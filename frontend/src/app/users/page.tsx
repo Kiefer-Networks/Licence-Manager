@@ -1,0 +1,240 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { AppLayout } from '@/components/layout/app-layout';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { api, Employee } from '@/lib/api';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString('de-DE');
+}
+
+export default function UsersPage() {
+  const router = useRouter();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [sortColumn, setSortColumn] = useState<string>('full_name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const debouncedSearch = useDebounce(search, 300);
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
+    return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
+  };
+
+  useEffect(() => {
+    api.getDepartments().then(setDepartments).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.getEmployees({
+      page,
+      search: debouncedSearch || undefined,
+      status: selectedStatus !== 'all' ? selectedStatus : undefined,
+      department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+      sort_by: sortColumn,
+      sort_dir: sortDirection,
+    }).then((data) => {
+      if (!cancelled) {
+        setEmployees(data.items);
+        setTotal(data.total);
+        setLoading(false);
+      }
+    }).catch(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [page, debouncedSearch, selectedStatus, selectedDepartment, sortColumn, sortDirection]);
+
+  const pageSize = 50;
+  const totalPages = Math.ceil(total / pageSize);
+
+  return (
+    <AppLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="pt-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Employees synced from HiBob</p>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 bg-zinc-50 border-zinc-200"
+            />
+          </div>
+
+          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+            <SelectTrigger className="w-32 h-9 bg-zinc-50 border-zinc-200">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="offboarded">Offboarded</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+            <SelectTrigger className="w-44 h-9 bg-zinc-50 border-zinc-200">
+              <SelectValue placeholder="Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <span className="text-sm text-muted-foreground ml-auto">
+            {total} employee{total !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+            </div>
+          ) : employees.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+              <Users className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-sm">No employees found</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-zinc-50/50">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button onClick={() => handleSort('full_name')} className="flex items-center gap-1.5 hover:text-foreground">
+                      Name <SortIcon column="full_name" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button onClick={() => handleSort('email')} className="flex items-center gap-1.5 hover:text-foreground">
+                      Email <SortIcon column="email" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button onClick={() => handleSort('department')} className="flex items-center gap-1.5 hover:text-foreground">
+                      Department <SortIcon column="department" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 hover:text-foreground">
+                      Status <SortIcon column="status" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Licenses</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button onClick={() => handleSort('start_date')} className="flex items-center gap-1.5 hover:text-foreground">
+                      Start Date <SortIcon column="start_date" />
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((employee) => (
+                  <tr
+                    key={employee.id}
+                    onClick={() => router.push(`/users/${employee.id}`)}
+                    className="border-b last:border-0 hover:bg-zinc-50/50 transition-colors cursor-pointer"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {employee.avatar ? (
+                          <img
+                            src={employee.avatar}
+                            alt=""
+                            className="h-7 w-7 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="h-7 w-7 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-medium text-zinc-600">{employee.full_name.charAt(0)}</span>
+                          </div>
+                        )}
+                        <span className="font-medium">{employee.full_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{employee.email}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{employee.department || '-'}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
+                        {employee.status === 'active' ? 'Active' : 'Offboarded'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="tabular-nums">{employee.license_count}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      <div className="flex items-center justify-between">
+                        {formatDate(employee.start_date)}
+                        <ChevronRight className="h-4 w-4 text-zinc-300" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>Previous</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next</Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

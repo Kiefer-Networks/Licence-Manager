@@ -1,0 +1,509 @@
+"""License repository."""
+
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import select, func, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from licence_api.models.orm.license import LicenseORM
+from licence_api.models.orm.employee import EmployeeORM
+from licence_api.models.orm.provider import ProviderORM
+from licence_api.repositories.base import BaseRepository
+
+
+class LicenseRepository(BaseRepository[LicenseORM]):
+    """Repository for license operations."""
+
+    model = LicenseORM
+
+    async def get_by_provider_and_external_id(
+        self,
+        provider_id: UUID,
+        external_user_id: str,
+    ) -> LicenseORM | None:
+        """Get license by provider and external user ID.
+
+        Args:
+            provider_id: Provider UUID
+            external_user_id: External user ID in provider system
+
+        Returns:
+            LicenseORM or None if not found
+        """
+        result = await self.session.execute(
+            select(LicenseORM).where(
+                and_(
+                    LicenseORM.provider_id == provider_id,
+                    LicenseORM.external_user_id == external_user_id,
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_all_with_details(
+        self,
+        provider_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        status: str | None = None,
+        unassigned_only: bool = False,
+        search: str | None = None,
+        department: str | None = None,
+        sort_by: str = "synced_at",
+        sort_dir: str = "desc",
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]], int]:
+        """Get licenses with provider and employee details.
+
+        Args:
+            provider_id: Filter by provider
+            employee_id: Filter by employee
+            status: Filter by status
+            unassigned_only: Only return licenses without employee
+            search: Search by external_user_id, employee email or name
+            department: Filter by employee department
+            sort_by: Column to sort by
+            sort_dir: Sort direction (asc/desc)
+            offset: Pagination offset
+            limit: Pagination limit
+
+        Returns:
+            Tuple of (license details, total count)
+        """
+        query = (
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+        )
+        count_query = (
+            select(func.count())
+            .select_from(LicenseORM)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+        )
+
+        if provider_id:
+            query = query.where(LicenseORM.provider_id == provider_id)
+            count_query = count_query.where(LicenseORM.provider_id == provider_id)
+
+        if employee_id:
+            query = query.where(LicenseORM.employee_id == employee_id)
+            count_query = count_query.where(LicenseORM.employee_id == employee_id)
+
+        if status:
+            query = query.where(LicenseORM.status == status)
+            count_query = count_query.where(LicenseORM.status == status)
+
+        if unassigned_only:
+            query = query.where(LicenseORM.employee_id.is_(None))
+            count_query = count_query.where(LicenseORM.employee_id.is_(None))
+
+        if department:
+            query = query.where(EmployeeORM.department == department)
+            count_query = count_query.where(EmployeeORM.department == department)
+
+        if search:
+            search_pattern = f"%{search.lower()}%"
+            search_filter = or_(
+                LicenseORM.external_user_id.ilike(search_pattern),
+                EmployeeORM.email.ilike(search_pattern),
+                EmployeeORM.full_name.ilike(search_pattern),
+            )
+            query = query.where(search_filter)
+            count_query = count_query.where(search_filter)
+
+        # Validated sorting - whitelist of allowed columns
+        sort_columns = {
+            "synced_at": LicenseORM.synced_at,
+            "external_user_id": LicenseORM.external_user_id,
+            "license_type": LicenseORM.license_type,
+            "status": LicenseORM.status,
+            "last_activity_at": LicenseORM.last_activity_at,
+            "monthly_cost": LicenseORM.monthly_cost,
+            "provider_name": ProviderORM.display_name,
+            "employee_name": EmployeeORM.full_name,
+        }
+        sort_column = sort_columns.get(sort_by, LicenseORM.synced_at)
+
+        # Validate sort direction
+        if sort_dir not in ("asc", "desc"):
+            sort_dir = "desc"
+
+        if sort_dir == "desc":
+            query = query.order_by(sort_column.desc().nulls_last())
+        else:
+            query = query.order_by(sort_column.asc().nulls_last())
+
+        query = query.offset(offset).limit(limit)
+
+        result = await self.session.execute(query)
+        licenses = list(result.all())
+
+        count_result = await self.session.execute(count_query)
+        total = count_result.scalar_one()
+
+        return licenses, total
+
+    async def get_inactive(
+        self,
+        days_threshold: int = 30,
+        department: str | None = None,
+        limit: int = 100,
+    ) -> list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]]:
+        """Get licenses with no activity for specified days.
+
+        Args:
+            days_threshold: Number of days without activity
+            department: Filter by employee department
+            limit: Maximum results
+
+        Returns:
+            List of inactive licenses with details
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_threshold)
+
+        query = (
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            .where(LicenseORM.status == "active")
+            .where(
+                (LicenseORM.last_activity_at < cutoff)
+                | (LicenseORM.last_activity_at.is_(None))
+            )
+        )
+
+        if department:
+            query = query.where(EmployeeORM.department == department)
+
+        query = query.order_by(LicenseORM.last_activity_at.asc().nulls_first()).limit(limit)
+
+        result = await self.session.execute(query)
+        return list(result.all())
+
+    async def get_by_employee(self, employee_id: UUID) -> list[LicenseORM]:
+        """Get all licenses for an employee.
+
+        Args:
+            employee_id: Employee UUID
+
+        Returns:
+            List of licenses
+        """
+        result = await self.session.execute(
+            select(LicenseORM).where(LicenseORM.employee_id == employee_id)
+        )
+        return list(result.scalars().all())
+
+    async def upsert(
+        self,
+        provider_id: UUID,
+        external_user_id: str,
+        employee_id: UUID | None,
+        license_type: str | None,
+        status: str,
+        assigned_at: datetime | None,
+        last_activity_at: datetime | None,
+        monthly_cost: Decimal | None,
+        currency: str,
+        metadata: dict[str, Any] | None,
+        synced_at: datetime,
+    ) -> LicenseORM:
+        """Create or update license by provider and external ID.
+
+        Args:
+            provider_id: Provider UUID
+            external_user_id: External user ID
+            employee_id: Employee UUID (optional)
+            license_type: License type
+            status: License status
+            assigned_at: Assignment date
+            last_activity_at: Last activity date
+            monthly_cost: Monthly cost
+            currency: Currency code
+            metadata: Additional metadata
+            synced_at: Sync timestamp
+
+        Returns:
+            Created or updated LicenseORM
+        """
+        existing = await self.get_by_provider_and_external_id(provider_id, external_user_id)
+
+        if existing:
+            existing.employee_id = employee_id
+            existing.license_type = license_type
+            existing.status = status
+            existing.assigned_at = assigned_at
+            existing.last_activity_at = last_activity_at
+            existing.monthly_cost = monthly_cost
+            existing.currency = currency
+            existing.extra_data = metadata
+            existing.synced_at = synced_at
+            await self.session.flush()
+            await self.session.refresh(existing)
+            return existing
+
+        return await self.create(
+            provider_id=provider_id,
+            external_user_id=external_user_id,
+            employee_id=employee_id,
+            license_type=license_type,
+            status=status,
+            assigned_at=assigned_at,
+            last_activity_at=last_activity_at,
+            monthly_cost=monthly_cost,
+            currency=currency,
+            extra_data=metadata,
+            synced_at=synced_at,
+        )
+
+    async def get_statistics(self, department: str | None = None) -> dict[str, Any]:
+        """Get license statistics.
+
+        Args:
+            department: Optional department filter
+
+        Returns:
+            Dict with license statistics
+        """
+        # Base queries - join with employee for department filter
+        base_query = select(func.count()).select_from(LicenseORM)
+        if department:
+            base_query = base_query.join(
+                EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
+            ).where(EmployeeORM.department == department)
+
+        # Total count
+        total_result = await self.session.execute(base_query)
+        total = total_result.scalar_one()
+
+        # Count by status
+        status_query = select(LicenseORM.status, func.count()).group_by(LicenseORM.status)
+        if department:
+            status_query = status_query.join(
+                EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
+            ).where(EmployeeORM.department == department)
+        status_result = await self.session.execute(status_query)
+        by_status = dict(status_result.all())
+
+        # Unassigned count and potential savings (only if no department filter)
+        if department:
+            unassigned = 0
+            potential_savings = Decimal("0")
+        else:
+            unassigned_result = await self.session.execute(
+                select(func.count())
+                .select_from(LicenseORM)
+                .where(LicenseORM.employee_id.is_(None))
+            )
+            unassigned = unassigned_result.scalar_one()
+
+            # Potential savings = sum of monthly_cost for all unassigned licenses
+            savings_result = await self.session.execute(
+                select(func.sum(LicenseORM.monthly_cost))
+                .select_from(LicenseORM)
+                .where(LicenseORM.employee_id.is_(None))
+            )
+            potential_savings = savings_result.scalar_one() or Decimal("0")
+
+        # Total monthly cost - include all licenses regardless of status
+        # (unassigned licenses still cost money)
+        cost_query = (
+            select(func.sum(LicenseORM.monthly_cost))
+            .select_from(LicenseORM)
+        )
+        if department:
+            cost_query = cost_query.join(
+                EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
+            ).where(EmployeeORM.department == department)
+        cost_result = await self.session.execute(cost_query)
+        total_cost = cost_result.scalar_one() or Decimal("0")
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "unassigned": unassigned,
+            "potential_savings": potential_savings,
+            "total_monthly_cost": total_cost,
+        }
+
+    async def count_by_provider(self) -> dict[UUID, int]:
+        """Count licenses by provider.
+
+        Returns:
+            Dict mapping provider ID to count
+        """
+        result = await self.session.execute(
+            select(LicenseORM.provider_id, func.count())
+            .group_by(LicenseORM.provider_id)
+        )
+        return dict(result.all())
+
+    async def count_by_employee_ids(self, employee_ids: list[UUID]) -> dict[UUID, int]:
+        """Count licenses for multiple employees in a single query (batch).
+
+        This avoids N+1 query problems when listing employees with license counts.
+
+        Args:
+            employee_ids: List of employee UUIDs
+
+        Returns:
+            Dict mapping employee ID to license count
+        """
+        if not employee_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(LicenseORM.employee_id, func.count())
+            .where(LicenseORM.employee_id.in_(employee_ids))
+            .group_by(LicenseORM.employee_id)
+        )
+        return dict(result.all())
+
+    async def get_licenses_with_providers_for_employees(
+        self,
+        employee_ids: list[UUID],
+    ) -> dict[UUID, list[tuple[Any, Any]]]:
+        """Get licenses with provider names for multiple employees in a single query.
+
+        This avoids N+1 query problems when generating offboarding reports.
+
+        Args:
+            employee_ids: List of employee UUIDs
+
+        Returns:
+            Dict mapping employee ID to list of (license, provider) tuples
+        """
+        if not employee_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .where(LicenseORM.employee_id.in_(employee_ids))
+        )
+
+        # Group by employee_id
+        grouped: dict[UUID, list[tuple[Any, Any]]] = {}
+        for lic, provider in result.all():
+            if lic.employee_id not in grouped:
+                grouped[lic.employee_id] = []
+            grouped[lic.employee_id].append((lic, provider))
+
+        return grouped
+
+    async def get_by_ids_with_providers(
+        self,
+        license_ids: list[UUID],
+    ) -> list[tuple[LicenseORM, ProviderORM]]:
+        """Get multiple licenses by IDs with their providers.
+
+        Args:
+            license_ids: List of license UUIDs
+
+        Returns:
+            List of (license, provider) tuples
+        """
+        if not license_ids:
+            return []
+
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .where(LicenseORM.id.in_(license_ids))
+        )
+        return list(result.all())
+
+    async def delete_by_ids(self, license_ids: list[UUID]) -> int:
+        """Delete multiple licenses by IDs.
+
+        Args:
+            license_ids: List of license UUIDs to delete
+
+        Returns:
+            Number of deleted licenses
+        """
+        if not license_ids:
+            return 0
+
+        from sqlalchemy import delete
+
+        result = await self.session.execute(
+            delete(LicenseORM).where(LicenseORM.id.in_(license_ids))
+        )
+        await self.session.flush()
+        return result.rowcount
+
+    async def unassign_by_ids(self, license_ids: list[UUID]) -> int:
+        """Bulk unassign licenses (set employee_id = NULL).
+
+        Args:
+            license_ids: List of license UUIDs to unassign
+
+        Returns:
+            Number of unassigned licenses
+        """
+        if not license_ids:
+            return 0
+
+        from sqlalchemy import update
+
+        result = await self.session.execute(
+            update(LicenseORM)
+            .where(LicenseORM.id.in_(license_ids))
+            .values(employee_id=None)
+        )
+        await self.session.flush()
+        return result.rowcount
+
+    async def get_license_type_counts(self, provider_id: UUID) -> dict[str, int]:
+        """Get counts of each license type for a provider.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dict mapping license_type to count
+        """
+        result = await self.session.execute(
+            select(LicenseORM.license_type, func.count())
+            .where(LicenseORM.provider_id == provider_id)
+            .where(LicenseORM.license_type.isnot(None))
+            .group_by(LicenseORM.license_type)
+        )
+        return {lt or "Unknown": count for lt, count in result.all()}
+
+    async def update_pricing_by_type(
+        self,
+        provider_id: UUID,
+        license_type: str,
+        monthly_cost: Decimal | None,
+        currency: str = "EUR",
+    ) -> int:
+        """Update pricing for all licenses of a specific type.
+
+        Args:
+            provider_id: Provider UUID
+            license_type: License type to update
+            monthly_cost: New monthly cost
+            currency: Currency code
+
+        Returns:
+            Number of updated licenses
+        """
+        from sqlalchemy import update
+
+        result = await self.session.execute(
+            update(LicenseORM)
+            .where(
+                and_(
+                    LicenseORM.provider_id == provider_id,
+                    LicenseORM.license_type == license_type,
+                )
+            )
+            .values(monthly_cost=monthly_cost, currency=currency)
+        )
+        await self.session.flush()
+        return result.rowcount

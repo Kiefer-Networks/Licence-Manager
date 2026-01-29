@@ -1,0 +1,396 @@
+# ============================================================================
+# LICENCE MANAGEMENT SYSTEM - GITIGNORE
+# ============================================================================
+
+# ============================================================================
+# SECURITY - SENSITIVE FILES (NEVER COMMIT)
+# ============================================================================
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+
+# Secrets and credentials
+**/secrets/
+**/credentials/
+*.secret
+credentials.json
+service-account*.json
+*-credentials.json
+*_credentials.json
+
+# OAuth tokens
+token.json
+tokens.json
+oauth_tokens.*
+
+# ============================================================================
+# BACKEND - PYTHON
+# ============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Virtual environments
+.venv
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.virtualenv/
+virtualenv/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyright
+.pyright/
+
+# Ruff
+.ruff_cache/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# pdm
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582
+__pypackages__/
+
+# Backend data directory (avatars, uploaded files)
+backend/data/
+
+# Alembic generated files (keep migrations)
+backend/alembic/__pycache__/
+
+# ============================================================================
+# FRONTEND - NODE.JS / NEXT.JS
+# ============================================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnp.cjs
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Next.js
+.next/
+out/
+
+# Production build
+frontend/build/
+build/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Turbo
+.turbo
+
+# Parcel cache
+.parcel-cache
+
+# Storybook
+storybook-static/
+
+# ============================================================================
+# DATABASE
+# ============================================================================
+
+# SQLite
+*.sqlite
+*.sqlite3
+*.db
+
+# PostgreSQL
+*.sql.gz
+*.dump
+
+# Database backups
+*.bak
+*_backup.*
+backup_*/
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose.local.yml
+docker-compose.local.yaml
+
+# ============================================================================
+# IDE AND EDITORS
+# ============================================================================
+
+# JetBrains (PyCharm, WebStorm, IntelliJ)
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+# VS Code
+.vscode/
+*.code-workspace
+.history/
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# TextMate
+*.tmproj
+*.tmproject
+tmtags
+
+# Notepad++
+nppBackup/
+
+# ============================================================================
+# OPERATING SYSTEM
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================================================
+# LOGS AND TEMPORARY FILES
+# ============================================================================
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+*~
+.temp/
+.tmp/
+temp/
+tmp/
+
+# Cache
+.cache/
+*.cache
+
+# ============================================================================
+# MISCELLANEOUS
+# ============================================================================
+
+# Archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+
+# Compiled binaries
+*.exe
+*.dll
+*.dylib
+
+# Core dumps
+core
+*.core
+
+# JupyterNotebook
+.ipynb_checkpoints
+
+# Profiling
+*.prof
+
+# Local configuration
+local.settings.json
+*.local.json
+
+# ============================================================================
+# PROJECT SPECIFIC
+# ============================================================================
+
+# Uploaded files and user data
+uploads/
+user_data/
+user-data/
+
+# Generated reports
+reports/generated/
+exports/
+
+# Session files
+sessions/
+
+# Backup files
+*.backup
+*_backup
+backup/
+backups/
+

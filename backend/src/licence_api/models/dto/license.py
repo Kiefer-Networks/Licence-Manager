@@ -1,0 +1,47 @@
+"""License DTOs."""
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from licence_api.models.domain.license import LicenseStatus
+
+
+class LicenseResponse(BaseModel):
+    """License response DTO."""
+
+    id: UUID
+    provider_id: UUID
+    provider_name: str
+    employee_id: UUID | None = None
+    employee_email: str | None = None
+    employee_name: str | None = None
+    external_user_id: str
+    license_type: str | None = None
+    license_type_display_name: str | None = None  # Custom display name from pricing config
+    status: LicenseStatus
+    assigned_at: datetime | None = None
+    last_activity_at: datetime | None = None
+    monthly_cost: Decimal | None = None
+    currency: str = "EUR"
+    metadata: dict[str, Any] | None = None
+    synced_at: datetime
+    is_external_email: bool = False
+    employee_status: str | None = None  # active, offboarded, etc.
+
+    class Config:
+        """Pydantic config."""
+
+        from_attributes = True
+
+
+class LicenseListResponse(BaseModel):
+    """License list response DTO."""
+
+    items: list[LicenseResponse]
+    total: int
+    page: int
+    page_size: int
