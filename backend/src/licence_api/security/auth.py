@@ -1,18 +1,21 @@
 """Authentication and authorization utilities."""
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from functools import wraps
+from typing import Annotated, Callable
 from uuid import UUID
 
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from licence_api.config import get_settings
-from licence_api.models.domain.admin_user import AdminUser, UserRole
+from licence_api.models.domain.admin_user import AdminUser, AuthProvider
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 class GoogleTokenInfo:
@@ -40,7 +43,8 @@ async def verify_google_token(token: str) -> GoogleTokenInfo:
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
+            timeout=10.0,
         )
 
     if response.status_code != 200:
@@ -64,7 +68,7 @@ async def verify_google_token(token: str) -> GoogleTokenInfo:
         if not email or not email.endswith(f"@{settings.allowed_email_domain}"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Email domain must be {settings.allowed_email_domain}",
+                detail="Email domain not allowed",
             )
 
     return GoogleTokenInfo(
@@ -74,13 +78,19 @@ async def verify_google_token(token: str) -> GoogleTokenInfo:
     )
 
 
-def create_access_token(user_id: UUID, email: str, role: UserRole) -> str:
+def create_access_token(
+    user_id: UUID,
+    email: str,
+    roles: list[str],
+    permissions: list[str],
+) -> str:
     """Create a JWT access token.
 
     Args:
         user_id: User UUID
         email: User email
-        role: User role
+        roles: List of role codes
+        permissions: List of permission codes
 
     Returns:
         JWT token string
@@ -91,16 +101,45 @@ def create_access_token(user_id: UUID, email: str, role: UserRole) -> str:
     payload = {
         "sub": str(user_id),
         "email": email,
-        "role": role.value,
+        "roles": roles,
+        "permissions": permissions,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
+        "type": "access",
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
     }
 
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
+def create_refresh_token() -> tuple[str, str]:
+    """Create a refresh token.
+
+    Returns:
+        Tuple of (raw_token, token_hash)
+    """
+    raw_token = secrets.token_urlsafe(64)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    return raw_token, token_hash
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash a refresh token.
+
+    Args:
+        token: Raw refresh token
+
+    Returns:
+        Hashed token
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def decode_token(token: str) -> dict:
     """Decode and verify a JWT token.
+
+    Validates signature, expiration, issuer (iss), and audience (aud) claims.
 
     Args:
         token: JWT token string
@@ -109,7 +148,7 @@ def decode_token(token: str) -> dict:
         Token payload
 
     Raises:
-        HTTPException: If token is invalid or expired
+        HTTPException: If token is invalid, expired, or has invalid claims
     """
     settings = get_settings()
 
@@ -118,22 +157,36 @@ def decode_token(token: str) -> dict:
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            options={
+                "require_iat": True,
+                "require_exp": True,
+                "require_sub": True,
+            },
         )
         return payload
-    except JWTError as e:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        ) from e
+        )
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(HTTPBearer(auto_error=False))] = None,
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(HTTPBearer(auto_error=False)),
+    ] = None,
 ) -> AdminUser:
     """Get the current authenticated user from JWT token.
 
+    Accepts token from Authorization header or httpOnly cookie.
+
     Args:
-        credentials: HTTP Bearer credentials (optional in dev mode)
+        request: FastAPI request (for cookie access)
+        credentials: HTTP Bearer credentials
 
     Returns:
         AdminUser domain model
@@ -141,40 +194,206 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
-    if credentials is None:
+    token: str | None = None
+
+    # Try Authorization header first
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        # Fall back to httpOnly cookie
+        token = request.cookies.get("access_token")
+
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = decode_token(credentials.credentials)
+    payload = decode_token(token)
+
+    if payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
+        )
 
     return AdminUser(
         id=UUID(payload["sub"]),
         email=payload["email"],
-        role=UserRole(payload["role"]),
+        roles=payload.get("roles", []),
+        permissions=payload.get("permissions", []),
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
 
 
-async def require_admin(
+def require_permission(*required_permissions: str):
+    """Dependency factory to require specific permissions.
+
+    Args:
+        required_permissions: Permission codes required (any one)
+
+    Returns:
+        Dependency function
+    """
+    async def permission_dependency(
+        current_user: Annotated[AdminUser, Depends(get_current_user)],
+    ) -> AdminUser:
+        if not current_user.has_any_permission(*required_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return permission_dependency
+
+
+def require_all_permissions(*required_permissions: str):
+    """Dependency factory to require all specified permissions.
+
+    Args:
+        required_permissions: All permission codes required
+
+    Returns:
+        Dependency function
+    """
+    async def permission_dependency(
+        current_user: Annotated[AdminUser, Depends(get_current_user)],
+    ) -> AdminUser:
+        if not current_user.has_all_permissions(*required_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return permission_dependency
+
+
+def require_role(*required_roles: str):
+    """Dependency factory to require specific roles.
+
+    Args:
+        required_roles: Role codes required (any one)
+
+    Returns:
+        Dependency function
+    """
+    async def role_dependency(
+        current_user: Annotated[AdminUser, Depends(get_current_user)],
+    ) -> AdminUser:
+        if not any(current_user.has_role(role) for role in required_roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role",
+            )
+        return current_user
+
+    return role_dependency
+
+
+async def require_superadmin(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
 ) -> AdminUser:
-    """Require the current user to have admin role.
+    """Require the current user to be a superadmin.
 
     Args:
         current_user: Current authenticated user
 
     Returns:
-        AdminUser if they have admin role
+        AdminUser if they are superadmin
+
+    Raises:
+        HTTPException: If user is not superadmin
+    """
+    if not current_user.is_superadmin():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required",
+        )
+    return current_user
+
+
+async def require_admin(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+) -> AdminUser:
+    """Require the current user to be an admin or higher.
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        AdminUser if they are admin or higher
 
     Raises:
         HTTPException: If user is not admin
     """
-    if current_user.role != UserRole.ADMIN:
+    if not current_user.is_admin():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
     return current_user
+
+
+# Permission constants for easy access
+class Permissions:
+    """Permission code constants."""
+
+    # Dashboard
+    DASHBOARD_VIEW = "dashboard.view"
+
+    # Users
+    USERS_VIEW = "users.view"
+    USERS_CREATE = "users.create"
+    USERS_EDIT = "users.edit"
+    USERS_DELETE = "users.delete"
+    USERS_MANAGE_ROLES = "users.manage_roles"
+
+    # Roles
+    ROLES_VIEW = "roles.view"
+    ROLES_CREATE = "roles.create"
+    ROLES_EDIT = "roles.edit"
+    ROLES_DELETE = "roles.delete"
+
+    # Providers
+    PROVIDERS_VIEW = "providers.view"
+    PROVIDERS_CREATE = "providers.create"
+    PROVIDERS_EDIT = "providers.edit"
+    PROVIDERS_DELETE = "providers.delete"
+    PROVIDERS_SYNC = "providers.sync"
+
+    # Licenses
+    LICENSES_VIEW = "licenses.view"
+    LICENSES_CREATE = "licenses.create"
+    LICENSES_EDIT = "licenses.edit"
+    LICENSES_DELETE = "licenses.delete"
+    LICENSES_ASSIGN = "licenses.assign"
+    LICENSES_BULK_ACTIONS = "licenses.bulk_actions"
+
+    # Employees
+    EMPLOYEES_VIEW = "employees.view"
+    EMPLOYEES_EDIT = "employees.edit"
+
+    # Reports
+    REPORTS_VIEW = "reports.view"
+    REPORTS_EXPORT = "reports.export"
+
+    # Settings
+    SETTINGS_VIEW = "settings.view"
+    SETTINGS_EDIT = "settings.edit"
+
+    # Payment Methods
+    PAYMENT_METHODS_VIEW = "payment_methods.view"
+    PAYMENT_METHODS_CREATE = "payment_methods.create"
+    PAYMENT_METHODS_EDIT = "payment_methods.edit"
+    PAYMENT_METHODS_DELETE = "payment_methods.delete"
+
+    # Audit
+    AUDIT_VIEW = "audit.view"
+    AUDIT_EXPORT = "audit.export"
+
+    # System
+    SYSTEM_ADMIN = "system.admin"
