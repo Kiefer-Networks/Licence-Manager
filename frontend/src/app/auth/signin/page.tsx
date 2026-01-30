@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { useAuth } from '@/components/auth-provider';
 
 /**
  * Validates callback URL to prevent open redirect attacks.
@@ -25,21 +25,22 @@ function isValidCallbackUrl(url: string | null): boolean {
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   const rawCallbackUrl = searchParams.get('callbackUrl');
   const callbackUrl = isValidCallbackUrl(rawCallbackUrl) ? rawCallbackUrl! : '/dashboard';
 
-  // Don't auto-redirect based on existing session - just show the login form
-  // This prevents redirect loops when auth state is inconsistent
+  // Redirect if already authenticated
   useEffect(() => {
-    setIsCheckingAuth(false);
-  }, []);
+    if (!authLoading && isAuthenticated) {
+      router.push(callbackUrl);
+    }
+  }, [authLoading, isAuthenticated, router, callbackUrl]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,10 +48,9 @@ function SignInContent() {
     setIsLoading(true);
 
     try {
-      // Get CSRF token first
-      await api.refreshCsrfToken();
-      await api.login(email, password);
-      router.push(callbackUrl);
+      // Use AuthProvider's login which handles CSRF, token refresh, and user state
+      await login(email, password);
+      // AuthProvider's login() already pushes to /dashboard
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
       setError(errorMessage);
@@ -60,7 +60,7 @@ function SignInContent() {
   };
 
   // Show loading while checking existing auth
-  if (isCheckingAuth) {
+  if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
