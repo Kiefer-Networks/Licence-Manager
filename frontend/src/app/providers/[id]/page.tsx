@@ -1042,112 +1042,150 @@ export default function ProviderDetailPage() {
 
             {/* Individual License Type Pricing - for providers with combined license types (Microsoft 365) */}
             {hasCombinedTypes && individualLicenseTypes.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Individual License Pricing
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    This provider has combined license types (e.g., "E5, Power BI, Teams").
-                    Set prices for each individual license and the total cost per user will be calculated automatically.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {individualLicenseTypes.map((lt) => {
-                      const edit = individualPricingEdits[lt.license_type] || {
-                        cost: '',
-                        currency: 'EUR',
-                        billing_cycle: 'monthly',
-                        display_name: '',
-                        notes: '',
-                      };
-                      const updateEdit = (updates: Partial<typeof edit>) => {
-                        setIndividualPricingEdits({
-                          ...individualPricingEdits,
-                          [lt.license_type]: { ...edit, ...updates },
-                        });
-                      };
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-medium">License Type Pricing</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Set prices for each individual license. The total cost per user is calculated as the sum of their assigned licenses.
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={handleSaveIndividualPricing} disabled={savingIndividualPricing}>
+                    {savingIndividualPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Save Pricing
+                  </Button>
+                </div>
 
-                      return (
-                        <div key={lt.license_type} className="p-3 bg-white rounded-lg border space-y-2">
-                          <div className="flex items-center justify-between">
+                <div className="space-y-4">
+                  {individualLicenseTypes.map((lt) => {
+                    const edit = individualPricingEdits[lt.license_type] || {
+                      cost: '',
+                      currency: 'EUR',
+                      billing_cycle: 'monthly',
+                      display_name: '',
+                      notes: '',
+                    };
+                    const updateEdit = (updates: Partial<typeof edit>) => {
+                      setIndividualPricingEdits({
+                        ...individualPricingEdits,
+                        [lt.license_type]: { ...edit, ...updates },
+                      });
+                    };
+
+                    // Calculate monthly equivalent for display
+                    let monthlyEquivalent = '';
+                    if (edit.cost && parseFloat(edit.cost) > 0) {
+                      const cost = parseFloat(edit.cost);
+                      if (edit.billing_cycle === 'yearly') {
+                        monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}/month`;
+                      } else if (edit.billing_cycle === 'monthly') {
+                        monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}/month`;
+                      }
+                    }
+
+                    return (
+                      <Card key={lt.license_type}>
+                        <CardContent className="pt-4 pb-4">
+                          <div className="flex items-start justify-between mb-3">
                             <div>
-                              <p className="text-xs font-medium">{lt.license_type}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{lt.license_type}</p>
+                              <h3 className="font-medium text-sm">
+                                {edit.display_name || lt.license_type}
+                              </h3>
                               <p className="text-xs text-muted-foreground">{lt.user_count} users</p>
                             </div>
+                            {monthlyEquivalent && (
+                              <Badge variant="secondary" className="text-xs">
+                                {monthlyEquivalent}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="flex gap-1">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              className="flex-1 h-8 text-sm"
-                              placeholder="0.00"
-                              value={edit.cost}
-                              onChange={(e) => updateEdit({ cost: e.target.value })}
-                            />
-                            <Select value={edit.currency} onValueChange={(v) => updateEdit({ currency: v })}>
-                              <SelectTrigger className="w-16 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="EUR">EUR</SelectItem>
-                                <SelectItem value="USD">USD</SelectItem>
-                              </SelectContent>
-                            </Select>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="space-y-1.5 md:col-span-2">
+                              <Label className="text-xs text-muted-foreground">Display Name</Label>
+                              <Input
+                                placeholder={lt.license_type}
+                                value={edit.display_name}
+                                onChange={(e) => updateEdit({ display_name: e.target.value })}
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Cost</Label>
+                              <div className="flex gap-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="flex-1"
+                                  placeholder="0.00"
+                                  value={edit.cost}
+                                  onChange={(e) => updateEdit({ cost: e.target.value })}
+                                />
+                                <Select value={edit.currency} onValueChange={(v) => updateEdit({ currency: v })}>
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="EUR">EUR</SelectItem>
+                                    <SelectItem value="USD">USD</SelectItem>
+                                    <SelectItem value="GBP">GBP</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                              <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="monthly">Monthly</SelectItem>
+                                  <SelectItem value="yearly">Yearly</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
-                          <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="monthly">Monthly</SelectItem>
-                              <SelectItem value="yearly">Yearly</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={handleSaveIndividualPricing} disabled={savingIndividualPricing}>
-                      {savingIndividualPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      Save Individual Prices
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
-            {/* License Type Pricing (combined types) */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-medium">{hasCombinedTypes ? 'Combined License Types' : 'License Type Pricing'}</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {hasCombinedTypes
-                    ? 'These are the combined license type strings as stored. You can override individual pricing above.'
-                    : provider.config?.provider_license_info?.max_users
-                    ? 'Or set individual prices per license type (overrides package pricing).'
-                    : 'Set prices for each license type. Prices will be applied to existing and new licenses.'}
-                </p>
-              </div>
-              {!hasCombinedTypes && (
-                <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
-                  {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  Save Pricing
-                </Button>
-              )}
-            </div>
+            {/* License Type Pricing - for providers without combined types */}
+            {!hasCombinedTypes && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-medium">License Type Pricing</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {provider.config?.provider_license_info?.max_users
+                        ? 'Or set individual prices per license type (overrides package pricing).'
+                        : 'Set prices for each license type. Prices will be applied to existing and new licenses.'}
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
+                    {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Save Pricing
+                  </Button>
+                </div>
+              </>
+            )}
 
-            {licenseTypes.length === 0 ? (
+            {!hasCombinedTypes && licenseTypes.length === 0 && (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
                 <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">No license types found</p>
                 <p className="text-xs mt-1">Sync the provider to discover license types</p>
               </div>
-            ) : (
+            )}
+
+            {!hasCombinedTypes && licenseTypes.length > 0 && (
               <div className="space-y-4">
                 {licenseTypes.map((lt) => {
                   const edit = pricingEdits[lt.license_type] || {
@@ -1291,10 +1329,17 @@ export default function ProviderDetailPage() {
               </div>
             )}
 
-            {licenseTypes.length > 0 && (
+            {!hasCombinedTypes && licenseTypes.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 The monthly cost shown on licenses is calculated from the billing cycle.
                 Yearly costs are divided by 12, perpetual/one-time show as €0/month.
+              </p>
+            )}
+
+            {hasCombinedTypes && individualLicenseTypes.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                The monthly cost per user is calculated as the sum of all their individual license prices.
+                Yearly costs are divided by 12.
               </p>
             )}
           </div>
