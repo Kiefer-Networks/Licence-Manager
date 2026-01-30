@@ -1,13 +1,17 @@
 """Providers router."""
 
 import copy
+import uuid as uuid_module
+from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.provider_logos import get_provider_logo
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
@@ -103,7 +107,7 @@ async def list_providers(
                 id=p.id,
                 name=p.name,
                 display_name=p.display_name,
-                logo_url=p.logo_url,
+                logo_url=get_provider_logo(p.name, p.logo_url),
                 enabled=p.enabled,
                 config=p.config,
                 last_sync_at=p.last_sync_at,
@@ -154,7 +158,7 @@ async def get_provider(
         id=provider.id,
         name=provider.name,
         display_name=provider.display_name,
-        logo_url=provider.logo_url,
+        logo_url=get_provider_logo(provider.name, provider.logo_url),
         enabled=provider.enabled,
         config=provider.config,
         last_sync_at=provider.last_sync_at,
@@ -219,7 +223,7 @@ async def create_provider(
         id=provider.id,
         name=provider.name,
         display_name=provider.display_name,
-        logo_url=provider.logo_url,
+        logo_url=get_provider_logo(provider.name, provider.logo_url),
         enabled=provider.enabled,
         config=provider.config,
         last_sync_at=provider.last_sync_at,
@@ -253,6 +257,10 @@ async def update_provider(
     if request.display_name is not None:
         update_data["display_name"] = request.display_name
         changes["display_name"] = {"old": provider.display_name, "new": request.display_name}
+
+    if request.logo_url is not None:
+        update_data["logo_url"] = request.logo_url if request.logo_url else None
+        changes["logo_url"] = {"old": provider.logo_url, "new": request.logo_url}
 
     if request.enabled is not None:
         update_data["enabled"] = request.enabled
@@ -311,7 +319,7 @@ async def update_provider(
         id=provider.id,
         name=provider.name,
         display_name=provider.display_name,
-        logo_url=provider.logo_url,
+        logo_url=get_provider_logo(provider.name, provider.logo_url),
         enabled=provider.enabled,
         config=provider.config,
         last_sync_at=provider.last_sync_at,
@@ -322,6 +330,227 @@ async def update_provider(
         created_at=provider.created_at,
         updated_at=provider.updated_at,
     )
+
+
+# Logo storage directory
+LOGOS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "logos"
+ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
+MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2MB
+
+# Logo file signatures
+LOGO_SIGNATURES = {
+    ".png": [b"\x89PNG\r\n\x1a\n"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".webp": [b"RIFF"],
+    ".svg": [b"<?xml", b"<svg", b"\xef\xbb\xbf<?xml", b"\xef\xbb\xbf<svg"],
+}
+
+
+def validate_logo_signature(content: bytes, extension: str) -> bool:
+    """Validate logo file content matches expected signature."""
+    ext_lower = extension.lower()
+    signatures = LOGO_SIGNATURES.get(ext_lower)
+    if not signatures:
+        return False
+
+    # Special handling for WEBP
+    if ext_lower == ".webp":
+        if content.startswith(b"RIFF") and len(content) > 12 and content[8:12] == b"WEBP":
+            return True
+        return False
+
+    # Special handling for SVG (text-based)
+    if ext_lower == ".svg":
+        # Check first 1000 bytes for SVG indicators
+        header = content[:1000].lower()
+        return b"<svg" in header or b"<?xml" in header
+
+    for sig in signatures:
+        if content.startswith(sig):
+            return True
+    return False
+
+
+class LogoUploadResponse(BaseModel):
+    """Logo upload response."""
+    logo_url: str
+
+
+@router.post("/{provider_id}/logo", response_model=LogoUploadResponse)
+async def upload_provider_logo(
+    http_request: Request,
+    provider_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> LogoUploadResponse:
+    """Upload a logo for a provider. Requires providers.edit permission."""
+    repo = ProviderRepository(db)
+    provider = await repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Validate file
+    if file.filename is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No filename provided",
+        )
+
+    safe_filename = Path(file.filename).name
+    ext = Path(safe_filename).suffix.lower()
+
+    if ext not in ALLOWED_LOGO_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_LOGO_EXTENSIONS)}",
+        )
+
+    # Read and validate content
+    content = await file.read()
+    if len(content) > MAX_LOGO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB",
+        )
+
+    if not validate_logo_signature(content, ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match declared file type",
+        )
+
+    # Save file
+    LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+    stored_filename = f"{uuid_module.uuid4()}{ext}"
+    file_path = LOGOS_DIR / stored_filename
+
+    # Delete old logo if exists
+    if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
+        old_filename = provider.logo_url.split("/")[-1]
+        old_path = LOGOS_DIR / old_filename
+        if old_path.exists():
+            old_path.unlink()
+
+    file_path.write_bytes(content)
+
+    # Update provider with logo URL
+    logo_url = f"/api/v1/providers/{provider_id}/logo/{stored_filename}"
+    await repo.update(provider_id, logo_url=logo_url)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_UPDATE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider_id,
+        user=current_user,
+        request=http_request,
+        details={"action": "logo_upload", "filename": safe_filename},
+    )
+
+    # Invalidate caches
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
+
+    return LogoUploadResponse(logo_url=logo_url)
+
+
+@router.get("/{provider_id}/logo/{filename}")
+async def get_provider_logo_file(
+    provider_id: UUID,
+    filename: str,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+) -> FileResponse:
+    """Get a provider's logo file."""
+    # Sanitize filename
+    safe_filename = Path(filename).name
+    if "/" in safe_filename or "\\" in safe_filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename",
+        )
+
+    file_path = LOGOS_DIR / safe_filename
+
+    # Validate path is within LOGOS_DIR
+    try:
+        resolved = file_path.resolve()
+        if not resolved.is_relative_to(LOGOS_DIR.resolve()):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+    except (ValueError, RuntimeError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Logo not found",
+        )
+
+    # Determine media type
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".svg": "image/svg+xml",
+        ".webp": "image/webp",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(path=file_path, media_type=media_type)
+
+
+@router.delete("/{provider_id}/logo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_provider_logo(
+    http_request: Request,
+    provider_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Delete a provider's logo. Requires providers.edit permission."""
+    repo = ProviderRepository(db)
+    provider = await repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Delete file if exists
+    if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
+        old_filename = provider.logo_url.split("/")[-1]
+        old_path = LOGOS_DIR / old_filename
+        if old_path.exists():
+            old_path.unlink()
+
+    # Clear logo URL
+    await repo.update(provider_id, logo_url=None)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_UPDATE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider_id,
+        user=current_user,
+        request=http_request,
+        details={"action": "logo_delete"},
+    )
+
+    # Invalidate caches
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -388,6 +617,8 @@ async def test_provider_connection(
         )
 
     from licence_api.providers import (
+        AdobeProvider,
+        AtlassianProvider,
         HiBobProvider,
         GoogleWorkspaceProvider,
         MicrosoftProvider,
@@ -399,6 +630,8 @@ async def test_provider_connection(
     )
 
     providers = {
+        ProviderName.ADOBE: AdobeProvider,
+        ProviderName.ATLASSIAN: AtlassianProvider,
         ProviderName.HIBOB: HiBobProvider,
         ProviderName.GOOGLE_WORKSPACE: GoogleWorkspaceProvider,
         ProviderName.MICROSOFT: MicrosoftProvider,
