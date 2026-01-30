@@ -1840,7 +1840,7 @@ export default function ProviderDetailPage() {
                     />
                   </div>
 
-                  <div>
+                  <div className="space-y-2">
                     <Label
                       htmlFor="file-upload"
                       className={`inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium cursor-pointer transition-colors ${
@@ -1865,9 +1865,13 @@ export default function ProviderDetailPage() {
                       id="file-upload"
                       type="file"
                       className="hidden"
+                      accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp"
                       onChange={handleFileUpload}
                       disabled={uploadingFile}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Allowed: PDF, Images (PNG, JPG, GIF), Office documents (Word, Excel, PowerPoint)
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -1919,14 +1923,25 @@ export default function ProviderDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {file.viewable && (
+                              <a
+                                href={api.getProviderFileViewUrl(providerId, file.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-zinc-100 transition-colors"
+                                title="View in browser"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </a>
+                            )}
                             <a
                               href={api.getProviderFileDownloadUrl(providerId, file.id)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-zinc-100 transition-colors"
-                              title="View/Download"
+                              title="Download"
                             >
-                              <Eye className="h-3.5 w-3.5" />
+                              <Download className="h-3.5 w-3.5" />
                             </a>
                             <Button
                               variant="ghost"

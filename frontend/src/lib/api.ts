@@ -472,6 +472,7 @@ export interface ProviderFile {
   description?: string | null;
   category?: string | null;
   created_at: string;
+  viewable: boolean;  // Whether file can be viewed inline in browser (PDFs, images)
 }
 
 export interface LicenseTypeInfo {
@@ -856,6 +857,10 @@ export const api = {
 
   getProviderFileDownloadUrl(providerId: string, fileId: string): string {
     return `${API_BASE}/api/v1/providers/${providerId}/files/${fileId}/download`;
+  },
+
+  getProviderFileViewUrl(providerId: string, fileId: string): string {
+    return `${API_BASE}/api/v1/providers/${providerId}/files/${fileId}/view`;
   },
 
   // Payment Methods
