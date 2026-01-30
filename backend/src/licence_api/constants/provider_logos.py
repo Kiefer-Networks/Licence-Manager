@@ -17,6 +17,7 @@ BUILT_IN_LOGOS: dict[str, str] = {
     "slack": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg",
     "zoom": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Zoom_Communications_Logo.svg",
     "teams": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg",
+    "mattermost": "https://raw.githubusercontent.com/mattermost/mattermost/master/server/public/icon.png",
 
     # Development
     "github": "https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg",
@@ -25,6 +26,8 @@ BUILT_IN_LOGOS: dict[str, str] = {
     "jira": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Jira_Logo.svg",
     "confluence": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Confluence-blue-logo-gradient-rgb%402x.png",
     "atlassian": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Atlassian-logo-blue-large.svg",
+    "jetbrains": "https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.svg",
+    "cursor": "https://www.cursor.com/favicon.ico",
 
     # Cloud / Infrastructure
     "aws": "https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg",
@@ -54,6 +57,10 @@ BUILT_IN_LOGOS: dict[str, str] = {
     "asana": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Asana_logo.svg",
     "trello": "https://upload.wikimedia.org/wikipedia/commons/1/17/Trello-logo-blue.svg",
     "monday": "https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg",
+    "miro": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Miro_2019.svg",
+
+    # AI
+    "openai": "https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg",
 
     # Other
     "dropbox": "https://upload.wikimedia.org/wikipedia/commons/7/78/Dropbox_Icon.svg",
