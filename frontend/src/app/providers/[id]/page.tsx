@@ -127,6 +127,7 @@ export default function ProviderDetailPage() {
     cost: string;
     currency: string;
     billing_cycle: string;
+    payment_frequency: string;
     display_name: string;
     notes: string;
   }>>({});
@@ -243,12 +244,13 @@ export default function ProviderDetailPage() {
       setHasCombinedTypes(data.has_combined_types);
 
       // Initialize individual pricing edits
-      const edits: Record<string, { cost: string; currency: string; billing_cycle: string; display_name: string; notes: string }> = {};
+      const edits: Record<string, { cost: string; currency: string; billing_cycle: string; payment_frequency: string; display_name: string; notes: string }> = {};
       for (const lt of data.license_types) {
         edits[lt.license_type] = {
           cost: lt.pricing?.cost || '',
           currency: lt.pricing?.currency || 'EUR',
-          billing_cycle: lt.pricing?.billing_cycle || 'monthly',
+          billing_cycle: lt.pricing?.billing_cycle || 'yearly',
+          payment_frequency: lt.pricing?.payment_frequency || 'monthly',
           display_name: lt.pricing?.display_name || lt.display_name || '',
           notes: lt.pricing?.notes || '',
         };
@@ -436,7 +438,7 @@ export default function ProviderDetailPage() {
           cost: edit.cost || '0',
           currency: edit.currency,
           billing_cycle: edit.billing_cycle,
-          payment_frequency: edit.billing_cycle, // Same as billing cycle for individual
+          payment_frequency: edit.payment_frequency,
           notes: edit.notes || undefined,
         });
       }
@@ -1061,7 +1063,8 @@ export default function ProviderDetailPage() {
                     const edit = individualPricingEdits[lt.license_type] || {
                       cost: '',
                       currency: 'EUR',
-                      billing_cycle: 'monthly',
+                      billing_cycle: 'yearly',
+                      payment_frequency: 'monthly',
                       display_name: '',
                       notes: '',
                     };
@@ -1101,7 +1104,7 @@ export default function ProviderDetailPage() {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             <div className="space-y-1.5 md:col-span-2">
                               <Label className="text-xs text-muted-foreground">Display Name</Label>
                               <Input
@@ -1139,6 +1142,19 @@ export default function ProviderDetailPage() {
                             <div className="space-y-1.5">
                               <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
                               <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="yearly">Yearly</SelectItem>
+                                  <SelectItem value="monthly">Monthly</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Payment</Label>
+                              <Select value={edit.payment_frequency} onValueChange={(v) => updateEdit({ payment_frequency: v })}>
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
