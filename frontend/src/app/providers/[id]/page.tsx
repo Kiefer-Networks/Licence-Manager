@@ -24,7 +24,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, ProviderFile } from '@/lib/api';
+import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse } from '@/lib/api';
+import { ThreeTableLayout } from '@/components/licenses';
+import { formatMonthlyCost } from '@/lib/format';
+import { handleSilentError } from '@/lib/error-handler';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { CopyButton, CopyableText } from '@/components/ui/copy-button';
 import {
   ArrowLeft,
   Key,
@@ -67,6 +72,7 @@ export default function ProviderDetailPage() {
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [categorizedLicenses, setCategorizedLicenses] = useState<CategorizedLicensesResponse | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -127,6 +133,13 @@ export default function ProviderDetailPage() {
 
   const isManual = provider?.config?.provider_type === 'manual' || provider?.name === 'manual';
 
+  // Providers where licenses are tied to users (seat-based) vs transferable (license-based)
+  // Seat-based: user IS the license holder, can only activate/deactivate
+  // License-based: licenses can be reassigned to different users
+  const SEAT_BASED_PROVIDERS = ['slack', 'cursor', 'google_workspace', 'microsoft', 'figma', 'miro', 'github', 'gitlab', 'mattermost', 'openai', '1password'];
+  const isSeatBased = provider?.config?.license_model === 'seat_based' ||
+    (provider?.config?.license_model !== 'license_based' && SEAT_BASED_PROVIDERS.includes(provider?.name || ''));
+
   const fetchProvider = useCallback(async () => {
     try {
       const p = await api.getProvider(providerId);
@@ -136,7 +149,7 @@ export default function ProviderDetailPage() {
         license_model: p.config?.license_model || 'license_based',
       });
     } catch (error) {
-      console.error('Failed to fetch provider:', error);
+      handleSilentError('fetchProvider', error);
     }
   }, [providerId]);
 
@@ -145,7 +158,16 @@ export default function ProviderDetailPage() {
       const data = await api.getLicenses({ provider_id: providerId, page_size: 200 });
       setLicenses(data.items);
     } catch (error) {
-      console.error('Failed to fetch licenses:', error);
+      handleSilentError('fetchLicenses', error);
+    }
+  }, [providerId]);
+
+  const fetchCategorizedLicenses = useCallback(async () => {
+    try {
+      const data = await api.getCategorizedLicenses({ provider_id: providerId });
+      setCategorizedLicenses(data);
+    } catch (error) {
+      handleSilentError('fetchCategorizedLicenses', error);
     }
   }, [providerId]);
 
@@ -154,17 +176,23 @@ export default function ProviderDetailPage() {
       const data = await api.getEmployees({ status: 'active', page_size: 200 });
       setEmployees(data.items);
     } catch (error) {
-      console.error('Failed to fetch employees:', error);
+      handleSilentError('fetchEmployees', error);
     }
   }, []);
 
-  const fetchLicenseTypes = useCallback(async () => {
+  const fetchLicenseTypes = useCallback(async (currentProvider?: Provider | null) => {
     try {
-      const data = await api.getProviderLicenseTypes(providerId);
-      setLicenseTypes(data.license_types);
+      const [typesData, pricingData] = await Promise.all([
+        api.getProviderLicenseTypes(providerId),
+        api.getProviderPricing(providerId),
+      ]);
+      setLicenseTypes(typesData.license_types);
+
       // Initialize pricing edits with current values
       const edits: Record<string, { cost: string; currency: string; billing_cycle: string; payment_frequency: string; display_name: string; next_billing_date: string; notes: string }> = {};
-      for (const lt of data.license_types) {
+
+      // Initialize license type pricing
+      for (const lt of typesData.license_types) {
         edits[lt.license_type] = {
           cost: lt.pricing?.cost || '',
           currency: lt.pricing?.currency || 'EUR',
@@ -175,9 +203,24 @@ export default function ProviderDetailPage() {
           notes: lt.pricing?.notes || '',
         };
       }
+
+      // Initialize package pricing - check API response first, then provider config as fallback
+      const pkgPricing = pricingData.package_pricing || currentProvider?.config?.package_pricing;
+      if (pkgPricing) {
+        edits['__package__'] = {
+          cost: pkgPricing.cost || '',
+          currency: pkgPricing.currency || 'EUR',
+          billing_cycle: pkgPricing.billing_cycle || 'yearly',
+          payment_frequency: 'yearly', // Not used for package pricing
+          display_name: '',
+          next_billing_date: pkgPricing.next_billing_date || '',
+          notes: pkgPricing.notes || '',
+        };
+      }
+
       setPricingEdits(edits);
     } catch (error) {
-      console.error('Failed to fetch license types:', error);
+      handleSilentError('fetchLicenseTypes', error);
     }
   }, [providerId]);
 
@@ -186,15 +229,15 @@ export default function ProviderDetailPage() {
       const data = await api.getProviderFiles(providerId);
       setFiles(data.items);
     } catch (error) {
-      console.error('Failed to fetch files:', error);
+      handleSilentError('fetchFiles', error);
     }
   }, [providerId]);
 
   useEffect(() => {
-    Promise.all([fetchProvider(), fetchLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchFiles()]).finally(() =>
+    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchFiles()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchProvider, fetchLicenses, fetchEmployees, fetchLicenseTypes]);
+  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchFiles]);
 
   const handleSync = async () => {
     if (!provider || isManual) return;
@@ -249,6 +292,7 @@ export default function ProviderDetailPage() {
       setLicenseForm({ license_type: '', license_key: '', quantity: '1', monthly_cost: '', valid_until: '', notes: '' });
       setBulkKeys('');
       await fetchLicenses();
+      await fetchCategorizedLicenses();
       await fetchProvider();
     } catch (error: any) {
       showToast('error', error.message || 'Failed to add license');
@@ -287,6 +331,7 @@ export default function ProviderDetailPage() {
       showToast('success', 'License deleted');
       setDeleteDialog(null);
       await fetchLicenses();
+      await fetchCategorizedLicenses();
       await fetchProvider();
     } catch (error: any) {
       showToast('error', error.message || 'Failed to delete');
@@ -298,7 +343,23 @@ export default function ProviderDetailPage() {
     setSavingPricing(true);
     try {
       const pricing: LicenseTypePricing[] = [];
+      let packagePricing: PackagePricing | null = null;
+
       for (const [licenseType, edit] of Object.entries(pricingEdits)) {
+        // Handle package pricing separately
+        if (licenseType === '__package__') {
+          if (edit.cost) {
+            packagePricing = {
+              cost: edit.cost,
+              currency: edit.currency,
+              billing_cycle: edit.billing_cycle,
+              next_billing_date: edit.next_billing_date || undefined,
+              notes: edit.notes || undefined,
+            };
+          }
+          continue;
+        }
+
         if (edit.cost) {
           pricing.push({
             license_type: licenseType,
@@ -312,9 +373,13 @@ export default function ProviderDetailPage() {
           });
         }
       }
-      await api.updateProviderPricing(provider.id, pricing);
-      await fetchLicenseTypes();
+      await api.updateProviderPricing(provider.id, pricing, packagePricing);
+      // Fetch provider first to get updated config, then pass to fetchLicenseTypes
+      const updatedProvider = await api.getProvider(provider.id);
+      setProvider(updatedProvider);
+      await fetchLicenseTypes(updatedProvider);
       await fetchLicenses();
+      await fetchCategorizedLicenses();
       showToast('success', 'Pricing saved and applied to licenses');
     } catch (error: any) {
       showToast('error', error.message || 'Failed to save pricing');
@@ -382,11 +447,22 @@ export default function ProviderDetailPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Stats
-  const totalLicenses = licenses.length;
-  const assignedLicenses = licenses.filter((l) => l.employee_id).length;
-  const unassignedLicenses = totalLicenses - assignedLicenses;
-  const totalMonthlyCost = licenses.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
+  // Stats - count only ACTIVE licenses from categorized arrays
+  const stats = categorizedLicenses?.stats;
+  const totalLicenses = stats?.total_active ?? licenses.filter((l) => l.status === 'active').length;
+  // Count only ACTIVE assigned (internal) - stats.total_assigned includes inactive
+  const assignedLicenses = categorizedLicenses?.assigned.filter((l) => l.status === 'active').length
+    ?? licenses.filter((l) => l.status === 'active' && l.employee_id).length;
+  // Count only ACTIVE external licenses
+  const externalLicenses = categorizedLicenses?.external.filter((l) => l.status === 'active').length ?? 0;
+  // "Not in HRIS" = active internal licenses without employee match (CRITICAL for seat-based providers!)
+  const notInHrisLicenses = categorizedLicenses?.unassigned.filter((l) => l.status === 'active').length ?? 0;
+  // For package providers: available = max_users - active_users (unused seats)
+  // For other providers: this is the same as notInHrisLicenses
+  const maxUsers = provider?.config?.provider_license_info?.max_users;
+  const availableSeats = maxUsers ? Math.max(0, maxUsers - totalLicenses) : null;
+  const inactiveLicenses = stats?.total_inactive ?? licenses.filter((l) => l.status !== 'active').length;
+  const totalMonthlyCost = stats?.monthly_cost ? parseFloat(String(stats.monthly_cost)) : licenses.filter((l) => l.status === 'active').reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
 
   if (loading) {
     return (
@@ -424,15 +500,18 @@ export default function ProviderDetailPage() {
           </div>
         )}
 
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Providers', href: '/providers' },
+            { label: provider.display_name },
+          ]}
+          className="pt-2"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-4">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
               <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isManual ? 'bg-purple-50' : 'bg-zinc-100'}`}>
                 {isManual ? <Package className="h-5 w-5 text-purple-600" /> : <Key className="h-5 w-5 text-zinc-600" />}
               </div>
@@ -448,7 +527,6 @@ export default function ProviderDetailPage() {
                 </div>
               </div>
             </div>
-          </div>
           <div className="flex items-center gap-2">
             {!isManual && (
               <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
@@ -488,46 +566,78 @@ export default function ProviderDetailPage() {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <Key className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase">Licenses</span>
-                  </div>
-                  <p className="text-2xl font-semibold">{totalLicenses}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <Users className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase">Assigned</span>
-                  </div>
-                  <p className="text-2xl font-semibold">{assignedLicenses}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <Package className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase">Unassigned</span>
-                  </div>
-                  <p className="text-2xl font-semibold text-amber-600">{unassignedLicenses}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <DollarSign className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase">Monthly Cost</span>
-                  </div>
-                  <p className="text-2xl font-semibold">
-                    {provider.config?.currency || 'EUR'} {totalMonthlyCost.toFixed(2)}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+            {(() => {
+              // Determine billing cycle from package pricing or license pricing
+              const packagePricing = provider.config?.package_pricing;
+              const licensePricing = provider.config?.license_pricing || {};
+              const firstPricing = Object.values(licensePricing)[0] as { billing_cycle?: string } | undefined;
+              const billingCycle = packagePricing?.billing_cycle || firstPricing?.billing_cycle || 'monthly';
+              const isYearly = billingCycle === 'yearly';
+              const costLabel = isYearly ? 'Yearly Cost' : 'Monthly Cost';
+              const displayCost = isYearly ? totalMonthlyCost * 12 : totalMonthlyCost;
+
+              return (
+                <div className={`grid grid-cols-2 ${availableSeats !== null ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+                  <Card>
+                    <CardContent className="pt-5 pb-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Key className="h-4 w-4" />
+                        <span className="text-xs font-medium uppercase">Active</span>
+                      </div>
+                      <p className="text-2xl font-semibold">{totalLicenses}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className={notInHrisLicenses > 0 ? 'border-red-200 bg-red-50/30' : ''}>
+                    <CardContent className="pt-5 pb-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Users className="h-4 w-4" />
+                        <span className="text-xs font-medium uppercase">Assigned</span>
+                      </div>
+                      <div className="flex items-baseline gap-1 flex-wrap">
+                        <span className="text-2xl font-semibold">{assignedLicenses}</span>
+                        {externalLicenses > 0 && (
+                          <span className="text-sm text-muted-foreground">+ {externalLicenses} <span className="text-xs">(ext)</span></span>
+                        )}
+                        {notInHrisLicenses > 0 && (
+                          <span className="text-sm text-red-600 font-medium">+ {notInHrisLicenses} <span className="text-xs">(⚠ not in HRIS)</span></span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {availableSeats !== null && (
+                    <Card>
+                      <CardContent className="pt-5 pb-4">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                          <Package className="h-4 w-4" />
+                          <span className="text-xs font-medium uppercase">Available</span>
+                        </div>
+                        <p className="text-2xl font-semibold text-emerald-600">{availableSeats}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <Card>
+                    <CardContent className="pt-5 pb-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <UserMinus className="h-4 w-4" />
+                        <span className="text-xs font-medium uppercase">Inactive</span>
+                      </div>
+                      <p className="text-2xl font-semibold text-zinc-400">{inactiveLicenses}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-5 pb-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <DollarSign className="h-4 w-4" />
+                        <span className="text-xs font-medium uppercase">{costLabel}</span>
+                      </div>
+                      <p className="text-xl font-semibold">
+                        {provider.config?.currency || 'EUR'} {displayCost.toFixed(2)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
 
             {/* Info */}
             <Card>
@@ -541,18 +651,43 @@ export default function ProviderDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">License Model</span>
-                  <span>{provider.config?.license_model === 'seat_based' ? 'Seat-based' : 'License-based'}</span>
+                  <span>{isSeatBased ? 'Seat-based' : 'License-based'}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Billing Cycle</span>
-                  <span className="capitalize">{provider.config?.billing_cycle || 'Not set'}</span>
-                </div>
-                {provider.config?.default_cost && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Default Cost</span>
-                    <span>{provider.config.currency || 'EUR'} {provider.config.default_cost}</span>
-                  </div>
-                )}
+                {(() => {
+                  // Get billing info from license_pricing config
+                  const licensePricing = provider.config?.license_pricing || {};
+                  const pricingEntries = Object.values(licensePricing) as Array<{ billing_cycle?: string; cost?: string; currency?: string }>;
+                  const firstPricing = pricingEntries[0];
+                  const billingCycle = provider.config?.billing_cycle || firstPricing?.billing_cycle;
+
+                  // Calculate total monthly cost from pricing config
+                  let configuredMonthlyCost = 0;
+                  for (const pricing of pricingEntries) {
+                    if (pricing.cost) {
+                      const cost = parseFloat(pricing.cost);
+                      if (pricing.billing_cycle === 'yearly') {
+                        configuredMonthlyCost += cost / 12;
+                      } else if (pricing.billing_cycle === 'monthly') {
+                        configuredMonthlyCost += cost;
+                      }
+                    }
+                  }
+
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Billing Cycle</span>
+                        <span className="capitalize">{billingCycle || 'Not set'}</span>
+                      </div>
+                      {firstPricing?.cost && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Cost per License</span>
+                          <span>{firstPricing.currency || 'EUR'} {firstPricing.cost}/{firstPricing.billing_cycle === 'yearly' ? 'year' : 'month'}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {!isManual && provider.last_sync_at && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Last Sync</span>
@@ -561,6 +696,89 @@ export default function ProviderDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Provider License Info (from API) */}
+            {provider.config?.provider_license_info && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    Provider License
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  {(() => {
+                    const licenseInfo = provider.config.provider_license_info;
+                    const expiresAt = licenseInfo.expires_at ? new Date(licenseInfo.expires_at) : null;
+                    const isExpiringSoon = expiresAt && (expiresAt.getTime() - Date.now()) < 30 * 24 * 60 * 60 * 1000;
+                    const usedSeats = totalLicenses;
+                    const maxSeats = licenseInfo.max_users || 0;
+                    const availableSeats = maxSeats - usedSeats;
+                    const usagePercent = maxSeats > 0 ? (usedSeats / maxSeats) * 100 : 0;
+
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">License Type</span>
+                          <Badge variant="outline" className="capitalize">
+                            {licenseInfo.sku_name || 'Standard'}
+                            {licenseInfo.is_trial && <span className="ml-1 text-amber-600">(Trial)</span>}
+                          </Badge>
+                        </div>
+                        {licenseInfo.company && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Licensed To</span>
+                            <span>{licenseInfo.company}</span>
+                          </div>
+                        )}
+                        {maxSeats > 0 && (
+                          <>
+                            <div className="flex justify-between items-center">
+                              <span className="text-muted-foreground">Seat Usage</span>
+                              <span className={usagePercent > 90 ? 'text-red-600 font-medium' : usagePercent > 75 ? 'text-amber-600' : ''}>
+                                {usedSeats} / {maxSeats} ({Math.round(usagePercent)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-zinc-100 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full transition-all ${usagePercent > 90 ? 'bg-red-500' : usagePercent > 75 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Available Seats</span>
+                              <span className={availableSeats < 10 ? 'text-amber-600 font-medium' : 'text-emerald-600'}>
+                                {availableSeats > 0 ? availableSeats : 'No seats available'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {expiresAt && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Expires</span>
+                            <span className={isExpiringSoon ? 'text-red-600 font-medium' : ''}>
+                              {expiresAt.toLocaleDateString('de-DE')}
+                              {isExpiringSoon && (
+                                <Badge variant="outline" className="ml-2 text-red-600 border-red-200 bg-red-50">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Expiring Soon
+                                </Badge>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {licenseInfo.licensee_email && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">License Contact</span>
+                            <span className="text-xs">{licenseInfo.licensee_email}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
@@ -583,119 +801,185 @@ export default function ProviderDetailPage() {
               </div>
             )}
 
-            <div className="border rounded-lg bg-white">
-              {licenses.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No licenses yet</p>
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-zinc-50/50">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">License</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Assigned To</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {licenses.map((license) => {
-                      // Determine license status for badge display
-                      const isExternal = license.is_external_email;
-                      const isOffboarded = license.employee_status === 'offboarded';
-                      const isUnassigned = !license.employee_id;
-
-                      return (
-                        <tr key={license.id} className="border-b last:border-0">
-                          <td className="px-4 py-3">
-                            <div>
-                              <p className="font-medium">{license.external_user_id}</p>
-                              {license.metadata?.notes && (
-                                <p className="text-xs text-muted-foreground">{license.metadata.notes}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {/* Priority: External > Offboarded > Assigned > Unassigned */}
-                            {isExternal ? (
-                              <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
-                                <Globe className="h-3 w-3 mr-1" />
-                                External
-                              </Badge>
-                            ) : isOffboarded ? (
-                              <div className="flex items-center gap-2">
-                                <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                  <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center">
-                                    <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
-                                  </div>
-                                  <span className="hover:underline text-muted-foreground line-through">{license.employee_name}</span>
-                                </Link>
-                                <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
-                                  <Skull className="h-3 w-3 mr-1" />
-                                  Offboarded
-                                </Badge>
-                              </div>
-                            ) : isUnassigned ? (
-                              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
-                                Unassigned
-                              </Badge>
-                            ) : (
-                              <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center group-hover:bg-zinc-200 transition-colors">
-                                  <span className="text-xs font-medium">{license.employee_name?.charAt(0)}</span>
-                                </div>
-                                <span className="hover:underline">{license.employee_name}</span>
-                              </Link>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            <div>
-                              <span>{license.license_type_display_name || license.license_type || '-'}</span>
-                              {license.license_type_display_name && license.license_type && (
-                                <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {license.monthly_cost ? `${license.currency} ${license.monthly_cost}` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {license.employee_id ? (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleUnassign(license)} title="Unassign">
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </Button>
-                              ) : (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAssignDialog(license)} title="Assign">
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              {isManual && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={() => setDeleteDialog(license)} title="Delete">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            {categorizedLicenses ? (
+              <ThreeTableLayout
+                assigned={categorizedLicenses.assigned}
+                unassigned={categorizedLicenses.unassigned}
+                external={categorizedLicenses.external}
+                stats={categorizedLicenses.stats}
+                showProvider={false}
+                showStats={true}
+                maxUsers={provider?.config?.provider_license_info?.max_users}
+              />
+            ) : (
+              <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
+                <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No licenses yet</p>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'pricing' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Package Pricing - for providers with package licenses (e.g., Mattermost) */}
+            {provider.config?.provider_license_info?.max_users && (
+              <Card className="border-blue-200 bg-blue-50/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Package License Pricing
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    This provider uses a package license for {provider.config.provider_license_info.max_users} users.
+                    Enter the total package cost and it will be distributed across all active users.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(() => {
+                    const licenseInfo = provider.config?.provider_license_info;
+                    const packagePricing = provider.config?.package_pricing || {};
+                    const packageEdit = pricingEdits['__package__'] || {
+                      cost: packagePricing.cost || '',
+                      currency: packagePricing.currency || 'EUR',
+                      billing_cycle: packagePricing.billing_cycle || 'yearly',
+                      next_billing_date: packagePricing.next_billing_date || '',
+                      notes: packagePricing.notes || '',
+                    };
+                    const updatePackageEdit = (updates: Partial<typeof packageEdit>) => {
+                      setPricingEdits({
+                        ...pricingEdits,
+                        ['__package__']: { ...packageEdit, ...updates },
+                      });
+                    };
+
+                    const packageCost = parseFloat(packageEdit.cost) || 0;
+                    const maxUsers = licenseInfo?.max_users || 0;
+                    const isYearly = packageEdit.billing_cycle === 'yearly';
+
+                    // Get expiration date from license info
+                    const expiresAt = licenseInfo?.expires_at ? new Date(licenseInfo.expires_at) : null;
+                    const expiresAtStr = expiresAt ? expiresAt.toISOString().split('T')[0] : '';
+
+                    // Use expires_at from license info as default for next_billing_date if not set
+                    const nextBillingDate = packageEdit.next_billing_date || expiresAtStr;
+
+                    // Cost per user based on package size (not active users)
+                    // If yearly: show yearly cost per user, if monthly: show monthly cost per user
+                    const costPerUser = maxUsers > 0 ? packageCost / maxUsers : 0;
+                    const monthlyCostPerUser = isYearly ? costPerUser / 12 : costPerUser;
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-white rounded-lg border">
+                          <div className="text-center">
+                            <p className="text-xs text-muted-foreground uppercase">Package Size</p>
+                            <p className="text-xl font-semibold">{maxUsers} Users</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-muted-foreground uppercase">Active Users</p>
+                            <p className="text-xl font-semibold">{totalLicenses}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-muted-foreground uppercase">{isYearly ? 'Yearly' : 'Monthly'} Cost</p>
+                            <p className="text-xl font-semibold">{packageEdit.currency} {packageCost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-muted-foreground uppercase">Cost per User</p>
+                            <p className="text-xl font-semibold text-emerald-600">
+                              {packageEdit.currency} {costPerUser.toFixed(2)}{isYearly ? '/yr' : '/mo'}
+                            </p>
+                            {isYearly && (
+                              <p className="text-xs text-muted-foreground">({packageEdit.currency} {monthlyCostPerUser.toFixed(2)}/mo)</p>
+                            )}
+                          </div>
+                          {expiresAt && (
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground uppercase">Expires</p>
+                              <p className="text-xl font-semibold">{expiresAt.toLocaleDateString('de-DE')}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Total Package Cost</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="flex-1"
+                                placeholder="0.00"
+                                value={packageEdit.cost}
+                                onChange={(e) => updatePackageEdit({ cost: e.target.value })}
+                              />
+                              <Select value={packageEdit.currency} onValueChange={(v) => updatePackageEdit({ currency: v })}>
+                                <SelectTrigger className="w-20">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="EUR">EUR</SelectItem>
+                                  <SelectItem value="USD">USD</SelectItem>
+                                  <SelectItem value="GBP">GBP</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                            <Select value={packageEdit.billing_cycle} onValueChange={(v) => updatePackageEdit({ billing_cycle: v })}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Next Billing / Renewal</Label>
+                            <Input
+                              type="date"
+                              value={nextBillingDate}
+                              onChange={(e) => updatePackageEdit({ next_billing_date: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Notes</Label>
+                            <Input
+                              placeholder="e.g., Professional Plan"
+                              value={packageEdit.notes}
+                              onChange={(e) => updatePackageEdit({ notes: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
+                            {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                            Apply Package Pricing
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* License Type Pricing */}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-medium">License Type Pricing</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Set prices for each license type. Prices will be applied to existing and new licenses.
+                  {provider.config?.provider_license_info?.max_users
+                    ? 'Or set individual prices per license type (overrides package pricing).'
+                    : 'Set prices for each license type. Prices will be applied to existing and new licenses.'}
                 </p>
               </div>
               <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
@@ -749,7 +1033,12 @@ export default function ProviderDetailPage() {
                             <h3 className="font-medium text-sm">
                               {edit.display_name || lt.license_type}
                             </h3>
-                            <p className="text-xs text-muted-foreground">{lt.count} licenses</p>
+                            <p className="text-xs text-muted-foreground">
+                              {licenses.filter(l => l.license_type === lt.license_type && l.status === 'active').length} active licenses
+                              {licenses.filter(l => l.license_type === lt.license_type && l.status !== 'active').length > 0 && (
+                                <span className="text-zinc-400"> ({licenses.filter(l => l.license_type === lt.license_type && l.status !== 'active').length} inactive)</span>
+                              )}
+                            </p>
                           </div>
                           {monthlyEquivalent && (
                             <Badge variant="secondary" className="text-xs">
@@ -1179,7 +1468,7 @@ export default function ProviderDetailPage() {
           <DialogHeader>
             <DialogTitle>Assign License</DialogTitle>
             <DialogDescription>
-              Assign <strong>{assignDialog?.external_user_id}</strong> to an employee
+              Assign <strong>{assignDialog?.metadata?.email || assignDialog?.external_user_id}</strong> to an employee
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
