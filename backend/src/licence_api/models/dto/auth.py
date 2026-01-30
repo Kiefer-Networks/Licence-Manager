@@ -1,22 +1,133 @@
 """Authentication DTOs."""
 
-from pydantic import BaseModel, EmailStr
+from datetime import datetime
+from uuid import UUID
 
-from licence_api.models.domain.admin_user import UserRole
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TokenResponse(BaseModel):
     """Token response DTO."""
 
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     expires_in: int
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request."""
+
+    refresh_token: str
+
+
+class LocalLoginRequest(BaseModel):
+    """Local login request."""
+
+    email: EmailStr
+    password: str = Field(min_length=8)
+
+
+class PasswordChangeRequest(BaseModel):
+    """Password change request."""
+
+    current_password: str
+    new_password: str = Field(min_length=12)
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request (admin only)."""
+
+    user_id: UUID
+    new_password: str = Field(min_length=12)
+    require_change: bool = True
 
 
 class UserInfo(BaseModel):
     """User info DTO."""
 
+    id: UUID
     email: EmailStr
     name: str | None = None
     picture_url: str | None = None
-    role: UserRole
+    auth_provider: str
+    is_active: bool
+    require_password_change: bool
+    roles: list[str]
+    permissions: list[str]
+    is_superadmin: bool = False
+    last_login_at: datetime | None = None
+
+
+class UserCreateRequest(BaseModel):
+    """User creation request."""
+
+    email: EmailStr
+    name: str | None = None
+    password: str = Field(min_length=12)
+    role_codes: list[str] = []
+
+
+class UserUpdateRequest(BaseModel):
+    """User update request."""
+
+    name: str | None = None
+    is_active: bool | None = None
+    role_codes: list[str] | None = None
+
+
+class RoleResponse(BaseModel):
+    """Role response DTO."""
+
+    id: UUID
+    code: str
+    name: str
+    description: str | None = None
+    is_system: bool
+    priority: int
+    permissions: list[str]
+
+
+class RoleCreateRequest(BaseModel):
+    """Role creation request."""
+
+    code: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+    name: str = Field(min_length=2, max_length=100)
+    description: str | None = None
+    permission_codes: list[str] = []
+
+
+class RoleUpdateRequest(BaseModel):
+    """Role update request."""
+
+    name: str | None = None
+    description: str | None = None
+    permission_codes: list[str] | None = None
+
+
+class PermissionResponse(BaseModel):
+    """Permission response DTO."""
+
+    id: UUID
+    code: str
+    name: str
+    description: str | None = None
+    category: str
+
+
+class PermissionsByCategory(BaseModel):
+    """Permissions grouped by category."""
+
+    category: str
+    permissions: list[PermissionResponse]
+
+
+class SessionInfo(BaseModel):
+    """Active session info."""
+
+    id: UUID
+    user_agent: str | None = None
+    ip_address: str | None = None
+    created_at: datetime
+    expires_at: datetime
+    is_current: bool = False

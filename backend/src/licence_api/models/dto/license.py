@@ -45,3 +45,25 @@ class LicenseListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class LicenseStats(BaseModel):
+    """License statistics for categorized view."""
+
+    total_active: int
+    total_assigned: int
+    total_unassigned: int
+    total_inactive: int
+    total_external: int
+    monthly_cost: Decimal
+    potential_savings: Decimal  # Unassigned + offboarded licenses
+    currency: str = "EUR"
+
+
+class CategorizedLicensesResponse(BaseModel):
+    """Response with licenses categorized into assigned/unassigned/external."""
+
+    assigned: list[LicenseResponse]
+    unassigned: list[LicenseResponse]
+    external: list[LicenseResponse]
+    stats: LicenseStats

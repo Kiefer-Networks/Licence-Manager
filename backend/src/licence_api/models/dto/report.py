@@ -30,13 +30,17 @@ class InactiveLicenseEntry(BaseModel):
     """Inactive license entry."""
 
     license_id: str
+    provider_id: str
     provider_name: str
+    employee_id: str | None = None
     employee_name: str | None = None
     employee_email: str | None = None
+    employee_status: str | None = None
     external_user_id: str
     last_activity_at: datetime | None = None
     days_inactive: int
     monthly_cost: Decimal | None = None
+    is_external_email: bool = False
 
 
 class InactiveLicenseReport(BaseModel):
@@ -70,6 +74,7 @@ class ExternalUserLicense(BaseModel):
     """External user license entry."""
 
     license_id: str
+    provider_id: str
     provider_name: str
     external_user_id: str
     employee_id: str | None = None

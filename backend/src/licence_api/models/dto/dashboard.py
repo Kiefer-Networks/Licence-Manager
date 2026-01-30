@@ -51,6 +51,7 @@ class DashboardResponse(BaseModel):
     total_licenses: int
     active_licenses: int
     unassigned_licenses: int
+    external_licenses: int = 0
     total_monthly_cost: Decimal
     potential_savings: Decimal = Decimal("0")
     currency: str = "EUR"
