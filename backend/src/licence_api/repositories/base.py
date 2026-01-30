@@ -20,7 +20,7 @@ class BaseRepository(Generic[T]):
         """Initialize repository with database session."""
         self.session = session
 
-    async def get_by_id(self, id: UUID) -> T | None:
+    async def get(self, id: UUID) -> T | None:
         """Get a record by ID.
 
         Args:
@@ -33,6 +33,17 @@ class BaseRepository(Generic[T]):
             select(self.model).where(self.model.id == id)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_id(self, id: UUID) -> T | None:
+        """Get a record by ID (alias for get).
+
+        Args:
+            id: Record UUID
+
+        Returns:
+            Record or None if not found
+        """
+        return await self.get(id)
 
     async def get_all(
         self,
