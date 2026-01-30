@@ -4,7 +4,7 @@ from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.payment_method_repository import PaymentMethodRepository
 from licence_api.security.auth import get_current_user, require_admin
+from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 
 router = APIRouter()
 
@@ -126,6 +127,7 @@ async def list_payment_methods(
 
 @router.post("", response_model=PaymentMethodResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment_method(
+    http_request: Request,
     request: PaymentMethodCreate,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -151,6 +153,17 @@ async def create_payment_method(
 
     if request.is_default:
         await repo.set_default(method.id)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PAYMENT_METHOD_CREATE,
+        resource_type=ResourceType.PAYMENT_METHOD,
+        resource_id=method.id,
+        user=current_user,
+        request=http_request,
+        details={"name": request.name, "type": request.type, "is_default": request.is_default},
+    )
 
     await db.commit()
     await db.refresh(method)
@@ -199,6 +212,7 @@ async def get_payment_method(
 
 @router.put("/{payment_method_id}", response_model=PaymentMethodResponse)
 async def update_payment_method(
+    http_request: Request,
     payment_method_id: UUID,
     request: PaymentMethodUpdate,
     current_user: Annotated[AdminUser, Depends(require_admin)],
@@ -215,18 +229,34 @@ async def update_payment_method(
         )
 
     update_data = {}
+    changes = {}
     if request.name is not None:
         update_data["name"] = request.name
+        changes["name"] = {"old": method.name, "new": request.name}
     if request.details is not None:
         update_data["details"] = request.details
+        changes["details_updated"] = True
     if request.notes is not None:
         update_data["notes"] = request.notes
+        changes["notes_updated"] = True
 
     if update_data:
         method = await repo.update(payment_method_id, **update_data)
 
     if request.is_default:
         await repo.set_default(payment_method_id)
+        changes["is_default"] = {"old": False, "new": True}
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PAYMENT_METHOD_UPDATE,
+        resource_type=ResourceType.PAYMENT_METHOD,
+        resource_id=payment_method_id,
+        user=current_user,
+        request=http_request,
+        details={"changes": changes},
+    )
 
     await db.commit()
     await db.refresh(method)
@@ -246,12 +276,25 @@ async def update_payment_method(
 
 @router.delete("/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_payment_method(
+    http_request: Request,
     payment_method_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a payment method. Admin only."""
     repo = PaymentMethodRepository(db)
+
+    # Get method info for audit before deletion
+    method = await repo.get_by_id(payment_method_id)
+    if method is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment method not found",
+        )
+
+    method_name = method.name
+    method_type = method.type
+
     deleted = await repo.delete(payment_method_id)
 
     if not deleted:
@@ -259,5 +302,16 @@ async def delete_payment_method(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Payment method not found",
         )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PAYMENT_METHOD_DELETE,
+        resource_type=ResourceType.PAYMENT_METHOD,
+        resource_id=payment_method_id,
+        user=current_user,
+        request=http_request,
+        details={"name": method_name, "type": method_type},
+    )
 
     await db.commit()

@@ -3,7 +3,7 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.notification_service import NotificationService
 
 router = APIRouter()
@@ -148,15 +149,33 @@ async def get_company_domains(
 
 @router.put("/company-domains", response_model=CompanyDomainsResponse)
 async def set_company_domains(
+    http_request: Request,
     request: CompanyDomainsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CompanyDomainsResponse:
     """Set company domains. Requires settings.edit permission."""
     repo = SettingsRepository(db)
+
+    # Get old value for audit
+    old_setting = await repo.get("company_domains")
+    old_domains = old_setting.get("domains", []) if old_setting else []
+
     # Normalize domains (lowercase, strip whitespace)
     domains = [d.strip().lower() for d in request.domains if d.strip()]
     await repo.set("company_domains", {"domains": domains})
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_UPDATE,
+        resource_type=ResourceType.SETTING,
+        resource_id="company_domains",
+        user=current_user,
+        request=http_request,
+        details={"old_domains": old_domains, "new_domains": domains},
+    )
+
     await db.commit()
     return CompanyDomainsResponse(domains=domains)
 
@@ -174,6 +193,7 @@ async def get_setting(
 
 @router.put("/{key}", response_model=dict[str, Any])
 async def set_setting(
+    http_request: Request,
     key: str,
     request: SettingValue,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
@@ -182,11 +202,25 @@ async def set_setting(
     """Set a setting value. Requires settings.edit permission."""
     repo = SettingsRepository(db)
     await repo.set(key, request.value)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_UPDATE,
+        resource_type=ResourceType.SETTING,
+        resource_id=key,
+        user=current_user,
+        request=http_request,
+        details={"key": key},
+    )
+    await db.commit()
+
     return request.value
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_setting(
+    http_request: Request,
     key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -199,6 +233,18 @@ async def delete_setting(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Setting not found",
         )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_DELETE,
+        resource_type=ResourceType.SETTING,
+        resource_id=key,
+        user=current_user,
+        request=http_request,
+        details={"key": key},
+    )
+    await db.commit()
 
 
 # Notification rules
@@ -228,6 +274,7 @@ async def list_notification_rules(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_notification_rule(
+    http_request: Request,
     request: NotificationRuleCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -239,6 +286,19 @@ async def create_notification_rule(
         slack_channel=request.slack_channel,
         template=request.template,
     )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_UPDATE,
+        resource_type=ResourceType.NOTIFICATION_RULE,
+        resource_id=rule.id,
+        user=current_user,
+        request=http_request,
+        details={"action": "create", "event_type": request.event_type, "slack_channel": request.slack_channel},
+    )
+    await db.commit()
+
     return NotificationRuleResponse(
         id=rule.id,
         event_type=rule.event_type,
@@ -250,6 +310,7 @@ async def create_notification_rule(
 
 @router.put("/notifications/rules/{rule_id}", response_model=NotificationRuleResponse)
 async def update_notification_rule(
+    http_request: Request,
     rule_id: UUID,
     request: NotificationRuleUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
@@ -268,6 +329,19 @@ async def update_notification_rule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification rule not found",
         )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_UPDATE,
+        resource_type=ResourceType.NOTIFICATION_RULE,
+        resource_id=rule_id,
+        user=current_user,
+        request=http_request,
+        details={"action": "update", "changes": request.model_dump(exclude_unset=True)},
+    )
+    await db.commit()
+
     return NotificationRuleResponse(
         id=rule.id,
         event_type=rule.event_type,
@@ -279,6 +353,7 @@ async def update_notification_rule(
 
 @router.delete("/notifications/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_notification_rule(
+    http_request: Request,
     rule_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -291,6 +366,18 @@ async def delete_notification_rule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification rule not found",
         )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_DELETE,
+        resource_type=ResourceType.NOTIFICATION_RULE,
+        resource_id=rule_id,
+        user=current_user,
+        request=http_request,
+        details={"action": "delete"},
+    )
+    await db.commit()
 
 
 class TestNotificationRequest(BaseModel):

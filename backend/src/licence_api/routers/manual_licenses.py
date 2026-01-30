@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from licence_api.security.auth import require_permission, Permissions
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 
 router = APIRouter()
 
@@ -60,6 +61,7 @@ class ManualLicenseBulkCreate(BaseModel):
 
 @router.post("", response_model=list[LicenseResponse])
 async def create_manual_licenses(
+    http_request: Request,
     request: ManualLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -146,12 +148,30 @@ async def create_manual_licenses(
             )
         )
 
+    # Audit log
+    audit = AuditService(db)
+    for lic in created_licenses:
+        await audit.log(
+            action=AuditAction.LICENSE_CREATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=lic.id,
+            user=current_user,
+            request=http_request,
+            details={
+                "provider_id": str(request.provider_id),
+                "license_type": request.license_type,
+                "employee_id": str(request.employee_id) if request.employee_id else None,
+                "manual_entry": True,
+            },
+        )
+
     await db.commit()
     return created_licenses
 
 
 @router.post("/bulk", response_model=list[LicenseResponse])
 async def create_manual_licenses_bulk(
+    http_request: Request,
     request: ManualLicenseBulkCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -229,12 +249,29 @@ async def create_manual_licenses_bulk(
             )
         )
 
+    # Audit log - bulk create
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.LICENSE_BULK_CREATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=None,
+        user=current_user,
+        request=http_request,
+        details={
+            "provider_id": str(request.provider_id),
+            "license_type": request.license_type,
+            "count": len(created_licenses),
+            "manual_entry": True,
+        },
+    )
+
     await db.commit()
     return created_licenses
 
 
 @router.put("/{license_id}", response_model=LicenseResponse)
 async def update_manual_license(
+    http_request: Request,
     license_id: UUID,
     request: ManualLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -295,6 +332,18 @@ async def update_manual_license(
 
     # Apply updates
     license_orm = await license_repo.update(license_id, **update_data)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.LICENSE_UPDATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        user=current_user,
+        request=http_request,
+        details={"changes": list(update_data.keys()), "manual_entry": True},
+    )
+
     await db.commit()
 
     # Get provider and employee for response
@@ -324,6 +373,7 @@ async def update_manual_license(
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
 async def assign_manual_license(
+    http_request: Request,
     license_id: UUID,
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
@@ -331,11 +381,12 @@ async def assign_manual_license(
 ) -> LicenseResponse:
     """Assign a manual license to an employee. Requires licenses.assign permission."""
     request = ManualLicenseUpdate(employee_id=employee_id)
-    return await update_manual_license(license_id, request, current_user, db)
+    return await update_manual_license(http_request, license_id, request, current_user, db)
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 async def unassign_manual_license(
+    http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -352,6 +403,8 @@ async def unassign_manual_license(
             detail="License not found",
         )
 
+    old_employee_id = license_orm.employee_id
+
     # Update
     license_orm = await license_repo.update(
         license_id,
@@ -359,6 +412,18 @@ async def unassign_manual_license(
         status="unassigned",
         assigned_at=None,
     )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.LICENSE_UNASSIGN,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        user=current_user,
+        request=http_request,
+        details={"previous_employee_id": str(old_employee_id) if old_employee_id else None},
+    )
+
     await db.commit()
 
     provider = await provider_repo.get_by_id(license_orm.provider_id)
@@ -384,6 +449,7 @@ async def unassign_manual_license(
 
 @router.delete("/{license_id}")
 async def delete_manual_license(
+    http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -407,7 +473,21 @@ async def delete_manual_license(
             detail="Can only delete manual licenses",
         )
 
+    provider_id = license_orm.provider_id
+
     await license_repo.delete(license_id)
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.LICENSE_DELETE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        user=current_user,
+        request=http_request,
+        details={"provider_id": str(provider_id), "manual_entry": True},
+    )
+
     await db.commit()
 
     return {"success": True, "message": "License deleted"}

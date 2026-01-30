@@ -23,6 +23,8 @@ from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.security.rate_limit import limiter
+from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
+from licence_api.services.cache_service import get_cache_service
 from licence_api.services.sync_service import SyncService
 
 router = APIRouter()
@@ -165,6 +167,7 @@ async def get_provider(
 
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
+    http_request: Request,
     request: ProviderCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -191,6 +194,25 @@ async def create_provider(
         config=request.config or {},
     )
 
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_CREATE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider.id,
+        user=current_user,
+        request=http_request,
+        details={
+            "name": request.name,
+            "display_name": request.display_name,
+        },
+    )
+
+    # Invalidate relevant caches
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
+    await cache.invalidate_dashboard()
+
     return ProviderResponse(
         id=provider.id,
         name=provider.name,
@@ -207,6 +229,7 @@ async def create_provider(
 
 @router.put("/{provider_id}", response_model=ProviderResponse)
 async def update_provider(
+    http_request: Request,
     provider_id: UUID,
     request: ProviderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
@@ -222,25 +245,47 @@ async def update_provider(
         )
 
     update_data: dict[str, Any] = {}
+    changes: dict[str, Any] = {}
 
     if request.display_name is not None:
         update_data["display_name"] = request.display_name
+        changes["display_name"] = {"old": provider.display_name, "new": request.display_name}
 
     if request.enabled is not None:
         update_data["enabled"] = request.enabled
+        changes["enabled"] = {"old": provider.enabled, "new": request.enabled}
 
     if request.config is not None:
         update_data["config"] = request.config
+        changes["config_updated"] = True
 
     if request.credentials is not None:
         encryption = get_encryption_service()
         update_data["credentials_encrypted"] = encryption.encrypt(request.credentials)
+        changes["credentials_updated"] = True
 
     if request.payment_method_id is not None:
         update_data["payment_method_id"] = request.payment_method_id
+        changes["payment_method_id"] = {"old": str(provider.payment_method_id) if provider.payment_method_id else None, "new": str(request.payment_method_id)}
 
     if update_data:
         provider = await repo.update(provider_id, **update_data)
+
+        # Audit log
+        audit = AuditService(db)
+        await audit.log(
+            action=AuditAction.PROVIDER_UPDATE,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=http_request,
+            details={"changes": changes},
+        )
+
+        # Invalidate relevant caches
+        cache = await get_cache_service()
+        await cache.invalidate_providers()
+        await cache.invalidate_dashboard()
 
     from licence_api.repositories.license_repository import LicenseRepository
     license_repo = LicenseRepository(db)
@@ -277,18 +322,50 @@ async def update_provider(
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider(
+    http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a provider. Requires providers.delete permission."""
     repo = ProviderRepository(db)
+
+    # Get provider info for audit before deletion
+    provider = await repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    provider_name = provider.name
+    provider_display_name = provider.display_name
+
     deleted = await repo.delete(provider_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_DELETE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider_id,
+        user=current_user,
+        request=http_request,
+        details={
+            "name": provider_name,
+            "display_name": provider_display_name,
+        },
+    )
+
+    # Invalidate relevant caches
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
+    await cache.invalidate_dashboard()
 
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
@@ -351,36 +428,90 @@ async def test_provider_connection(
 
 @router.post("/sync", response_model=SyncResponse)
 async def trigger_sync(
+    http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
     provider_id: UUID | None = None,
 ) -> SyncResponse:
     """Trigger a sync operation. Requires providers.sync permission."""
     service = SyncService(db)
+    audit = AuditService(db)
+
     try:
         results = await service.trigger_sync(provider_id)
+
+        # Audit log
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=http_request,
+            details={"results": results, "scope": "single" if provider_id else "all"},
+        )
+
+        # Invalidate caches after sync (data has changed)
+        cache = await get_cache_service()
+        await cache.invalidate_all()
+
         return SyncResponse(success=True, results=results)
-    except Exception:
+    except Exception as e:
+        # Audit failed sync
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=http_request,
+            details={"error": str(e), "success": False},
+        )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
 
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
 async def sync_provider(
+    http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SyncResponse:
     """Sync a specific provider. Requires providers.sync permission."""
     service = SyncService(db)
+    audit = AuditService(db)
+
     try:
         results = await service.sync_provider(provider_id)
+
+        # Audit log
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=http_request,
+            details={"results": results},
+        )
+
+        # Invalidate caches after sync (data has changed)
+        cache = await get_cache_service()
+        await cache.invalidate_all()
+
         return SyncResponse(success=True, results=results)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-    except Exception:
+    except Exception as e:
+        # Audit failed sync
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=http_request,
+            details={"error": str(e), "success": False},
+        )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
 
@@ -536,6 +667,7 @@ async def get_provider_pricing(
 
 @router.put("/{provider_id}/pricing", response_model=LicenseTypePricingResponse)
 async def update_provider_pricing(
+    http_request: Request,
     provider_id: UUID,
     request: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
@@ -630,6 +762,21 @@ async def update_provider_pricing(
                 currency=p.currency,
             )
 
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_UPDATE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider_id,
+        user=current_user,
+        request=http_request,
+        details={
+            "action": "pricing_update",
+            "license_types_count": len(request.pricing),
+            "has_package_pricing": request.package_pricing is not None,
+        },
+    )
+
     await db.commit()
 
     return LicenseTypePricingResponse(
@@ -640,6 +787,7 @@ async def update_provider_pricing(
 
 @router.post("/sync/avatars", response_model=SyncResponse)
 async def resync_avatars(
+    http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
     force: bool = False,
@@ -653,13 +801,35 @@ async def resync_avatars(
     Requires providers.sync permission.
     """
     service = SyncService(db)
+    audit = AuditService(db)
+
     try:
         results = await service.resync_avatars(force=force)
+
+        # Audit log
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=None,
+            user=current_user,
+            request=http_request,
+            details={"action": "avatar_resync", "force": force, "results": results},
+        )
+
         return SyncResponse(success=True, results=results)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="HiBob provider not configured",
         )
-    except Exception:
+    except Exception as e:
+        # Audit failed sync
+        await audit.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=None,
+            user=current_user,
+            request=http_request,
+            details={"action": "avatar_resync", "error": str(e), "success": False},
+        )
         return SyncResponse(success=False, results={"error": "Avatar sync failed"})
