@@ -1,5 +1,6 @@
 """Providers router."""
 
+import copy
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -19,7 +20,7 @@ from licence_api.models.dto.provider import (
 )
 from licence_api.routers.payment_methods import calculate_expiry_info
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import get_current_user, require_admin
+from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.sync_service import SyncService
 
@@ -49,12 +50,26 @@ class SyncResponse(BaseModel):
 
 @router.get("", response_model=ProviderListResponse)
 async def list_providers(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderListResponse:
-    """List all configured providers."""
+    """List all configured providers. Requires providers.view permission."""
+    from licence_api.models.dto.provider import ProviderLicenseStats
+    from licence_api.repositories.license_repository import LicenseRepository
+    from licence_api.repositories.settings_repository import SettingsRepository
+
     repo = ProviderRepository(db)
+    license_repo = LicenseRepository(db)
+    settings_repo = SettingsRepository(db)
+
     providers_with_counts = await repo.get_all_with_license_counts()
+
+    # Get company domains for external detection
+    domains_setting = await settings_repo.get("company_domains")
+    company_domains = [d.lower() for d in (domains_setting.get("domains") or [])] if domains_setting else []
+
+    # Get license stats per provider
+    license_stats = await license_repo.get_stats_by_provider(company_domains)
 
     items = []
     for p, count in providers_with_counts:
@@ -67,6 +82,16 @@ async def list_providers(
                 type=p.payment_method.type,
                 is_expiring=is_expiring,
             )
+
+        # Get stats for this provider
+        stats = license_stats.get(p.id, {})
+        provider_stats = ProviderLicenseStats(
+            active=stats.get("active", 0),
+            assigned=stats.get("assigned", 0),
+            external=stats.get("external", 0),
+            not_in_hris=stats.get("not_in_hris", 0),
+        )
+
         items.append(
             ProviderResponse(
                 id=p.id,
@@ -77,6 +102,7 @@ async def list_providers(
                 last_sync_at=p.last_sync_at,
                 last_sync_status=p.last_sync_status,
                 license_count=count,
+                license_stats=provider_stats,
                 payment_method_id=p.payment_method_id,
                 payment_method=pm_summary,
                 created_at=p.created_at,
@@ -90,10 +116,10 @@ async def list_providers(
 @router.get("/{provider_id}", response_model=ProviderResponse)
 async def get_provider(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
-    """Get a single provider by ID."""
+    """Get a single provider by ID. Requires providers.view permission."""
     repo = ProviderRepository(db)
     provider = await repo.get_by_id(provider_id)
     if provider is None:
@@ -136,10 +162,10 @@ async def get_provider(
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     request: ProviderCreate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
-    """Create a new provider. Admin only."""
+    """Create a new provider. Requires providers.create permission."""
     repo = ProviderRepository(db)
 
     # Check if provider already exists
@@ -179,10 +205,10 @@ async def create_provider(
 async def update_provider(
     provider_id: UUID,
     request: ProviderUpdate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
-    """Update a provider. Admin only."""
+    """Update a provider. Requires providers.edit permission."""
     repo = ProviderRepository(db)
     provider = await repo.get_by_id(provider_id)
     if provider is None:
@@ -248,10 +274,10 @@ async def update_provider(
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    """Delete a provider. Admin only."""
+    """Delete a provider. Requires providers.delete permission."""
     repo = ProviderRepository(db)
     deleted = await repo.delete(provider_id)
     if not deleted:
@@ -264,9 +290,9 @@ async def delete_provider(
 @router.post("/test-connection", response_model=TestConnectionResponse)
 async def test_provider_connection(
     request: TestConnectionRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
 ) -> TestConnectionResponse:
-    """Test provider connection with given credentials. Admin only."""
+    """Test provider connection with given credentials. Requires providers.create permission."""
     # Manual providers don't need connection test
     if request.name == "manual":
         return TestConnectionResponse(
@@ -319,11 +345,11 @@ async def test_provider_connection(
 
 @router.post("/sync", response_model=SyncResponse)
 async def trigger_sync(
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
     provider_id: UUID | None = None,
 ) -> SyncResponse:
-    """Trigger a sync operation. Admin only."""
+    """Trigger a sync operation. Requires providers.sync permission."""
     service = SyncService(db)
     try:
         results = await service.trigger_sync(provider_id)
@@ -335,10 +361,10 @@ async def trigger_sync(
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
 async def sync_provider(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SyncResponse:
-    """Sync a specific provider. Admin only."""
+    """Sync a specific provider. Requires providers.sync permission."""
     service = SyncService(db)
     try:
         results = await service.sync_provider(provider_id)
@@ -365,16 +391,28 @@ class LicenseTypePricing(BaseModel):
     notes: str | None = None  # e.g., "Includes support", "Volume discount"
 
 
+class PackagePricing(BaseModel):
+    """Package pricing for providers with bulk/package licenses (e.g., Mattermost)."""
+
+    cost: str  # Total package cost
+    currency: str = "EUR"
+    billing_cycle: str = "yearly"  # yearly, monthly
+    next_billing_date: str | None = None
+    notes: str | None = None
+
+
 class LicenseTypePricingResponse(BaseModel):
     """Response with all license type pricing."""
 
     pricing: list[LicenseTypePricing]
+    package_pricing: PackagePricing | None = None
 
 
 class LicenseTypePricingRequest(BaseModel):
     """Request to update license type pricing."""
 
     pricing: list[LicenseTypePricing]
+    package_pricing: PackagePricing | None = None
 
 
 class LicenseTypeInfo(BaseModel):
@@ -394,10 +432,10 @@ class LicenseTypesResponse(BaseModel):
 @router.get("/{provider_id}/license-types", response_model=LicenseTypesResponse)
 async def get_provider_license_types(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseTypesResponse:
-    """Get all license types for a provider with their counts and current pricing."""
+    """Get all license types for a provider with their counts and current pricing. Requires providers.view permission."""
     from licence_api.repositories.license_repository import LicenseRepository
 
     repo = ProviderRepository(db)
@@ -448,10 +486,10 @@ async def get_provider_license_types(
 @router.get("/{provider_id}/pricing", response_model=LicenseTypePricingResponse)
 async def get_provider_pricing(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseTypePricingResponse:
-    """Get license type pricing for a provider."""
+    """Get license type pricing for a provider. Requires providers.view permission."""
     repo = ProviderRepository(db)
     provider = await repo.get_by_id(provider_id)
     if provider is None:
@@ -475,17 +513,29 @@ async def get_provider_pricing(
         for lt, info in pricing_config.items()
     ]
 
-    return LicenseTypePricingResponse(pricing=pricing)
+    # Get package pricing if exists
+    package_pricing_config = (provider.config or {}).get("package_pricing")
+    package_pricing = None
+    if package_pricing_config:
+        package_pricing = PackagePricing(
+            cost=package_pricing_config.get("cost", "0"),
+            currency=package_pricing_config.get("currency", "EUR"),
+            billing_cycle=package_pricing_config.get("billing_cycle", "yearly"),
+            next_billing_date=package_pricing_config.get("next_billing_date"),
+            notes=package_pricing_config.get("notes"),
+        )
+
+    return LicenseTypePricingResponse(pricing=pricing, package_pricing=package_pricing)
 
 
 @router.put("/{provider_id}/pricing", response_model=LicenseTypePricingResponse)
 async def update_provider_pricing(
     provider_id: UUID,
     request: LicenseTypePricingRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseTypePricingResponse:
-    """Update license type pricing for a provider. Admin only."""
+    """Update license type pricing for a provider. Requires providers.edit permission."""
     from licence_api.repositories.license_repository import LicenseRepository
     from decimal import Decimal
 
@@ -499,7 +549,45 @@ async def update_provider_pricing(
             detail="Provider not found",
         )
 
-    # Build pricing config
+    # Create a copy of config to ensure SQLAlchemy detects the change
+    config = copy.deepcopy(provider.config) if provider.config else {}
+
+    # Handle package pricing (for providers like Mattermost with bulk licenses)
+    if request.package_pricing and request.package_pricing.cost:
+        package_config = {
+            "cost": request.package_pricing.cost,
+            "currency": request.package_pricing.currency,
+            "billing_cycle": request.package_pricing.billing_cycle,
+            "next_billing_date": request.package_pricing.next_billing_date,
+            "notes": request.package_pricing.notes,
+        }
+        config["package_pricing"] = package_config
+
+        # Calculate monthly package cost
+        package_cost = Decimal(request.package_pricing.cost)
+        if request.package_pricing.billing_cycle == "yearly":
+            monthly_package_cost = package_cost / 12
+        else:
+            monthly_package_cost = package_cost
+
+        # Get package size (max_users) from provider_license_info
+        license_info = config.get("provider_license_info", {})
+        max_users = license_info.get("max_users", 0)
+
+        if max_users > 0:
+            # Calculate cost per user based on package size (not active users)
+            # Example: 52250 EUR/year / 500 users = 104.50 EUR/year per user = 8.71 EUR/month per user
+            cost_per_license = monthly_package_cost / max_users
+            await license_repo.update_all_active_pricing(
+                provider_id=provider_id,
+                monthly_cost=cost_per_license,
+                currency=request.package_pricing.currency,
+            )
+    else:
+        # Clear package pricing if not provided
+        config.pop("package_pricing", None)
+
+    # Build individual license type pricing config
     pricing_config = {}
     for p in request.pricing:
         if p.cost and p.cost != "0":
@@ -513,12 +601,10 @@ async def update_provider_pricing(
                 "notes": p.notes,
             }
 
-    # Update provider config
-    config = provider.config or {}
     config["license_pricing"] = pricing_config
     await repo.update(provider_id, config=config)
 
-    # Calculate monthly cost for each license type and apply
+    # Apply individual license type pricing (overrides package pricing for specific types)
     for p in request.pricing:
         if p.cost:
             # Calculate monthly equivalent cost
@@ -540,12 +626,15 @@ async def update_provider_pricing(
 
     await db.commit()
 
-    return LicenseTypePricingResponse(pricing=request.pricing)
+    return LicenseTypePricingResponse(
+        pricing=request.pricing,
+        package_pricing=request.package_pricing,
+    )
 
 
 @router.post("/sync/avatars", response_model=SyncResponse)
 async def resync_avatars(
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     db: Annotated[AsyncSession, Depends(get_db)],
     force: bool = False,
 ) -> SyncResponse:
@@ -555,7 +644,7 @@ async def resync_avatars(
         force: If True, delete existing avatars and re-download all.
                If False (default), only download missing avatars.
 
-    Admin only.
+    Requires providers.sync permission.
     """
     service = SyncService(db)
     try:
