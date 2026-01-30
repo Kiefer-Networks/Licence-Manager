@@ -71,6 +71,35 @@ class Settings(BaseSettings):
     session_cookie_httponly: bool = True
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
+    # CORS settings
+    cors_origins: str = "http://localhost:3000"  # Comma-separated list
+
+    # Trusted proxies for rate limiting (comma-separated IP/CIDR ranges)
+    trusted_proxies: str = ""
+
+    # Rate limiting settings (requests per minute unless otherwise noted)
+    rate_limit_default: int = 100
+    rate_limit_auth_login: int = 5
+    rate_limit_auth_refresh: int = 10
+    rate_limit_auth_password_change: int = 3
+    rate_limit_auth_logout: int = 10
+    rate_limit_admin_user_create: int = 10
+    rate_limit_admin_role_modify: int = 20
+    rate_limit_provider_test: int = 10
+    rate_limit_sensitive: int = 5
+
+    # Cache TTL settings (in seconds)
+    cache_ttl_dashboard: int = 300  # 5 minutes
+    cache_ttl_departments: int = 3600  # 1 hour
+    cache_ttl_providers: int = 300  # 5 minutes
+    cache_ttl_provider_stats: int = 300  # 5 minutes
+    cache_ttl_license_stats: int = 300  # 5 minutes
+    cache_ttl_payment_methods: int = 1800  # 30 minutes
+    cache_ttl_settings: int = 3600  # 1 hour
+
+    # Audit settings
+    audit_retention_days: int = 365  # How long to keep audit logs
+
     @property
     def async_database_url(self) -> str:
         """Get async database URL for SQLAlchemy."""
@@ -81,6 +110,18 @@ class Settings(BaseSettings):
     def google_oauth_enabled(self) -> bool:
         """Check if Google OAuth is configured."""
         return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Get CORS origins as a list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_proxies_list(self) -> list[str]:
+        """Get trusted proxies as a list."""
+        if not self.trusted_proxies:
+            return []
+        return [proxy.strip() for proxy in self.trusted_proxies.split(",") if proxy.strip()]
 
 
 @lru_cache

@@ -1,6 +1,5 @@
 """Rate limiting configuration for security-sensitive endpoints."""
 
-import os
 from ipaddress import ip_address, ip_network
 from typing import Sequence
 
@@ -11,20 +10,22 @@ from licence_api.config import get_settings
 
 
 def _get_trusted_proxies() -> Sequence[str]:
-    """Get list of trusted proxy IP ranges from environment.
+    """Get list of trusted proxy IP ranges from configuration.
 
     Returns:
         List of IP addresses or CIDR ranges that are trusted proxies.
     """
-    proxies_env = os.environ.get("TRUSTED_PROXIES", "")
-    if not proxies_env:
-        # Default: trust localhost and common private ranges for development
-        settings = get_settings()
-        if settings.environment == "development":
-            return ["127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-        # In production, require explicit configuration
-        return []
-    return [p.strip() for p in proxies_env.split(",") if p.strip()]
+    settings = get_settings()
+
+    if settings.trusted_proxies_list:
+        return settings.trusted_proxies_list
+
+    # Default: trust localhost and common private ranges for development
+    if settings.environment == "development":
+        return ["127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+
+    # In production, require explicit configuration
+    return []
 
 
 def _is_trusted_proxy(client_ip: str, trusted_proxies: Sequence[str]) -> bool:
@@ -109,8 +110,8 @@ def _get_storage_uri() -> str | None:
     """
     settings = get_settings()
 
-    # Always use Redis if REDIS_URL is set
-    redis_url = os.environ.get("REDIS_URL")
+    # Always use Redis if configured
+    redis_url = str(settings.redis_url) if settings.redis_url else None
     if redis_url:
         # Append database index for rate limiting to avoid conflicts
         if redis_url.endswith("/"):
@@ -131,22 +132,45 @@ def _get_storage_uri() -> str | None:
     return None
 
 
+def _get_rate_limit_settings() -> dict[str, str]:
+    """Get rate limit settings from configuration.
+
+    Returns:
+        Dictionary of rate limit strings
+    """
+    settings = get_settings()
+    return {
+        "default": f"{settings.rate_limit_default}/minute",
+        "auth_login": f"{settings.rate_limit_auth_login}/minute",
+        "auth_refresh": f"{settings.rate_limit_auth_refresh}/minute",
+        "auth_password_change": f"{settings.rate_limit_auth_password_change}/minute",
+        "auth_logout": f"{settings.rate_limit_auth_logout}/minute",
+        "admin_user_create": f"{settings.rate_limit_admin_user_create}/minute",
+        "admin_role_modify": f"{settings.rate_limit_admin_role_modify}/minute",
+        "provider_test": f"{settings.rate_limit_provider_test}/minute",
+        "sensitive": f"{settings.rate_limit_sensitive}/minute",
+    }
+
+
+# Get rate limits from config
+_rate_limits = _get_rate_limit_settings()
+
 # Create limiter instance with Redis backend for distributed deployments
 limiter = Limiter(
     key_func=get_real_client_ip,
-    default_limits=["100/minute"],
+    default_limits=[_rate_limits["default"]],
     storage_uri=_get_storage_uri(),
 )
 
 # Rate limit constants for different endpoint types
-AUTH_LOGIN_LIMIT = "5/minute"
-AUTH_REFRESH_LIMIT = "10/minute"
-AUTH_PASSWORD_CHANGE_LIMIT = "3/minute"
-AUTH_LOGOUT_LIMIT = "10/minute"
-API_DEFAULT_LIMIT = "100/minute"
+AUTH_LOGIN_LIMIT = _rate_limits["auth_login"]
+AUTH_REFRESH_LIMIT = _rate_limits["auth_refresh"]
+AUTH_PASSWORD_CHANGE_LIMIT = _rate_limits["auth_password_change"]
+AUTH_LOGOUT_LIMIT = _rate_limits["auth_logout"]
+API_DEFAULT_LIMIT = _rate_limits["default"]
 
 # Admin endpoint limits (more restrictive)
-ADMIN_USER_CREATE_LIMIT = "10/minute"
-ADMIN_ROLE_MODIFY_LIMIT = "20/minute"
-PROVIDER_TEST_CONNECTION_LIMIT = "10/minute"
-SENSITIVE_OPERATION_LIMIT = "5/minute"
+ADMIN_USER_CREATE_LIMIT = _rate_limits["admin_user_create"]
+ADMIN_ROLE_MODIFY_LIMIT = _rate_limits["admin_role_modify"]
+PROVIDER_TEST_CONNECTION_LIMIT = _rate_limits["provider_test"]
+SENSITIVE_OPERATION_LIMIT = _rate_limits["sensitive"]
