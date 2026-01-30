@@ -12,7 +12,9 @@ engine = create_async_engine(
     settings.async_database_url,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
-    echo=settings.debug,
+    # Security: Never echo SQL statements as they may contain sensitive data
+    # Use proper logging configuration for query debugging instead
+    echo=False,
 )
 
 async_session_maker = async_sessionmaker(

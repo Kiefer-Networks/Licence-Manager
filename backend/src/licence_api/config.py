@@ -32,15 +32,32 @@ class Settings(BaseSettings):
     # Redis
     redis_url: RedisDsn = Field(default="redis://localhost:6379")
 
-    # Security
+    # Security - Encryption
+    # Primary encryption key (current key for new encryptions)
     encryption_key: str = Field(min_length=32)
+    # Legacy keys for decryption during key rotation (comma-separated, oldest to newest)
+    # Example: "old_key_1,old_key_2" when rotating from key 1 -> 2 -> current
+    encryption_key_legacy: str = ""
+
+    # Security - JWT
     jwt_secret: str = Field(min_length=32)
     jwt_algorithm: str = "HS256"
-    jwt_expiration_hours: int = 24
+    jwt_expiration_hours: int = 1  # Short-lived access tokens
+    jwt_issuer: str = "licence-api"
+    jwt_audience: str = "licence-app"
 
-    # Google OAuth
-    google_client_id: str
-    google_client_secret: str
+    # Security - Refresh Tokens
+    refresh_token_days: int = 30
+
+    # Security - Password Policy
+    password_min_length: int = 12
+    password_history_count: int = 5
+    max_login_attempts: int = 5
+    lockout_duration_minutes: int = 30
+
+    # Google OAuth (optional for local-only auth)
+    google_client_id: str = ""
+    google_client_secret: str = ""
 
     # Optional domain restriction
     allowed_email_domain: str | None = None
@@ -48,11 +65,22 @@ class Settings(BaseSettings):
     # Sync settings
     sync_interval_minutes: int = 60
 
+    # Session settings
+    session_cookie_name: str = "licence_session"
+    session_cookie_secure: bool = True
+    session_cookie_httponly: bool = True
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
     @property
     def async_database_url(self) -> str:
         """Get async database URL for SQLAlchemy."""
         url = str(self.database_url)
         return url.replace("postgresql://", "postgresql+asyncpg://")
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        """Check if Google OAuth is configured."""
+        return bool(self.google_client_id and self.google_client_secret)
 
 
 @lru_cache

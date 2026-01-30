@@ -23,6 +23,7 @@ class MattermostProvider(BaseProvider):
         self.access_token = credentials.get("access_token")
         server_url = credentials.get("server_url", "").rstrip("/")
         self.base_url = f"{server_url}/api/v4" if server_url else ""
+        self._license_info: dict[str, Any] | None = None
 
     def _get_headers(self) -> dict[str, str]:
         """Get request headers with authentication."""
@@ -48,12 +49,77 @@ class MattermostProvider(BaseProvider):
         except Exception:
             return False
 
+    async def get_license_info(self) -> dict[str, Any] | None:
+        """Fetch Mattermost license information.
+
+        Returns:
+            License info dict or None if not available
+        """
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/license/client?format=old",
+                    headers=self._get_headers(),
+                    timeout=10.0,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+
+                    # Parse expiration timestamp (milliseconds)
+                    expires_at = None
+                    if data.get("ExpiresAt"):
+                        try:
+                            expires_at = datetime.fromtimestamp(
+                                int(data["ExpiresAt"]) / 1000
+                            ).isoformat()
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Parse start timestamp
+                    starts_at = None
+                    if data.get("StartsAt"):
+                        try:
+                            starts_at = datetime.fromtimestamp(
+                                int(data["StartsAt"]) / 1000
+                            ).isoformat()
+                        except (ValueError, TypeError):
+                            pass
+
+                    return {
+                        "is_licensed": data.get("IsLicensed") == "true",
+                        "is_trial": data.get("IsTrial") == "true",
+                        "license_id": data.get("Id"),
+                        "sku_name": data.get("SkuShortName") or data.get("SkuName"),
+                        "company": data.get("Company"),
+                        "licensee_name": data.get("Name"),
+                        "licensee_email": data.get("Email"),
+                        "max_users": int(data.get("Users", 0)) if data.get("Users") else None,
+                        "starts_at": starts_at,
+                        "expires_at": expires_at,
+                        "features": {
+                            "ldap": data.get("LDAP") == "true",
+                            "saml": data.get("SAML") == "true",
+                            "mfa": data.get("MFA") == "true",
+                            "guest_accounts": data.get("GuestAccounts") == "true",
+                            "compliance": data.get("Compliance") == "true",
+                            "data_retention": data.get("DataRetention") == "true",
+                            "elasticsearch": data.get("Elasticsearch") == "true",
+                            "cluster": data.get("Cluster") == "true",
+                        },
+                    }
+        except Exception:
+            pass
+        return None
+
     async def fetch_licenses(self) -> list[dict[str, Any]]:
         """Fetch all users from Mattermost.
 
         Returns:
             List of license data dicts
         """
+        # Fetch license info first
+        self._license_info = await self.get_license_info()
+
         licenses = []
         page = 0
         per_page = 200
@@ -69,7 +135,6 @@ class MattermostProvider(BaseProvider):
                     params={
                         "page": page,
                         "per_page": per_page,
-                        "sort": "create_at",
                     },
                     timeout=30.0,
                 )
@@ -211,3 +276,13 @@ class MattermostProvider(BaseProvider):
             return "Mattermost Guest"
         else:
             return "Mattermost User"
+
+    def get_provider_metadata(self) -> dict[str, Any] | None:
+        """Get provider metadata including license info.
+
+        Should be called after fetch_licenses().
+
+        Returns:
+            Provider metadata dict or None
+        """
+        return self._license_info
