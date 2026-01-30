@@ -471,6 +471,19 @@ export interface LicenseTypeInfo {
   pricing: LicenseTypePricing | null;
 }
 
+// Individual license type info (extracted from combined strings like "E5, Power BI, Teams")
+export interface IndividualLicenseTypeInfo {
+  license_type: string;
+  display_name?: string | null;
+  user_count: number;
+  pricing: LicenseTypePricing | null;
+}
+
+export interface IndividualLicenseTypesResponse {
+  license_types: IndividualLicenseTypeInfo[];
+  has_combined_types: boolean;  // True if any license_type contains commas
+}
+
 export interface SyncResponse {
   success: boolean;
   results: Record<string, any>;
@@ -694,6 +707,21 @@ export const api = {
     return fetchApi<{ pricing: LicenseTypePricing[]; package_pricing?: PackagePricing | null }>(`/providers/${providerId}/pricing`, {
       method: 'PUT',
       body: JSON.stringify({ pricing, package_pricing: packagePricing }),
+    });
+  },
+
+  // Individual license type pricing (for providers with combined license types like Microsoft 365)
+  async getProviderIndividualLicenseTypes(providerId: string): Promise<IndividualLicenseTypesResponse> {
+    return fetchApi<IndividualLicenseTypesResponse>(`/providers/${providerId}/individual-license-types`);
+  },
+
+  async updateProviderIndividualPricing(
+    providerId: string,
+    pricing: LicenseTypePricing[]
+  ): Promise<IndividualLicenseTypesResponse> {
+    return fetchApi<IndividualLicenseTypesResponse>(`/providers/${providerId}/individual-pricing`, {
+      method: 'PUT',
+      body: JSON.stringify({ pricing }),
     });
   },
 

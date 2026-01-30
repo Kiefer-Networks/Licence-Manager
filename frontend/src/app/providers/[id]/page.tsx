@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse } from '@/lib/api';
+import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
 import { handleSilentError } from '@/lib/error-handler';
@@ -119,6 +119,18 @@ export default function ProviderDetailPage() {
     notes: string;
   }>>({});
   const [savingPricing, setSavingPricing] = useState(false);
+
+  // Individual pricing (for Microsoft/Azure with combined license types)
+  const [individualLicenseTypes, setIndividualLicenseTypes] = useState<IndividualLicenseTypeInfo[]>([]);
+  const [hasCombinedTypes, setHasCombinedTypes] = useState(false);
+  const [individualPricingEdits, setIndividualPricingEdits] = useState<Record<string, {
+    cost: string;
+    currency: string;
+    billing_cycle: string;
+    display_name: string;
+    notes: string;
+  }>>({});
+  const [savingIndividualPricing, setSavingIndividualPricing] = useState(false);
 
   // Files
   const [files, setFiles] = useState<ProviderFile[]>([]);
@@ -224,6 +236,29 @@ export default function ProviderDetailPage() {
     }
   }, [providerId]);
 
+  const fetchIndividualLicenseTypes = useCallback(async () => {
+    try {
+      const data = await api.getProviderIndividualLicenseTypes(providerId);
+      setIndividualLicenseTypes(data.license_types);
+      setHasCombinedTypes(data.has_combined_types);
+
+      // Initialize individual pricing edits
+      const edits: Record<string, { cost: string; currency: string; billing_cycle: string; display_name: string; notes: string }> = {};
+      for (const lt of data.license_types) {
+        edits[lt.license_type] = {
+          cost: lt.pricing?.cost || '',
+          currency: lt.pricing?.currency || 'EUR',
+          billing_cycle: lt.pricing?.billing_cycle || 'monthly',
+          display_name: lt.pricing?.display_name || lt.display_name || '',
+          notes: lt.pricing?.notes || '',
+        };
+      }
+      setIndividualPricingEdits(edits);
+    } catch (error) {
+      handleSilentError('fetchIndividualLicenseTypes', error);
+    }
+  }, [providerId]);
+
   const fetchFiles = useCallback(async () => {
     try {
       const data = await api.getProviderFiles(providerId);
@@ -234,10 +269,10 @@ export default function ProviderDetailPage() {
   }, [providerId]);
 
   useEffect(() => {
-    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchFiles()]).finally(() =>
+    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchFiles]);
+  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles]);
 
   const handleSync = async () => {
     if (!provider || isManual) return;
@@ -385,6 +420,39 @@ export default function ProviderDetailPage() {
       showToast('error', error.message || 'Failed to save pricing');
     } finally {
       setSavingPricing(false);
+    }
+  };
+
+  const handleSaveIndividualPricing = async () => {
+    if (!provider) return;
+    setSavingIndividualPricing(true);
+    try {
+      const pricing: LicenseTypePricing[] = [];
+
+      for (const [licenseType, edit] of Object.entries(individualPricingEdits)) {
+        pricing.push({
+          license_type: licenseType,
+          display_name: edit.display_name || undefined,
+          cost: edit.cost || '0',
+          currency: edit.currency,
+          billing_cycle: edit.billing_cycle,
+          payment_frequency: edit.billing_cycle, // Same as billing cycle for individual
+          notes: edit.notes || undefined,
+        });
+      }
+
+      const result = await api.updateProviderIndividualPricing(provider.id, pricing);
+      setIndividualLicenseTypes(result.license_types);
+
+      // Refresh license data to show updated costs
+      await fetchLicenses();
+      await fetchCategorizedLicenses();
+      await fetchLicenseTypes();
+      showToast('success', 'Individual pricing saved and applied to licenses');
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save individual pricing');
+    } finally {
+      setSavingIndividualPricing(false);
     }
   };
 
@@ -972,20 +1040,105 @@ export default function ProviderDetailPage() {
               </Card>
             )}
 
-            {/* License Type Pricing */}
+            {/* Individual License Type Pricing - for providers with combined license types (Microsoft 365) */}
+            {hasCombinedTypes && individualLicenseTypes.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Individual License Pricing
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    This provider has combined license types (e.g., "E5, Power BI, Teams").
+                    Set prices for each individual license and the total cost per user will be calculated automatically.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {individualLicenseTypes.map((lt) => {
+                      const edit = individualPricingEdits[lt.license_type] || {
+                        cost: '',
+                        currency: 'EUR',
+                        billing_cycle: 'monthly',
+                        display_name: '',
+                        notes: '',
+                      };
+                      const updateEdit = (updates: Partial<typeof edit>) => {
+                        setIndividualPricingEdits({
+                          ...individualPricingEdits,
+                          [lt.license_type]: { ...edit, ...updates },
+                        });
+                      };
+
+                      return (
+                        <div key={lt.license_type} className="p-3 bg-white rounded-lg border space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-medium">{lt.license_type}</p>
+                              <p className="text-xs text-muted-foreground">{lt.user_count} users</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="flex-1 h-8 text-sm"
+                              placeholder="0.00"
+                              value={edit.cost}
+                              onChange={(e) => updateEdit({ cost: e.target.value })}
+                            />
+                            <Select value={edit.currency} onValueChange={(v) => updateEdit({ currency: v })}>
+                              <SelectTrigger className="w-16 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="EUR">EUR</SelectItem>
+                                <SelectItem value="USD">USD</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="yearly">Yearly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={handleSaveIndividualPricing} disabled={savingIndividualPricing}>
+                      {savingIndividualPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Save Individual Prices
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* License Type Pricing (combined types) */}
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-medium">License Type Pricing</h2>
+                <h2 className="text-sm font-medium">{hasCombinedTypes ? 'Combined License Types' : 'License Type Pricing'}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {provider.config?.provider_license_info?.max_users
+                  {hasCombinedTypes
+                    ? 'These are the combined license type strings as stored. You can override individual pricing above.'
+                    : provider.config?.provider_license_info?.max_users
                     ? 'Or set individual prices per license type (overrides package pricing).'
                     : 'Set prices for each license type. Prices will be applied to existing and new licenses.'}
                 </p>
               </div>
-              <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
-                {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Save Pricing
-              </Button>
+              {!hasCombinedTypes && (
+                <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
+                  {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Save Pricing
+                </Button>
+              )}
             </div>
 
             {licenseTypes.length === 0 ? (
