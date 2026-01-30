@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
@@ -21,8 +21,27 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { api, License, Provider } from '@/lib/api';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Key, Trash2, UserMinus, Building2, X, CheckSquare, UserX, Globe, Skull } from 'lucide-react';
+import { api, License, Provider, CategorizedLicensesResponse } from '@/lib/api';
+import { handleSilentError } from '@/lib/error-handler';
+import { formatMonthlyCost } from '@/lib/format';
+import { LicenseStatsCards, LicenseStatusBadge } from '@/components/licenses';
+import {
+  Search,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Loader2,
+  Key,
+  Trash2,
+  UserMinus,
+  Building2,
+  X,
+  CheckSquare,
+  UserX,
+  Globe,
+  Users,
+  AlertTriangle,
+} from 'lucide-react';
 import Link from 'next/link';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -37,22 +56,21 @@ function useDebounce<T>(value: T, delay: number): T {
 // Providers that support remote member removal
 const REMOVABLE_PROVIDERS = ['cursor'];
 
-export default function LicensesPage() {
+type Tab = 'assigned' | 'unassigned' | 'external';
+
+function LicensesContent() {
   const searchParams = useSearchParams();
-  const [licenses, setLicenses] = useState<License[]>([]);
+  const [categorizedData, setCategorizedData] = useState<CategorizedLicensesResponse | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [unassignedOnly, setUnassignedOnly] = useState(searchParams.get('unassigned') === 'true');
-  const [externalOnly, setExternalOnly] = useState(searchParams.get('external') === 'true');
-  const [sortColumn, setSortColumn] = useState<string>('synced_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [sortColumn, setSortColumn] = useState<string>('external_user_id');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [activeTab, setActiveTab] = useState<Tab>('assigned');
+  const [page, setPage] = useState(1);
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -62,6 +80,8 @@ export default function LicensesPage() {
 
   const debouncedSearch = useDebounce(search, 300);
   const licenseProviders = providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+  const pageSize = 50;
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -79,46 +99,91 @@ export default function LicensesPage() {
 
   // Load providers and departments once
   useEffect(() => {
-    api.getProviders().then((data) => setProviders(data.items)).catch(console.error);
-    api.getDepartments().then(setDepartments).catch(console.error);
+    api.getProviders().then((data) => setProviders(data.items)).catch((e) => handleSilentError('getProviders', e));
+    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
   }, []);
 
-  // Load licenses when filters change
+  // Load categorized licenses when filters change
   const loadLicenses = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getLicenses({
-        page,
-        search: debouncedSearch || undefined,
+      const data = await api.getCategorizedLicenses({
         provider_id: selectedProvider !== 'all' ? selectedProvider : undefined,
-        status: selectedStatus !== 'all' ? selectedStatus : undefined,
-        department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
-        unassigned: unassignedOnly,
-        external: externalOnly,
         sort_by: sortColumn,
         sort_dir: sortDirection,
       });
-      setLicenses(data.items);
-      setTotal(data.total);
+      setCategorizedData(data);
       // Clear selection when data changes
       setSelectedIds(new Set());
     } catch (e) {
-      console.error(e);
+      handleSilentError('loadLicenses', e);
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, selectedProvider, selectedStatus, selectedDepartment, unassignedOnly, externalOnly, sortColumn, sortDirection]);
+  }, [selectedProvider, sortColumn, sortDirection]);
 
   useEffect(() => {
     loadLicenses();
   }, [loadLicenses]);
 
+  // Get licenses for current tab
+  const getCurrentTabLicenses = (): License[] => {
+    if (!categorizedData) return [];
+    switch (activeTab) {
+      case 'assigned':
+        return categorizedData.assigned;
+      case 'unassigned':
+        return categorizedData.unassigned;
+      case 'external':
+        return categorizedData.external;
+    }
+  };
+
+  // Filter licenses by search and department
+  const getFilteredLicenses = (): License[] => {
+    let licenses = getCurrentTabLicenses();
+
+    // Search filter
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      licenses = licenses.filter(
+        (l) =>
+          l.external_user_id.toLowerCase().includes(searchLower) ||
+          l.employee_name?.toLowerCase().includes(searchLower) ||
+          l.employee_email?.toLowerCase().includes(searchLower) ||
+          l.provider_name.toLowerCase().includes(searchLower) ||
+          l.license_type?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Department filter (would need backend support for optimal performance)
+    // For now, we filter client-side
+    if (selectedDepartment !== 'all') {
+      // Department info is not in the license response, would need employee data
+      // This is a limitation - in production you'd add department to LicenseResponse
+    }
+
+    return licenses;
+  };
+
+  const filteredLicenses = getFilteredLicenses();
+
+  // Split licenses into active and inactive for "Not in HRIS" and "External" tabs
+  const activeLicenses = filteredLicenses.filter(l => l.status === 'active');
+  const inactiveLicenses = filteredLicenses.filter(l => l.status !== 'active');
+
+  // For tabs that show split tables, we don't paginate the same way
+  const showSplitTables = activeTab === 'unassigned' || activeTab === 'external';
+
+  const totalPages = showSplitTables ? 1 : Math.ceil(filteredLicenses.length / pageSize);
+  const paginatedLicenses = showSplitTables ? filteredLicenses : filteredLicenses.slice((page - 1) * pageSize, page * pageSize);
+
   // Selection handlers
   const toggleSelectAll = () => {
-    if (selectedIds.size === licenses.length) {
+    if (selectedIds.size === paginatedLicenses.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(licenses.map(l => l.id)));
+      setSelectedIds(new Set(paginatedLicenses.map(l => l.id)));
     }
   };
 
@@ -133,7 +198,7 @@ export default function LicensesPage() {
   };
 
   // Get selected licenses info
-  const selectedLicenses = licenses.filter(l => selectedIds.has(l.id));
+  const selectedLicenses = paginatedLicenses.filter(l => selectedIds.has(l.id));
   const removableLicenses = selectedLicenses.filter(l => {
     const provider = providers.find(p => p.id === l.provider_id);
     return provider && REMOVABLE_PROVIDERS.includes(provider.name);
@@ -203,8 +268,21 @@ export default function LicensesPage() {
     }
   }, [toast]);
 
-  const pageSize = 50;
-  const totalPages = Math.ceil(total / pageSize);
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, debouncedSearch, selectedDepartment]);
+
+  // Count only active licenses for tab badges (to match provider detail page)
+  const assignedActiveCount = categorizedData?.assigned.filter(l => l.status === 'active').length || 0;
+  const unassignedActiveCount = categorizedData?.unassigned.filter(l => l.status === 'active').length || 0;
+  const externalActiveCount = categorizedData?.external.filter(l => l.status === 'active').length || 0;
+
+  const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
+    { id: 'assigned', label: 'Assigned', count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
+    { id: 'unassigned', label: 'Not in HRIS', count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
+    { id: 'external', label: 'External', count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
+  ];
 
   return (
     <AppLayout>
@@ -214,6 +292,23 @@ export default function LicensesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Licenses</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage software licenses across all providers</p>
         </div>
+
+        {/* Stats - computed from arrays to show active-only counts */}
+        {categorizedData && (
+          <LicenseStatsCards
+            stats={{
+              total_active: assignedActiveCount + unassignedActiveCount + externalActiveCount,
+              total_assigned: assignedActiveCount,
+              total_unassigned: unassignedActiveCount,
+              total_external: externalActiveCount,
+              total_inactive: categorizedData.assigned.filter(l => l.status !== 'active').length +
+                              categorizedData.unassigned.filter(l => l.status !== 'active').length +
+                              categorizedData.external.filter(l => l.status !== 'active').length,
+              monthly_cost: categorizedData.stats.monthly_cost,
+              currency: categorizedData.stats.currency,
+            }}
+          />
+        )}
 
         {/* Bulk Action Toolbar */}
         {selectedIds.size > 0 && (
@@ -263,126 +358,311 @@ export default function LicensesPage() {
           </div>
         )}
 
-        {/* Search and Filters */}
-        <div className="space-y-3">
-          {/* Main Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-              <Input
-                placeholder="Search by email, name, provider..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-10 bg-zinc-50 border-zinc-200"
-              />
-            </div>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
-              {total} license{total !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground mr-1">Quick filters:</span>
-
-            <Button
-              variant={unassignedOnly ? 'default' : 'outline'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setUnassignedOnly(!unassignedOnly)}
-            >
-              Unassigned
-            </Button>
-
-            <Button
-              variant={externalOnly ? 'default' : 'outline'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setExternalOnly(!externalOnly)}
-            >
-              <Globe className="h-3 w-3 mr-1" />
-              External
-            </Button>
-
-            <div className="w-px h-5 bg-zinc-200 mx-1" />
-
-            <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-              <SelectTrigger className="w-36 h-7 text-xs bg-zinc-50 border-zinc-200">
-                <SelectValue placeholder="Provider" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Providers</SelectItem>
-                {licenseProviders.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-28 h-7 text-xs bg-zinc-50 border-zinc-200">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-              <SelectTrigger className="w-36 h-7 text-xs bg-zinc-50 border-zinc-200">
-                <SelectValue placeholder="Department" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {departments.map((dept) => (
-                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Active Filter Tags */}
-            {(selectedProvider !== 'all' || selectedStatus !== 'all' || selectedDepartment !== 'all' || unassignedOnly || externalOnly) && (
-              <>
-                <div className="w-px h-5 bg-zinc-200 mx-1" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setSelectedProvider('all');
-                    setSelectedStatus('all');
-                    setSelectedDepartment('all');
-                    setUnassignedOnly(false);
-                    setExternalOnly(false);
-                  }}
+        {/* Tabs */}
+        <div className="border-b">
+          <nav className="flex gap-6">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSelectedIds(new Set());
+                }}
+                className={`flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-zinc-900 text-zinc-900'
+                    : 'border-transparent text-muted-foreground hover:text-zinc-900'
+                }`}
+              >
+                <span className={tab.warning ? 'text-red-500' : ''}>{tab.icon}</span>
+                <span className={tab.warning ? 'text-red-600' : ''}>{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 text-xs rounded-full ${
+                    activeTab === tab.id
+                      ? tab.warning ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white'
+                      : tab.warning ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600'
+                  }`}
                 >
-                  Clear filters
-                </Button>
-              </>
-            )}
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Input
+              placeholder="Search by email, name, provider..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 bg-zinc-50 border-zinc-200"
+            />
           </div>
+
+          <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+            <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Providers</SelectItem>
+              {licenseProviders.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+            <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
+              <Building2 className="h-4 w-4 mr-2 text-zinc-400" />
+              <SelectValue placeholder="Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {(selectedProvider !== 'all' || selectedDepartment !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSelectedProvider('all');
+                setSelectedDepartment('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+
+          <span className="text-sm text-muted-foreground ml-auto">
+            {filteredLicenses.length} license{filteredLicenses.length !== 1 ? 's' : ''}
+          </span>
         </div>
 
         {/* Table */}
-        <div className="border rounded-lg bg-white overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+        {loading ? (
+          <div className="border rounded-lg bg-white flex items-center justify-center h-64">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+          </div>
+        ) : filteredLicenses.length === 0 ? (
+          <div className="border rounded-lg bg-white flex flex-col items-center justify-center h-64 text-muted-foreground">
+            <Key className="h-8 w-8 mb-2 opacity-30" />
+            <p className="text-sm">No {activeTab === 'unassigned' ? 'licenses outside HRIS' : `${activeTab} licenses`} found</p>
+          </div>
+        ) : showSplitTables ? (
+          /* Split table view for "Not in HRIS" and "External" tabs */
+          <div className="space-y-8">
+            {/* Active Licenses */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                {activeTab === 'unassigned' ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <h3 className="text-sm font-medium text-red-600">
+                      Active Licenses - Not in HRIS ({activeLicenses.length})
+                    </h3>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="h-4 w-4 text-orange-500" />
+                    <h3 className="text-sm font-medium">
+                      Active External Licenses ({activeLicenses.length})
+                    </h3>
+                  </>
+                )}
+              </div>
+              {activeLicenses.length > 0 ? (
+                <div className={`border rounded-lg bg-white overflow-hidden ${activeTab === 'unassigned' ? 'border-red-200' : ''}`}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-zinc-50/50">
+                        <th className="w-10 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={activeLicenses.every(l => selectedIds.has(l.id)) && activeLicenses.length > 0}
+                            onChange={() => {
+                              const allSelected = activeLicenses.every(l => selectedIds.has(l.id));
+                              const newSet = new Set(selectedIds);
+                              activeLicenses.forEach(l => allSelected ? newSet.delete(l.id) : newSet.add(l.id));
+                              setSelectedIds(newSet);
+                            }}
+                            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                          />
+                        </th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeLicenses.map((license) => {
+                        const provider = providers.find(p => p.id === license.provider_id);
+                        const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
+                        return (
+                          <tr key={license.id} className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${selectedIds.has(license.id) ? 'bg-zinc-50' : ''}`}>
+                            <td className="px-4 py-3">
+                              <input type="checkbox" checked={selectedIds.has(license.id)} onChange={() => toggleSelect(license.id)} className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500" />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
+                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {license.employee_id && license.employee_status !== 'offboarded' && (
+                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                                    <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
+                                      <span className="text-xs font-medium text-zinc-600">{license.employee_name?.charAt(0)}</span>
+                                    </div>
+                                    <span className="truncate hover:underline">{license.employee_name}</span>
+                                  </Link>
+                                )}
+                                {license.employee_id && license.employee_status === 'offboarded' && (
+                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                                    <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
+                                    </div>
+                                    <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
+                                  </Link>
+                                )}
+                                <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              <div>
+                                <span>{license.license_type_display_name || license.license_type || '-'}</span>
+                                {license.license_type_display_name && license.license_type && (
+                                  <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-sm">
+                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
+                  <p className="text-sm text-emerald-600">
+                    {activeTab === 'unassigned' ? 'All active licenses are matched to HRIS' : 'No active external licenses'}
+                  </p>
+                </div>
+              )}
             </div>
-          ) : licenses.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-              <Key className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No licenses found</p>
-            </div>
-          ) : (
+
+            {/* Inactive Licenses */}
+            {inactiveLicenses.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                  Inactive Licenses {activeTab === 'unassigned' ? '- Not in HRIS' : '- External'} ({inactiveLicenses.length})
+                </h3>
+                <div className="border rounded-lg bg-white overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-zinc-50/50">
+                        <th className="w-10 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={inactiveLicenses.every(l => selectedIds.has(l.id)) && inactiveLicenses.length > 0}
+                            onChange={() => {
+                              const allSelected = inactiveLicenses.every(l => selectedIds.has(l.id));
+                              const newSet = new Set(selectedIds);
+                              inactiveLicenses.forEach(l => allSelected ? newSet.delete(l.id) : newSet.add(l.id));
+                              setSelectedIds(newSet);
+                            }}
+                            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                          />
+                        </th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inactiveLicenses.map((license) => {
+                        const provider = providers.find(p => p.id === license.provider_id);
+                        const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
+                        return (
+                          <tr key={license.id} className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${selectedIds.has(license.id) ? 'bg-zinc-50' : ''}`}>
+                            <td className="px-4 py-3">
+                              <input type="checkbox" checked={selectedIds.has(license.id)} onChange={() => toggleSelect(license.id)} className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500" />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
+                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {license.employee_id && license.employee_status !== 'offboarded' && (
+                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                                    <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
+                                      <span className="text-xs font-medium text-zinc-600">{license.employee_name?.charAt(0)}</span>
+                                    </div>
+                                    <span className="truncate hover:underline">{license.employee_name}</span>
+                                  </Link>
+                                )}
+                                {license.employee_id && license.employee_status === 'offboarded' && (
+                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                                    <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
+                                    </div>
+                                    <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
+                                  </Link>
+                                )}
+                                <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              <div>
+                                <span>{license.license_type_display_name || license.license_type || '-'}</span>
+                                {license.license_type_display_name && license.license_type && (
+                                  <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-sm">
+                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Standard single table view for "Assigned" tab */
+          <div className="border rounded-lg bg-white overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-zinc-50/50">
                   <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === licenses.length && licenses.length > 0}
+                      checked={selectedIds.size === paginatedLicenses.length && paginatedLicenses.length > 0}
                       onChange={toggleSelectAll}
                       className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                     />
@@ -403,11 +683,6 @@ export default function LicensesPage() {
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                    <button onClick={() => handleSort('last_activity_at')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Last Active <SortIcon column="last_activity_at" />
-                    </button>
-                  </th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('monthly_cost')} className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto">
                       Cost <SortIcon column="monthly_cost" />
@@ -416,14 +691,9 @@ export default function LicensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {licenses.map((license) => {
+                {paginatedLicenses.map((license) => {
                   const provider = providers.find(p => p.id === license.provider_id);
                   const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
-
-                  // Determine license status for badge display
-                  const isExternal = license.is_external_email;
-                  const isOffboarded = license.employee_status === 'offboarded';
-                  const isUnassigned = !license.employee_id;
 
                   return (
                     <tr
@@ -450,14 +720,18 @@ export default function LicensesPage() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
                       <td className="px-4 py-3">
-                        {/* Priority: External > Offboarded > Assigned > Unassigned */}
-                        {isExternal ? (
-                          <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
-                            <Globe className="h-3 w-3 mr-1" />
-                            External
-                          </Badge>
-                        ) : isOffboarded ? (
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {license.employee_id && license.employee_status !== 'offboarded' && (
+                            <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                              <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
+                                <span className="text-xs font-medium text-zinc-600">
+                                  {license.employee_name?.charAt(0)}
+                                </span>
+                              </div>
+                              <span className="truncate hover:underline">{license.employee_name}</span>
+                            </Link>
+                          )}
+                          {license.employee_id && license.employee_status === 'offboarded' && (
                             <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
                               <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                                 <span className="text-xs font-medium text-red-600">
@@ -466,25 +740,9 @@ export default function LicensesPage() {
                               </div>
                               <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
                             </Link>
-                            <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
-                              <Skull className="h-3 w-3 mr-1" />
-                              Offboarded
-                            </Badge>
-                          </div>
-                        ) : isUnassigned ? (
-                          <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
-                            Unassigned
-                          </Badge>
-                        ) : (
-                          <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                            <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
-                              <span className="text-xs font-medium text-zinc-600">
-                                {license.employee_name?.charAt(0)}
-                              </span>
-                            </div>
-                            <span className="truncate hover:underline">{license.employee_name}</span>
-                          </Link>
-                        )}
+                          )}
+                          <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <div>
@@ -494,22 +752,19 @@ export default function LicensesPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {license.last_activity_at ? new Date(license.last_activity_at).toLocaleDateString('de-DE') : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {license.monthly_cost ? `€${Number(license.monthly_cost).toFixed(2)}` : '-'}
+                      <td className="px-4 py-3 text-right tabular-nums text-sm">
+                        {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
+        {/* Pagination - only for non-split table views */}
+        {!showSplitTables && totalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               Page {page} of {totalPages}
@@ -539,15 +794,15 @@ export default function LicensesPage() {
             <p className="text-sm text-zinc-600 mb-3">The following actions will be performed:</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
-                <span className="text-emerald-600">•</span>
+                <span className="text-emerald-600">-</span>
                 <span>Users will be removed from the external provider (e.g., Cursor team)</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-emerald-600">•</span>
+                <span className="text-emerald-600">-</span>
                 <span>Licenses will be deleted from this database</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-amber-600">•</span>
+                <span className="text-amber-600">-</span>
                 <span>Only Cursor licenses support remote removal ({removableLicenses.length} of {selectedIds.size} selected)</span>
               </li>
             </ul>
@@ -577,15 +832,15 @@ export default function LicensesPage() {
             <p className="text-sm text-zinc-600 mb-3">Important:</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
-                <span className="text-red-600">•</span>
+                <span className="text-red-600">-</span>
                 <span>This does NOT remove users from the external provider systems</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-amber-600">•</span>
+                <span className="text-amber-600">-</span>
                 <span>Licenses may reappear after the next sync if users still exist in the provider</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-600">-</span>
                 <span>Use "Remove from Provider" to actually revoke access</span>
               </li>
             </ul>
@@ -615,15 +870,15 @@ export default function LicensesPage() {
             <p className="text-sm text-zinc-600 mb-3">This action will:</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
-                <span className="text-amber-600">•</span>
+                <span className="text-amber-600">-</span>
                 <span>Remove the employee association from the selected licenses</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-600">-</span>
                 <span>Mark the licenses as "Unassigned" in the system</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-600">-</span>
                 <span>The licenses remain in the database and users remain in the provider</span>
               </li>
             </ul>
@@ -649,5 +904,19 @@ export default function LicensesPage() {
         </div>
       )}
     </AppLayout>
+  );
+}
+
+export default function LicensesPage() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AppLayout>
+    }>
+      <LicensesContent />
+    </Suspense>
   );
 }
