@@ -21,8 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, PaymentMethod, PaymentMethodCreate } from '@/lib/api';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle } from 'lucide-react';
+import { api, PaymentMethod, PaymentMethodCreate, NotificationRule, NOTIFICATION_EVENT_TYPES } from '@/lib/api';
+import { handleSilentError } from '@/lib/error-handler';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,21 @@ export default function SettingsPage() {
   const [paymentMethodDialogOpen, setPaymentMethodDialogOpen] = useState(false);
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
   const [savingPaymentMethod, setSavingPaymentMethod] = useState(false);
+
+  // Slack/Notification state
+  const [slackBotToken, setSlackBotToken] = useState('');
+  const [slackConfigured, setSlackConfigured] = useState(false);
+  const [savingSlack, setSavingSlack] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+  const [testChannel, setTestChannel] = useState('');
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
+  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<NotificationRule | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    event_type: '',
+    slack_channel: '',
+    template: '',
+  });
   const [paymentMethodForm, setPaymentMethodForm] = useState({
     name: '',
     type: 'credit_card',
@@ -54,7 +71,12 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    Promise.all([fetchCompanyDomains(), fetchPaymentMethods()]).finally(() => setLoading(false));
+    Promise.all([
+      fetchCompanyDomains(),
+      fetchPaymentMethods(),
+      fetchSlackConfig(),
+      fetchNotificationRules(),
+    ]).finally(() => setLoading(false));
   }, []);
 
   async function fetchCompanyDomains() {
@@ -62,7 +84,7 @@ export default function SettingsPage() {
       const domains = await api.getCompanyDomains();
       setCompanyDomains(domains);
     } catch (error) {
-      console.error('Failed to fetch company domains:', error);
+      handleSilentError('fetchCompanyDomains', error);
     }
   }
 
@@ -71,7 +93,25 @@ export default function SettingsPage() {
       const data = await api.getPaymentMethods();
       setPaymentMethods(data.items);
     } catch (error) {
-      console.error('Failed to fetch payment methods:', error);
+      handleSilentError('fetchPaymentMethods', error);
+    }
+  }
+
+  async function fetchSlackConfig() {
+    try {
+      const config = await api.getSlackConfig();
+      setSlackConfigured(config.configured);
+    } catch (error) {
+      handleSilentError('fetchSlackConfig', error);
+    }
+  }
+
+  async function fetchNotificationRules() {
+    try {
+      const rules = await api.getNotificationRules();
+      setNotificationRules(rules);
+    } catch (error) {
+      handleSilentError('fetchNotificationRules', error);
     }
   }
 
@@ -202,6 +242,109 @@ export default function SettingsPage() {
       showToast('success', 'Payment method deleted');
     } catch (error: any) {
       showToast('error', error.message || 'Failed to delete payment method');
+    }
+  };
+
+  // Slack handlers
+  const handleSaveSlackConfig = async () => {
+    if (!slackBotToken.trim()) {
+      showToast('error', 'Please enter a Slack bot token');
+      return;
+    }
+    setSavingSlack(true);
+    try {
+      await api.setSlackConfig({ bot_token: slackBotToken });
+      setSlackConfigured(true);
+      setSlackBotToken('');
+      showToast('success', 'Slack configuration saved');
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save Slack configuration');
+    } finally {
+      setSavingSlack(false);
+    }
+  };
+
+  const handleTestSlack = async () => {
+    if (!testChannel.trim()) {
+      showToast('error', 'Please enter a channel name');
+      return;
+    }
+    setTestingSlack(true);
+    try {
+      const result = await api.testSlackNotification(testChannel.startsWith('#') ? testChannel : `#${testChannel}`);
+      if (result.success) {
+        showToast('success', result.message);
+      } else {
+        showToast('error', result.message);
+      }
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to send test notification');
+    } finally {
+      setTestingSlack(false);
+    }
+  };
+
+  // Notification rule handlers
+  const handleOpenRuleDialog = (rule?: NotificationRule) => {
+    if (rule) {
+      setEditingRule(rule);
+      setRuleForm({
+        event_type: rule.event_type,
+        slack_channel: rule.slack_channel,
+        template: rule.template || '',
+      });
+    } else {
+      setEditingRule(null);
+      setRuleForm({ event_type: '', slack_channel: '', template: '' });
+    }
+    setRuleDialogOpen(true);
+  };
+
+  const handleSaveRule = async () => {
+    if (!ruleForm.event_type || !ruleForm.slack_channel) {
+      showToast('error', 'Please fill in all required fields');
+      return;
+    }
+    try {
+      const channel = ruleForm.slack_channel.startsWith('#') ? ruleForm.slack_channel : `#${ruleForm.slack_channel}`;
+      if (editingRule) {
+        await api.updateNotificationRule(editingRule.id, {
+          slack_channel: channel,
+          template: ruleForm.template || undefined,
+        });
+        showToast('success', 'Notification rule updated');
+      } else {
+        await api.createNotificationRule({
+          event_type: ruleForm.event_type,
+          slack_channel: channel,
+          template: ruleForm.template || undefined,
+        });
+        showToast('success', 'Notification rule created');
+      }
+      await fetchNotificationRules();
+      setRuleDialogOpen(false);
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save notification rule');
+    }
+  };
+
+  const handleToggleRule = async (rule: NotificationRule) => {
+    try {
+      await api.updateNotificationRule(rule.id, { enabled: !rule.enabled });
+      await fetchNotificationRules();
+      showToast('success', `Rule ${rule.enabled ? 'disabled' : 'enabled'}`);
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to update rule');
+    }
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    try {
+      await api.deleteNotificationRule(id);
+      await fetchNotificationRules();
+      showToast('success', 'Notification rule deleted');
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to delete rule');
     }
   };
 
@@ -382,7 +525,203 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
+
+        {/* Slack Integration Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Slack Notifications</h2>
+            </div>
+          </div>
+
+          <div className="border rounded-lg bg-white p-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Configure Slack integration to receive notifications about license changes, offboarded employees, and sync errors.
+            </p>
+
+            {/* Slack Configuration */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${slackConfigured ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                <span className="text-sm font-medium">{slackConfigured ? 'Slack Connected' : 'Slack Not Connected'}</span>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  value={slackBotToken}
+                  onChange={(e) => setSlackBotToken(e.target.value)}
+                  placeholder={slackConfigured ? 'Enter new token to update' : 'xoxb-your-bot-token'}
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm" onClick={handleSaveSlackConfig} disabled={savingSlack || !slackBotToken.trim()}>
+                  {savingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Token'}
+                </Button>
+              </div>
+
+              {slackConfigured && (
+                <div className="flex gap-2 pt-2 border-t">
+                  <div className="flex items-center gap-1 flex-1">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={testChannel}
+                      onChange={(e) => setTestChannel(e.target.value)}
+                      placeholder="channel-name"
+                      className="flex-1"
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleTestSlack} disabled={testingSlack || !testChannel.trim()}>
+                    {testingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> Test</>}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Notification Rules Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Notification Rules</h2>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => handleOpenRuleDialog()} disabled={!slackConfigured}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Add Rule
+            </Button>
+          </div>
+
+          {!slackConfigured ? (
+            <div className="border rounded-lg bg-zinc-50 p-4 text-center">
+              <MessageSquare className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
+              <p className="text-sm text-muted-foreground">Configure Slack above to create notification rules</p>
+            </div>
+          ) : notificationRules.length > 0 ? (
+            <div className="border rounded-lg bg-white divide-y">
+              {notificationRules.map((rule) => {
+                const eventType = NOTIFICATION_EVENT_TYPES.find(t => t.value === rule.event_type);
+                return (
+                  <div key={rule.id} className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${rule.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-400'}`}>
+                        <Bell className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{eventType?.label || rule.event_type}</p>
+                          {!rule.enabled && (
+                            <Badge variant="secondary" className="text-xs">Disabled</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {rule.slack_channel}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${rule.enabled ? 'text-emerald-600' : 'text-zinc-400'}`}
+                        onClick={() => handleToggleRule(rule)}
+                        title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                      >
+                        <Power className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenRuleDialog(rule)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeleteRule(rule.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="border rounded-lg bg-white p-6 text-center">
+              <Bell className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
+              <p className="text-sm text-muted-foreground">No notification rules configured</p>
+              <p className="text-xs text-muted-foreground mt-1">Add rules to receive Slack notifications for events</p>
+            </div>
+          )}
+        </section>
       </div>
+
+      {/* Notification Rule Dialog */}
+      <Dialog open={ruleDialogOpen} onOpenChange={setRuleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingRule ? 'Edit Notification Rule' : 'Add Notification Rule'}</DialogTitle>
+            <DialogDescription>
+              {editingRule ? 'Update the notification rule settings.' : 'Create a rule to receive Slack notifications for specific events.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Event Type</Label>
+              <Select
+                value={ruleForm.event_type}
+                onValueChange={(v) => setRuleForm({ ...ruleForm, event_type: v })}
+                disabled={!!editingRule}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select event type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTIFICATION_EVENT_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      <div>
+                        <span>{type.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {ruleForm.event_type && (
+                <p className="text-xs text-muted-foreground">
+                  {NOTIFICATION_EVENT_TYPES.find(t => t.value === ruleForm.event_type)?.description}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Slack Channel</Label>
+              <div className="flex items-center gap-1">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={ruleForm.slack_channel.replace(/^#/, '')}
+                  onChange={(e) => setRuleForm({ ...ruleForm, slack_channel: e.target.value })}
+                  placeholder="channel-name"
+                  className="flex-1"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Custom Template (optional)</Label>
+              <Textarea
+                value={ruleForm.template}
+                onChange={(e) => setRuleForm({ ...ruleForm, template: e.target.value })}
+                placeholder="Leave empty for default message template"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Available variables: {'{{employee_name}}'}, {'{{employee_email}}'}, {'{{provider_name}}'}, {'{{license_count}}'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRuleDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveRule} disabled={!ruleForm.event_type || !ruleForm.slack_channel}>
+              {editingRule ? 'Save Changes' : 'Create Rule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Payment Method Dialog */}
       <Dialog open={paymentMethodDialogOpen} onOpenChange={setPaymentMethodDialogOpen}>

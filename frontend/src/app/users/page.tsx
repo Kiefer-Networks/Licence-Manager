@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { api, Employee } from '@/lib/api';
+import { handleSilentError } from '@/lib/error-handler';
 import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -60,7 +61,7 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    api.getDepartments().then(setDepartments).catch(console.error);
+    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
   }, []);
 
   useEffect(() => {

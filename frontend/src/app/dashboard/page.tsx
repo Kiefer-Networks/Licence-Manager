@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api, DashboardData, PaymentMethod } from '@/lib/api';
+import { handleSilentError } from '@/lib/error-handler';
+import { SkeletonDashboard } from '@/components/ui/skeleton';
 import {
   Users,
   Key,
@@ -28,6 +30,7 @@ import {
   ChevronRight,
   Package,
   CreditCard,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -42,10 +45,10 @@ export default function DashboardPage() {
   const [expiringPaymentMethods, setExpiringPaymentMethods] = useState<PaymentMethod[]>([]);
 
   useEffect(() => {
-    api.getDepartments().then(setDepartments).catch(console.error);
+    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
     api.getPaymentMethods().then((data) => {
       setExpiringPaymentMethods(data.items.filter((m) => m.is_expiring));
-    }).catch(console.error);
+    }).catch((e) => handleSilentError('getPaymentMethods', e));
   }, []);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function DashboardPage() {
       const data = await api.getDashboard(dept);
       setDashboard(data);
     } catch (error) {
-      console.error('Failed to fetch dashboard:', error);
+      handleSilentError('fetchDashboard', error);
     } finally {
       setLoading(false);
     }
@@ -89,14 +92,15 @@ export default function DashboardPage() {
 
   const totalLicenses = dashboard?.total_licenses || 0;
   const unassignedCount = dashboard?.unassigned_licenses || 0;
+  const externalCount = dashboard?.external_licenses || 0;
   const potentialSavings = Number(dashboard?.potential_savings || 0);
   const totalCost = Number(dashboard?.total_monthly_cost || 0);
 
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="max-w-6xl mx-auto">
+          <SkeletonDashboard />
         </div>
       </AppLayout>
     );
@@ -261,9 +265,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Alert Cards */}
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="grid lg:grid-cols-3 gap-4">
           {/* Unassigned Licenses */}
-          <Link href="/licenses?unassigned=true">
+          <Link href="/licenses">
             <Card className={`hover:border-zinc-300 transition-colors cursor-pointer h-full ${unassignedCount > 0 ? 'border-amber-200 bg-amber-50/30' : ''}`}>
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-start justify-between">
@@ -333,6 +337,40 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2 mt-3 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
                     <span className="text-sm font-medium">No pending offboardings</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* External Licenses */}
+          <Link href="/licenses">
+            <Card className={`hover:border-zinc-300 transition-colors cursor-pointer h-full ${externalCount > 0 ? 'border-orange-200 bg-orange-50/30' : ''}`}>
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${externalCount > 0 ? 'bg-orange-100' : 'bg-zinc-100'}`}>
+                      <Globe className={`h-5 w-5 ${externalCount > 0 ? 'text-orange-600' : 'text-zinc-400'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">External Licenses</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        Non-company email addresses
+                      </p>
+                      {externalCount > 0 && (
+                        <div className="mt-3">
+                          <p className="text-2xl font-semibold text-orange-600">{externalCount}</p>
+                          <p className="text-xs text-muted-foreground">external licenses</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-zinc-300" />
+                </div>
+                {externalCount === 0 && (
+                  <div className="flex items-center gap-2 mt-3 text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">No external licenses</span>
                   </div>
                 )}
               </CardContent>

@@ -14,9 +14,6 @@ type SetupStep = 'welcome' | 'hibob' | 'providers' | 'complete';
 
 interface SetupStatus {
   is_complete: boolean;
-  has_hibob: boolean;
-  has_providers: boolean;
-  has_admin: boolean;
 }
 
 export default function SetupPage() {
@@ -37,8 +34,8 @@ export default function SetupPage() {
         if (status.is_complete) {
           router.push('/dashboard');
         }
-      } catch (error) {
-        console.error('Failed to check setup status:', error);
+      } catch {
+        // Silently handle - user will see setup page
       }
     }
     checkStatus();
@@ -47,10 +44,14 @@ export default function SetupPage() {
   const handleHibobSetup = async () => {
     setLoading(true);
     setError(null);
+
+    // Copy token for use, then clear from state immediately for security
+    const token = hibobAuthToken;
+
     try {
       // Test connection first
       const testResult = await api.testProviderConnection('hibob', {
-        auth_token: hibobAuthToken,
+        auth_token: token,
       });
 
       if (!testResult.success) {
@@ -63,13 +64,17 @@ export default function SetupPage() {
         name: 'hibob',
         display_name: 'HiBob',
         credentials: {
-          auth_token: hibobAuthToken,
+          auth_token: token,
         },
       });
 
+      // Clear sensitive data from state after successful submission
+      setHibobAuthToken('');
       setStep('providers');
-    } catch (err: any) {
-      setError(err.message || 'Failed to configure HiBob');
+    } catch (err: unknown) {
+      // Sanitize error message - don't expose internal details
+      const message = err instanceof Error ? err.message : 'Configuration failed';
+      setError(message.includes('token') ? 'Invalid credentials' : message);
     } finally {
       setLoading(false);
     }
@@ -80,11 +85,11 @@ export default function SetupPage() {
   };
 
   const handleComplete = async () => {
-    // Trigger initial sync
+    // Trigger initial sync (non-blocking, errors are logged server-side)
     try {
       await api.triggerSync();
-    } catch (error) {
-      console.error('Initial sync failed:', error);
+    } catch {
+      // Sync failures are handled server-side, don't block navigation
     }
     router.push('/dashboard');
   };

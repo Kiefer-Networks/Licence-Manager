@@ -12,7 +12,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api, InactiveLicenseReport, OffboardingReport, CostReport, ExternalUsersReport } from '@/lib/api';
-import { Clock, UserMinus, Wallet, Loader2, AlertCircle, Building2, AlertTriangle, Globe, Skull } from 'lucide-react';
+import { handleSilentError } from '@/lib/error-handler';
+import { Clock, UserMinus, Wallet, Loader2, AlertCircle, Building2, AlertTriangle, Globe, Skull, Download, Package } from 'lucide-react';
+import { formatMonthlyCost } from '@/lib/format';
+import { Button } from '@/components/ui/button';
+import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts } from '@/lib/export';
+import { LicenseStatusBadge } from '@/components/licenses';
 import Link from 'next/link';
 
 export default function ReportsPage() {
@@ -26,7 +31,7 @@ export default function ReportsPage() {
 
   // Load departments once
   useEffect(() => {
-    api.getDepartments().then(setDepartments).catch(console.error);
+    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
   }, []);
 
   // Load reports when department changes
@@ -47,7 +52,7 @@ export default function ReportsPage() {
         setCostReport(cost);
         setExternalUsersReport(externalUsers);
       }
-    }).catch(console.error).finally(() => !cancelled && setLoading(false));
+    }).catch((e) => handleSilentError('loadReports', e)).finally(() => !cancelled && setLoading(false));
 
     return () => { cancelled = true; };
   }, [selectedDepartment]);
@@ -104,6 +109,24 @@ export default function ReportsPage() {
 
             {/* Inactive Licenses */}
             <TabsContent value="inactive" className="space-y-6">
+              {/* Header with Export */}
+              <div className="flex items-center justify-between">
+                <div />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => inactiveReport && exportInactiveLicenses(
+                    inactiveReport.licenses,
+                    selectedDepartment !== 'all' ? selectedDepartment : undefined
+                  )}
+                  disabled={!inactiveReport || inactiveReport.licenses.length === 0}
+                  className="gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </Button>
+              </div>
+
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="border rounded-lg bg-white p-5">
@@ -134,32 +157,64 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {inactiveReport.licenses.map((license) => (
-                        <tr key={license.license_id} className="border-b last:border-0 hover:bg-zinc-50/50">
-                          <td className="px-4 py-3 font-medium">{license.provider_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
-                          <td className="px-4 py-3">
-                            {license.employee_name ? (
+                      {inactiveReport.licenses.map((license) => {
+                        const isOffboarded = license.employee_status === 'offboarded';
+                        return (
+                          <tr key={license.license_id} className="border-b last:border-0 hover:bg-zinc-50/50">
+                            <td className="px-4 py-3 font-medium">
+                              <Link href={`/providers/${license.provider_id}`} className="hover:underline">
+                                {license.provider_name}
+                              </Link>
+                            </td>
+                            <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center">
-                                  <span className="text-xs font-medium text-zinc-600">{license.employee_name.charAt(0)}</span>
-                                </div>
-                                {license.employee_name}
+                                <span className="text-muted-foreground">{license.external_user_id}</span>
+                                {license.is_external_email && (
+                                  <LicenseStatusBadge
+                                    license={{
+                                      is_external_email: true,
+                                      employee_id: license.employee_id,
+                                      employee_status: license.employee_status,
+                                    }}
+                                    showUnassigned={false}
+                                  />
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-muted-foreground">Unassigned</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={license.days_inactive > 60 ? 'destructive' : 'secondary'} className="tabular-nums">
-                              {license.days_inactive}d
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {license.monthly_cost ? `€${Number(license.monthly_cost).toFixed(2)}` : '-'}
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 py-3">
+                              {license.employee_name && license.employee_id ? (
+                                <div className="flex items-center gap-2">
+                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                                    <div className={`h-6 w-6 rounded-full flex items-center justify-center ${isOffboarded ? 'bg-red-100' : 'bg-zinc-100 group-hover:bg-zinc-200'} transition-colors`}>
+                                      <span className={`text-xs font-medium ${isOffboarded ? 'text-red-600' : 'text-zinc-600'}`}>{license.employee_name.charAt(0)}</span>
+                                    </div>
+                                    <span className={`hover:underline ${isOffboarded ? 'text-muted-foreground line-through' : ''}`}>{license.employee_name}</span>
+                                  </Link>
+                                  {isOffboarded && (
+                                    <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-xs">
+                                      <Skull className="h-3 w-3 mr-1" />
+                                      Offboarded
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
+                                  <Package className="h-3 w-3 mr-1" />
+                                  Unassigned
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={license.days_inactive > 60 ? 'destructive' : 'secondary'} className="tabular-nums">
+                                {license.days_inactive}d
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums">
+                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, 'EUR') : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 ) : (
@@ -173,6 +228,24 @@ export default function ReportsPage() {
 
             {/* Offboarding */}
             <TabsContent value="offboarding" className="space-y-6">
+              {/* Header with Export */}
+              <div className="flex items-center justify-between">
+                <div />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => offboardingReport && exportOffboarding(
+                    offboardingReport.employees,
+                    selectedDepartment !== 'all' ? selectedDepartment : undefined
+                  )}
+                  disabled={!offboardingReport || offboardingReport.employees.length === 0}
+                  className="gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </Button>
+              </div>
+
               {/* Stats */}
               <div className="border rounded-lg bg-white p-5">
                 <div className="flex items-center gap-3">
@@ -242,6 +315,24 @@ export default function ReportsPage() {
 
             {/* External Users */}
             <TabsContent value="external" className="space-y-6">
+              {/* Header with Export */}
+              <div className="flex items-center justify-between">
+                <div />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => externalUsersReport && exportExternalUsers(
+                    externalUsersReport.licenses,
+                    selectedDepartment !== 'all' ? selectedDepartment : undefined
+                  )}
+                  disabled={!externalUsersReport || externalUsersReport.licenses.length === 0}
+                  className="gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </Button>
+              </div>
+
               {/* Stats */}
               <div className="border rounded-lg bg-white p-5">
                 <div className="flex items-center gap-3">
@@ -286,14 +377,22 @@ export default function ReportsPage() {
                           <tr key={license.license_id} className="border-b last:border-0 hover:bg-zinc-50/50">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-xs">
-                                  <Globe className="h-3 w-3 mr-1" />
-                                  External
-                                </Badge>
                                 <span className="font-medium">{license.external_user_id}</span>
+                                <LicenseStatusBadge
+                                  license={{
+                                    is_external_email: true,
+                                    employee_id: license.employee_id,
+                                    employee_status: license.employee_status,
+                                  }}
+                                  showUnassigned={false}
+                                />
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground">{license.provider_name}</td>
+                            <td className="px-4 py-3">
+                              <Link href={`/providers/${license.provider_id}`} className="hover:underline text-muted-foreground hover:text-zinc-900">
+                                {license.provider_name}
+                              </Link>
+                            </td>
                             <td className="px-4 py-3">
                               {license.employee_name && license.employee_id ? (
                                 <div className="flex items-center gap-2">
@@ -312,13 +411,14 @@ export default function ReportsPage() {
                                 </div>
                               ) : (
                                 <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
+                                  <Package className="h-3 w-3 mr-1" />
                                   Unassigned
                                 </Badge>
                               )}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{license.license_type || '-'}</td>
                             <td className="px-4 py-3 text-right tabular-nums">
-                              {license.monthly_cost ? `€${Number(license.monthly_cost).toFixed(2)}` : '-'}
+                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, 'EUR') : '-'}
                             </td>
                           </tr>
                         );
@@ -336,6 +436,25 @@ export default function ReportsPage() {
 
             {/* Costs */}
             <TabsContent value="costs" className="space-y-6">
+              {/* Header with Export */}
+              <div className="flex items-center justify-between">
+                <div />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => costReport && exportCosts(
+                    costReport.monthly_costs,
+                    costReport.total_cost,
+                    selectedDepartment !== 'all' ? selectedDepartment : undefined
+                  )}
+                  disabled={!costReport || costReport.monthly_costs.length === 0}
+                  className="gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </Button>
+              </div>
+
               {/* Stats */}
               <div className="border rounded-lg bg-white p-5">
                 <div className="flex items-center gap-3">

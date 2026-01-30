@@ -22,6 +22,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api, Employee, License, Provider } from '@/lib/api';
+import { handleSilentError } from '@/lib/error-handler';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { CopyableText } from '@/components/ui/copy-button';
 import {
   ArrowLeft,
   Key,
@@ -37,7 +40,9 @@ import {
   Plus,
   DollarSign,
   Clock,
+  Globe,
 } from 'lucide-react';
+import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
 
 const REMOVABLE_PROVIDERS = ['cursor'];
@@ -76,7 +81,7 @@ export default function UserDetailPage() {
       const data = await api.getEmployee(employeeId);
       setEmployee(data);
     } catch (error) {
-      console.error('Failed to fetch employee:', error);
+      handleSilentError('fetchEmployee', error);
     }
   }, [employeeId]);
 
@@ -85,7 +90,7 @@ export default function UserDetailPage() {
       const data = await api.getLicenses({ employee_id: employeeId, page_size: 100 });
       setLicenses(data.items);
     } catch (error) {
-      console.error('Failed to fetch licenses:', error);
+      handleSilentError('fetchLicenses', error);
     }
   }, [employeeId]);
 
@@ -94,7 +99,7 @@ export default function UserDetailPage() {
       const data = await api.getProviders();
       setProviders(data.items);
     } catch (error) {
-      console.error('Failed to fetch providers:', error);
+      handleSilentError('fetchProviders', error);
     }
   }, []);
 
@@ -112,7 +117,7 @@ export default function UserDetailPage() {
       const data = await api.getLicenses({ unassigned: true, page_size: 200 });
       setAvailableLicenses(data.items);
     } catch (error) {
-      console.error('Failed to fetch available licenses:', error);
+      handleSilentError('fetchAvailableLicenses', error);
     } finally {
       setLoadingAvailable(false);
     }
@@ -220,15 +225,18 @@ export default function UserDetailPage() {
           </div>
         )}
 
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Employees', href: '/users' },
+            { label: employee.full_name },
+          ]}
+          className="pt-2"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-4">
-            <Link href="/users">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
               {employee.avatar ? (
                 <img
                   src={employee.avatar}
@@ -252,7 +260,6 @@ export default function UserDetailPage() {
                 </div>
               </div>
             </div>
-          </div>
           <Button size="sm" onClick={openAssignDialog}>
             <Plus className="h-4 w-4 mr-1.5" />
             Assign License
@@ -267,7 +274,9 @@ export default function UserDetailPage() {
                 <Mail className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase">Email</span>
               </div>
-              <p className="text-sm font-medium truncate">{employee.email}</p>
+              <CopyableText className="text-sm font-medium truncate block">
+                {employee.email}
+              </CopyableText>
             </CardContent>
           </Card>
           <Card>
@@ -349,8 +358,16 @@ export default function UserDetailPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                          {license.external_user_id}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground font-mono text-xs">{license.external_user_id}</span>
+                            {license.is_external_email && (
+                              <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] px-1.5">
+                                <Globe className="h-3 w-3 mr-1" />
+                                External
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{license.license_type || '-'}</td>
                         <td className="px-4 py-3 text-muted-foreground">
@@ -361,8 +378,8 @@ export default function UserDetailPage() {
                             </span>
                           ) : '-'}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums">
-                          {license.monthly_cost ? `${license.currency} ${license.monthly_cost}` : '-'}
+                        <td className="px-4 py-3 text-right tabular-nums text-sm">
+                          {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
