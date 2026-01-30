@@ -1,32 +1,108 @@
-import { getSession } from 'next-auth/react';
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
-async function getAuthHeaders(): Promise<HeadersInit> {
+// CSRF token cache
+let csrfToken: string | null = null;
+
+/**
+ * Get CSRF token from cookie or fetch a new one.
+ * Required for all state-changing requests (POST, PUT, DELETE).
+ */
+async function getCsrfToken(): Promise<string> {
+  // Try to get from cookie first
+  if (typeof window !== 'undefined') {
+    const cookieValue = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrf_token='))
+      ?.split('=')[1];
+    if (cookieValue) {
+      csrfToken = decodeURIComponent(cookieValue);
+      return csrfToken;
+    }
+  }
+
+  // Fetch new token if not in cookie
+  if (!csrfToken) {
+    const response = await fetch(`${API_BASE}/api/v1/auth/csrf-token`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (response.ok) {
+      const data = await response.json();
+      csrfToken = data.csrf_token;
+    }
+  }
+
+  return csrfToken || '';
+}
+
+async function getAuthHeaders(method: string = 'GET'): Promise<HeadersInit> {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
 
-  // Get session and add authorization header if available
-  const session = await getSession();
-  if (session?.accessToken) {
-    headers['Authorization'] = `Bearer ${session.accessToken}`;
+  // Add CSRF token for state-changing requests
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const token = await getCsrfToken();
+    if (token) {
+      headers['X-CSRF-Token'] = token;
+    }
   }
 
   return headers;
 }
 
-async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers = await getAuthHeaders();
+// Token refresh helper using httpOnly cookies
+async function refreshAccessToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Send httpOnly cookies
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = true): Promise<T> {
+  const method = options.method || 'GET';
+  const headers = await getAuthHeaders(method);
   const url = `${API_BASE}/api/v1${endpoint}`;
 
   const response = await fetch(url, {
     ...options,
+    credentials: 'include', // Always include cookies
     headers: {
       ...headers,
       ...options.headers,
     },
   });
+
+  // Handle 401 - attempt token refresh
+  if (response.status === 401 && retry && typeof window !== 'undefined') {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      // Retry the request with new token from cookies
+      return fetchApi<T>(endpoint, options, false);
+    }
+    // No valid token - let AuthProvider/AppLayout handle redirect
+    // Don't redirect here to avoid conflicts with React Router
+    throw new Error('Session expired');
+  }
+
+  // Handle 403 CSRF errors - refresh token and retry
+  if (response.status === 403 && retry) {
+    const error = await response.json().catch(() => ({ detail: '' }));
+    if (error.detail?.includes('CSRF')) {
+      csrfToken = null; // Clear cached token
+      return fetchApi<T>(endpoint, options, false);
+    }
+    throw new Error(error.detail || 'Access denied');
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -51,6 +127,7 @@ export interface DashboardData {
   total_licenses: number;
   active_licenses: number;
   unassigned_licenses: number;
+  external_licenses: number;
   total_monthly_cost: string;
   potential_savings: string;
   currency: string;
@@ -96,15 +173,56 @@ export interface PaymentMethodSummary {
   is_expiring: boolean;
 }
 
+export interface NotificationRule {
+  id: string;
+  event_type: string;
+  slack_channel: string;
+  enabled: boolean;
+  template?: string;
+}
+
+export const NOTIFICATION_EVENT_TYPES = [
+  { value: 'employee_offboarded', label: 'Employee Offboarded', description: 'When an employee with active licenses is offboarded' },
+  { value: 'license_inactive', label: 'Inactive License', description: 'When a license has been inactive for 30+ days' },
+  { value: 'sync_error', label: 'Sync Error', description: 'When a provider sync fails' },
+  { value: 'payment_expiring', label: 'Payment Expiring', description: 'When a payment method is about to expire' },
+] as const;
+
+export interface ProviderLicenseInfo {
+  is_licensed?: boolean;
+  is_trial?: boolean;
+  license_id?: string;
+  sku_name?: string;
+  company?: string;
+  licensee_name?: string;
+  licensee_email?: string;
+  max_users?: number;
+  starts_at?: string;
+  expires_at?: string;
+  features?: Record<string, boolean>;
+}
+
+export interface ProviderLicenseStats {
+  active: number;
+  assigned: number;  // Internal assigned (matched to HRIS)
+  external: number;  // External email domains
+  not_in_hris: number;  // Internal but not matched to HRIS
+}
+
 export interface Provider {
   id: string;
   name: string;
   display_name: string;
   enabled: boolean;
-  config?: Record<string, any>;
+  config?: {
+    provider_license_info?: ProviderLicenseInfo;
+    license_pricing?: Record<string, any>;
+    [key: string]: any;
+  };
   last_sync_at?: string;
   last_sync_status?: string;
   license_count: number;
+  license_stats?: ProviderLicenseStats | null;
   payment_method_id?: string | null;
   payment_method?: PaymentMethodSummary | null;
   created_at: string;
@@ -144,6 +262,24 @@ export interface LicenseListResponse {
   page_size: number;
 }
 
+export interface LicenseStats {
+  total_active: number;
+  total_assigned: number;
+  total_unassigned: number;
+  total_inactive: number;
+  total_external: number;
+  monthly_cost: string;
+  potential_savings: string;
+  currency: string;
+}
+
+export interface CategorizedLicensesResponse {
+  assigned: License[];
+  unassigned: License[];
+  external: License[];
+  stats: LicenseStats;
+}
+
 export interface Employee {
   id: string;
   hibob_id: string;
@@ -167,13 +303,17 @@ export interface EmployeeListResponse {
 
 export interface InactiveLicenseEntry {
   license_id: string;
+  provider_id: string;
   provider_name: string;
+  employee_id?: string;
   employee_name?: string;
   employee_email?: string;
+  employee_status?: string;
   external_user_id: string;
   last_activity_at?: string;
   days_inactive: number;
   monthly_cost?: string;
+  is_external_email: boolean;
 }
 
 export interface InactiveLicenseReport {
@@ -212,6 +352,7 @@ export interface OffboardingReport {
 
 export interface ExternalUserLicense {
   license_id: string;
+  provider_id: string;
   provider_name: string;
   external_user_id: string;
   employee_id?: string;
@@ -259,6 +400,14 @@ export interface LicenseTypePricing {
   notes?: string | null;
 }
 
+export interface PackagePricing {
+  cost: string;
+  currency: string;
+  billing_cycle: string;  // yearly, monthly
+  next_billing_date?: string | null;
+  notes?: string | null;
+}
+
 // Payment Methods
 export interface PaymentMethod {
   id: string;
@@ -301,6 +450,139 @@ export interface LicenseTypeInfo {
 export interface SyncResponse {
   success: boolean;
   results: Record<string, any>;
+}
+
+// ============================================================================
+// RBAC Types
+// ============================================================================
+
+export interface Permission {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+}
+
+export interface PermissionCategory {
+  category: string;
+  permissions: Permission[];
+}
+
+export type PermissionsByCategory = Record<string, Permission[]>;
+
+export interface Role {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  priority: number;
+  permissions: string[];  // Permission codes, not full objects
+}
+
+export interface RoleListResponse {
+  items: Role[];
+  total: number;
+}
+
+export interface RoleCreateRequest {
+  code: string;
+  name: string;
+  description?: string;
+  permission_codes: string[];
+}
+
+export interface RoleUpdateRequest {
+  name?: string;
+  description?: string;
+  permission_codes?: string[];
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name?: string;
+  picture_url?: string;
+  auth_provider: string;
+  is_active: boolean;
+  require_password_change: boolean;
+  roles: string[];  // Role codes
+  permissions: string[];  // Permission codes
+  last_login_at?: string;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUser[];
+  total: number;
+}
+
+export interface AdminUserCreateRequest {
+  email: string;
+  name?: string;
+  password: string;
+  role_codes: string[];
+}
+
+export interface AdminUserUpdateRequest {
+  name?: string;
+  is_active?: boolean;
+  role_codes?: string[];
+}
+
+export interface UserSession {
+  id: string;
+  user_agent?: string;
+  ip_address?: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at?: string;
+}
+
+export interface CurrentUserInfo {
+  id: string;
+  email: string;
+  name?: string;
+  auth_provider: string;
+  roles: string[];
+  permissions: string[];
+  is_superadmin: boolean;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
+}
+
+// ============================================================================
+// Audit Log Types
+// ============================================================================
+
+export interface AuditLogEntry {
+  id: string;
+  admin_user_id?: string;
+  admin_user_email?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  changes?: Record<string, any>;
+  ip_address?: string;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 // API Functions
@@ -376,14 +658,18 @@ export const api = {
     return fetchApi<{ license_types: LicenseTypeInfo[] }>(`/providers/${providerId}/license-types`);
   },
 
-  async getProviderPricing(providerId: string): Promise<{ pricing: LicenseTypePricing[] }> {
-    return fetchApi<{ pricing: LicenseTypePricing[] }>(`/providers/${providerId}/pricing`);
+  async getProviderPricing(providerId: string): Promise<{ pricing: LicenseTypePricing[]; package_pricing?: PackagePricing | null }> {
+    return fetchApi<{ pricing: LicenseTypePricing[]; package_pricing?: PackagePricing | null }>(`/providers/${providerId}/pricing`);
   },
 
-  async updateProviderPricing(providerId: string, pricing: LicenseTypePricing[]): Promise<{ pricing: LicenseTypePricing[] }> {
-    return fetchApi<{ pricing: LicenseTypePricing[] }>(`/providers/${providerId}/pricing`, {
+  async updateProviderPricing(
+    providerId: string,
+    pricing: LicenseTypePricing[],
+    packagePricing?: PackagePricing | null
+  ): Promise<{ pricing: LicenseTypePricing[]; package_pricing?: PackagePricing | null }> {
+    return fetchApi<{ pricing: LicenseTypePricing[]; package_pricing?: PackagePricing | null }>(`/providers/${providerId}/pricing`, {
       method: 'PUT',
-      body: JSON.stringify({ pricing }),
+      body: JSON.stringify({ pricing, package_pricing: packagePricing }),
     });
   },
 
@@ -398,9 +684,16 @@ export const api = {
     if (description) formData.append('description', description);
     if (category) formData.append('category', category);
 
+    // Get CSRF token for file upload
+    const csrfTokenValue = await getCsrfToken();
+
     const url = `${API_BASE}/api/v1/providers/${providerId}/files`;
     const response = await fetch(url, {
       method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include', // Send auth cookies
       body: formData,
     });
 
@@ -449,6 +742,20 @@ export const api = {
   },
 
   // Licenses
+  async getCategorizedLicenses(params: {
+    provider_id?: string;
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+  } = {}): Promise<CategorizedLicensesResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
+    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
+    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchApi<CategorizedLicensesResponse>(`/licenses/categorized${query}`);
+  },
+
   async getLicenses(params: {
     page?: number;
     page_size?: number;
@@ -646,5 +953,381 @@ export const api = {
       body: JSON.stringify({ domains }),
     });
     return response.domains;
+  },
+
+  // Notification Rules (Slack)
+  async getNotificationRules(): Promise<NotificationRule[]> {
+    return fetchApi<NotificationRule[]>('/settings/notifications/rules');
+  },
+
+  async createNotificationRule(data: {
+    event_type: string;
+    slack_channel: string;
+    template?: string;
+  }): Promise<NotificationRule> {
+    return fetchApi<NotificationRule>('/settings/notifications/rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateNotificationRule(
+    ruleId: string,
+    data: {
+      slack_channel?: string;
+      template?: string;
+      enabled?: boolean;
+    }
+  ): Promise<NotificationRule> {
+    return fetchApi<NotificationRule>(`/settings/notifications/rules/${ruleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteNotificationRule(ruleId: string): Promise<void> {
+    await fetchApi(`/settings/notifications/rules/${ruleId}`, { method: 'DELETE' });
+  },
+
+  // Slack Settings
+  async getSlackConfig(): Promise<{ webhook_url?: string; bot_token?: string; configured: boolean }> {
+    const response = await fetchApi<Record<string, any> | null>('/settings/slack');
+    if (!response) {
+      return { configured: false };
+    }
+    return {
+      webhook_url: response.webhook_url,
+      bot_token: response.bot_token ? '••••••••' : undefined,
+      configured: !!response.bot_token,
+    };
+  },
+
+  async setSlackConfig(data: { bot_token: string }): Promise<void> {
+    await fetchApi('/settings/slack', {
+      method: 'PUT',
+      body: JSON.stringify({ value: data }),
+    });
+  },
+
+  async testSlackNotification(channel: string): Promise<{ success: boolean; message: string }> {
+    return fetchApi<{ success: boolean; message: string }>('/settings/notifications/test', {
+      method: 'POST',
+      body: JSON.stringify({ channel }),
+    });
+  },
+
+  // ============================================================================
+  // Authentication
+  // ============================================================================
+
+  async login(email: string, password: string): Promise<LoginResponse> {
+    // First get CSRF token for the login request
+    const csrfTokenValue = await getCsrfToken();
+
+    const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include', // Receive httpOnly cookies
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(error.detail || 'Login failed');
+    }
+
+    // Tokens are now stored in httpOnly cookies by the server
+    return response.json();
+  },
+
+  async logout(): Promise<void> {
+    try {
+      // Server reads refresh token from httpOnly cookie
+      await fetchApi('/auth/logout', {
+        method: 'POST',
+      });
+    } catch {
+      // Ignore errors during logout
+    }
+    // Cookies are cleared by the server
+    // Clear CSRF token cache
+    csrfToken = null;
+  },
+
+  async logoutAllSessions(): Promise<{ sessions_revoked: number }> {
+    const result = await fetchApi<{ sessions_revoked: number }>('/auth/logout-all', {
+      method: 'POST',
+    });
+
+    // Clear CSRF token cache
+    csrfToken = null;
+
+    return result;
+  },
+
+  async getCurrentUser(): Promise<CurrentUserInfo> {
+    return fetchApi<CurrentUserInfo>('/auth/me');
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await fetchApi('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  },
+
+  // ============================================================================
+  // RBAC - Admin Users
+  // ============================================================================
+
+  async getAdminUsers(params: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    is_active?: boolean;
+    role?: string;
+  } = {}): Promise<AdminUserListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', params.page.toString());
+    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
+    if (params.search) searchParams.set('search', params.search);
+    if (params.is_active !== undefined) searchParams.set('is_active', params.is_active.toString());
+    if (params.role) searchParams.set('role', params.role);
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchApi<AdminUserListResponse>(`/rbac/users${query}`);
+  },
+
+  async getAdminUser(userId: string): Promise<AdminUser> {
+    return fetchApi<AdminUser>(`/rbac/users/${userId}`);
+  },
+
+  async createAdminUser(data: {
+    email: string;
+    name?: string;
+    password: string;
+    role_ids: string[];
+  }): Promise<AdminUser> {
+    // Convert role_ids to role_codes by fetching roles first
+    const rolesResponse = await this.getRoles();
+    const roleCodes = data.role_ids
+      .map(id => rolesResponse.items.find(r => r.id === id)?.code)
+      .filter((code): code is string => !!code);
+
+    return fetchApi<AdminUser>('/rbac/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+        role_codes: roleCodes,
+      }),
+    });
+  },
+
+  async updateAdminUser(userId: string, data: {
+    name?: string;
+    is_active?: boolean;
+    role_ids?: string[];
+  }): Promise<AdminUser> {
+    let roleCodes: string[] | undefined;
+
+    if (data.role_ids) {
+      const rolesResponse = await this.getRoles();
+      roleCodes = data.role_ids
+        .map(id => rolesResponse.items.find(r => r.id === id)?.code)
+        .filter((code): code is string => !!code);
+    }
+
+    return fetchApi<AdminUser>(`/rbac/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: data.name,
+        is_active: data.is_active,
+        role_codes: roleCodes,
+      }),
+    });
+  },
+
+  async deleteAdminUser(userId: string): Promise<void> {
+    await fetchApi(`/rbac/users/${userId}`, { method: 'DELETE' });
+  },
+
+  async resetAdminUserPassword(userId: string): Promise<{ temporary_password: string }> {
+    return fetchApi<{ temporary_password: string }>(`/rbac/users/${userId}/reset-password`, {
+      method: 'POST',
+    });
+  },
+
+  async unlockAdminUser(userId: string): Promise<AdminUser> {
+    return fetchApi<AdminUser>(`/rbac/users/${userId}/unlock`, {
+      method: 'POST',
+    });
+  },
+
+  async getAdminUserSessions(userId: string): Promise<{ sessions: UserSession[] }> {
+    return fetchApi<{ sessions: UserSession[] }>(`/rbac/users/${userId}/sessions`);
+  },
+
+  async revokeAdminUserSession(userId: string, sessionId: string): Promise<void> {
+    await fetchApi(`/rbac/users/${userId}/sessions/${sessionId}`, { method: 'DELETE' });
+  },
+
+  // ============================================================================
+  // RBAC - Roles
+  // ============================================================================
+
+  async getRoles(): Promise<RoleListResponse> {
+    return fetchApi<RoleListResponse>('/rbac/roles');
+  },
+
+  async getRole(roleId: string): Promise<Role> {
+    return fetchApi<Role>(`/rbac/roles/${roleId}`);
+  },
+
+  async createRole(data: {
+    code: string;
+    name: string;
+    description?: string;
+    permission_ids: string[];
+  }): Promise<Role> {
+    // Convert permission_ids to permission_codes by fetching permissions first
+    const permissionsResponse = await this.getPermissions();
+    const permissionCodes = data.permission_ids
+      .map(id => permissionsResponse.items.find(p => p.id === id)?.code)
+      .filter((code): code is string => !!code);
+
+    return fetchApi<Role>('/rbac/roles', {
+      method: 'POST',
+      body: JSON.stringify({
+        code: data.code,
+        name: data.name,
+        description: data.description,
+        permission_codes: permissionCodes,
+      }),
+    });
+  },
+
+  async updateRole(roleId: string, data: {
+    name?: string;
+    description?: string;
+    permission_ids?: string[];
+  }): Promise<Role> {
+    let permissionCodes: string[] | undefined;
+
+    if (data.permission_ids) {
+      const permissionsResponse = await this.getPermissions();
+      permissionCodes = data.permission_ids
+        .map(id => permissionsResponse.items.find(p => p.id === id)?.code)
+        .filter((code): code is string => !!code);
+    }
+
+    return fetchApi<Role>(`/rbac/roles/${roleId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        permission_codes: permissionCodes,
+      }),
+    });
+  },
+
+  async deleteRole(roleId: string): Promise<void> {
+    await fetchApi(`/rbac/roles/${roleId}`, { method: 'DELETE' });
+  },
+
+  // ============================================================================
+  // RBAC - Permissions
+  // ============================================================================
+
+  async getPermissions(): Promise<{ items: Permission[]; total: number }> {
+    return fetchApi<{ items: Permission[]; total: number }>('/rbac/permissions');
+  },
+
+  async getPermissionsByCategory(): Promise<PermissionsByCategory> {
+    // Backend returns array of {category, permissions}, convert to Record
+    const data = await fetchApi<PermissionCategory[]>('/rbac/permissions/by-category');
+    const result: PermissionsByCategory = {};
+    for (const item of data) {
+      result[item.category] = item.permissions;
+    }
+    return result;
+  },
+
+  // ============================================================================
+  // Audit Logs
+  // ============================================================================
+
+  async getAuditLogs(params: {
+    page?: number;
+    page_size?: number;
+    action?: string;
+    resource_type?: string;
+    admin_user_id?: string;
+  } = {}): Promise<AuditLogListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', params.page.toString());
+    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
+    if (params.action) searchParams.set('action', params.action);
+    if (params.resource_type) searchParams.set('resource_type', params.resource_type);
+    if (params.admin_user_id) searchParams.set('admin_user_id', params.admin_user_id);
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchApi<AuditLogListResponse>(`/audit${query}`);
+  },
+
+  async getAuditLog(logId: string): Promise<AuditLogEntry> {
+    return fetchApi<AuditLogEntry>(`/audit/${logId}`);
+  },
+
+  async getAuditResourceTypes(): Promise<string[]> {
+    const response = await fetchApi<{ resource_types: string[] }>('/audit/resource-types');
+    return response.resource_types;
+  },
+
+  async getAuditActions(): Promise<string[]> {
+    const response = await fetchApi<{ actions: string[] }>('/audit/actions');
+    return response.actions;
+  },
+
+  // ============================================================================
+  // Auth Helpers
+  // ============================================================================
+
+  /**
+   * Check if user appears to be authenticated.
+   * Note: This checks for the presence of the auth indicator cookie,
+   * not the actual httpOnly token (which is not accessible from JS).
+   * The server is the source of truth for authentication.
+   */
+  isAuthenticated(): boolean {
+    if (typeof window === 'undefined') return false;
+    // Check for auth indicator cookie (set alongside httpOnly tokens)
+    // or check if we have a CSRF token (indicates active session)
+    const hasCsrfCookie = document.cookie.includes('csrf_token=');
+    return hasCsrfCookie;
+  },
+
+  /**
+   * Clear client-side auth state.
+   * Note: httpOnly cookies can only be cleared by the server via logout.
+   */
+  clearAuth(): void {
+    csrfToken = null;
+    // Note: httpOnly cookies are cleared server-side
+  },
+
+  /**
+   * Fetch a fresh CSRF token. Call this after login or when CSRF errors occur.
+   */
+  async refreshCsrfToken(): Promise<string> {
+    csrfToken = null;
+    return getCsrfToken();
   },
 };
