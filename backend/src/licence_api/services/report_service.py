@@ -122,6 +122,20 @@ class ReportService:
                 for lic, provider, _ in unassigned_results
             ]
 
+        # Count external licenses
+        external_count = 0
+        setting = await self.settings_repo.get("company_domains")
+        company_domains = setting.get("domains", []) if setting else []
+        if company_domains:
+            all_licenses, _ = await self.license_repo.get_all_with_details(
+                department=department,
+                limit=10000,
+            )
+            for lic, provider, _ in all_licenses:
+                if "@" in lic.external_user_id and provider.name != "hibob":
+                    if not is_company_email(lic.external_user_id, company_domains):
+                        external_count += 1
+
         return DashboardResponse(
             total_employees=total_employees,
             active_employees=active_employees,
@@ -129,6 +143,7 @@ class ReportService:
             total_licenses=license_stats["total"],
             active_licenses=license_stats["by_status"].get("active", 0),
             unassigned_licenses=license_stats["unassigned"],
+            external_licenses=external_count,
             total_monthly_cost=license_stats["total_monthly_cost"],
             potential_savings=license_stats["potential_savings"],
             providers=provider_summaries,
@@ -213,6 +228,10 @@ class ReportService:
             limit=100,
         )
 
+        # Get company domains for external email detection
+        setting = await self.settings_repo.get("company_domains")
+        company_domains = setting.get("domains", []) if setting else []
+
         entries = []
         potential_savings = Decimal("0")
 
@@ -223,16 +242,25 @@ class ReportService:
             else:
                 days_inactive = days_threshold + 30  # Assume inactive since forever
 
+            # Check if external email
+            is_external = False
+            if "@" in lic.external_user_id and company_domains:
+                is_external = not is_company_email(lic.external_user_id, company_domains)
+
             entries.append(
                 InactiveLicenseEntry(
                     license_id=str(lic.id),
+                    provider_id=str(provider.id),
                     provider_name=provider.display_name,
+                    employee_id=str(employee.id) if employee else None,
                     employee_name=employee.full_name if employee else None,
                     employee_email=employee.email if employee else None,
+                    employee_status=employee.status if employee else None,
                     external_user_id=lic.external_user_id,
                     last_activity_at=lic.last_activity_at,
                     days_inactive=days_inactive,
                     monthly_cost=lic.monthly_cost,
+                    is_external_email=is_external,
                 )
             )
 
@@ -345,6 +373,7 @@ class ReportService:
                 external_licenses.append(
                     ExternalUserLicense(
                         license_id=str(lic.id),
+                        provider_id=str(provider.id),
                         provider_name=provider.display_name,
                         external_user_id=lic.external_user_id,
                         employee_id=str(employee.id) if employee else None,

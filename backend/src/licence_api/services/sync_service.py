@@ -388,6 +388,16 @@ class SyncService:
             else:
                 created += 1
 
+        # Store provider metadata (e.g., license info) if available
+        if hasattr(provider, "get_provider_metadata"):
+            metadata = provider.get_provider_metadata()
+            if metadata:
+                provider_orm = await self.provider_repo.get_by_id(provider_id)
+                if provider_orm:
+                    config = provider_orm.config or {}
+                    config["provider_license_info"] = metadata
+                    await self.provider_repo.update(provider_id, config=config)
+
         return {
             "provider": provider.__class__.__name__,
             "licenses_created": created,

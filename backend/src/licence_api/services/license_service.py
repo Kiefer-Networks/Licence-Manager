@@ -5,7 +5,14 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.models.dto.license import LicenseResponse, LicenseListResponse
+from decimal import Decimal
+
+from licence_api.models.dto.license import (
+    LicenseResponse,
+    LicenseListResponse,
+    LicenseStats,
+    CategorizedLicensesResponse,
+)
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.settings_repository import SettingsRepository
@@ -285,3 +292,119 @@ class LicenseService:
             return None
 
         return await self.get_license(license_id)
+
+    async def get_categorized_licenses(
+        self,
+        provider_id: UUID | None = None,
+        sort_by: str = "external_user_id",
+        sort_dir: str = "asc",
+    ) -> CategorizedLicensesResponse:
+        """Get licenses categorized into assigned, unassigned, and external.
+
+        External licenses are always in the external category, regardless of
+        assignment status. This creates a clear three-table layout:
+        - Assigned: Internal licenses linked to employees
+        - Unassigned: Internal licenses not linked to any employee
+        - External: ALL licenses with external email domains
+
+        Args:
+            provider_id: Optional provider filter
+            sort_by: Column to sort by (default: external_user_id for alphabetical)
+            sort_dir: Sort direction (default: asc for alphabetical)
+
+        Returns:
+            CategorizedLicensesResponse with three categories and stats
+        """
+        # Load company domains for external email check
+        company_domains = await self._get_company_domains()
+
+        # Fetch all licenses (we need all to categorize properly)
+        results, _ = await self.license_repo.get_all_with_details(
+            provider_id=provider_id,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            offset=0,
+            limit=10000,
+        )
+
+        assigned: list[LicenseResponse] = []
+        unassigned: list[LicenseResponse] = []
+        external: list[LicenseResponse] = []
+
+        # Stats tracking
+        total_active = 0
+        total_inactive = 0
+        total_monthly_cost = Decimal("0")
+        potential_savings = Decimal("0")
+
+        for license_orm, provider_orm, employee_orm in results:
+            is_external = self._check_external_email(
+                license_orm.external_user_id, company_domains
+            )
+            is_active = license_orm.status == "active"
+            is_assigned = license_orm.employee_id is not None
+            is_offboarded = employee_orm and employee_orm.status == "offboarded"
+
+            license_response = LicenseResponse(
+                id=license_orm.id,
+                provider_id=license_orm.provider_id,
+                provider_name=provider_orm.display_name,
+                employee_id=license_orm.employee_id,
+                employee_email=employee_orm.email if employee_orm else None,
+                employee_name=employee_orm.full_name if employee_orm else None,
+                external_user_id=license_orm.external_user_id,
+                license_type=license_orm.license_type,
+                license_type_display_name=self._get_display_name_from_pricing(
+                    license_orm.license_type, provider_orm.config
+                ),
+                status=license_orm.status,
+                assigned_at=license_orm.assigned_at,
+                last_activity_at=license_orm.last_activity_at,
+                monthly_cost=license_orm.monthly_cost,
+                currency=license_orm.currency,
+                metadata=license_orm.extra_data or {},
+                synced_at=license_orm.synced_at,
+                is_external_email=is_external,
+                employee_status=employee_orm.status if employee_orm else None,
+            )
+
+            # Track active/inactive
+            if is_active:
+                total_active += 1
+            else:
+                total_inactive += 1
+
+            # Track monthly cost (only active licenses)
+            if is_active and license_orm.monthly_cost:
+                total_monthly_cost += license_orm.monthly_cost
+
+            # Track potential savings (unassigned + offboarded, only active)
+            if is_active and license_orm.monthly_cost:
+                if not is_assigned or is_offboarded:
+                    potential_savings += license_orm.monthly_cost
+
+            # Categorize: External licenses ALWAYS go to external category
+            if is_external:
+                external.append(license_response)
+            elif is_assigned:
+                assigned.append(license_response)
+            else:
+                unassigned.append(license_response)
+
+        stats = LicenseStats(
+            total_active=total_active,
+            total_assigned=len(assigned),
+            total_unassigned=len(unassigned),
+            total_inactive=total_inactive,
+            total_external=len(external),
+            monthly_cost=total_monthly_cost,
+            potential_savings=potential_savings,
+            currency="EUR",
+        )
+
+        return CategorizedLicensesResponse(
+            assigned=assigned,
+            unassigned=unassigned,
+            external=external,
+            stats=stats,
+        )
