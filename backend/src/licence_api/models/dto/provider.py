@@ -37,6 +37,15 @@ class PaymentMethodSummary(BaseModel):
     is_expiring: bool = False
 
 
+class ProviderLicenseStats(BaseModel):
+    """License statistics for a provider."""
+
+    active: int = 0
+    assigned: int = 0  # Internal assigned (matched to HRIS)
+    external: int = 0  # External email domains
+    not_in_hris: int = 0  # Internal but not matched to HRIS
+
+
 class ProviderResponse(BaseModel):
     """Provider response DTO."""
 
@@ -48,6 +57,7 @@ class ProviderResponse(BaseModel):
     last_sync_at: datetime | None = None
     last_sync_status: SyncStatus | None = None
     license_count: int = 0
+    license_stats: ProviderLicenseStats | None = None
     payment_method_id: UUID | None = None
     payment_method: PaymentMethodSummary | None = None
     created_at: datetime
