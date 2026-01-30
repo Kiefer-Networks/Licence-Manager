@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api, Provider } from '@/lib/api';
-import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package } from 'lucide-react';
+import { handleSilentError } from '@/lib/error-handler';
+import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
 const hrisProvider = { value: 'hibob', label: 'HiBob', fields: ['auth_token'] };
@@ -72,33 +73,219 @@ const FIELD_LABELS: Record<string, string> = {
   user_token: 'User Token',
 };
 
-// Permission hints for providers
-const PROVIDER_PERMISSIONS: Record<string, string[]> = {
-  '1password': [
-    'SCIM bridge token required',
-    'Enable SCIM provisioning in 1Password admin console',
-  ],
-  github: [
-    'read:org - Read org and team membership',
-    'read:user - Read user profile data',
-  ],
-  gitlab: [
-    'read_api - Read access to the API',
-    'read_user - Read user information',
-  ],
-  mattermost: [
-    'Personal access token or bot token',
-    'System Admin role recommended for full user list',
-  ],
-  microsoft: [
-    'User.Read.All (Application)',
-    'Directory.Read.All (Application)',
-    'AuditLog.Read.All (Application) - for sign-in activity',
-  ],
-  miro: [
-    'OAuth access token with team:read scope',
-    'Organization ID required for Enterprise plans',
-  ],
+// Detailed setup instructions for providers
+const PROVIDER_SETUP: Record<string, { permissions: string[]; steps: string[]; link?: string }> = {
+  '1password': {
+    permissions: [
+      'SCIM bridge token with full provisioning access',
+    ],
+    steps: [
+      '1. Log in to 1Password Business/Teams admin console',
+      '2. Go to Integrations → Directory',
+      '3. Click "Set up SCIM bridge"',
+      '4. Generate a new SCIM bearer token',
+      '5. Copy the Sign-in Address (e.g., company.1password.com)',
+      '6. Save the bearer token securely - it cannot be viewed again',
+    ],
+    link: 'https://support.1password.com/scim/',
+  },
+  cursor: {
+    permissions: [
+      'Team Admin API Key with member management access',
+    ],
+    steps: [
+      '1. Log in to Cursor as a Team Admin',
+      '2. Go to Team Settings → API',
+      '3. Generate a new API key',
+      '4. Ensure Enterprise plan is active for full API access',
+      '5. Copy the API key and store it securely',
+    ],
+    link: 'https://cursor.sh/settings/team',
+  },
+  figma: {
+    permissions: [
+      'org:read - Read organization and team info',
+      'file:read - Optional for activity tracking',
+    ],
+    steps: [
+      '1. Go to Figma → Account Settings → Personal Access Tokens',
+      '2. Click "Create new token"',
+      '3. Name it (e.g., "License Management")',
+      '4. Select org:read scope (minimum required)',
+      '5. Copy the token immediately - it won\'t be shown again',
+      '6. Find Organization ID: Admin → Settings → Organization ID',
+    ],
+    link: 'https://www.figma.com/developers/api#access-tokens',
+  },
+  github: {
+    permissions: [
+      'read:org - Read organization and team membership',
+      'read:user - Read user profile data',
+      'admin:org (optional) - For seat management',
+    ],
+    steps: [
+      '1. Go to GitHub → Settings → Developer settings → Personal access tokens',
+      '2. Click "Generate new token (classic)"',
+      '3. Select scopes: read:org, read:user',
+      '4. For Enterprise: use admin:org for seat counts',
+      '5. Copy the token and store securely',
+      '6. Organization name: your GitHub org slug (github.com/ORG_NAME)',
+    ],
+    link: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
+  },
+  gitlab: {
+    permissions: [
+      'read_api - Read access to the API',
+      'read_user - Read user information',
+    ],
+    steps: [
+      '1. Go to GitLab → User Settings → Access Tokens',
+      '2. Create a new Personal Access Token',
+      '3. Select scopes: read_api, read_user',
+      '4. Set expiration date (recommended: 1 year)',
+      '5. Copy the token immediately',
+      '6. Group ID: Go to your group → Settings → General → Group ID',
+      '7. For self-hosted: Enter your GitLab server URL',
+    ],
+    link: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
+  },
+  google_workspace: {
+    permissions: [
+      'admin.directory.user.readonly - Read user directory',
+      'admin.directory.group.readonly - Optional for groups',
+    ],
+    steps: [
+      '1. Go to Google Cloud Console → Create new project',
+      '2. Enable Admin SDK API',
+      '3. Create Service Account with Domain-Wide Delegation',
+      '4. Download the JSON key file',
+      '5. In Google Admin: Security → API controls → Domain-wide delegation',
+      '6. Add the Service Account client ID',
+      '7. Add scope: https://www.googleapis.com/auth/admin.directory.user.readonly',
+      '8. Admin Email: A super admin email for impersonation',
+    ],
+    link: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
+  },
+  hibob: {
+    permissions: [
+      'API Token with employee read access',
+    ],
+    steps: [
+      '1. Log in to HiBob as Admin',
+      '2. Go to Settings → Integrations → Service Users',
+      '3. Create a new Service User',
+      '4. Grant "People" read permissions',
+      '5. Generate API token',
+      '6. Copy the token - it cannot be retrieved later',
+    ],
+    link: 'https://apidocs.hibob.com/reference/getting-started',
+  },
+  jetbrains: {
+    permissions: [
+      'Organization API access with license management',
+    ],
+    steps: [
+      '1. Go to JetBrains Account → Organization',
+      '2. Navigate to API Keys section',
+      '3. Generate new API key',
+      '4. Find Organization ID (X-Customer-Code):',
+      '   - Go to Organization → Settings',
+      '   - Copy the Organization ID/Customer Code',
+      '5. The API key provides access to license assignments',
+    ],
+    link: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
+  },
+  mattermost: {
+    permissions: [
+      'Personal Access Token or Bot Token',
+      'System Admin role recommended',
+    ],
+    steps: [
+      '1. Go to Mattermost → Account Settings → Security',
+      '2. Create a Personal Access Token',
+      '3. For bot tokens: Integrations → Bot Accounts',
+      '4. System Admin role provides full user list access',
+      '5. Regular users may only see users in their teams',
+      '6. Server URL: Your Mattermost instance URL (e.g., https://mattermost.company.com)',
+    ],
+    link: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
+  },
+  microsoft: {
+    permissions: [
+      'User.Read.All (Application) - Read all user profiles',
+      'Directory.Read.All (Application) - Read directory data',
+      'AuditLog.Read.All (Application) - Sign-in activity logs',
+    ],
+    steps: [
+      '1. Go to Azure Portal → Azure Active Directory',
+      '2. App registrations → New registration',
+      '3. Name it (e.g., "License Management")',
+      '4. Note the Application (Client) ID and Tenant ID',
+      '5. Certificates & secrets → New client secret',
+      '6. API permissions → Add permission → Microsoft Graph',
+      '7. Add Application permissions:',
+      '   - User.Read.All',
+      '   - Directory.Read.All',
+      '   - AuditLog.Read.All (optional, for activity)',
+      '8. Click "Grant admin consent"',
+    ],
+    link: 'https://learn.microsoft.com/en-us/graph/auth-register-app-v2',
+  },
+  miro: {
+    permissions: [
+      'team:read - Read team and member information',
+      'boards:read - Optional for activity tracking',
+    ],
+    steps: [
+      '1. Go to Miro → Profile Settings → Your apps',
+      '2. Create new app or use existing',
+      '3. Install app to your team/organization',
+      '4. Generate OAuth access token',
+      '5. Required scope: team:read',
+      '6. Organization ID: Admin → Organization settings → ID',
+      '7. Enterprise plan required for organization-wide access',
+    ],
+    link: 'https://developers.miro.com/docs/getting-started',
+  },
+  openai: {
+    permissions: [
+      'Admin API Key with organization member access',
+    ],
+    steps: [
+      '1. Go to platform.openai.com',
+      '2. Click on your profile → Organization settings',
+      '3. Note the Organization ID',
+      '4. Go to API keys → Create new secret key',
+      '5. You must be an Organization Owner to access member list',
+      '6. The Admin API provides access to:',
+      '   - Organization members',
+      '   - Usage data',
+      '   - Invite management',
+    ],
+    link: 'https://platform.openai.com/docs/api-reference/organization',
+  },
+  slack: {
+    permissions: [
+      'users:read - Access user list',
+      'users:read.email - Access user emails',
+      'team:read - Access workspace info',
+      'team.billing:read - Optional: paid seat status',
+    ],
+    steps: [
+      '1. Go to api.slack.com/apps → Create New App',
+      '2. Choose "From scratch"',
+      '3. Name it and select workspace',
+      '4. OAuth & Permissions → Add Bot Token Scopes:',
+      '   - users:read',
+      '   - users:read.email',
+      '   - team:read',
+      '   - team.billing:read (optional, shows paid seats)',
+      '5. Install App to Workspace',
+      '6. Copy Bot User OAuth Token (starts with xoxb-)',
+      '7. User Token (xoxp-) optional for additional access',
+    ],
+    link: 'https://api.slack.com/authentication/basics',
+  },
 };
 
 const getFieldLabel = (field: string) => {
@@ -139,7 +326,7 @@ export default function ProvidersPage() {
       const data = await api.getProviders();
       setProviders(data.items);
     } catch (error) {
-      console.error('Failed to fetch providers:', error);
+      handleSilentError('fetchProviders', error);
     } finally {
       setLoading(false);
     }
@@ -363,7 +550,21 @@ export default function ProvidersPage() {
                         <div>
                           <p className="font-medium text-sm">{provider.display_name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {provider.license_count} license{provider.license_count !== 1 ? 's' : ''}
+                            {provider.license_stats ? (
+                              <>
+                                <span className="font-medium text-zinc-700">{provider.license_stats.active} active</span>
+                                {' · '}
+                                {provider.license_stats.assigned} assigned
+                                {provider.license_stats.external > 0 && (
+                                  <span className="text-orange-600"> + {provider.license_stats.external} ext</span>
+                                )}
+                                {provider.license_stats.not_in_hris > 0 && (
+                                  <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.not_in_hris} <AlertTriangle className="h-3 w-3" /> not in HRIS</span>
+                                )}
+                              </>
+                            ) : (
+                              <>{provider.license_count} license{provider.license_count !== 1 ? 's' : ''}</>
+                            )}
                             {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString('de-DE')}`}
                           </p>
                         </div>
@@ -437,19 +638,34 @@ export default function ProvidersPage() {
                 />
               </div>
             ))}
-            {/* Permission hints */}
-            {PROVIDER_PERMISSIONS[newProviderType] && (
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                <p className="text-xs font-medium text-blue-800 mb-1">Required Permissions:</p>
-                <ul className="text-xs text-blue-700 space-y-0.5">
-                  {PROVIDER_PERMISSIONS[newProviderType].map((perm) => (
-                    <li key={perm}>• {perm}</li>
-                  ))}
-                </ul>
-                {newProviderType === 'microsoft' && (
-                  <p className="text-xs text-blue-600 mt-2">
-                    Grant these permissions in Azure Portal → App registrations → API permissions → Add permission → Microsoft Graph
-                  </p>
+            {/* Setup Instructions */}
+            {PROVIDER_SETUP[newProviderType] && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-blue-800 mb-1">Required Permissions:</p>
+                  <ul className="text-xs text-blue-700 space-y-0.5">
+                    {PROVIDER_SETUP[newProviderType].permissions.map((perm) => (
+                      <li key={perm}>• {perm}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-blue-800 mb-1">Setup Steps:</p>
+                  <ol className="text-xs text-blue-700 space-y-0.5">
+                    {PROVIDER_SETUP[newProviderType].steps.map((step, idx) => (
+                      <li key={idx}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+                {PROVIDER_SETUP[newProviderType].link && (
+                  <a
+                    href={PROVIDER_SETUP[newProviderType].link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1"
+                  >
+                    View documentation →
+                  </a>
                 )}
               </div>
             )}
