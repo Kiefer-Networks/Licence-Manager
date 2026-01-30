@@ -297,14 +297,18 @@ function LicensesContent() {
         {categorizedData && (
           <LicenseStatsCards
             stats={{
-              total_active: assignedActiveCount + unassignedActiveCount + externalActiveCount,
+              total_active: assignedActiveCount + unassignedActiveCount + externalActiveCount +
+                            (categorizedData.service_accounts?.filter(l => l.status === 'active').length || 0),
               total_assigned: assignedActiveCount,
               total_unassigned: unassignedActiveCount,
               total_external: externalActiveCount,
+              total_service_accounts: categorizedData.service_accounts?.filter(l => l.status === 'active').length || 0,
               total_inactive: categorizedData.assigned.filter(l => l.status !== 'active').length +
                               categorizedData.unassigned.filter(l => l.status !== 'active').length +
-                              categorizedData.external.filter(l => l.status !== 'active').length,
+                              categorizedData.external.filter(l => l.status !== 'active').length +
+                              (categorizedData.service_accounts?.filter(l => l.status !== 'active').length || 0),
               monthly_cost: categorizedData.stats.monthly_cost,
+              potential_savings: categorizedData.stats.potential_savings,
               currency: categorizedData.stats.currency,
             }}
           />

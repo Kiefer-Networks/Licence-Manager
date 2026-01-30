@@ -55,6 +55,8 @@ import {
   FileText,
   File,
   Eye,
+  Bot,
+  Building2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -107,6 +109,15 @@ export default function ProviderDetailPage() {
   // Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<License | null>(null);
 
+  // Service Account Dialog
+  const [serviceAccountDialog, setServiceAccountDialog] = useState<License | null>(null);
+  const [serviceAccountForm, setServiceAccountForm] = useState({
+    is_service_account: false,
+    service_account_name: '',
+    service_account_owner_id: '',
+  });
+  const [savingServiceAccount, setSavingServiceAccount] = useState(false);
+
   // Pricing
   const [licenseTypes, setLicenseTypes] = useState<LicenseTypeInfo[]>([]);
   const [pricingEdits, setPricingEdits] = useState<Record<string, {
@@ -138,6 +149,41 @@ export default function ProviderDetailPage() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileDescription, setFileDescription] = useState('');
   const [fileCategory, setFileCategory] = useState('other');
+
+  // License Packages
+  const [licensePackages, setLicensePackages] = useState<import('@/lib/api').LicensePackage[]>([]);
+  const [packageDialogOpen, setPackageDialogOpen] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<import('@/lib/api').LicensePackage | null>(null);
+  const [packageForm, setPackageForm] = useState({
+    license_type: '',
+    display_name: '',
+    total_seats: '',
+    cost_per_seat: '',
+    currency: 'EUR',
+    billing_cycle: 'monthly',
+    contract_start: '',
+    contract_end: '',
+    auto_renew: false,
+    notes: '',
+  });
+  const [savingPackage, setSavingPackage] = useState(false);
+
+  // Organization Licenses
+  const [orgLicenses, setOrgLicenses] = useState<import('@/lib/api').OrganizationLicense[]>([]);
+  const [orgLicenseDialogOpen, setOrgLicenseDialogOpen] = useState(false);
+  const [editingOrgLicense, setEditingOrgLicense] = useState<import('@/lib/api').OrganizationLicense | null>(null);
+  const [orgLicenseForm, setOrgLicenseForm] = useState({
+    name: '',
+    license_type: '',
+    quantity: '',
+    unit: '',
+    monthly_cost: '',
+    currency: 'EUR',
+    billing_cycle: 'monthly',
+    renewal_date: '',
+    notes: '',
+  });
+  const [savingOrgLicense, setSavingOrgLicense] = useState(false);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -270,11 +316,29 @@ export default function ProviderDetailPage() {
     }
   }, [providerId]);
 
+  const fetchLicensePackages = useCallback(async () => {
+    try {
+      const data = await api.getLicensePackages(providerId);
+      setLicensePackages(data.items);
+    } catch (error) {
+      handleSilentError('fetchLicensePackages', error);
+    }
+  }, [providerId]);
+
+  const fetchOrgLicenses = useCallback(async () => {
+    try {
+      const data = await api.getOrganizationLicenses(providerId);
+      setOrgLicenses(data.items);
+    } catch (error) {
+      handleSilentError('fetchOrgLicenses', error);
+    }
+  }, [providerId]);
+
   useEffect(() => {
-    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles()]).finally(() =>
+    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles(), fetchLicensePackages(), fetchOrgLicenses()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles]);
+  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles, fetchLicensePackages, fetchOrgLicenses]);
 
   const handleSync = async () => {
     if (!provider || isManual) return;
@@ -370,6 +434,193 @@ export default function ProviderDetailPage() {
       await fetchLicenses();
       await fetchCategorizedLicenses();
       await fetchProvider();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to delete');
+    }
+  };
+
+  const handleOpenServiceAccountDialog = (license: License) => {
+    setServiceAccountForm({
+      is_service_account: license.is_service_account || false,
+      service_account_name: license.service_account_name || '',
+      service_account_owner_id: license.service_account_owner_id || '',
+    });
+    setServiceAccountDialog(license);
+  };
+
+  const handleSaveServiceAccount = async () => {
+    if (!serviceAccountDialog) return;
+    setSavingServiceAccount(true);
+    try {
+      await api.updateLicenseServiceAccount(serviceAccountDialog.id, {
+        is_service_account: serviceAccountForm.is_service_account,
+        service_account_name: serviceAccountForm.service_account_name || undefined,
+        service_account_owner_id: serviceAccountForm.service_account_owner_id || undefined,
+      });
+      showToast('success', serviceAccountForm.is_service_account ? 'Marked as service account' : 'Removed service account flag');
+      setServiceAccountDialog(null);
+      await fetchCategorizedLicenses();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to update');
+    } finally {
+      setSavingServiceAccount(false);
+    }
+  };
+
+  // License Package handlers
+  const handleOpenPackageDialog = (pkg?: import('@/lib/api').LicensePackage) => {
+    if (pkg) {
+      setEditingPackage(pkg);
+      setPackageForm({
+        license_type: pkg.license_type,
+        display_name: pkg.display_name || '',
+        total_seats: String(pkg.total_seats),
+        cost_per_seat: pkg.cost_per_seat || '',
+        currency: pkg.currency,
+        billing_cycle: pkg.billing_cycle || 'monthly',
+        contract_start: pkg.contract_start || '',
+        contract_end: pkg.contract_end || '',
+        auto_renew: pkg.auto_renew,
+        notes: pkg.notes || '',
+      });
+    } else {
+      setEditingPackage(null);
+      setPackageForm({
+        license_type: '',
+        display_name: '',
+        total_seats: '',
+        cost_per_seat: '',
+        currency: 'EUR',
+        billing_cycle: 'monthly',
+        contract_start: '',
+        contract_end: '',
+        auto_renew: false,
+        notes: '',
+      });
+    }
+    setPackageDialogOpen(true);
+  };
+
+  const handleSavePackage = async () => {
+    if (!packageForm.license_type || !packageForm.total_seats) {
+      showToast('error', 'License type and total seats are required');
+      return;
+    }
+    setSavingPackage(true);
+    try {
+      const data = {
+        license_type: packageForm.license_type,
+        display_name: packageForm.display_name || undefined,
+        total_seats: parseInt(packageForm.total_seats),
+        cost_per_seat: packageForm.cost_per_seat || undefined,
+        currency: packageForm.currency,
+        billing_cycle: packageForm.billing_cycle || undefined,
+        contract_start: packageForm.contract_start || undefined,
+        contract_end: packageForm.contract_end || undefined,
+        auto_renew: packageForm.auto_renew,
+        notes: packageForm.notes || undefined,
+      };
+
+      if (editingPackage) {
+        await api.updateLicensePackage(providerId, editingPackage.id, data);
+        showToast('success', 'Package updated');
+      } else {
+        await api.createLicensePackage(providerId, data);
+        showToast('success', 'Package created');
+      }
+      setPackageDialogOpen(false);
+      await fetchLicensePackages();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save package');
+    } finally {
+      setSavingPackage(false);
+    }
+  };
+
+  const handleDeletePackage = async (pkg: import('@/lib/api').LicensePackage) => {
+    if (!confirm(`Delete package "${pkg.display_name || pkg.license_type}"?`)) return;
+    try {
+      await api.deleteLicensePackage(providerId, pkg.id);
+      showToast('success', 'Package deleted');
+      await fetchLicensePackages();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to delete package');
+    }
+  };
+
+  // Organization License handlers
+  const handleOpenOrgLicenseDialog = (lic?: import('@/lib/api').OrganizationLicense) => {
+    if (lic) {
+      setEditingOrgLicense(lic);
+      setOrgLicenseForm({
+        name: lic.name,
+        license_type: lic.license_type || '',
+        quantity: lic.quantity ? String(lic.quantity) : '',
+        unit: lic.unit || '',
+        monthly_cost: lic.monthly_cost || '',
+        currency: lic.currency,
+        billing_cycle: lic.billing_cycle || 'monthly',
+        renewal_date: lic.renewal_date || '',
+        notes: lic.notes || '',
+      });
+    } else {
+      setEditingOrgLicense(null);
+      setOrgLicenseForm({
+        name: '',
+        license_type: '',
+        quantity: '',
+        unit: '',
+        monthly_cost: '',
+        currency: 'EUR',
+        billing_cycle: 'monthly',
+        renewal_date: '',
+        notes: '',
+      });
+    }
+    setOrgLicenseDialogOpen(true);
+  };
+
+  const handleSaveOrgLicense = async () => {
+    if (!orgLicenseForm.name) {
+      showToast('error', 'Name is required');
+      return;
+    }
+    setSavingOrgLicense(true);
+    try {
+      const data = {
+        name: orgLicenseForm.name,
+        license_type: orgLicenseForm.license_type || undefined,
+        quantity: orgLicenseForm.quantity ? parseInt(orgLicenseForm.quantity) : undefined,
+        unit: orgLicenseForm.unit || undefined,
+        monthly_cost: orgLicenseForm.monthly_cost || undefined,
+        currency: orgLicenseForm.currency,
+        billing_cycle: orgLicenseForm.billing_cycle || undefined,
+        renewal_date: orgLicenseForm.renewal_date || undefined,
+        notes: orgLicenseForm.notes || undefined,
+      };
+
+      if (editingOrgLicense) {
+        await api.updateOrganizationLicense(providerId, editingOrgLicense.id, data);
+        showToast('success', 'Organization license updated');
+      } else {
+        await api.createOrganizationLicense(providerId, data);
+        showToast('success', 'Organization license created');
+      }
+      setOrgLicenseDialogOpen(false);
+      await fetchOrgLicenses();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save organization license');
+    } finally {
+      setSavingOrgLicense(false);
+    }
+  };
+
+  const handleDeleteOrgLicense = async (lic: import('@/lib/api').OrganizationLicense) => {
+    if (!confirm(`Delete "${lic.name}"?`)) return;
+    try {
+      await api.deleteOrganizationLicense(providerId, lic.id);
+      showToast('success', 'Organization license deleted');
+      await fetchOrgLicenses();
     } catch (error: any) {
       showToast('error', error.message || 'Failed to delete');
     }
@@ -582,7 +833,19 @@ export default function ProviderDetailPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isManual ? 'bg-purple-50' : 'bg-zinc-100'}`}>
+              {provider.logo_url ? (
+                <img
+                  src={provider.logo_url}
+                  alt={provider.display_name}
+                  className="h-10 w-10 rounded-lg object-contain bg-white border"
+                  onError={(e) => {
+                    // Fallback to icon if logo fails to load
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isManual ? 'bg-purple-50' : 'bg-zinc-100'} ${provider.logo_url ? 'hidden' : ''}`}>
                 {isManual ? <Package className="h-5 w-5 text-purple-600" /> : <Key className="h-5 w-5 text-zinc-600" />}
               </div>
               <div>
@@ -876,10 +1139,14 @@ export default function ProviderDetailPage() {
                 assigned={categorizedLicenses.assigned}
                 unassigned={categorizedLicenses.unassigned}
                 external={categorizedLicenses.external}
+                serviceAccounts={categorizedLicenses.service_accounts}
                 stats={categorizedLicenses.stats}
                 showProvider={false}
                 showStats={true}
                 maxUsers={provider?.config?.provider_license_info?.max_users}
+                onServiceAccountClick={handleOpenServiceAccountDialog}
+                onAssignClick={(license) => setAssignDialog(license)}
+                onDeleteClick={(license) => setDeleteDialog(license)}
               />
             ) : (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
@@ -1358,6 +1625,178 @@ export default function ProviderDetailPage() {
                 Yearly costs are divided by 12.
               </p>
             )}
+
+            {/* License Packages Section */}
+            <div className="border-t pt-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-medium flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    License Packages
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Track purchased seat packages and their utilization
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleOpenPackageDialog()}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Package
+                </Button>
+              </div>
+
+              {licensePackages.length === 0 ? (
+                <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
+                  <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No license packages defined</p>
+                  <p className="text-xs mt-1">Add a package to track seat utilization</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {licensePackages.map((pkg) => (
+                    <Card key={pkg.id}>
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-sm">{pkg.display_name || pkg.license_type}</h3>
+                              <Badge
+                                variant="outline"
+                                className={pkg.utilization_percent > 90 ? 'text-red-600 border-red-200 bg-red-50' : pkg.utilization_percent > 70 ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50'}
+                              >
+                                {pkg.utilization_percent}% used
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground font-mono mb-2">{pkg.license_type}</p>
+
+                            <div className="flex items-center gap-4 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Seats:</span>{' '}
+                                <span className="font-medium">{pkg.assigned_seats}</span>
+                                <span className="text-muted-foreground"> / {pkg.total_seats}</span>
+                                {pkg.available_seats > 0 && (
+                                  <span className="text-emerald-600 ml-1">({pkg.available_seats} available)</span>
+                                )}
+                              </div>
+                              {pkg.cost_per_seat && (
+                                <div>
+                                  <span className="text-muted-foreground">Cost/seat:</span>{' '}
+                                  <span className="font-medium">{pkg.currency} {pkg.cost_per_seat}</span>
+                                </div>
+                              )}
+                              {pkg.total_monthly_cost && (
+                                <div>
+                                  <span className="text-muted-foreground">Total:</span>{' '}
+                                  <span className="font-medium">{pkg.currency} {pkg.total_monthly_cost}/mo</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {(pkg.contract_start || pkg.contract_end) && (
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {pkg.contract_start && <span>From {new Date(pkg.contract_start).toLocaleDateString('de-DE')}</span>}
+                                {pkg.contract_end && <span>to {new Date(pkg.contract_end).toLocaleDateString('de-DE')}</span>}
+                                {pkg.auto_renew && <Badge variant="secondary" className="text-xs">Auto-renew</Badge>}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenPackageDialog(pkg)}>
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeletePackage(pkg)}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Utilization bar */}
+                        <div className="mt-3 h-2 bg-zinc-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${pkg.utilization_percent > 90 ? 'bg-red-500' : pkg.utilization_percent > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(100, pkg.utilization_percent)}%` }}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Organization Licenses Section */}
+            <div className="border-t pt-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-medium flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Organization Licenses
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Organization-wide licenses not tied to individual users (e.g., storage, capacity)
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleOpenOrgLicenseDialog()}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add License
+                </Button>
+              </div>
+
+              {orgLicenses.length === 0 ? (
+                <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
+                  <Building2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No organization licenses</p>
+                  <p className="text-xs mt-1">Add licenses for organization-wide resources</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orgLicenses.map((lic) => (
+                    <Card key={lic.id}>
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-sm">{lic.name}</h3>
+                            {lic.license_type && (
+                              <p className="text-xs text-muted-foreground font-mono">{lic.license_type}</p>
+                            )}
+
+                            <div className="flex items-center gap-4 mt-2 text-sm">
+                              {lic.quantity && (
+                                <div>
+                                  <span className="text-muted-foreground">Quantity:</span>{' '}
+                                  <span className="font-medium">{lic.quantity} {lic.unit || 'units'}</span>
+                                </div>
+                              )}
+                              {lic.monthly_cost && (
+                                <div>
+                                  <span className="text-muted-foreground">Cost:</span>{' '}
+                                  <span className="font-medium">{lic.currency} {lic.monthly_cost}/mo</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {lic.renewal_date && (
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                <span>Renews {new Date(lic.renewal_date).toLocaleDateString('de-DE')}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenOrgLicenseDialog(lic)}>
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteOrgLicense(lic)}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1719,6 +2158,322 @@ export default function ProviderDetailPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteDialog(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDeleteLicense}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Service Account Dialog */}
+      <Dialog open={!!serviceAccountDialog} onOpenChange={() => setServiceAccountDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-blue-500" />
+              Service Account Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure <strong>{serviceAccountDialog?.external_user_id}</strong> as a service account.
+              Service accounts are intentionally not linked to HRIS employees.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="is_service_account"
+                checked={serviceAccountForm.is_service_account}
+                onChange={(e) => setServiceAccountForm(prev => ({ ...prev, is_service_account: e.target.checked }))}
+                className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+              />
+              <Label htmlFor="is_service_account" className="cursor-pointer">
+                Mark as Service Account
+              </Label>
+            </div>
+
+            {serviceAccountForm.is_service_account && (
+              <>
+                <div>
+                  <Label className="text-xs font-medium mb-2 block">Service Account Name (optional)</Label>
+                  <Input
+                    placeholder="e.g., Backup Service, CI/CD Bot, Shared Mailbox"
+                    value={serviceAccountForm.service_account_name}
+                    onChange={(e) => setServiceAccountForm(prev => ({ ...prev, service_account_name: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A descriptive name for this service account
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-medium mb-2 block">Owner (optional)</Label>
+                  <Select
+                    value={serviceAccountForm.service_account_owner_id}
+                    onValueChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select responsible employee..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No owner</SelectItem>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.full_name} ({emp.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The employee responsible for this service account
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setServiceAccountDialog(null)}>Cancel</Button>
+            <Button onClick={handleSaveServiceAccount} disabled={savingServiceAccount}>
+              {savingServiceAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* License Package Dialog */}
+      <Dialog open={packageDialogOpen} onOpenChange={setPackageDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              {editingPackage ? 'Edit License Package' : 'Add License Package'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPackage
+                ? 'Update the license package details.'
+                : 'Define a purchased license package to track seat utilization.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">License Type *</Label>
+                <Input
+                  placeholder="e.g., Enterprise, Pro, Business"
+                  value={packageForm.license_type}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, license_type: e.target.value }))}
+                  disabled={!!editingPackage}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">Display Name</Label>
+                <Input
+                  placeholder="Optional friendly name"
+                  value={packageForm.display_name}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, display_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Total Seats *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="100"
+                  value={packageForm.total_seats}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, total_seats: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Cost per Seat</Label>
+                <div className="flex gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="15.00"
+                    value={packageForm.cost_per_seat}
+                    onChange={(e) => setPackageForm(prev => ({ ...prev, cost_per_seat: e.target.value }))}
+                  />
+                  <Select value={packageForm.currency} onValueChange={(v) => setPackageForm(prev => ({ ...prev, currency: v }))}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Billing Cycle</Label>
+                <Select value={packageForm.billing_cycle} onValueChange={(v) => setPackageForm(prev => ({ ...prev, billing_cycle: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Contract Start</Label>
+                <Input
+                  type="date"
+                  value={packageForm.contract_start}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, contract_start: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Contract End</Label>
+                <Input
+                  type="date"
+                  value={packageForm.contract_end}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, contract_end: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="auto_renew"
+                  checked={packageForm.auto_renew}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, auto_renew: e.target.checked }))}
+                  className="h-4 w-4 rounded border-zinc-300"
+                />
+                <Label htmlFor="auto_renew" className="text-sm cursor-pointer">Auto-renew</Label>
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">Notes</Label>
+                <Textarea
+                  placeholder="Optional notes..."
+                  value={packageForm.notes}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPackageDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSavePackage} disabled={savingPackage}>
+              {savingPackage && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingPackage ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Organization License Dialog */}
+      <Dialog open={orgLicenseDialogOpen} onOpenChange={setOrgLicenseDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              {editingOrgLicense ? 'Edit Organization License' : 'Add Organization License'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingOrgLicense
+                ? 'Update the organization license details.'
+                : 'Add an organization-wide license (e.g., storage, capacity, enterprise features).'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">Name *</Label>
+                <Input
+                  placeholder="e.g., SharePoint Storage Extension"
+                  value={orgLicenseForm.name}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">License Type</Label>
+                <Input
+                  placeholder="Optional type/SKU"
+                  value={orgLicenseForm.license_type}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, license_type: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Quantity</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="100"
+                  value={orgLicenseForm.quantity}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, quantity: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Unit</Label>
+                <Input
+                  placeholder="e.g., GB, TB, users"
+                  value={orgLicenseForm.unit}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, unit: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Monthly Cost</Label>
+                <div className="flex gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="50.00"
+                    value={orgLicenseForm.monthly_cost}
+                    onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, monthly_cost: e.target.value }))}
+                  />
+                  <Select value={orgLicenseForm.currency} onValueChange={(v) => setOrgLicenseForm(prev => ({ ...prev, currency: v }))}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Billing Cycle</Label>
+                <Select value={orgLicenseForm.billing_cycle} onValueChange={(v) => setOrgLicenseForm(prev => ({ ...prev, billing_cycle: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectItem value="one_time">One-time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Renewal Date</Label>
+                <Input
+                  type="date"
+                  value={orgLicenseForm.renewal_date}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, renewal_date: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs font-medium mb-2 block">Notes</Label>
+                <Textarea
+                  placeholder="Optional notes..."
+                  value={orgLicenseForm.notes}
+                  onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOrgLicenseDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveOrgLicense} disabled={savingOrgLicense}>
+              {savingOrgLicense && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingOrgLicense ? 'Update' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

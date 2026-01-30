@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 
 interface LicenseTableProps {
@@ -18,6 +25,9 @@ interface LicenseTableProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onToggleSelectAll?: () => void;
+  onServiceAccountClick?: (license: License) => void;
+  onAssignClick?: (license: License) => void;
+  onDeleteClick?: (license: License) => void;
 }
 
 type SortColumn = 'external_user_id' | 'employee_name' | 'license_type' | 'monthly_cost' | 'provider_name';
@@ -30,7 +40,11 @@ export function LicenseTable({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  onServiceAccountClick,
+  onAssignClick,
+  onDeleteClick,
 }: LicenseTableProps) {
+  const hasActions = onServiceAccountClick || onAssignClick || onDeleteClick;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -64,7 +78,9 @@ export function LicenseTable({
           l.employee_name?.toLowerCase().includes(searchLower) ||
           l.employee_email?.toLowerCase().includes(searchLower) ||
           l.provider_name.toLowerCase().includes(searchLower) ||
-          l.license_type?.toLowerCase().includes(searchLower)
+          l.license_type?.toLowerCase().includes(searchLower) ||
+          l.service_account_name?.toLowerCase().includes(searchLower) ||
+          l.service_account_owner_name?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -176,6 +192,9 @@ export function LicenseTable({
                     Cost <SortIcon column="monthly_cost" />
                   </button>
                 </th>
+                {hasActions && (
+                  <th className="w-10 px-4 py-3"></th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -209,7 +228,17 @@ export function LicenseTable({
                   {showEmployee && (
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {license.employee_id && license.employee_status !== 'offboarded' && (
+                        {/* Service account with owner */}
+                        {license.is_service_account && license.service_account_owner_id && (
+                          <Link href={`/users/${license.service_account_owner_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
+                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                              <span className="text-xs font-medium text-blue-600">{license.service_account_owner_name?.charAt(0) || 'O'}</span>
+                            </div>
+                            <span className="hover:underline text-muted-foreground text-xs">Owner: {license.service_account_owner_name}</span>
+                          </Link>
+                        )}
+                        {/* Regular employee assignment */}
+                        {!license.is_service_account && license.employee_id && license.employee_status !== 'offboarded' && (
                           <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
                             <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center group-hover:bg-zinc-200 transition-colors">
                               <span className="text-xs font-medium">{license.employee_name?.charAt(0)}</span>
@@ -217,7 +246,7 @@ export function LicenseTable({
                             <span className="hover:underline">{license.employee_name}</span>
                           </Link>
                         )}
-                        {license.employee_id && license.employee_status === 'offboarded' && (
+                        {!license.is_service_account && license.employee_id && license.employee_status === 'offboarded' && (
                           <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
                             <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center">
                               <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
@@ -225,7 +254,7 @@ export function LicenseTable({
                             <span className="hover:underline text-muted-foreground line-through">{license.employee_name}</span>
                           </Link>
                         )}
-                        <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
+                        <LicenseStatusBadge license={license} showUnassigned={!license.employee_id && !license.is_service_account} />
                       </div>
                     </td>
                   )}
@@ -240,6 +269,43 @@ export function LicenseTable({
                   <td className="px-4 py-3 text-right tabular-nums text-sm">
                     {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
                   </td>
+                  {hasActions && (
+                    <td className="px-4 py-3">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {onServiceAccountClick && (
+                            <DropdownMenuItem onClick={() => onServiceAccountClick(license)}>
+                              <Bot className="h-4 w-4 mr-2" />
+                              {license.is_service_account ? 'Edit Service Account' : 'Mark as Service Account'}
+                            </DropdownMenuItem>
+                          )}
+                          {onAssignClick && !license.is_service_account && (
+                            <DropdownMenuItem onClick={() => onAssignClick(license)}>
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Assign to Employee
+                            </DropdownMenuItem>
+                          )}
+                          {(onServiceAccountClick || onAssignClick) && onDeleteClick && (
+                            <DropdownMenuSeparator />
+                          )}
+                          {onDeleteClick && (
+                            <DropdownMenuItem
+                              onClick={() => onDeleteClick(license)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

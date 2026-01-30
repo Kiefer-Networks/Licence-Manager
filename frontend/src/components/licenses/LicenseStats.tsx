@@ -3,7 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { LicenseStats as LicenseStatsType } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
-import { Key, Users, Package, UserMinus, Wallet } from 'lucide-react';
+import { Key, Users, Package, UserMinus, Wallet, Bot } from 'lucide-react';
 
 interface ExtendedStats extends LicenseStatsType {
   available_seats?: number | null;
@@ -39,6 +39,9 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
             <span className="text-2xl font-semibold">{stats.total_assigned}</span>
             {stats.total_external > 0 && (
               <span className="text-sm text-muted-foreground">+ {stats.total_external} <span className="text-xs">(ext)</span></span>
+            )}
+            {(stats.total_service_accounts ?? 0) > 0 && (
+              <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">(svc)</span></span>
             )}
             {hasNotInHris && (
               <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ not in HRIS)</span></span>

@@ -231,12 +231,14 @@ export interface ProviderLicenseStats {
   assigned: number;  // Internal assigned (matched to HRIS)
   external: number;  // External email domains
   not_in_hris: number;  // Internal but not matched to HRIS
+  service_accounts: number;  // Service accounts (intentionally not linked to HRIS)
 }
 
 export interface Provider {
   id: string;
   name: string;
   display_name: string;
+  logo_url?: string | null;
   enabled: boolean;
   config?: {
     provider_license_info?: ProviderLicenseInfo;
@@ -277,6 +279,11 @@ export interface License {
   synced_at: string;
   is_external_email?: boolean;
   employee_status?: string;
+  // Service account fields
+  is_service_account?: boolean;
+  service_account_name?: string;
+  service_account_owner_id?: string;
+  service_account_owner_name?: string;
 }
 
 export interface LicenseListResponse {
@@ -292,6 +299,7 @@ export interface LicenseStats {
   total_unassigned: number;
   total_inactive: number;
   total_external: number;
+  total_service_accounts: number;
   monthly_cost: string;
   potential_savings: string;
   currency: string;
@@ -301,6 +309,7 @@ export interface CategorizedLicensesResponse {
   assigned: License[];
   unassigned: License[];
   external: License[];
+  service_accounts: License[];
   stats: LicenseStats;
 }
 
@@ -487,6 +496,90 @@ export interface IndividualLicenseTypesResponse {
 export interface SyncResponse {
   success: boolean;
   results: Record<string, any>;
+}
+
+// License Packages (for seat tracking)
+export interface LicensePackage {
+  id: string;
+  provider_id: string;
+  license_type: string;
+  display_name?: string;
+  total_seats: number;
+  assigned_seats: number;
+  available_seats: number;
+  utilization_percent: number;
+  cost_per_seat?: string;
+  total_monthly_cost?: string;
+  billing_cycle?: string;
+  payment_frequency?: string;
+  currency: string;
+  contract_start?: string;
+  contract_end?: string;
+  auto_renew: boolean;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LicensePackageCreate {
+  license_type: string;
+  display_name?: string;
+  total_seats: number;
+  cost_per_seat?: string;
+  billing_cycle?: string;
+  payment_frequency?: string;
+  currency?: string;
+  contract_start?: string;
+  contract_end?: string;
+  auto_renew?: boolean;
+  notes?: string;
+}
+
+export interface LicensePackageListResponse {
+  items: LicensePackage[];
+  total: number;
+}
+
+// Organization-wide Licenses
+export interface OrganizationLicense {
+  id: string;
+  provider_id: string;
+  name: string;
+  license_type?: string;
+  quantity?: number;
+  unit?: string;
+  monthly_cost?: string;
+  currency: string;
+  billing_cycle?: string;
+  renewal_date?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationLicenseCreate {
+  name: string;
+  license_type?: string;
+  quantity?: number;
+  unit?: string;
+  monthly_cost?: string;
+  currency?: string;
+  billing_cycle?: string;
+  renewal_date?: string;
+  notes?: string;
+}
+
+export interface OrganizationLicenseListResponse {
+  items: OrganizationLicense[];
+  total: number;
+  total_monthly_cost: string;
+}
+
+// Service Account Update
+export interface ServiceAccountUpdate {
+  is_service_account: boolean;
+  service_account_name?: string;
+  service_account_owner_id?: string;
 }
 
 // ============================================================================
@@ -862,6 +955,68 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ license_ids: licenseIds }),
     });
+  },
+
+  // Service Account Management
+  async updateLicenseServiceAccount(licenseId: string, data: ServiceAccountUpdate): Promise<License> {
+    return fetchApi<License>(`/licenses/${licenseId}/service-account`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // License Packages
+  async getLicensePackages(providerId: string): Promise<LicensePackageListResponse> {
+    return fetchApi<LicensePackageListResponse>(`/providers/${providerId}/packages`);
+  },
+
+  async createLicensePackage(providerId: string, data: LicensePackageCreate): Promise<LicensePackage> {
+    return fetchApi<LicensePackage>(`/providers/${providerId}/packages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateLicensePackage(
+    providerId: string,
+    packageId: string,
+    data: Partial<LicensePackageCreate>
+  ): Promise<LicensePackage> {
+    return fetchApi<LicensePackage>(`/providers/${providerId}/packages/${packageId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteLicensePackage(providerId: string, packageId: string): Promise<void> {
+    await fetchApi(`/providers/${providerId}/packages/${packageId}`, { method: 'DELETE' });
+  },
+
+  // Organization Licenses
+  async getOrganizationLicenses(providerId: string): Promise<OrganizationLicenseListResponse> {
+    return fetchApi<OrganizationLicenseListResponse>(`/providers/${providerId}/org-licenses`);
+  },
+
+  async createOrganizationLicense(providerId: string, data: OrganizationLicenseCreate): Promise<OrganizationLicense> {
+    return fetchApi<OrganizationLicense>(`/providers/${providerId}/org-licenses`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateOrganizationLicense(
+    providerId: string,
+    licenseId: string,
+    data: Partial<OrganizationLicenseCreate>
+  ): Promise<OrganizationLicense> {
+    return fetchApi<OrganizationLicense>(`/providers/${providerId}/org-licenses/${licenseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteOrganizationLicense(providerId: string, licenseId: string): Promise<void> {
+    await fetchApi(`/providers/${providerId}/org-licenses/${licenseId}`, { method: 'DELETE' });
   },
 
   // Manual Licenses

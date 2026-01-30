@@ -4,19 +4,23 @@ import { useState, useMemo } from 'react';
 import { License, LicenseStats } from '@/lib/api';
 import { LicenseTable } from './LicenseTable';
 import { LicenseStatsCards } from './LicenseStats';
-import { Users, Package, Globe, AlertTriangle } from 'lucide-react';
+import { Users, Package, Globe, AlertTriangle, Bot } from 'lucide-react';
 
 interface ThreeTableLayoutProps {
   assigned: License[];
   unassigned: License[];
   external: License[];
+  serviceAccounts?: License[];
   stats: LicenseStats;
   showProvider?: boolean;
   showStats?: boolean;
   maxUsers?: number | null; // For package providers
+  onServiceAccountClick?: (license: License) => void;
+  onAssignClick?: (license: License) => void;
+  onDeleteClick?: (license: License) => void;
 }
 
-type Tab = 'assigned' | 'unassigned' | 'external';
+type Tab = 'assigned' | 'unassigned' | 'external' | 'service_accounts';
 
 // Sort by email alphabetically
 const sortByEmail = (a: License, b: License) => {
@@ -29,10 +33,14 @@ export function ThreeTableLayout({
   assigned,
   unassigned,
   external,
+  serviceAccounts = [],
   stats,
   showProvider = false,
   showStats = true,
   maxUsers = null,
+  onServiceAccountClick,
+  onAssignClick,
+  onDeleteClick,
 }: ThreeTableLayoutProps) {
   const [activeTab, setActiveTab] = useState<Tab>('assigned');
 
@@ -41,7 +49,8 @@ export function ThreeTableLayout({
     const activeAssigned = assigned.filter(l => l.status === 'active').length;
     const activeUnassigned = unassigned.filter(l => l.status === 'active').length;
     const activeExternal = external.filter(l => l.status === 'active').length;
-    const totalActive = activeAssigned + activeUnassigned + activeExternal;
+    const activeServiceAccounts = serviceAccounts.filter(l => l.status === 'active').length;
+    const totalActive = activeAssigned + activeUnassigned + activeExternal + activeServiceAccounts;
 
     // For package providers: available = max_users - total_active
     const available = maxUsers ? Math.max(0, maxUsers - totalActive) : null;
@@ -52,9 +61,10 @@ export function ThreeTableLayout({
       total_assigned: activeAssigned,
       total_unassigned: activeUnassigned,
       total_external: activeExternal,
+      total_service_accounts: activeServiceAccounts,
       available_seats: available,
     };
-  }, [assigned, unassigned, external, stats, maxUsers]);
+  }, [assigned, unassigned, external, serviceAccounts, stats, maxUsers]);
 
   // Split unassigned into active and inactive, sorted alphabetically
   const unassignedActive = useMemo(() =>
@@ -76,10 +86,21 @@ export function ThreeTableLayout({
     [external]
   );
 
+  // Split service accounts into active and inactive, sorted alphabetically
+  const serviceAccountsActive = useMemo(() =>
+    serviceAccounts.filter(l => l.status === 'active').sort(sortByEmail),
+    [serviceAccounts]
+  );
+  const serviceAccountsInactive = useMemo(() =>
+    serviceAccounts.filter(l => l.status !== 'active').sort(sortByEmail),
+    [serviceAccounts]
+  );
+
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
     { id: 'assigned', label: 'Assigned', count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
     { id: 'unassigned', label: 'Not in HRIS', count: unassignedActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActive.length > 0 },
     { id: 'external', label: 'External', count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
+    ...(serviceAccounts.length > 0 ? [{ id: 'service_accounts' as Tab, label: 'Service Accounts', count: serviceAccountsActive.length, icon: <Bot className="h-4 w-4" /> }] : []),
   ];
 
   const getLicenses = () => {
@@ -90,6 +111,8 @@ export function ThreeTableLayout({
         return unassigned; // Handled separately with two tables
       case 'external':
         return external.sort(sortByEmail);
+      case 'service_accounts':
+        return serviceAccounts.sort(sortByEmail);
     }
   };
 
@@ -101,6 +124,8 @@ export function ThreeTableLayout({
         return 'No licenses outside HRIS';
       case 'external':
         return 'No external licenses';
+      case 'service_accounts':
+        return 'No service accounts';
     }
   };
 
@@ -157,6 +182,9 @@ export function ThreeTableLayout({
                   showProvider={showProvider}
                   showEmployee={true}
                   emptyMessage="No active licenses outside HRIS"
+                  onServiceAccountClick={onServiceAccountClick}
+                  onAssignClick={onAssignClick}
+                  onDeleteClick={onDeleteClick}
                 />
               </div>
             ) : (
@@ -177,6 +205,9 @@ export function ThreeTableLayout({
                 showProvider={showProvider}
                 showEmployee={true}
                 emptyMessage="No inactive licenses"
+                onServiceAccountClick={onServiceAccountClick}
+                onAssignClick={onAssignClick}
+                onDeleteClick={onDeleteClick}
               />
             </div>
           )}
@@ -198,6 +229,9 @@ export function ThreeTableLayout({
                 showProvider={showProvider}
                 showEmployee={true}
                 emptyMessage="No active external licenses"
+                onServiceAccountClick={onServiceAccountClick}
+                onAssignClick={onAssignClick}
+                onDeleteClick={onDeleteClick}
               />
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
@@ -217,6 +251,53 @@ export function ThreeTableLayout({
                 showProvider={showProvider}
                 showEmployee={true}
                 emptyMessage="No inactive external licenses"
+                onServiceAccountClick={onServiceAccountClick}
+                onAssignClick={onAssignClick}
+                onDeleteClick={onDeleteClick}
+              />
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'service_accounts' ? (
+        // Service Accounts: Two tables - Active first, then Inactive
+        <div className="space-y-8">
+          {/* Active Service Accounts */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Bot className="h-4 w-4 text-blue-500" />
+              <h3 className="text-sm font-medium">
+                Active Service Accounts ({serviceAccountsActive.length})
+              </h3>
+            </div>
+            {serviceAccountsActive.length > 0 ? (
+              <LicenseTable
+                licenses={serviceAccountsActive}
+                showProvider={showProvider}
+                showEmployee={true}
+                emptyMessage="No active service accounts"
+                onServiceAccountClick={onServiceAccountClick}
+                onDeleteClick={onDeleteClick}
+              />
+            ) : (
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
+                <p className="text-sm">No active service accounts</p>
+              </div>
+            )}
+          </div>
+
+          {/* Inactive Service Accounts */}
+          {serviceAccountsInactive.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                Inactive Service Accounts ({serviceAccountsInactive.length})
+              </h3>
+              <LicenseTable
+                licenses={serviceAccountsInactive}
+                showProvider={showProvider}
+                showEmployee={true}
+                emptyMessage="No inactive service accounts"
+                onServiceAccountClick={onServiceAccountClick}
+                onDeleteClick={onDeleteClick}
               />
             </div>
           )}
@@ -228,6 +309,9 @@ export function ThreeTableLayout({
           showProvider={showProvider}
           showEmployee={true}
           emptyMessage={getEmptyMessage()}
+          onServiceAccountClick={onServiceAccountClick}
+          onAssignClick={onAssignClick}
+          onDeleteClick={onDeleteClick}
         />
       )}
     </div>

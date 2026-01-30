@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Globe, Skull, UserMinus } from 'lucide-react';
+import { Globe, Skull, UserMinus, Bot } from 'lucide-react';
 
 // Minimal type for LicenseStatusBadge - only the fields it actually needs
 interface LicenseForBadge {
@@ -9,6 +9,8 @@ interface LicenseForBadge {
   employee_id?: string | null;
   employee_status?: string | null;
   status?: string;
+  is_service_account?: boolean;
+  service_account_name?: string | null;
 }
 
 interface LicenseStatusBadgeProps {
@@ -26,6 +28,20 @@ interface LicenseStatusBadgeProps {
  */
 export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseStatusBadgeProps) {
   const badges: React.ReactNode[] = [];
+
+  // Service Account badge - shown when is_service_account=true
+  if (license.is_service_account) {
+    badges.push(
+      <Badge
+        key="service-account"
+        variant="outline"
+        className="text-blue-600 border-blue-200 bg-blue-50"
+      >
+        <Bot className="h-3 w-3 mr-1" />
+        {license.service_account_name || 'Service Account'}
+      </Badge>
+    );
+  }
 
   // External badge - ALWAYS shown when is_external_email=true
   if (license.is_external_email) {
