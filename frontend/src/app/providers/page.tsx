@@ -23,13 +23,15 @@ import {
 } from '@/components/ui/select';
 import { api, Provider } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 
 const hrisProvider = { value: 'hibob', label: 'HiBob', fields: ['auth_token'] };
 
 const licenseProviderTypes = [
   { value: '1password', label: '1Password', fields: ['api_token', 'sign_in_address'], type: 'api' },
+  { value: 'adobe', label: 'Adobe Creative Cloud', fields: ['client_id', 'client_secret', 'org_id', 'technical_account_id'], type: 'api' },
+  { value: 'atlassian', label: 'Atlassian (Confluence/Jira)', fields: ['api_token', 'org_id', 'admin_email'], type: 'api' },
   { value: 'cursor', label: 'Cursor', fields: ['api_key'], type: 'api' },
   { value: 'figma', label: 'Figma', fields: ['access_token', 'org_id'], type: 'api' },
   { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
@@ -59,7 +61,7 @@ const FIELD_LABELS: Record<string, string> = {
   auth_token: 'Auth Token',
   base_url: 'Server URL (optional, for self-hosted)',
   bot_token: 'Bot Token',
-  client_id: 'Application (Client) ID',
+  client_id: 'Client ID',
   client_secret: 'Client Secret',
   customer_code: 'Organization ID (X-Customer-Code)',
   domain: 'Domain',
@@ -69,6 +71,7 @@ const FIELD_LABELS: Record<string, string> = {
   server_url: 'Server URL',
   service_account_json: 'Service Account JSON',
   sign_in_address: 'Sign-in Address',
+  technical_account_id: 'Technical Account ID',
   tenant_id: 'Tenant ID',
   user_token: 'User Token',
 };
@@ -88,6 +91,40 @@ const PROVIDER_SETUP: Record<string, { permissions: string[]; steps: string[]; l
       '6. Save the bearer token securely - it cannot be viewed again',
     ],
     link: 'https://support.1password.com/scim/',
+  },
+  adobe: {
+    permissions: [
+      'User Management API access',
+      'Service Account (Server-to-Server) credentials',
+    ],
+    steps: [
+      '1. Go to Adobe Developer Console (developer.adobe.com)',
+      '2. Create a new project or select existing',
+      '3. Add API → User Management API',
+      '4. Select OAuth Server-to-Server credential',
+      '5. Copy the Client ID and Client Secret',
+      '6. Find Organization ID: Admin Console → Overview',
+      '7. Technical Account ID: Found in credential details',
+      '8. Ensure the integration has User Management admin role',
+    ],
+    link: 'https://developer.adobe.com/developer-console/docs/guides/services/services-add-api-oauth-s2s/',
+  },
+  atlassian: {
+    permissions: [
+      'Organization admin access',
+      'API token with admin privileges',
+    ],
+    steps: [
+      '1. Go to admin.atlassian.com',
+      '2. Select your organization',
+      '3. Go to Settings → API keys',
+      '4. Click "Create API key"',
+      '5. Name it (e.g., "License Management")',
+      '6. Copy the API key immediately - it cannot be viewed again',
+      '7. Find Organization ID: Settings → Organization details',
+      '8. Admin Email: Your Atlassian admin account email',
+    ],
+    link: 'https://support.atlassian.com/organization-administration/docs/manage-an-organization-with-the-admin-apis/',
   },
   cursor: {
     permissions: [
@@ -307,6 +344,8 @@ export default function ProvidersPage() {
   const [manualConfig, setManualConfig] = useState({
     license_model: 'license_based',
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncingProviderId, setSyncingProviderId] = useState<string | null>(null);
@@ -348,16 +387,37 @@ export default function ProvidersPage() {
     setManualConfig({
       license_model: 'license_based',
     });
+    setLogoFile(null);
+    setLogoPreview(null);
     setError(null);
     setAddDialogOpen(true);
   };
 
   const isManualProvider = (providerType: string) => providerType === 'manual';
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
   const handleOpenEditDialog = (provider: Provider) => {
     setEditingProvider(provider);
     setNewProviderName(provider.display_name);
     setCredentials({});
+    setLogoFile(null);
+    setLogoPreview(provider.logo_url || null);
     setError(null);
     setEditDialogOpen(true);
   };
@@ -375,12 +435,22 @@ export default function ProvidersPage() {
         config.license_model = manualConfig.license_model;
       }
 
-      await api.createProvider({
+      const newProvider = await api.createProvider({
         name: providerType,
         display_name: newProviderName,
         credentials: isManual ? {} : credentials,
         config: Object.keys(config).length > 0 ? config : undefined,
       });
+
+      // Upload logo if provided (for manual providers)
+      if (isManual && logoFile) {
+        try {
+          await api.uploadProviderLogo(newProvider.id, logoFile);
+        } catch (logoErr) {
+          console.error('Failed to upload logo:', logoErr);
+        }
+      }
+
       await fetchProviders();
       setAddDialogOpen(false);
       showToast('success', `${newProviderName} added`);
@@ -405,6 +475,17 @@ export default function ProvidersPage() {
         updates.credentials = credentials;
       }
       await api.updateProvider(editingProvider.id, updates);
+
+      // Upload logo if a new file was selected (for manual providers)
+      const isManual = editingProvider.config?.provider_type === 'manual' || editingProvider.name === 'manual';
+      if (isManual && logoFile) {
+        try {
+          await api.uploadProviderLogo(editingProvider.id, logoFile);
+        } catch (logoErr) {
+          console.error('Failed to upload logo:', logoErr);
+        }
+      }
+
       await fetchProviders();
       setEditDialogOpen(false);
       showToast('success', 'Provider updated');
@@ -544,9 +625,17 @@ export default function ProvidersPage() {
                   <Link key={provider.id} href={`/providers/${provider.id}`}>
                     <div className="flex items-center justify-between p-4 hover:bg-zinc-50 transition-colors cursor-pointer">
                       <div className="flex items-center gap-3">
-                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${isManual ? 'bg-purple-50' : 'bg-zinc-100'}`}>
-                          {isManual ? <Package className="h-4 w-4 text-purple-600" /> : <Key className="h-4 w-4 text-zinc-600" />}
-                        </div>
+                        {provider.logo_url ? (
+                          <img
+                            src={provider.logo_url}
+                            alt={provider.display_name}
+                            className="h-9 w-9 rounded-lg object-contain bg-white border p-1"
+                          />
+                        ) : (
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${isManual ? 'bg-purple-50' : 'bg-zinc-100'}`}>
+                            {isManual ? <Package className="h-4 w-4 text-purple-600" /> : <Key className="h-4 w-4 text-zinc-600" />}
+                          </div>
+                        )}
                         <div>
                           <p className="font-medium text-sm">{provider.display_name}</p>
                           <p className="text-xs text-muted-foreground">
@@ -602,14 +691,14 @@ export default function ProvidersPage() {
 
       {/* Add Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{dialogMode === 'hris' ? 'Connect HRIS' : 'Add Provider'}</DialogTitle>
             <DialogDescription>
               {dialogMode === 'hris' ? 'Connect HiBob to sync employee data' : 'Add a new license provider'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1">
             {dialogMode === 'license' && (
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Provider Type</Label>
@@ -683,6 +772,40 @@ export default function ProvidersPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Logo (optional)</Label>
+                  <div className="flex items-center gap-3">
+                    {logoPreview ? (
+                      <div className="relative">
+                        <img src={logoPreview} alt="Logo preview" className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
+                        <button
+                          type="button"
+                          onClick={clearLogo}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg border-2 border-dashed border-zinc-200 flex items-center justify-center">
+                        <Package className="h-5 w-5 text-zinc-300" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.svg,.webp"
+                        onChange={handleLogoChange}
+                        className="hidden"
+                      />
+                      <span className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        {logoPreview ? 'Change' : 'Upload'}
+                      </span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP. Max 2MB.</p>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   After creating the provider, you can add license keys or seats and configure pricing in the Pricing tab.
                 </p>
@@ -722,6 +845,43 @@ export default function ProvidersPage() {
                 />
               </div>
             ))}
+            {/* Logo upload for manual providers */}
+            {editingProvider && (editingProvider.config?.provider_type === 'manual' || editingProvider.name === 'manual') && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Logo</Label>
+                <div className="flex items-center gap-3">
+                  {logoPreview ? (
+                    <div className="relative">
+                      <img src={logoPreview} alt="Logo preview" className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
+                      <button
+                        type="button"
+                        onClick={clearLogo}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-12 w-12 rounded-lg border-2 border-dashed border-zinc-200 flex items-center justify-center">
+                      <Package className="h-5 w-5 text-zinc-300" />
+                    </div>
+                  )}
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.svg,.webp"
+                      onChange={handleLogoChange}
+                      className="hidden"
+                    />
+                    <span className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                      <Upload className="h-3 w-3" />
+                      {logoPreview ? 'Change' : 'Upload'}
+                    </span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP. Max 2MB.</p>
+              </div>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
           <DialogFooter>
