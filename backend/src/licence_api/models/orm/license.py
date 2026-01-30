@@ -24,7 +24,7 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("employees.id"), nullable=True
     )
     external_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    license_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    license_type: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_activity_at: Mapped[datetime | None] = mapped_column(

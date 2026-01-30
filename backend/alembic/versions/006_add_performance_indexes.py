@@ -14,8 +14,8 @@ This migration adds indexes to improve query performance for:
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "006_add_performance_indexes"
-down_revision = "005_add_cascade_delete_to_licenses"
+revision = "006"
+down_revision = "005"
 branch_labels = None
 depends_on = None
 
