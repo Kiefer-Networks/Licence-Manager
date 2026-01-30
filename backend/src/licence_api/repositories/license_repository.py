@@ -507,3 +507,138 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         )
         await self.session.flush()
         return result.rowcount
+
+    async def update_all_active_pricing(
+        self,
+        provider_id: UUID,
+        monthly_cost: Decimal | None,
+        currency: str = "EUR",
+    ) -> int:
+        """Update pricing for all active licenses of a provider.
+
+        Used for package pricing where all licenses share the same cost.
+
+        Args:
+            provider_id: Provider UUID
+            monthly_cost: New monthly cost per license
+            currency: Currency code
+
+        Returns:
+            Number of updated licenses
+        """
+        from sqlalchemy import update
+
+        result = await self.session.execute(
+            update(LicenseORM)
+            .where(
+                and_(
+                    LicenseORM.provider_id == provider_id,
+                    LicenseORM.status == "active",
+                )
+            )
+            .values(monthly_cost=monthly_cost, currency=currency)
+        )
+        await self.session.flush()
+        return result.rowcount
+
+    async def count_active_by_provider(self, provider_id: UUID) -> int:
+        """Count active licenses for a provider.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Number of active licenses
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(LicenseORM)
+            .where(
+                and_(
+                    LicenseORM.provider_id == provider_id,
+                    LicenseORM.status == "active",
+                )
+            )
+        )
+        return result.scalar() or 0
+
+    async def get_stats_by_provider(
+        self,
+        company_domains: list[str],
+    ) -> dict[UUID, dict[str, int]]:
+        """Get license statistics grouped by provider.
+
+        Args:
+            company_domains: List of company email domains (lowercase)
+
+        Returns:
+            Dict mapping provider_id to stats dict with:
+            - active: count of active licenses
+            - assigned: count of active licenses with employee_id
+            - not_in_hris: count of active internal licenses without employee_id
+            - external: count of active external licenses
+        """
+        from sqlalchemy import func, case
+
+        # Build domain matching condition for external detection
+        # A license is external if its email doesn't end with any company domain
+        # We use external_user_id as the email field
+
+        results = await self.session.execute(
+            select(
+                LicenseORM.provider_id,
+                func.count().filter(LicenseORM.status == "active").label("active"),
+                func.count().filter(
+                    and_(
+                        LicenseORM.status == "active",
+                        LicenseORM.employee_id.isnot(None),
+                    )
+                ).label("assigned"),
+            )
+            .group_by(LicenseORM.provider_id)
+        )
+
+        stats: dict[UUID, dict[str, int]] = {}
+        for row in results:
+            stats[row.provider_id] = {
+                "active": row.active or 0,
+                "assigned": row.assigned or 0,
+                "not_in_hris": 0,
+                "external": 0,
+            }
+
+        # For external/not_in_hris detection, we need to check each license's email
+        # This is a bit expensive but necessary for accurate stats
+        # Only fetch active licenses without employee_id
+        unassigned_results = await self.session.execute(
+            select(LicenseORM.provider_id, LicenseORM.external_user_id)
+            .where(
+                and_(
+                    LicenseORM.status == "active",
+                    LicenseORM.employee_id.is_(None),
+                )
+            )
+        )
+
+        for row in unassigned_results:
+            provider_id = row.provider_id
+            email = (row.external_user_id or "").lower()
+
+            if provider_id not in stats:
+                stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "external": 0}
+
+            # Check if external
+            is_external = True
+            if email and "@" in email:
+                domain = email.split("@")[1]
+                if any(domain == d or domain.endswith("." + d) for d in company_domains):
+                    is_external = False
+
+            if is_external:
+                stats[provider_id]["external"] += 1
+            else:
+                stats[provider_id]["not_in_hris"] += 1
+
+        return stats
