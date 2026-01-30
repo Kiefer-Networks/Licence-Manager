@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -325,8 +326,6 @@ class SyncService:
         Returns:
             Dict with sync results
         """
-        from decimal import Decimal
-
         licenses = await provider.fetch_licenses()
         synced_at = datetime.now(timezone.utc)
         created = 0

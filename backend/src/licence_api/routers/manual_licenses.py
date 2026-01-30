@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -93,8 +93,7 @@ async def create_manual_licenses(
             external_id = request.license_key
         else:
             # Generate unique ID for seat-based or multiple licenses
-            import uuid
-            external_id = f"manual-{uuid.uuid4().hex[:12]}"
+            external_id = f"manual-{uuid4().hex[:12]}"
 
         metadata = {
             "manual_entry": True,

@@ -74,10 +74,10 @@ class SlackProvider(BaseProvider):
         """
         licenses = []
         billable_info = {}
-        workspace_plan = "Slack"  # Default if we can't get plan info
+        workspace_plan = "Slack"
 
         async with httpx.AsyncClient() as client:
-            # DEBUG: Check auth and scopes
+            # Verify authentication
             try:
                 auth_response = await client.post(
                     f"{self.BASE_URL}/auth.test",
@@ -85,15 +85,18 @@ class SlackProvider(BaseProvider):
                     timeout=10.0,
                 )
                 auth_data = auth_response.json()
-                logger.info(f"[SLACK DEBUG] Auth test response: {auth_data}")
+                if not auth_data.get("ok"):
+                    logger.warning("Slack auth.test failed: %s", auth_data.get("error"))
 
-                # Check OAuth scopes (returned in headers)
+                # Check for required OAuth scopes
                 scopes = auth_response.headers.get("x-oauth-scopes", "")
-                logger.info(f"[SLACK DEBUG] Bot token scopes: {scopes}")
                 if "users:read.email" not in scopes:
-                    logger.warning("[SLACK DEBUG] MISSING SCOPE: users:read.email - emails will not be returned!")
+                    logger.warning(
+                        "Missing users:read.email scope - user emails will not be available"
+                    )
             except Exception as e:
-                logger.error(f"[SLACK DEBUG] Auth test failed: {e}")
+                logger.error("Failed to verify Slack authentication: %s", e)
+
             # Get workspace plan info
             try:
                 plan_response = await client.get(
@@ -104,8 +107,6 @@ class SlackProvider(BaseProvider):
                 plan_data = plan_response.json()
 
                 if plan_data.get("ok"):
-                    # Plan names from API: free, std, plus, compliance, enterprise
-                    # std = Pro, plus = Business+, compliance = Enterprise Grid
                     plan = plan_data.get("plan", "").lower()
                     plan_map = {
                         "free": "Slack Free",
@@ -116,9 +117,10 @@ class SlackProvider(BaseProvider):
                         "compliance": "Slack Enterprise Grid",
                         "enterprise": "Slack Enterprise Grid",
                     }
-                    workspace_plan = plan_map.get(plan, f"Slack {plan.title()}" if plan else "Slack")
+                    workspace_plan = plan_map.get(
+                        plan, f"Slack {plan.title()}" if plan else "Slack"
+                    )
             except Exception:
-                # Plan API failed - use default
                 pass
 
             # Get billing info to know who actually has a paid license
@@ -133,10 +135,9 @@ class SlackProvider(BaseProvider):
                 if billing_data.get("ok"):
                     billable_info = billing_data.get("billable_info", {})
             except Exception:
-                # Billing API failed - continue without it
                 pass
 
-            # Now get user details for all users
+            # Fetch all users with pagination
             cursor = None
             while True:
                 params: dict[str, Any] = {"limit": 200}
@@ -154,49 +155,32 @@ class SlackProvider(BaseProvider):
                 if not data.get("ok"):
                     raise ValueError(f"Slack API error: {data.get('error')}")
 
-                # DEBUG: Log first 3 members raw to see full API structure
-                if not cursor:  # Only on first page
-                    sample_members = data.get("members", [])[:3]
-                    for i, sample in enumerate(sample_members):
-                        logger.info(f"[SLACK DEBUG] Sample member {i+1} RAW: {sample}")
-
                 for member in data.get("members", []):
                     user_id = member.get("id")
 
                     # Skip bots and Slackbot
                     if member.get("is_bot") or user_id == "USLACKBOT":
-                        logger.debug(f"[SLACK DEBUG] Skipping bot: {user_id}")
                         continue
 
-                    # DEBUG: Log full member data for users without email
                     profile = member.get("profile", {})
-                    member_email = profile.get("email", "")
-                    if not member_email:
-                        logger.warning(
-                            f"[SLACK DEBUG] User WITHOUT email - ID: {user_id}\n"
-                            f"  Full profile keys: {list(profile.keys())}\n"
-                            f"  Profile: {profile}\n"
-                            f"  deleted={member.get('deleted')}, "
-                            f"is_restricted={member.get('is_restricted')}, "
-                            f"is_ultra_restricted={member.get('is_ultra_restricted')}"
-                        )
-                    else:
-                        logger.info(f"[SLACK DEBUG] User WITH email: {user_id} -> {member_email}")
 
                     # Check billing status - this determines if they have an active license
                     user_billing = billable_info.get(user_id, {})
-                    # If billing info is available, use it; otherwise assume active for non-deleted users
                     if billable_info:
                         is_billable = user_billing.get("billing_active", False)
                     else:
                         # No billing info - assume active unless deleted or guest
-                        is_billable = not (member.get("deleted") or member.get("is_restricted") or member.get("is_ultra_restricted"))
+                        is_billable = not (
+                            member.get("deleted")
+                            or member.get("is_restricted")
+                            or member.get("is_ultra_restricted")
+                        )
 
                     # Determine status based on billing
                     if member.get("deleted"):
                         status = "suspended"
                     elif billable_info and not is_billable:
-                        status = "inactive"  # Not billable = no active license
+                        status = "inactive"
                     else:
                         status = "active"
 
@@ -213,7 +197,6 @@ class SlackProvider(BaseProvider):
                         role = "Member"
 
                     # License type is the workspace plan (same for all users)
-                    # Guests have a different license type
                     if member.get("is_restricted") or member.get("is_ultra_restricted"):
                         license_type = "Slack Guest"
                     else:
@@ -224,55 +207,44 @@ class SlackProvider(BaseProvider):
                     if member.get("updated"):
                         last_activity = datetime.fromtimestamp(member["updated"])
 
-                    profile = member.get("profile", {})
                     email = profile.get("email", "").lower().strip()
                     name = profile.get("real_name") or profile.get("display_name") or ""
 
-                    # Use email as external_user_id (for display) if available
-                    # If no email, try to create a readable identifier from name
-                    # Fall back to user_id only as last resort
+                    # Use email as external_user_id if available
                     if email:
                         external_id = email
                     elif name:
-                        # No email but has name - show as "Name (U123...)"
                         external_id = f"{name} ({user_id})"
                     else:
                         external_id = user_id
 
-                    licenses.append({
-                        "external_user_id": external_id,
-                        "email": email,
-                        "license_type": license_type,
-                        "status": status,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "slack_user_id": user_id,  # Store Slack user ID for API operations
+                    licenses.append(
+                        {
+                            "external_user_id": external_id,
                             "email": email,
-                            "name": name,
-                            "title": profile.get("title"),
-                            "role": role,  # Admin, Member, Guest, etc.
-                            "is_admin": member.get("is_admin", False),
-                            "is_owner": member.get("is_owner", False),
-                            "is_guest": member.get("is_restricted", False)
-                            or member.get("is_ultra_restricted", False),
-                            "is_billable": is_billable,
-                            "tz": member.get("tz"),
-                            "has_email": bool(email),  # Track if user has email (for debugging)
-                        },
-                    })
+                            "license_type": license_type,
+                            "status": status,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "slack_user_id": user_id,
+                                "email": email,
+                                "name": name,
+                                "title": profile.get("title"),
+                                "role": role,
+                                "is_admin": member.get("is_admin", False),
+                                "is_owner": member.get("is_owner", False),
+                                "is_guest": member.get("is_restricted", False)
+                                or member.get("is_ultra_restricted", False),
+                                "is_billable": is_billable,
+                                "tz": member.get("tz"),
+                            },
+                        }
+                    )
 
                 # Check for more pages
                 cursor = data.get("response_metadata", {}).get("next_cursor")
                 if not cursor:
                     break
-
-        # DEBUG: Log summary
-        users_with_email = sum(1 for lic in licenses if lic.get("email"))
-        users_without_email = sum(1 for lic in licenses if not lic.get("email"))
-        logger.info(
-            f"[SLACK DEBUG] Sync complete: {len(licenses)} total users, "
-            f"{users_with_email} with email, {users_without_email} without email"
-        )
 
         return licenses
 

@@ -144,3 +144,9 @@ AUTH_REFRESH_LIMIT = "10/minute"
 AUTH_PASSWORD_CHANGE_LIMIT = "3/minute"
 AUTH_LOGOUT_LIMIT = "10/minute"
 API_DEFAULT_LIMIT = "100/minute"
+
+# Admin endpoint limits (more restrictive)
+ADMIN_USER_CREATE_LIMIT = "10/minute"
+ADMIN_ROLE_MODIFY_LIMIT = "20/minute"
+PROVIDER_TEST_CONNECTION_LIMIT = "10/minute"
+SENSITIVE_OPERATION_LIMIT = "5/minute"

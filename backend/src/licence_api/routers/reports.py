@@ -1,6 +1,6 @@
 """Reports router."""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -32,8 +32,6 @@ async def get_cost_report(
 
     If dates are not specified, defaults to the last 3 months.
     """
-    from datetime import timedelta
-
     if end_date is None:
         end_date = date.today()
     if start_date is None:

@@ -15,7 +15,7 @@ from licence_api.models.dto.license import (
     LicenseListResponse,
     CategorizedLicensesResponse,
 )
-from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.license_service import LicenseService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status

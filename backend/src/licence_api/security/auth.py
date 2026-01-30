@@ -250,50 +250,6 @@ def require_permission(*required_permissions: str):
     return permission_dependency
 
 
-def require_all_permissions(*required_permissions: str):
-    """Dependency factory to require all specified permissions.
-
-    Args:
-        required_permissions: All permission codes required
-
-    Returns:
-        Dependency function
-    """
-    async def permission_dependency(
-        current_user: Annotated[AdminUser, Depends(get_current_user)],
-    ) -> AdminUser:
-        if not current_user.has_all_permissions(*required_permissions):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
-            )
-        return current_user
-
-    return permission_dependency
-
-
-def require_role(*required_roles: str):
-    """Dependency factory to require specific roles.
-
-    Args:
-        required_roles: Role codes required (any one)
-
-    Returns:
-        Dependency function
-    """
-    async def role_dependency(
-        current_user: Annotated[AdminUser, Depends(get_current_user)],
-    ) -> AdminUser:
-        if not any(current_user.has_role(role) for role in required_roles):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient role",
-            )
-        return current_user
-
-    return role_dependency
-
-
 async def require_superadmin(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
 ) -> AdminUser:

@@ -1,5 +1,6 @@
 """Payment methods router."""
 
+from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -80,7 +81,6 @@ def calculate_expiry_info(payment_method) -> tuple[bool, int | None]:
     if not expiry_month or not expiry_year:
         return False, None
 
-    from datetime import date
     today = date.today()
 
     try:

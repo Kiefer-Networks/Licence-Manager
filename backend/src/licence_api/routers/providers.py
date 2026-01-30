@@ -4,7 +4,7 @@ import copy
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,11 +20,15 @@ from licence_api.models.dto.provider import (
 )
 from licence_api.routers.payment_methods import calculate_expiry_info
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
+from licence_api.security.rate_limit import limiter
 from licence_api.services.sync_service import SyncService
 
 router = APIRouter()
+
+# Rate limit for credential testing to prevent brute force
+TEST_CONNECTION_LIMIT = "10/minute"
 
 
 class TestConnectionRequest(BaseModel):
@@ -288,7 +292,9 @@ async def delete_provider(
 
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
+@limiter.limit(TEST_CONNECTION_LIMIT)
 async def test_provider_connection(
+    http_request: Request,
     request: TestConnectionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
 ) -> TestConnectionResponse:

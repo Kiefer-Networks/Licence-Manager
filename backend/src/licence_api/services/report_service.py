@@ -122,19 +122,16 @@ class ReportService:
                 for lic, provider, _ in unassigned_results
             ]
 
-        # Count external licenses
+        # Count external licenses using optimized SQL query
         external_count = 0
         setting = await self.settings_repo.get("company_domains")
         company_domains = setting.get("domains", []) if setting else []
         if company_domains:
-            all_licenses, _ = await self.license_repo.get_all_with_details(
+            external_count = await self.license_repo.count_external_licenses(
+                company_domains=company_domains,
                 department=department,
-                limit=10000,
+                exclude_provider_name="hibob",
             )
-            for lic, provider, _ in all_licenses:
-                if "@" in lic.external_user_id and provider.name != "hibob":
-                    if not is_company_email(lic.external_user_id, company_domains):
-                        external_count += 1
 
         return DashboardResponse(
             total_employees=total_employees,

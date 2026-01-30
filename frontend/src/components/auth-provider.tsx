@@ -187,34 +187,3 @@ export const Permissions = {
   // System
   SYSTEM_ADMIN: 'system.admin',
 } as const;
-
-// Higher-order component for protecting routes
-export function withPermission<P extends object>(
-  WrappedComponent: React.ComponentType<P>,
-  requiredPermission: string
-) {
-  return function WithPermissionComponent(props: P) {
-    const { hasPermission, isLoading } = useAuth();
-    const router = useRouter();
-
-    useEffect(() => {
-      if (!isLoading && !hasPermission(requiredPermission)) {
-        router.push('/unauthorized');
-      }
-    }, [hasPermission, isLoading, router]);
-
-    if (isLoading) {
-      return (
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      );
-    }
-
-    if (!hasPermission(requiredPermission)) {
-      return null;
-    }
-
-    return <WrappedComponent {...props} />;
-  };
-}

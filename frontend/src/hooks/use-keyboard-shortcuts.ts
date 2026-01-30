@@ -12,16 +12,6 @@ interface ShortcutConfig {
   description: string;
 }
 
-const defaultShortcuts: ShortcutConfig[] = [
-  { key: 'd', alt: true, callback: () => {}, description: 'Go to Dashboard' },
-  { key: 'l', alt: true, callback: () => {}, description: 'Go to Licenses' },
-  { key: 'u', alt: true, callback: () => {}, description: 'Go to Users' },
-  { key: 'p', alt: true, callback: () => {}, description: 'Go to Providers' },
-  { key: 'r', alt: true, callback: () => {}, description: 'Go to Reports' },
-  { key: 's', alt: true, callback: () => {}, description: 'Go to Settings' },
-  { key: 'k', ctrl: true, callback: () => {}, description: 'Open Quick Search' },
-];
-
 /**
  * Hook for handling keyboard shortcuts.
  * Returns a function to register additional shortcuts.
@@ -77,16 +67,4 @@ export function useKeyboardShortcuts(additionalShortcuts: ShortcutConfig[] = [])
   return {
     shortcuts: allShortcuts,
   };
-}
-
-/**
- * Get shortcut key display string (e.g., "Alt+D")
- */
-export function getShortcutDisplay(shortcut: ShortcutConfig): string {
-  const parts: string[] = [];
-  if (shortcut.ctrl) parts.push('Ctrl');
-  if (shortcut.alt) parts.push('Alt');
-  if (shortcut.shift) parts.push('Shift');
-  parts.push(shortcut.key.toUpperCase());
-  return parts.join('+');
 }

@@ -88,6 +88,7 @@ async def list_users(
 
 
 @router.post("/users", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def create_user(
     http_request: Request,
     request: UserCreateRequest,

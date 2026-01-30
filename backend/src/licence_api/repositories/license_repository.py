@@ -55,6 +55,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         sort_dir: str = "desc",
         offset: int = 0,
         limit: int = 100,
+        external_only: bool = False,
+        company_domains: list[str] | None = None,
     ) -> tuple[list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]], int]:
         """Get licenses with provider and employee details.
 
@@ -69,6 +71,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             sort_dir: Sort direction (asc/desc)
             offset: Pagination offset
             limit: Pagination limit
+            external_only: Only return licenses with external emails
+            company_domains: Company domains for external email detection
 
         Returns:
             Tuple of (license details, total count)
@@ -113,6 +117,28 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             )
             query = query.where(search_filter)
             count_query = count_query.where(search_filter)
+
+        # External email filter - filter at SQL level for performance
+        if external_only and company_domains:
+            # Must have @ sign (be an email-like identifier)
+            email_condition = LicenseORM.external_user_id.like("%@%")
+            # Must NOT match any company domain
+            domain_conditions = [
+                ~LicenseORM.external_user_id.ilike(f"%@{domain}")
+                for domain in company_domains
+            ]
+            # Also exclude subdomain matches (e.g., @sub.company.com)
+            subdomain_conditions = [
+                ~LicenseORM.external_user_id.ilike(f"%@%.{domain}")
+                for domain in company_domains
+            ]
+            external_filter = and_(
+                email_condition,
+                *domain_conditions,
+                *subdomain_conditions,
+            )
+            query = query.where(external_filter)
+            count_query = count_query.where(external_filter)
 
         # Validated sorting - whitelist of allowed columns
         sort_columns = {
@@ -642,3 +668,50 @@ class LicenseRepository(BaseRepository[LicenseORM]):
                 stats[provider_id]["not_in_hris"] += 1
 
         return stats
+
+    async def count_external_licenses(
+        self,
+        company_domains: list[str],
+        department: str | None = None,
+        exclude_provider_name: str | None = "hibob",
+    ) -> int:
+        """Count licenses with external email addresses at the SQL level.
+
+        This is optimized for dashboard statistics, avoiding full table scans.
+
+        Args:
+            company_domains: List of company domains (emails matching these are internal)
+            department: Optional department filter
+            exclude_provider_name: Provider name to exclude (default: hibob for HRIS)
+
+        Returns:
+            Count of external licenses
+        """
+        if not company_domains:
+            return 0
+
+        # Build the base query
+        query = (
+            select(func.count())
+            .select_from(LicenseORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+        )
+
+        if department:
+            query = query.outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            query = query.where(EmployeeORM.department == department)
+
+        # Exclude specified provider (e.g., hibob which is HRIS source)
+        if exclude_provider_name:
+            query = query.where(ProviderORM.name != exclude_provider_name)
+
+        # Must have @ sign (be an email-like identifier)
+        query = query.where(LicenseORM.external_user_id.like("%@%"))
+
+        # Must NOT match any company domain
+        for domain in company_domains:
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{domain}"))
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{domain}"))
+
+        result = await self.session.execute(query)
+        return result.scalar_one()

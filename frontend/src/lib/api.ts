@@ -1,27 +1,50 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
-// CSRF token cache
+// CSRF token cache with expiration tracking
 let csrfToken: string | null = null;
+let csrfTokenTimestamp: number = 0;
+const CSRF_TOKEN_MAX_AGE_MS = 7 * 60 * 60 * 1000; // 7 hours (before 8h backend expiry)
+
+/**
+ * Check if cached CSRF token is still valid.
+ */
+function isCsrfTokenValid(): boolean {
+  if (!csrfToken || !csrfTokenTimestamp) return false;
+  return Date.now() - csrfTokenTimestamp < CSRF_TOKEN_MAX_AGE_MS;
+}
+
+/**
+ * Clear CSRF token cache.
+ */
+function clearCsrfToken(): void {
+  csrfToken = null;
+  csrfTokenTimestamp = 0;
+}
 
 /**
  * Get CSRF token from cookie or fetch a new one.
  * Required for all state-changing requests (POST, PUT, DELETE).
  */
 async function getCsrfToken(): Promise<string> {
-  // Try to get from cookie first
+  // Try to get from cookie first (always freshest source)
   if (typeof window !== 'undefined') {
     const cookieValue = document.cookie
       .split('; ')
       .find(row => row.startsWith('csrf_token='))
       ?.split('=')[1];
     if (cookieValue) {
-      csrfToken = decodeURIComponent(cookieValue);
+      const decodedToken = decodeURIComponent(cookieValue);
+      // Update cache if token differs or cache is stale
+      if (decodedToken !== csrfToken || !isCsrfTokenValid()) {
+        csrfToken = decodedToken;
+        csrfTokenTimestamp = Date.now();
+      }
       return csrfToken;
     }
   }
 
-  // Fetch new token if not in cookie
-  if (!csrfToken) {
+  // Fetch new token if not in cookie or cache is stale
+  if (!csrfToken || !isCsrfTokenValid()) {
     const response = await fetch(`${API_BASE}/api/v1/auth/csrf-token`, {
       method: 'GET',
       credentials: 'include',
@@ -29,6 +52,7 @@ async function getCsrfToken(): Promise<string> {
     if (response.ok) {
       const data = await response.json();
       csrfToken = data.csrf_token;
+      csrfTokenTimestamp = Date.now();
     }
   }
 
@@ -1054,7 +1078,7 @@ export const api = {
     }
     // Cookies are cleared by the server
     // Clear CSRF token cache
-    csrfToken = null;
+    clearCsrfToken();
   },
 
   async logoutAllSessions(): Promise<{ sessions_revoked: number }> {
@@ -1063,7 +1087,7 @@ export const api = {
     });
 
     // Clear CSRF token cache
-    csrfToken = null;
+    clearCsrfToken();
 
     return result;
   },

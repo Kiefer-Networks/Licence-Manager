@@ -1,6 +1,6 @@
 """Employee repository."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -135,8 +135,6 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         Returns:
             List of recently offboarded employees
         """
-        from datetime import timedelta
-
         cutoff = datetime.now() - timedelta(days=days)
 
         query = (

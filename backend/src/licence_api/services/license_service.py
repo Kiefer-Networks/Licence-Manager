@@ -95,49 +95,24 @@ class LicenseService:
             LicenseListResponse with paginated results
         """
         # Load company domains for external email check
-        company_domains = await self._get_company_domains()
+        company_domains = await self._get_company_domains() if external_only else None
 
-        # For external_only filter, we need to fetch more and filter post-query
-        # since the domain check is not a simple DB operation
-        if external_only and company_domains:
-            # Fetch all to filter
-            results, _ = await self.license_repo.get_all_with_details(
-                provider_id=provider_id,
-                employee_id=employee_id,
-                status=status,
-                unassigned_only=unassigned_only,
-                search=search,
-                department=department,
-                sort_by=sort_by,
-                sort_dir=sort_dir,
-                offset=0,
-                limit=10000,
-            )
-
-            # Filter to external only
-            filtered = []
-            for row in results:
-                license_orm, provider_orm, employee_orm = row
-                if self._check_external_email(license_orm.external_user_id, company_domains):
-                    filtered.append(row)
-
-            total = len(filtered)
-            offset = (page - 1) * page_size
-            results = filtered[offset : offset + page_size]
-        else:
-            offset = (page - 1) * page_size
-            results, total = await self.license_repo.get_all_with_details(
-                provider_id=provider_id,
-                employee_id=employee_id,
-                status=status,
-                unassigned_only=unassigned_only,
-                search=search,
-                department=department,
-                sort_by=sort_by,
-                sort_dir=sort_dir,
-                offset=offset,
-                limit=page_size,
-            )
+        # Use SQL-based filtering for external emails (much faster than Python filtering)
+        offset = (page - 1) * page_size
+        results, total = await self.license_repo.get_all_with_details(
+            provider_id=provider_id,
+            employee_id=employee_id,
+            status=status,
+            unassigned_only=unassigned_only,
+            search=search,
+            department=department,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            offset=offset,
+            limit=page_size,
+            external_only=external_only,
+            company_domains=company_domains,
+        )
 
         items = []
         for license_orm, provider_orm, employee_orm in results:
