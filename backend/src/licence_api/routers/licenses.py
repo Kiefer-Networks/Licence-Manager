@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,8 @@ from licence_api.models.dto.license import (
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+from licence_api.services.cache_service import get_cache_service
 from licence_api.services.license_service import LicenseService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
 from licence_api.repositories.provider_repository import ProviderRepository
@@ -145,6 +147,7 @@ async def get_license(
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
 async def assign_license(
+    http_request: Request,
     license_id: UUID,
     request: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
@@ -152,34 +155,79 @@ async def assign_license(
 ) -> LicenseResponse:
     """Manually assign a license to an employee. Requires licenses.assign permission."""
     service = LicenseService(db)
+    audit_service = AuditService(db)
+
     license = await service.assign_license_to_employee(license_id, request.employee_id)
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
+
+    # Audit log the assignment
+    await audit_service.log(
+        action=AuditAction.LICENSE_ASSIGN,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={"employee_id": str(request.employee_id)},
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache (license stats changed)
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
     return license
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 async def unassign_license(
+    http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
     """Unassign a license from an employee. Requires licenses.assign permission."""
     service = LicenseService(db)
+    audit_service = AuditService(db)
+
+    # Get current employee before unassigning
+    license_repo = LicenseRepository(db)
+    license_orm = await license_repo.get_by_id(license_id)
+    old_employee_id = str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
+
     license = await service.unassign_license(license_id)
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
+
+    # Audit log the unassignment
+    await audit_service.log(
+        action=AuditAction.LICENSE_UNASSIGN,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={"previous_employee_id": old_employee_id},
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache (license stats changed)
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
     return license
 
 
 @router.post("/{license_id}/remove-from-provider", response_model=RemoveMemberResponse)
 async def remove_license_from_provider(
+    http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -193,6 +241,7 @@ async def remove_license_from_provider(
 
     license_repo = LicenseRepository(db)
     provider_repo = ProviderRepository(db)
+    audit_service = AuditService(db)
 
     # Get the license
     license_orm = await license_repo.get_by_id(license_id)
@@ -228,6 +277,20 @@ async def remove_license_from_provider(
         # If successful, delete the license from our database
         if result["success"]:
             await license_repo.delete(license_id)
+
+            # Audit log the deletion
+            await audit_service.log(
+                action=AuditAction.LICENSE_DELETE,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                admin_user_id=current_user.id,
+                changes={
+                    "external_user_id": license_orm.external_user_id,
+                    "provider": provider.display_name,
+                    "removed_from_provider": True,
+                },
+                request=http_request,
+            )
             await db.commit()
 
         return RemoveMemberResponse(
@@ -243,6 +306,7 @@ async def remove_license_from_provider(
 
 @router.post("/bulk/remove-from-provider", response_model=BulkActionResponse)
 async def bulk_remove_from_provider(
+    http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -257,6 +321,7 @@ async def bulk_remove_from_provider(
 
     license_repo = LicenseRepository(db)
     provider_repo = ProviderRepository(db)
+    audit_service = AuditService(db)
     encryption = get_encryption_service()
 
     if len(request.license_ids) > 100:
@@ -273,6 +338,7 @@ async def bulk_remove_from_provider(
     results: list[BulkActionResult] = []
     successful = 0
     failed = 0
+    deleted_license_ids: list[UUID] = []
 
     for license_orm, provider in licenses_with_providers:
         # Check if provider supports remote removal
@@ -295,6 +361,7 @@ async def bulk_remove_from_provider(
 
             if result["success"]:
                 await license_repo.delete(license_orm.id)
+                deleted_license_ids.append(license_orm.id)
                 successful += 1
                 results.append(BulkActionResult(
                     license_id=str(license_orm.id),
@@ -316,6 +383,21 @@ async def bulk_remove_from_provider(
                 message=str(e),
             ))
 
+    # Audit log the bulk operation
+    if deleted_license_ids:
+        await audit_service.log(
+            action=AuditAction.LICENSE_DELETE,
+            resource_type=ResourceType.LICENSE,
+            admin_user_id=current_user.id,
+            changes={
+                "bulk_operation": True,
+                "deleted_count": len(deleted_license_ids),
+                "deleted_ids": [str(lid) for lid in deleted_license_ids],
+                "removed_from_provider": True,
+            },
+            request=http_request,
+        )
+
     await db.commit()
 
     return BulkActionResponse(
@@ -328,6 +410,7 @@ async def bulk_remove_from_provider(
 
 @router.post("/bulk/delete", response_model=BulkActionResponse)
 async def bulk_delete_licenses(
+    http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -339,6 +422,7 @@ async def bulk_delete_licenses(
     Use bulk/remove-from-provider for that.
     """
     license_repo = LicenseRepository(db)
+    audit_service = AuditService(db)
 
     if len(request.license_ids) > 100:
         raise HTTPException(
@@ -347,6 +431,21 @@ async def bulk_delete_licenses(
         )
 
     deleted_count = await license_repo.delete_by_ids(request.license_ids)
+
+    # Audit log the bulk deletion
+    await audit_service.log(
+        action=AuditAction.LICENSE_DELETE,
+        resource_type=ResourceType.LICENSE,
+        admin_user_id=current_user.id,
+        changes={
+            "bulk_operation": True,
+            "requested_count": len(request.license_ids),
+            "deleted_count": deleted_count,
+            "license_ids": [str(lid) for lid in request.license_ids],
+        },
+        request=http_request,
+    )
+
     await db.commit()
 
     results = [
@@ -368,6 +467,7 @@ async def bulk_delete_licenses(
 
 @router.post("/bulk/unassign", response_model=BulkActionResponse)
 async def bulk_unassign_licenses(
+    http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -379,6 +479,7 @@ async def bulk_unassign_licenses(
     and the users remain in the external provider systems.
     """
     license_repo = LicenseRepository(db)
+    audit_service = AuditService(db)
 
     if len(request.license_ids) > 100:
         raise HTTPException(
@@ -387,6 +488,21 @@ async def bulk_unassign_licenses(
         )
 
     unassigned_count = await license_repo.unassign_by_ids(request.license_ids)
+
+    # Audit log the bulk unassignment
+    await audit_service.log(
+        action=AuditAction.LICENSE_UNASSIGN,
+        resource_type=ResourceType.LICENSE,
+        admin_user_id=current_user.id,
+        changes={
+            "bulk_operation": True,
+            "requested_count": len(request.license_ids),
+            "unassigned_count": unassigned_count,
+            "license_ids": [str(lid) for lid in request.license_ids],
+        },
+        request=http_request,
+    )
+
     await db.commit()
 
     results = [
