@@ -104,7 +104,7 @@ async def list_audit_logs(
             resource_type=log.resource_type,
             resource_id=log.resource_id,
             changes=log.changes,
-            ip_address=log.ip_address,
+            ip_address=str(log.ip_address) if log.ip_address else None,
             created_at=log.created_at,
         )
         for log in logs
@@ -189,6 +189,6 @@ async def get_audit_log(
         resource_type=log.resource_type,
         resource_id=log.resource_id,
         changes=log.changes,
-        ip_address=log.ip_address,
+        ip_address=str(log.ip_address) if log.ip_address else None,
         created_at=log.created_at,
     )
