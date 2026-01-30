@@ -80,11 +80,13 @@ class CacheService:
     async def _connect(self) -> None:
         """Connect to Redis server."""
         settings = get_settings()
-        redis_url = settings.redis_url
 
-        if not redis_url:
+        if not settings.redis_url:
             logger.warning("REDIS_URL not configured - caching disabled")
             return
+
+        # Convert RedisDsn to string for URL manipulation
+        redis_url = str(settings.redis_url)
 
         try:
             # Use database 0 for caching (database 1 is for rate limiting)
