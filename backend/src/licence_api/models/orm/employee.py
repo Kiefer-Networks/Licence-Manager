@@ -26,7 +26,10 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     licenses: Mapped[list["LicenseORM"]] = relationship(
-        "LicenseORM", back_populates="employee", lazy="selectin"
+        "LicenseORM",
+        back_populates="employee",
+        lazy="selectin",
+        foreign_keys="[LicenseORM.employee_id]",
     )
 
     __table_args__ = (
