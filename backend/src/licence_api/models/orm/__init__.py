@@ -16,6 +16,8 @@ from licence_api.models.orm.role_permission import RolePermissionORM
 from licence_api.models.orm.user_role import UserRoleORM
 from licence_api.models.orm.refresh_token import RefreshTokenORM
 from licence_api.models.orm.password_history import PasswordHistoryORM
+from licence_api.models.orm.license_package import LicensePackageORM
+from licence_api.models.orm.organization_license import OrganizationLicenseORM
 
 __all__ = [
     "Base",
@@ -34,4 +36,6 @@ __all__ = [
     "UserRoleORM",
     "RefreshTokenORM",
     "PasswordHistoryORM",
+    "LicensePackageORM",
+    "OrganizationLicenseORM",
 ]

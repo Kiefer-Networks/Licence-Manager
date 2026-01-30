@@ -22,6 +22,7 @@ class ProviderUpdate(BaseModel):
     """Provider update DTO."""
 
     display_name: str | None = None
+    logo_url: str | None = None
     enabled: bool | None = None
     credentials: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
@@ -44,6 +45,7 @@ class ProviderLicenseStats(BaseModel):
     assigned: int = 0  # Internal assigned (matched to HRIS)
     external: int = 0  # External email domains
     not_in_hris: int = 0  # Internal but not matched to HRIS
+    service_accounts: int = 0  # Service accounts (intentionally not linked to HRIS)
 
 
 class ProviderResponse(BaseModel):
@@ -52,6 +54,7 @@ class ProviderResponse(BaseModel):
     id: UUID
     name: str  # Allow any provider name including 'manual'
     display_name: str
+    logo_url: str | None = None
     enabled: bool
     config: dict[str, Any] | None = None
     last_sync_at: datetime | None = None

@@ -18,6 +18,7 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     credentials_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=dict, nullable=True)
@@ -37,9 +38,17 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
     payment_method: Mapped["PaymentMethodORM | None"] = relationship(
         "PaymentMethodORM", lazy="selectin"
     )
+    license_packages: Mapped[list["LicensePackageORM"]] = relationship(
+        "LicensePackageORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+    )
+    organization_licenses: Mapped[list["OrganizationLicenseORM"]] = relationship(
+        "OrganizationLicenseORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+    )
 
 
 # Import here to avoid circular import
 from licence_api.models.orm.license import LicenseORM  # noqa: E402, F401
 from licence_api.models.orm.provider_file import ProviderFileORM  # noqa: E402, F401
 from licence_api.models.orm.payment_method import PaymentMethodORM  # noqa: E402, F401
+from licence_api.models.orm.license_package import LicensePackageORM  # noqa: E402, F401
+from licence_api.models.orm.organization_license import OrganizationLicenseORM  # noqa: E402, F401

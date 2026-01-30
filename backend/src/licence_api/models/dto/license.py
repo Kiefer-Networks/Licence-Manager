@@ -31,6 +31,11 @@ class LicenseResponse(BaseModel):
     synced_at: datetime
     is_external_email: bool = False
     employee_status: str | None = None  # active, offboarded, etc.
+    # Service account fields
+    is_service_account: bool = False
+    service_account_name: str | None = None
+    service_account_owner_id: UUID | None = None
+    service_account_owner_name: str | None = None
 
     class Config:
         """Pydantic config."""
@@ -55,15 +60,25 @@ class LicenseStats(BaseModel):
     total_unassigned: int
     total_inactive: int
     total_external: int
+    total_service_accounts: int = 0
     monthly_cost: Decimal
     potential_savings: Decimal  # Unassigned + offboarded licenses
     currency: str = "EUR"
 
 
 class CategorizedLicensesResponse(BaseModel):
-    """Response with licenses categorized into assigned/unassigned/external."""
+    """Response with licenses categorized into assigned/unassigned/external/service_accounts."""
 
     assigned: list[LicenseResponse]
     unassigned: list[LicenseResponse]
     external: list[LicenseResponse]
+    service_accounts: list[LicenseResponse]
     stats: LicenseStats
+
+
+class ServiceAccountUpdate(BaseModel):
+    """Update service account status for a license."""
+
+    is_service_account: bool
+    service_account_name: str | None = None
+    service_account_owner_id: UUID | None = None

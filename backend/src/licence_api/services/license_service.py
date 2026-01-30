@@ -116,6 +116,12 @@ class LicenseService:
 
         items = []
         for license_orm, provider_orm, employee_orm in results:
+            # Get service account owner name if set
+            service_account_owner_name = None
+            if license_orm.is_service_account and license_orm.service_account_owner_id:
+                owner = await self.employee_repo.get_by_id(license_orm.service_account_owner_id)
+                service_account_owner_name = owner.full_name if owner else None
+
             items.append(
                 LicenseResponse(
                     id=license_orm.id,
@@ -140,6 +146,10 @@ class LicenseService:
                         license_orm.external_user_id, company_domains
                     ),
                     employee_status=employee_orm.status if employee_orm else None,
+                    is_service_account=license_orm.is_service_account,
+                    service_account_name=license_orm.service_account_name,
+                    service_account_owner_id=license_orm.service_account_owner_id,
+                    service_account_owner_name=service_account_owner_name,
                 )
             )
 
@@ -176,6 +186,12 @@ class LicenseService:
         # Load company domains for external email check
         company_domains = await self._get_company_domains()
 
+        # Get service account owner name if set
+        service_account_owner_name = None
+        if license_orm.is_service_account and license_orm.service_account_owner_id:
+            owner = await self.employee_repo.get_by_id(license_orm.service_account_owner_id)
+            service_account_owner_name = owner.full_name if owner else None
+
         return LicenseResponse(
             id=license_orm.id,
             provider_id=license_orm.provider_id,
@@ -199,6 +215,10 @@ class LicenseService:
                 license_orm.external_user_id, company_domains
             ),
             employee_status=employee_orm.status if employee_orm else None,
+            is_service_account=license_orm.is_service_account,
+            service_account_name=license_orm.service_account_name,
+            service_account_owner_id=license_orm.service_account_owner_id,
+            service_account_owner_name=service_account_owner_name,
         )
 
     async def get_employee_licenses(self, employee_id: UUID) -> list[LicenseResponse]:
@@ -274,13 +294,13 @@ class LicenseService:
         sort_by: str = "external_user_id",
         sort_dir: str = "asc",
     ) -> CategorizedLicensesResponse:
-        """Get licenses categorized into assigned, unassigned, and external.
+        """Get licenses categorized into assigned, unassigned, external, and service_accounts.
 
-        External licenses are always in the external category, regardless of
-        assignment status. This creates a clear three-table layout:
+        Categories (in priority order):
+        - Service Accounts: Licenses marked as service accounts (intentionally not linked to HRIS)
+        - External: ALL licenses with external email domains
         - Assigned: Internal licenses linked to employees
         - Unassigned: Internal licenses not linked to any employee
-        - External: ALL licenses with external email domains
 
         Args:
             provider_id: Optional provider filter
@@ -288,7 +308,7 @@ class LicenseService:
             sort_dir: Sort direction (default: asc for alphabetical)
 
         Returns:
-            CategorizedLicensesResponse with three categories and stats
+            CategorizedLicensesResponse with four categories and stats
         """
         # Load company domains for external email check
         company_domains = await self._get_company_domains()
@@ -305,12 +325,16 @@ class LicenseService:
         assigned: list[LicenseResponse] = []
         unassigned: list[LicenseResponse] = []
         external: list[LicenseResponse] = []
+        service_accounts: list[LicenseResponse] = []
 
         # Stats tracking
         total_active = 0
         total_inactive = 0
         total_monthly_cost = Decimal("0")
         potential_savings = Decimal("0")
+
+        # Cache service account owner names
+        owner_cache: dict[UUID, str | None] = {}
 
         for license_orm, provider_orm, employee_orm in results:
             is_external = self._check_external_email(
@@ -319,6 +343,15 @@ class LicenseService:
             is_active = license_orm.status == "active"
             is_assigned = license_orm.employee_id is not None
             is_offboarded = employee_orm and employee_orm.status == "offboarded"
+            is_service_account = license_orm.is_service_account
+
+            # Get service account owner name
+            service_account_owner_name = None
+            if is_service_account and license_orm.service_account_owner_id:
+                if license_orm.service_account_owner_id not in owner_cache:
+                    owner = await self.employee_repo.get_by_id(license_orm.service_account_owner_id)
+                    owner_cache[license_orm.service_account_owner_id] = owner.full_name if owner else None
+                service_account_owner_name = owner_cache[license_orm.service_account_owner_id]
 
             license_response = LicenseResponse(
                 id=license_orm.id,
@@ -341,6 +374,10 @@ class LicenseService:
                 synced_at=license_orm.synced_at,
                 is_external_email=is_external,
                 employee_status=employee_orm.status if employee_orm else None,
+                is_service_account=is_service_account,
+                service_account_name=license_orm.service_account_name,
+                service_account_owner_id=license_orm.service_account_owner_id,
+                service_account_owner_name=service_account_owner_name,
             )
 
             # Track active/inactive
@@ -354,12 +391,18 @@ class LicenseService:
                 total_monthly_cost += license_orm.monthly_cost
 
             # Track potential savings (unassigned + offboarded, only active)
-            if is_active and license_orm.monthly_cost:
+            # Service accounts are intentional, so they don't count as potential savings
+            if is_active and license_orm.monthly_cost and not is_service_account:
                 if not is_assigned or is_offboarded:
                     potential_savings += license_orm.monthly_cost
 
-            # Categorize: External licenses ALWAYS go to external category
-            if is_external:
+            # Categorize in priority order:
+            # 1. Service accounts first (they are intentionally unlinked)
+            # 2. External emails (always separate)
+            # 3. Assigned vs Unassigned
+            if is_service_account:
+                service_accounts.append(license_response)
+            elif is_external:
                 external.append(license_response)
             elif is_assigned:
                 assigned.append(license_response)
@@ -372,6 +415,7 @@ class LicenseService:
             total_unassigned=len(unassigned),
             total_inactive=total_inactive,
             total_external=len(external),
+            total_service_accounts=len(service_accounts),
             monthly_cost=total_monthly_cost,
             potential_savings=potential_savings,
             currency="EUR",
@@ -381,5 +425,6 @@ class LicenseService:
             assigned=assigned,
             unassigned=unassigned,
             external=external,
+            service_accounts=service_accounts,
             stats=stats,
         )

@@ -14,6 +14,7 @@ from licence_api.models.dto.license import (
     LicenseResponse,
     LicenseListResponse,
     CategorizedLicensesResponse,
+    ServiceAccountUpdate,
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
@@ -520,3 +521,78 @@ async def bulk_unassign_licenses(
         failed=len(request.license_ids) - unassigned_count,
         results=results,
     )
+
+
+@router.put("/{license_id}/service-account", response_model=LicenseResponse)
+async def update_service_account_status(
+    http_request: Request,
+    license_id: UUID,
+    data: ServiceAccountUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LicenseResponse:
+    """Mark or unmark a license as a service account. Requires licenses.edit permission.
+
+    Service accounts are licenses that are intentionally not linked to HRIS employees.
+    They appear in a separate category and don't count as "unassigned" problems.
+    """
+    license_repo = LicenseRepository(db)
+    audit_service = AuditService(db)
+
+    license_orm = await license_repo.get_by_id(license_id)
+    if license_orm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    # Store old values for audit
+    old_values = {
+        "is_service_account": license_orm.is_service_account,
+        "service_account_name": license_orm.service_account_name,
+        "service_account_owner_id": str(license_orm.service_account_owner_id) if license_orm.service_account_owner_id else None,
+    }
+
+    # Update service account fields
+    license_orm.is_service_account = data.is_service_account
+    license_orm.service_account_name = data.service_account_name if data.is_service_account else None
+    license_orm.service_account_owner_id = data.service_account_owner_id if data.is_service_account else None
+
+    # If marking as service account, clear the employee assignment
+    if data.is_service_account and license_orm.employee_id:
+        license_orm.employee_id = None
+
+    # Audit log the change
+    await audit_service.log(
+        action=AuditAction.LICENSE_UPDATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={
+            "old": old_values,
+            "new": {
+                "is_service_account": data.is_service_account,
+                "service_account_name": data.service_account_name,
+                "service_account_owner_id": str(data.service_account_owner_id) if data.service_account_owner_id else None,
+            },
+        },
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache (license stats changed)
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+    await db.refresh(license_orm)
+
+    # Get the full license response
+    service = LicenseService(db)
+    license_response = await service.get_license(license_id)
+    if license_response is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    return license_response
