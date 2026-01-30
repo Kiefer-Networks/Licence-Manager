@@ -790,6 +790,20 @@ export const api = {
     return fetchApi<SyncResponse>(`/providers/${providerId}/sync`, { method: 'POST' });
   },
 
+  async uploadProviderLogo(providerId: string, file: File): Promise<{ logo_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return fetchApi<{ logo_url: string }>(`/providers/${providerId}/logo`, {
+      method: 'POST',
+      body: formData,
+      headers: {}, // Let browser set Content-Type with boundary
+    });
+  },
+
+  async deleteProviderLogo(providerId: string): Promise<void> {
+    return fetchApi<void>(`/providers/${providerId}/logo`, { method: 'DELETE' });
+  },
+
   async getProviderLicenseTypes(providerId: string): Promise<{ license_types: LicenseTypeInfo[] }> {
     return fetchApi<{ license_types: LicenseTypeInfo[] }>(`/providers/${providerId}/license-types`);
   },
