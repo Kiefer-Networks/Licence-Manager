@@ -11,6 +11,8 @@ from pydantic import BaseModel
 class ProviderName(StrEnum):
     """Provider name enum."""
 
+    ADOBE = "adobe"
+    ATLASSIAN = "atlassian"
     HIBOB = "hibob"
     CURSOR = "cursor"
     FIGMA = "figma"

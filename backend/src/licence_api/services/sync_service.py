@@ -137,6 +137,8 @@ class SyncService:
             Provider implementation instance
         """
         from licence_api.providers import (
+            AdobeProvider,
+            AtlassianProvider,
             CursorProvider,
             FigmaProvider,
             GitHubProvider,
@@ -153,6 +155,8 @@ class SyncService:
         )
 
         providers = {
+            ProviderName.ADOBE: AdobeProvider,
+            ProviderName.ATLASSIAN: AtlassianProvider,
             ProviderName.CURSOR: CursorProvider,
             ProviderName.FIGMA: FigmaProvider,
             ProviderName.GITHUB: GitHubProvider,

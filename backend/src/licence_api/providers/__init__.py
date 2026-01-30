@@ -1,5 +1,7 @@
 """Provider integrations package."""
 
+from licence_api.providers.adobe import AdobeProvider
+from licence_api.providers.atlassian import AtlassianProvider
 from licence_api.providers.base import BaseProvider
 from licence_api.providers.cursor import CursorProvider
 from licence_api.providers.figma import FigmaProvider
@@ -16,6 +18,8 @@ from licence_api.providers.openai import OpenAIProvider
 from licence_api.providers.slack import SlackProvider
 
 __all__ = [
+    "AdobeProvider",
+    "AtlassianProvider",
     "BaseProvider",
     "CursorProvider",
     "FigmaProvider",
