@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
-from licence_api.security.auth import require_admin
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
@@ -61,10 +61,10 @@ class ManualLicenseBulkCreate(BaseModel):
 @router.post("", response_model=list[LicenseResponse])
 async def create_manual_licenses(
     request: ManualLicenseCreate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[LicenseResponse]:
-    """Create one or more manual licenses. Admin only."""
+    """Create one or more manual licenses. Requires licenses.create permission."""
     provider_repo = ProviderRepository(db)
     license_repo = LicenseRepository(db)
 
@@ -154,10 +154,10 @@ async def create_manual_licenses(
 @router.post("/bulk", response_model=list[LicenseResponse])
 async def create_manual_licenses_bulk(
     request: ManualLicenseBulkCreate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[LicenseResponse]:
-    """Create multiple manual licenses with individual keys. Admin only."""
+    """Create multiple manual licenses with individual keys. Requires licenses.create permission."""
     provider_repo = ProviderRepository(db)
     license_repo = LicenseRepository(db)
 
@@ -238,10 +238,10 @@ async def create_manual_licenses_bulk(
 async def update_manual_license(
     license_id: UUID,
     request: ManualLicenseUpdate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Update a manual license. Admin only."""
+    """Update a manual license. Requires licenses.edit permission."""
     license_repo = LicenseRepository(db)
     provider_repo = ProviderRepository(db)
     employee_repo = EmployeeRepository(db)
@@ -327,10 +327,10 @@ async def update_manual_license(
 async def assign_manual_license(
     license_id: UUID,
     employee_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Assign a manual license to an employee. Admin only."""
+    """Assign a manual license to an employee. Requires licenses.assign permission."""
     request = ManualLicenseUpdate(employee_id=employee_id)
     return await update_manual_license(license_id, request, current_user, db)
 
@@ -338,10 +338,10 @@ async def assign_manual_license(
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 async def unassign_manual_license(
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Unassign a manual license from an employee. Admin only."""
+    """Unassign a manual license from an employee. Requires licenses.assign permission."""
     license_repo = LicenseRepository(db)
     provider_repo = ProviderRepository(db)
 
@@ -386,10 +386,10 @@ async def unassign_manual_license(
 @router.delete("/{license_id}")
 async def delete_manual_license(
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Delete a manual license. Admin only."""
+    """Delete a manual license. Requires licenses.delete permission."""
     license_repo = LicenseRepository(db)
 
     # Get license

@@ -10,10 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
-from licence_api.models.dto.license import LicenseResponse, LicenseListResponse
-from licence_api.security.auth import get_current_user, require_admin
+from licence_api.models.dto.license import (
+    LicenseResponse,
+    LicenseListResponse,
+    CategorizedLicensesResponse,
+)
+from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.license_service import LicenseService
+from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.license_repository import LicenseRepository
 
@@ -56,9 +61,13 @@ class BulkActionResponse(BaseModel):
     results: list[BulkActionResult]
 
 
+# Allowed status values for licenses
+ALLOWED_LICENSE_STATUSES = {"active", "inactive", "suspended", "pending"}
+
+
 @router.get("", response_model=LicenseListResponse)
 async def list_licenses(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
     provider_id: UUID | None = None,
     employee_id: UUID | None = None,
@@ -66,22 +75,27 @@ async def list_licenses(
     unassigned: bool = False,
     external: bool = False,
     search: str | None = Query(default=None, max_length=200),
-    department: str | None = Query(default=None, description="Filter by employee department"),
-    sort_by: str = "synced_at",
-    sort_dir: str = "desc",
+    department: str | None = Query(default=None, max_length=100, description="Filter by employee department"),
+    sort_by: str = Query(default="synced_at", max_length=50),
+    sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1, le=10000),
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> LicenseListResponse:
-    """List licenses with optional filters."""
+    """List licenses with optional filters. Requires licenses.view permission."""
+    # Sanitize inputs for defense in depth
+    sanitized_search = sanitize_search(search)
+    sanitized_department = sanitize_department(department)
+    sanitized_status = sanitize_status(status, ALLOWED_LICENSE_STATUSES)
+
     service = LicenseService(db)
     return await service.list_licenses(
         provider_id=provider_id,
         employee_id=employee_id,
-        status=status,
+        status=sanitized_status,
         unassigned_only=unassigned,
         external_only=external,
-        search=search,
-        department=department,
+        search=sanitized_search,
+        department=sanitized_department,
         sort_by=sort_by,
         sort_dir=sort_dir,
         page=page,
@@ -89,13 +103,36 @@ async def list_licenses(
     )
 
 
+@router.get("/categorized", response_model=CategorizedLicensesResponse)
+async def get_categorized_licenses(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_id: UUID | None = None,
+    sort_by: str = Query(default="external_user_id", max_length=50),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+) -> CategorizedLicensesResponse:
+    """Get licenses categorized into assigned, unassigned, and external.
+
+    External licenses are always in the external category, regardless of
+    assignment status. This creates a clear three-table layout.
+
+    Requires licenses.view permission.
+    """
+    service = LicenseService(db)
+    return await service.get_categorized_licenses(
+        provider_id=provider_id,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+
+
 @router.get("/{license_id}", response_model=LicenseResponse)
 async def get_license(
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Get a single license by ID."""
+    """Get a single license by ID. Requires licenses.view permission."""
     service = LicenseService(db)
     license = await service.get_license(license_id)
     if license is None:
@@ -110,10 +147,10 @@ async def get_license(
 async def assign_license(
     license_id: UUID,
     request: AssignLicenseRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Manually assign a license to an employee. Admin only."""
+    """Manually assign a license to an employee. Requires licenses.assign permission."""
     service = LicenseService(db)
     license = await service.assign_license_to_employee(license_id, request.employee_id)
     if license is None:
@@ -127,10 +164,10 @@ async def assign_license(
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 async def unassign_license(
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseResponse:
-    """Unassign a license from an employee. Admin only."""
+    """Unassign a license from an employee. Requires licenses.assign permission."""
     service = LicenseService(db)
     license = await service.unassign_license(license_id)
     if license is None:
@@ -144,10 +181,10 @@ async def unassign_license(
 @router.post("/{license_id}/remove-from-provider", response_model=RemoveMemberResponse)
 async def remove_license_from_provider(
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RemoveMemberResponse:
-    """Remove a user from the provider system. Admin only.
+    """Remove a user from the provider system. Requires licenses.delete permission.
 
     This will attempt to remove the user from the external provider (e.g., Cursor).
     Currently supported providers: Cursor (Enterprise only).
@@ -207,10 +244,10 @@ async def remove_license_from_provider(
 @router.post("/bulk/remove-from-provider", response_model=BulkActionResponse)
 async def bulk_remove_from_provider(
     request: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BulkActionResponse:
-    """Remove multiple users from their provider systems. Admin only.
+    """Remove multiple users from their provider systems. Requires licenses.bulk_actions permission.
 
     This will attempt to remove each user from their external provider.
     Currently supported providers: Cursor (Enterprise only).
@@ -292,10 +329,10 @@ async def bulk_remove_from_provider(
 @router.post("/bulk/delete", response_model=BulkActionResponse)
 async def bulk_delete_licenses(
     request: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BulkActionResponse:
-    """Delete multiple licenses from the database. Admin only.
+    """Delete multiple licenses from the database. Requires licenses.bulk_actions permission.
 
     This only removes the licenses from the local database.
     It does NOT remove users from the external provider systems.
@@ -332,10 +369,10 @@ async def bulk_delete_licenses(
 @router.post("/bulk/unassign", response_model=BulkActionResponse)
 async def bulk_unassign_licenses(
     request: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BulkActionResponse:
-    """Unassign multiple licenses from employees. Admin only.
+    """Unassign multiple licenses from employees. Requires licenses.bulk_actions permission.
 
     This removes the employee association from the licenses,
     marking them as unassigned. The licenses remain in the database
