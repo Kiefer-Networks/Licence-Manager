@@ -29,7 +29,7 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     licenses: Mapped[list["LicenseORM"]] = relationship(
-        "LicenseORM", back_populates="provider", lazy="selectin"
+        "LicenseORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
     )
     files: Mapped[list["ProviderFileORM"]] = relationship(
         "ProviderFileORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"

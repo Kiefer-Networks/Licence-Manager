@@ -3,7 +3,7 @@
 from licence_api.models.domain.employee import Employee, EmployeeStatus
 from licence_api.models.domain.license import License, LicenseStatus
 from licence_api.models.domain.provider import Provider, ProviderConfig, ProviderName
-from licence_api.models.domain.admin_user import AdminUser, UserRole
+from licence_api.models.domain.admin_user import AdminUser, AuthProvider
 
 __all__ = [
     "Employee",
@@ -14,5 +14,5 @@ __all__ = [
     "ProviderConfig",
     "ProviderName",
     "AdminUser",
-    "UserRole",
+    "AuthProvider",
 ]

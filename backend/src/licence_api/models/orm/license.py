@@ -18,7 +18,7 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "licenses"
 
     provider_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("providers.id"), nullable=False
+        PGUUID(as_uuid=True), ForeignKey("providers.id", ondelete="CASCADE"), nullable=False
     )
     employee_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("employees.id"), nullable=True

@@ -10,6 +10,12 @@ from licence_api.models.orm.settings import SettingsORM
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.models.orm.payment_method import PaymentMethodORM
 from licence_api.models.orm.provider_file import ProviderFileORM
+from licence_api.models.orm.permission import PermissionORM
+from licence_api.models.orm.role import RoleORM
+from licence_api.models.orm.role_permission import RolePermissionORM
+from licence_api.models.orm.user_role import UserRoleORM
+from licence_api.models.orm.refresh_token import RefreshTokenORM
+from licence_api.models.orm.password_history import PasswordHistoryORM
 
 __all__ = [
     "Base",
@@ -22,4 +28,10 @@ __all__ = [
     "NotificationRuleORM",
     "PaymentMethodORM",
     "ProviderFileORM",
+    "PermissionORM",
+    "RoleORM",
+    "RolePermissionORM",
+    "UserRoleORM",
+    "RefreshTokenORM",
+    "PasswordHistoryORM",
 ]
