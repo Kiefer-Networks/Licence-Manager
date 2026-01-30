@@ -501,6 +501,96 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         )
         return {lt or "Unknown": count for lt, count in result.all()}
 
+    async def get_individual_license_type_counts(
+        self,
+        provider_id: UUID,
+    ) -> dict[str, int]:
+        """Get counts of individual license types extracted from combined strings.
+
+        For providers like Microsoft 365 where users can have multiple licenses
+        (stored as comma-separated like "E5, Power BI, Teams"), this extracts
+        and counts each individual license type.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dict mapping individual license_type to count of users with that license
+        """
+        # First get all license_type strings
+        result = await self.session.execute(
+            select(LicenseORM.license_type)
+            .where(LicenseORM.provider_id == provider_id)
+            .where(LicenseORM.license_type.isnot(None))
+        )
+
+        # Count individual license types
+        individual_counts: dict[str, int] = {}
+        for (license_type,) in result.all():
+            if not license_type:
+                continue
+            # Split by comma and strip whitespace
+            for individual in license_type.split(","):
+                individual = individual.strip()
+                if individual:
+                    individual_counts[individual] = individual_counts.get(individual, 0) + 1
+
+        return individual_counts
+
+    async def update_pricing_by_individual_type(
+        self,
+        provider_id: UUID,
+        individual_pricing: dict[str, tuple[Decimal | None, str]],
+    ) -> int:
+        """Update pricing for all licenses based on individual license type prices.
+
+        For combined license types (e.g., "E5, Power BI, Teams"), calculates the
+        total price as the sum of individual license prices.
+
+        Args:
+            provider_id: Provider UUID
+            individual_pricing: Dict mapping individual license type to (price, currency)
+
+        Returns:
+            Number of updated licenses
+        """
+        from sqlalchemy import update
+
+        # Get all licenses for this provider
+        result = await self.session.execute(
+            select(LicenseORM.id, LicenseORM.license_type)
+            .where(LicenseORM.provider_id == provider_id)
+            .where(LicenseORM.license_type.isnot(None))
+        )
+
+        updated_count = 0
+        for license_id, license_type in result.all():
+            if not license_type:
+                continue
+
+            # Calculate total cost from individual prices
+            total_cost = Decimal("0")
+            currency = "EUR"  # Default currency
+
+            for individual in license_type.split(","):
+                individual = individual.strip()
+                if individual and individual in individual_pricing:
+                    price, curr = individual_pricing[individual]
+                    if price:
+                        total_cost += price
+                        currency = curr  # Use the last currency
+
+            # Update the license
+            await self.session.execute(
+                update(LicenseORM)
+                .where(LicenseORM.id == license_id)
+                .values(monthly_cost=total_cost if total_cost > 0 else None, currency=currency)
+            )
+            updated_count += 1
+
+        await self.session.flush()
+        return updated_count
+
     async def update_pricing_by_type(
         self,
         provider_id: UUID,

@@ -208,6 +208,10 @@ class MicrosoftProvider(BaseProvider):
                         elif sku_id:
                             license_names.append(sku_id)
 
+                    # Sort license names alphabetically for consistent grouping
+                    # This ensures "A, B, C" and "C, B, A" are stored the same way
+                    license_names.sort()
+
                     # User principal name is the email
                     email = user.get("userPrincipalName", "").lower()
 

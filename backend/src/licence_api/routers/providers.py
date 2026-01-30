@@ -785,6 +785,187 @@ async def update_provider_pricing(
     )
 
 
+class IndividualLicenseTypeInfo(BaseModel):
+    """Info about an individual license type extracted from combined license strings."""
+
+    license_type: str
+    display_name: str | None = None
+    user_count: int  # Number of users with this license
+    pricing: LicenseTypePricing | None = None
+
+
+class IndividualLicenseTypesResponse(BaseModel):
+    """Response with individual license types extracted from combined strings."""
+
+    license_types: list[IndividualLicenseTypeInfo]
+    has_combined_types: bool  # True if any license_type contains commas
+
+
+class IndividualLicenseTypePricingRequest(BaseModel):
+    """Request to update individual license type pricing."""
+
+    pricing: list[LicenseTypePricing]
+
+
+@router.get("/{provider_id}/individual-license-types", response_model=IndividualLicenseTypesResponse)
+async def get_provider_individual_license_types(
+    provider_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> IndividualLicenseTypesResponse:
+    """Get individual license types extracted from combined strings.
+
+    For providers like Microsoft 365 where users have multiple licenses stored as
+    comma-separated strings (e.g., "E5, Power BI, Teams"), this extracts and counts
+    each individual license type separately.
+
+    Requires providers.view permission.
+    """
+    from licence_api.repositories.license_repository import LicenseRepository
+
+    repo = ProviderRepository(db)
+    license_repo = LicenseRepository(db)
+
+    provider = await repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Get individual license type counts (extracted from combined strings)
+    individual_counts = await license_repo.get_individual_license_type_counts(provider_id)
+
+    # Get raw license types to check if any contain commas
+    raw_counts = await license_repo.get_license_type_counts(provider_id)
+    has_combined = any("," in lt for lt in raw_counts.keys())
+
+    # Get current individual pricing from config
+    individual_pricing_config = (provider.config or {}).get("individual_license_pricing", {})
+
+    license_types = []
+    for license_type, count in individual_counts.items():
+        price_info = individual_pricing_config.get(license_type)
+        pricing = None
+        if price_info:
+            pricing = LicenseTypePricing(
+                license_type=license_type,
+                display_name=price_info.get("display_name"),
+                cost=price_info.get("cost", "0"),
+                currency=price_info.get("currency", "EUR"),
+                billing_cycle=price_info.get("billing_cycle", "monthly"),
+                payment_frequency=price_info.get("payment_frequency", "monthly"),
+                next_billing_date=price_info.get("next_billing_date"),
+                notes=price_info.get("notes"),
+            )
+        license_types.append(
+            IndividualLicenseTypeInfo(
+                license_type=license_type,
+                display_name=price_info.get("display_name") if price_info else None,
+                user_count=count,
+                pricing=pricing,
+            )
+        )
+
+    # Sort by user count descending
+    license_types.sort(key=lambda x: x.user_count, reverse=True)
+
+    return IndividualLicenseTypesResponse(
+        license_types=license_types,
+        has_combined_types=has_combined,
+    )
+
+
+@router.put("/{provider_id}/individual-pricing", response_model=IndividualLicenseTypesResponse)
+async def update_provider_individual_pricing(
+    http_request: Request,
+    provider_id: UUID,
+    request: IndividualLicenseTypePricingRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> IndividualLicenseTypesResponse:
+    """Update individual license type pricing.
+
+    For combined license types, the total monthly cost is calculated as the sum of
+    individual license prices. For example, if a user has "E5, Power BI, Teams":
+    - E5 = 30 EUR/month
+    - Power BI = 10 EUR/month
+    - Teams = 0 EUR/month (free)
+    - Total = 40 EUR/month
+
+    Requires providers.edit permission.
+    """
+    from licence_api.repositories.license_repository import LicenseRepository
+    from decimal import Decimal
+
+    repo = ProviderRepository(db)
+    license_repo = LicenseRepository(db)
+
+    provider = await repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Create a copy of config to ensure SQLAlchemy detects the change
+    config = copy.deepcopy(provider.config) if provider.config else {}
+
+    # Build individual license type pricing config
+    individual_pricing_config = {}
+    individual_pricing_dict: dict[str, tuple[Decimal | None, str]] = {}
+
+    for p in request.pricing:
+        individual_pricing_config[p.license_type] = {
+            "cost": p.cost,
+            "currency": p.currency,
+            "billing_cycle": p.billing_cycle,
+            "payment_frequency": p.payment_frequency,
+            "display_name": p.display_name,
+            "next_billing_date": p.next_billing_date,
+            "notes": p.notes,
+        }
+
+        # Calculate monthly cost for the pricing dict
+        if p.cost:
+            cost = Decimal(p.cost)
+            if p.billing_cycle == "yearly":
+                monthly_cost = cost / 12
+            elif p.billing_cycle == "monthly":
+                monthly_cost = cost
+            else:
+                monthly_cost = Decimal("0")
+            individual_pricing_dict[p.license_type] = (monthly_cost, p.currency)
+
+    config["individual_license_pricing"] = individual_pricing_config
+    await repo.update(provider_id, config=config)
+
+    # Apply individual pricing to all licenses (sum of individual prices)
+    await license_repo.update_pricing_by_individual_type(
+        provider_id=provider_id,
+        individual_pricing=individual_pricing_dict,
+    )
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.PROVIDER_UPDATE,
+        resource_type=ResourceType.PROVIDER,
+        resource_id=provider_id,
+        user=current_user,
+        request=http_request,
+        details={
+            "action": "individual_pricing_update",
+            "license_types_count": len(request.pricing),
+        },
+    )
+
+    await db.commit()
+
+    # Return updated license types
+    return await get_provider_individual_license_types(provider_id, current_user, db)
+
+
 @router.post("/sync/avatars", response_model=SyncResponse)
 async def resync_avatars(
     http_request: Request,
