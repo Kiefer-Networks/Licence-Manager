@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,12 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 export default function UsersPage() {
+  const t = useTranslations('employees');
+  const tCommon = useTranslations('common');
+  const tUsers = useTranslations('users');
+  const tServiceAccounts = useTranslations('serviceAccounts');
+  const tAdminAccounts = useTranslations('adminAccounts');
+
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -105,8 +112,10 @@ export default function UsersPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage employees, service accounts, and admin accounts</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{tUsers('title')}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {t('title')}, {tServiceAccounts('title')}, {tAdminAccounts('title')}
+          </p>
         </div>
 
         {/* Tabs */}
@@ -114,15 +123,15 @@ export default function UsersPage() {
           <TabsList>
             <TabsTrigger value="employees" className="gap-2">
               <Users className="h-4 w-4" />
-              Employees
+              {t('title')}
             </TabsTrigger>
             <TabsTrigger value="service-accounts" className="gap-2">
               <Bot className="h-4 w-4" />
-              Service Accounts
+              {tServiceAccounts('title')}
             </TabsTrigger>
             <TabsTrigger value="admin-accounts" className="gap-2">
               <ShieldCheck className="h-4 w-4" />
-              Admin Accounts
+              {tAdminAccounts('title')}
             </TabsTrigger>
           </TabsList>
 
@@ -132,7 +141,7 @@ export default function UsersPage() {
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <Input
-                  placeholder="Search..."
+                  placeholder={tCommon('search')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 h-9 bg-zinc-50 border-zinc-200"
@@ -141,21 +150,21 @@ export default function UsersPage() {
 
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger className="w-32 h-9 bg-zinc-50 border-zinc-200">
-                  <SelectValue placeholder="Status" />
+                  <SelectValue placeholder={tCommon('status')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="offboarded">Offboarded</SelectItem>
+                  <SelectItem value="all">{tCommon('all')} {tCommon('status')}</SelectItem>
+                  <SelectItem value="active">{t('active')}</SelectItem>
+                  <SelectItem value="offboarded">{t('offboarded')}</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
                 <SelectTrigger className="w-44 h-9 bg-zinc-50 border-zinc-200">
-                  <SelectValue placeholder="Department" />
+                  <SelectValue placeholder={t('department')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
+                  <SelectItem value="all">{tCommon('all')} {t('department')}</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                   ))}
@@ -163,7 +172,7 @@ export default function UsersPage() {
               </Select>
 
               <span className="text-sm text-muted-foreground ml-auto">
-                {total} employee{total !== 1 ? 's' : ''}
+                {total} {t('employee')}{total !== 1 ? 's' : ''}
               </span>
             </div>
 
@@ -176,7 +185,7 @@ export default function UsersPage() {
               ) : employees.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                   <Users className="h-8 w-8 mb-2 opacity-30" />
-                  <p className="text-sm">No employees found</p>
+                  <p className="text-sm">{t('noEmployees')}</p>
                 </div>
               ) : (
                 <table className="w-full text-sm">
@@ -184,28 +193,28 @@ export default function UsersPage() {
                     <tr className="border-b bg-zinc-50/50">
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('full_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                          Name <SortIcon column="full_name" />
+                          {tCommon('name')} <SortIcon column="full_name" />
                         </button>
                       </th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('email')} className="flex items-center gap-1.5 hover:text-foreground">
-                          Email <SortIcon column="email" />
+                          {tCommon('email')} <SortIcon column="email" />
                         </button>
                       </th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('department')} className="flex items-center gap-1.5 hover:text-foreground">
-                          Department <SortIcon column="department" />
+                          {t('department')} <SortIcon column="department" />
                         </button>
                       </th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 hover:text-foreground">
-                          Status <SortIcon column="status" />
+                          {tCommon('status')} <SortIcon column="status" />
                         </button>
                       </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Licenses</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('licenseCount')}</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('start_date')} className="flex items-center gap-1.5 hover:text-foreground">
-                          Start Date <SortIcon column="start_date" />
+                          {t('startDate')} <SortIcon column="start_date" />
                         </button>
                       </th>
                     </tr>
@@ -237,7 +246,7 @@ export default function UsersPage() {
                         <td className="px-4 py-3 text-muted-foreground">{employee.department || '-'}</td>
                         <td className="px-4 py-3">
                           <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                            {employee.status === 'active' ? 'Active' : 'Offboarded'}
+                            {employee.status === 'active' ? t('active') : t('offboarded')}
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
@@ -259,10 +268,10 @@ export default function UsersPage() {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+                <p className="text-sm text-muted-foreground">{tCommon('page')} {page} {tCommon('of')} {totalPages}</p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>Previous</Button>
-                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next</Button>
+                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>{tCommon('back')}</Button>
+                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>{tCommon('next')}</Button>
                 </div>
               </div>
             )}
