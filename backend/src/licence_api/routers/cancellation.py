@@ -14,7 +14,7 @@ from licence_api.models.dto.cancellation import (
     NeedsReorderUpdate,
     RenewRequest,
 )
-from licence_api.security.auth import get_current_user
+from licence_api.security.auth import get_current_user, Permissions, require_permission
 from licence_api.services.cancellation_service import CancellationService
 
 router = APIRouter()
@@ -32,7 +32,7 @@ def get_cancellation_service(db: AsyncSession = Depends(get_db)) -> Cancellation
 async def cancel_license(
     license_id: UUID,
     request: CancellationRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
     """Cancel a license.
@@ -62,7 +62,7 @@ async def cancel_license(
 async def renew_license(
     license_id: UUID,
     request: RenewRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
     """Renew a license by setting a new expiration date.
@@ -89,7 +89,7 @@ async def renew_license(
 async def set_license_needs_reorder(
     license_id: UUID,
     request: NeedsReorderUpdate,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
     """Set the needs_reorder flag for a license."""
@@ -113,7 +113,7 @@ async def set_license_needs_reorder(
 async def cancel_package(
     package_id: UUID,
     request: CancellationRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
     """Cancel a license package.
@@ -143,7 +143,7 @@ async def cancel_package(
 async def renew_package(
     package_id: UUID,
     request: RenewRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
     """Renew a license package by setting a new contract end date.
@@ -170,7 +170,7 @@ async def renew_package(
 async def set_package_needs_reorder(
     package_id: UUID,
     request: NeedsReorderUpdate,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
     """Set the needs_reorder flag for a package."""
@@ -194,7 +194,7 @@ async def set_package_needs_reorder(
 async def cancel_org_license(
     org_license_id: UUID,
     request: CancellationRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
     """Cancel an organization license.
