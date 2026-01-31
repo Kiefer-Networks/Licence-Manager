@@ -109,6 +109,24 @@ class AuditService:
     All mutations should be logged through this service.
     """
 
+    # Sensitive fields that should be masked in audit logs
+    SENSITIVE_FIELDS = frozenset({
+        "password",
+        "api_key",
+        "api_secret",
+        "client_secret",
+        "access_token",
+        "refresh_token",
+        "bot_token",
+        "user_token",
+        "admin_api_key",
+        "auth_token",
+        "private_key",
+        "secret",
+        "credentials",
+        "service_account_json",
+    })
+
     def __init__(self, session: AsyncSession) -> None:
         """Initialize audit service.
 
@@ -117,6 +135,34 @@ class AuditService:
         """
         self.session = session
         self.audit_repo = AuditRepository(session)
+
+    @classmethod
+    def _mask_sensitive_data(cls, data: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Mask sensitive fields in audit data to prevent credential leakage.
+
+        Args:
+            data: Dictionary that may contain sensitive fields
+
+        Returns:
+            Dictionary with sensitive values replaced by "[REDACTED]"
+        """
+        if data is None:
+            return None
+
+        masked = {}
+        for key, value in data.items():
+            if key.lower() in cls.SENSITIVE_FIELDS:
+                masked[key] = "[REDACTED]"
+            elif isinstance(value, dict):
+                masked[key] = cls._mask_sensitive_data(value)
+            elif isinstance(value, list):
+                masked[key] = [
+                    cls._mask_sensitive_data(item) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                masked[key] = value
+        return masked
 
     async def log(
         self,
@@ -152,6 +198,9 @@ class AuditService:
         # Use details as changes if provided (backwards compatibility)
         if details is not None and changes is None:
             changes = details
+
+        # Mask sensitive fields to prevent credential leakage in audit logs
+        changes = self._mask_sensitive_data(changes)
 
         # Convert string resource_id to UUID if needed
         if isinstance(resource_id, str):
