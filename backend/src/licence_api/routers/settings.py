@@ -11,8 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
-from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
-from licence_api.services.notification_service import NotificationService
+from licence_api.services.settings_service import SettingsService
 
 router = APIRouter()
 
@@ -35,25 +34,13 @@ class CompanyDomainsResponse(BaseModel):
     domains: list[str]
 
 
-# Threshold Settings Models
-
-
 class ThresholdSettings(BaseModel):
     """Threshold settings for warnings and notifications."""
 
-    # License inactivity threshold (days)
     inactive_days: int = 30
-
-    # Contract expiring soon threshold (days)
     expiring_days: int = 90
-
-    # Low utilization threshold (percentage)
     low_utilization_percent: int = 70
-
-    # Cost increase threshold (percentage)
     cost_increase_percent: int = 20
-
-    # Maximum unused licenses before warning
     max_unassigned_licenses: int = 10
 
 
@@ -101,72 +88,65 @@ class SetupStatusDetailedResponse(BaseModel):
     has_admin: bool
 
 
+class TestNotificationRequest(BaseModel):
+    """Test notification request."""
+
+    channel: str
+
+
+class TestNotificationResponse(BaseModel):
+    """Test notification response."""
+
+    success: bool
+    message: str
+
+
+# Dependency injection
+def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
+    """Get SettingsService instance."""
+    return SettingsService(db)
+
+
 @router.get("/status", response_model=SetupStatusResponse)
 async def get_setup_status(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusResponse:
-    """Get basic setup status.
-
-    Returns only whether setup is complete to minimize information disclosure.
-    For detailed status, use /status/detailed with authentication.
-    """
-    from licence_api.repositories.provider_repository import ProviderRepository
-    from licence_api.repositories.user_repository import UserRepository
-
-    provider_repo = ProviderRepository(db)
-    user_repo = UserRepository(db)
-
-    has_any_provider = await provider_repo.exists_any()
-    hibob = await provider_repo.get_by_name("hibob")
-    admin_count = await user_repo.count_admins()
-
-    is_complete = has_any_provider and hibob is not None and admin_count > 0
-
-    return SetupStatusResponse(is_complete=is_complete)
+    """Get basic setup status."""
+    status = await service.get_setup_status()
+    return SetupStatusResponse(is_complete=status.is_complete)
 
 
 @router.get("/status/detailed", response_model=SetupStatusDetailedResponse)
 async def get_setup_status_detailed(
     current_user: Annotated[AdminUser, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusDetailedResponse:
     """Get detailed setup status. Admin only."""
-    from licence_api.repositories.provider_repository import ProviderRepository
-    from licence_api.repositories.user_repository import UserRepository
-
-    provider_repo = ProviderRepository(db)
-    user_repo = UserRepository(db)
-
-    has_any_provider = await provider_repo.exists_any()
-    hibob = await provider_repo.get_by_name("hibob")
-    admin_count = await user_repo.count_admins()
-
+    status = await service.get_setup_status(detailed=True)
     return SetupStatusDetailedResponse(
-        is_complete=has_any_provider and hibob is not None and admin_count > 0,
-        has_hibob=hibob is not None,
-        has_providers=has_any_provider,
-        has_admin=admin_count > 0,
+        is_complete=status.is_complete,
+        has_hibob=status.has_hibob,
+        has_providers=status.has_providers,
+        has_admin=status.has_admin,
     )
 
 
 @router.get("", response_model=dict[str, Any])
 async def get_all_settings(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> dict[str, Any]:
     """Get all application settings. Requires settings.view permission."""
-    repo = SettingsRepository(db)
-    return await repo.get_all()
+    return await service.get_all()
 
 
 @router.get("/company-domains", response_model=CompanyDomainsResponse)
 async def get_company_domains(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> CompanyDomainsResponse:
     """Get configured company domains. Requires settings.view permission."""
-    repo = SettingsRepository(db)
-    setting = await repo.get("company_domains")
+    setting = await service.get("company_domains")
     if setting is None:
         return CompanyDomainsResponse(domains=[])
     return CompanyDomainsResponse(domains=setting.get("domains", []))
@@ -177,49 +157,26 @@ async def set_company_domains(
     http_request: Request,
     request: CompanyDomainsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> CompanyDomainsResponse:
     """Set company domains. Requires settings.edit permission."""
-    repo = SettingsRepository(db)
-
-    # Get old value for audit
-    old_setting = await repo.get("company_domains")
-    old_domains = old_setting.get("domains", []) if old_setting else []
-
-    # Normalize domains (lowercase, strip whitespace)
-    domains = [d.strip().lower() for d in request.domains if d.strip()]
-    await repo.set("company_domains", {"domains": domains})
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_UPDATE,
-        resource_type=ResourceType.SETTING,
-        resource_id="company_domains",
+    domains = await service.set_company_domains(
+        domains=request.domains,
         user=current_user,
         request=http_request,
-        details={"old_domains": old_domains, "new_domains": domains},
     )
-
-    await db.commit()
     return CompanyDomainsResponse(domains=domains)
-
-
-# Thresholds endpoints (must be before /{key} wildcard routes)
 
 
 @router.get("/thresholds", response_model=ThresholdSettings)
 async def get_threshold_settings(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> ThresholdSettings:
     """Get threshold settings for warnings and notifications."""
-    repo = SettingsRepository(db)
-    settings = await repo.get("thresholds")
-
+    settings = await service.get("thresholds")
     if settings is None:
         return DEFAULT_THRESHOLDS
-
     return ThresholdSettings(**settings)
 
 
@@ -228,44 +185,25 @@ async def update_threshold_settings(
     http_request: Request,
     request: ThresholdSettings,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> ThresholdSettings:
     """Update threshold settings."""
-    repo = SettingsRepository(db)
-
-    # Get old value for audit
-    old_settings = await repo.get("thresholds")
-
-    # Save new settings
-    await repo.set("thresholds", request.model_dump())
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_UPDATE,
-        resource_type=ResourceType.SETTING,
-        resource_id="thresholds",
+    await service.set_thresholds(
+        thresholds=request.model_dump(),
         user=current_user,
         request=http_request,
-        details={"old": old_settings, "new": request.model_dump()},
     )
-    await db.commit()
-
     return request
-
-
-# Wildcard key routes (must be after all specific routes)
 
 
 @router.get("/{key}", response_model=dict[str, Any] | None)
 async def get_setting(
     key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> dict[str, Any] | None:
     """Get a specific setting by key. Requires settings.view permission."""
-    repo = SettingsRepository(db)
-    return await repo.get(key)
+    return await service.get(key)
 
 
 @router.put("/{key}", response_model=dict[str, Any])
@@ -274,25 +212,15 @@ async def set_setting(
     key: str,
     request: SettingValue,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> dict[str, Any]:
     """Set a setting value. Requires settings.edit permission."""
-    repo = SettingsRepository(db)
-    await repo.set(key, request.value)
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_UPDATE,
-        resource_type=ResourceType.SETTING,
-        resource_id=key,
+    return await service.set(
+        key=key,
+        value=request.value,
         user=current_user,
         request=http_request,
-        details={"key": key},
     )
-    await db.commit()
-
-    return request.value
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)
@@ -300,39 +228,28 @@ async def delete_setting(
     http_request: Request,
     key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> None:
     """Delete a setting. Requires settings.edit permission."""
-    repo = SettingsRepository(db)
-    deleted = await repo.delete(key)
+    deleted = await service.delete(
+        key=key,
+        user=current_user,
+        request=http_request,
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Setting not found",
         )
 
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_DELETE,
-        resource_type=ResourceType.SETTING,
-        resource_id=key,
-        user=current_user,
-        request=http_request,
-        details={"key": key},
-    )
-    await db.commit()
 
-
-# Notification rules
 @router.get("/notifications/rules", response_model=list[NotificationRuleResponse])
 async def list_notification_rules(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> list[NotificationRuleResponse]:
     """List all notification rules. Requires settings.view permission."""
-    service = NotificationService(db)
-    rules = await service.get_rules()
+    rules = await service.get_notification_rules()
     return [
         NotificationRuleResponse(
             id=r.id,
@@ -354,28 +271,16 @@ async def create_notification_rule(
     http_request: Request,
     request: NotificationRuleCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> NotificationRuleResponse:
     """Create a notification rule. Requires settings.edit permission."""
-    service = NotificationService(db)
-    rule = await service.create_rule(
+    rule = await service.create_notification_rule(
         event_type=request.event_type,
         slack_channel=request.slack_channel,
         template=request.template,
-    )
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_UPDATE,
-        resource_type=ResourceType.NOTIFICATION_RULE,
-        resource_id=rule.id,
         user=current_user,
         request=http_request,
-        details={"action": "create", "event_type": request.event_type, "slack_channel": request.slack_channel},
     )
-    await db.commit()
-
     return NotificationRuleResponse(
         id=rule.id,
         event_type=rule.event_type,
@@ -391,34 +296,22 @@ async def update_notification_rule(
     rule_id: UUID,
     request: NotificationRuleUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> NotificationRuleResponse:
     """Update a notification rule. Requires settings.edit permission."""
-    service = NotificationService(db)
-    rule = await service.update_rule(
-        rule_id,
+    rule = await service.update_notification_rule(
+        rule_id=rule_id,
         slack_channel=request.slack_channel,
         template=request.template,
         enabled=request.enabled,
+        user=current_user,
+        request=http_request,
     )
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification rule not found",
         )
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_UPDATE,
-        resource_type=ResourceType.NOTIFICATION_RULE,
-        resource_id=rule_id,
-        user=current_user,
-        request=http_request,
-        details={"action": "update", "changes": request.model_dump(exclude_unset=True)},
-    )
-    await db.commit()
-
     return NotificationRuleResponse(
         id=rule.id,
         event_type=rule.event_type,
@@ -433,54 +326,31 @@ async def delete_notification_rule(
     http_request: Request,
     rule_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> None:
     """Delete a notification rule. Requires settings.edit permission."""
-    service = NotificationService(db)
-    deleted = await service.delete_rule(rule_id)
+    deleted = await service.delete_notification_rule(
+        rule_id=rule_id,
+        user=current_user,
+        request=http_request,
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification rule not found",
         )
 
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.SETTING_DELETE,
-        resource_type=ResourceType.NOTIFICATION_RULE,
-        resource_id=rule_id,
-        user=current_user,
-        request=http_request,
-        details={"action": "delete"},
-    )
-    await db.commit()
-
-
-class TestNotificationRequest(BaseModel):
-    """Test notification request."""
-
-    channel: str
-
-
-class TestNotificationResponse(BaseModel):
-    """Test notification response."""
-
-    success: bool
-    message: str
-
 
 @router.post("/notifications/test", response_model=TestNotificationResponse)
 async def test_slack_notification(
     request: TestNotificationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> TestNotificationResponse:
     """Send a test notification to Slack. Requires settings.edit permission."""
     import httpx
 
-    repo = SettingsRepository(db)
-    slack_config = await repo.get("slack")
+    slack_config = await service.get("slack")
 
     if not slack_config or not slack_config.get("bot_token"):
         return TestNotificationResponse(

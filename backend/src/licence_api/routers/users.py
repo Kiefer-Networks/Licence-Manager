@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse
-from licence_api.security.auth import get_current_user, require_permission, Permissions
-from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.security.auth import require_permission, Permissions
+from licence_api.services.employee_service import EmployeeService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
 
 logger = logging.getLogger(__name__)
@@ -61,11 +61,16 @@ def get_avatar_base64(hibob_id: str) -> str | None:
 ALLOWED_EMPLOYEE_STATUSES = {"active", "offboarded", "pending", "on_leave"}
 
 
+def get_employee_service(db: AsyncSession = Depends(get_db)) -> EmployeeService:
+    """Get EmployeeService instance."""
+    return EmployeeService(db)
+
+
 # Employee endpoints
 @router.get("/employees", response_model=EmployeeListResponse)
 async def list_employees(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
     status: str | None = None,
     department: str | None = None,
     search: str | None = Query(default=None, max_length=200),
@@ -80,9 +85,8 @@ async def list_employees(
     sanitized_department = sanitize_department(department)
     sanitized_status = sanitize_status(status, ALLOWED_EMPLOYEE_STATUSES)
 
-    repo = EmployeeRepository(db)
     offset = (page - 1) * page_size
-    employees, total = await repo.get_all_with_filters(
+    employees, total, license_counts = await employee_service.list_employees(
         status=sanitized_status,
         department=sanitized_department,
         search=sanitized_search,
@@ -91,12 +95,6 @@ async def list_employees(
         offset=offset,
         limit=page_size,
     )
-
-    # Get license counts in a single batch query (avoids N+1)
-    from licence_api.repositories.license_repository import LicenseRepository
-    license_repo = LicenseRepository(db)
-    employee_ids = [emp.id for emp in employees]
-    license_counts = await license_repo.count_by_employee_ids(employee_ids)
 
     items = []
     for emp in employees:
@@ -127,32 +125,27 @@ async def list_employees(
 @router.get("/employees/departments", response_model=list[str])
 async def list_departments(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
 ) -> list[str]:
     """Get all unique departments."""
-    repo = EmployeeRepository(db)
-    return await repo.get_all_departments()
+    return await employee_service.get_departments()
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
 async def get_employee(
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
 ) -> EmployeeResponse:
     """Get a single employee by ID."""
-    repo = EmployeeRepository(db)
-    employee = await repo.get_by_id(employee_id)
-    if employee is None:
+    result = await employee_service.get_employee(employee_id)
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Employee not found",
         )
 
-    # Get license count in batch query (consistent with list endpoint)
-    from licence_api.repositories.license_repository import LicenseRepository
-    license_repo = LicenseRepository(db)
-    license_counts = await license_repo.count_by_employee_ids([employee_id])
+    employee, license_count = result
 
     return EmployeeResponse(
         id=employee.id,
@@ -164,6 +157,6 @@ async def get_employee(
         start_date=employee.start_date,
         termination_date=employee.termination_date,
         avatar=get_avatar_base64(employee.hibob_id),
-        license_count=license_counts.get(employee_id, 0),
+        license_count=license_count,
         synced_at=employee.synced_at,
     )

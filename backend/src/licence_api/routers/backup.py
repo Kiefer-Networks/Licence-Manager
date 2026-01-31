@@ -16,7 +16,6 @@ from licence_api.models.dto.backup import (
 )
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.rate_limit import limiter
-from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.backup_service import BackupService
 
 router = APIRouter()
@@ -30,13 +29,20 @@ BACKUP_RESTORE_LIMIT = "2/hour"
 BACKUP_INFO_LIMIT = "10/minute"
 
 
+def get_backup_service(
+    db: AsyncSession = Depends(get_db),
+) -> BackupService:
+    """Get BackupService instance."""
+    return BackupService(db)
+
+
 @router.post("/export")
 @limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
     http_request: Request,
     request: BackupExportRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[BackupService, Depends(get_backup_service)],
 ) -> Response:
     """Create an encrypted backup of all system data.
 
@@ -44,25 +50,17 @@ async def create_backup(
 
     Returns encrypted backup file as application/octet-stream.
     """
-    service = BackupService(db)
-
     try:
-        backup_data = await service.create_backup(request.password)
+        backup_data = await service.create_backup(
+            password=request.password,
+            user=current_user,
+            request=http_request,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create backup: {str(e)}",
         )
-
-    # Log audit event
-    audit_service = AuditService(db)
-    await audit_service.log(
-        action=AuditAction.EXPORT,
-        resource_type=ResourceType.SYSTEM,
-        user_id=current_user.id,
-        details={"action": "backup_created"},
-    )
-    await db.commit()
 
     # Generate filename with timestamp
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
@@ -83,7 +81,7 @@ async def create_backup(
 async def restore_backup(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[BackupService, Depends(get_backup_service)],
     file: UploadFile = File(...),
     password: str = Form(..., min_length=8),
 ) -> RestoreResponse:
@@ -125,26 +123,12 @@ async def restore_backup(
             detail="Empty file",
         )
 
-    service = BackupService(db)
-    result = await service.restore_backup(content, password)
-
-    # Log audit event if restore was successful
-    if result.success:
-        audit_service = AuditService(db)
-        await audit_service.log(
-            action=AuditAction.IMPORT,
-            resource_type=ResourceType.SYSTEM,
-            user_id=current_user.id,
-            details={
-                "action": "backup_restored",
-                "imported": result.imported.model_dump(),
-                "providers_valid": result.validation.providers_valid,
-                "providers_failed": len(result.validation.providers_failed),
-            },
-        )
-        await db.commit()
-
-    return result
+    return await service.restore_backup(
+        file_data=content,
+        password=password,
+        user=current_user,
+        request=http_request,
+    )
 
 
 @router.post("/info", response_model=BackupInfoResponse)

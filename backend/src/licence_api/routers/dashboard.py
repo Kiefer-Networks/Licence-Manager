@@ -16,10 +16,15 @@ from licence_api.utils.validation import sanitize_department
 router = APIRouter()
 
 
+def get_report_service(db: AsyncSession = Depends(get_db)) -> ReportService:
+    """Get ReportService instance."""
+    return ReportService(db)
+
+
 @router.get("", response_model=DashboardResponse)
 async def get_dashboard(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(default=None, description="Filter by department"),
 ) -> DashboardResponse:
     """Get dashboard overview data.
@@ -39,8 +44,7 @@ async def get_dashboard(
         return DashboardResponse(**cached)
 
     # Fetch from database
-    service = ReportService(db)
-    result = await service.get_dashboard(department=department)
+    result = await report_service.get_dashboard(department=department)
 
     # Cache the result
     await cache.set_dashboard(result, department=department)

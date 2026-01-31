@@ -1,6 +1,5 @@
 """Authentication router."""
 
-import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -27,7 +26,7 @@ from licence_api.models.dto.auth import (
     UserNotificationPreferenceUpdate,
 )
 from licence_api.security.auth import get_current_user
-from licence_api.security.csrf import generate_csrf_token, validate_csrf
+from licence_api.security.csrf import generate_csrf_token
 from licence_api.security.rate_limit import (
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
@@ -36,32 +35,18 @@ from licence_api.security.rate_limit import (
     limiter,
 )
 from licence_api.services.auth_service import AuthService
-from licence_api.repositories.user_repository import UserRepository
-from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
-from licence_api.utils.file_validation import (
-    validate_image_signature,
-    get_extension_from_content_type,
-)
 
 
-# Dependency injection functions
-def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
-    """Get UserRepository instance."""
-    return UserRepository(db)
+# Avatar storage directory for admin users (for get_avatar endpoint)
+ADMIN_AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "admin_avatars"
+
+router = APIRouter()
 
 
+# Dependency injection
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     """Get AuthService instance."""
     return AuthService(db)
-
-logger = logging.getLogger(__name__)
-
-# Avatar storage directory for admin users
-ADMIN_AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "admin_avatars"
-MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-
-router = APIRouter()
 
 # Available notification event types
 NOTIFICATION_EVENT_TYPES = [
@@ -223,7 +208,7 @@ async def login_local(
     request: Request,
     response: Response,
     body: LocalLoginRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     user_agent: str | None = Header(default=None),
 ) -> TokenResponse:
     """Authenticate with email and password.
@@ -231,10 +216,9 @@ async def login_local(
     Returns JWT access token and refresh token.
     Tokens are also set as httpOnly cookies for enhanced security.
     """
-    service = AuthService(db)
     ip_address = request.client.host if request.client else None
 
-    token_response = await service.authenticate_local(
+    token_response = await auth_service.authenticate_local(
         email=body.email,
         password=body.password,
         user_agent=user_agent,
@@ -253,7 +237,7 @@ async def refresh_token(
     request: Request,
     response: Response,
     body: RefreshTokenRequest | None = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
 ) -> TokenResponse:
     """Refresh access token using refresh token.
@@ -271,8 +255,7 @@ async def refresh_token(
             detail="Refresh token required",
         )
 
-    service = AuthService(db)
-    token_response = await service.refresh_access_token(token)
+    token_response = await auth_service.refresh_access_token(token)
 
     # Update access token cookie
     _set_auth_cookies(response, token_response.access_token, None)
@@ -286,7 +269,7 @@ async def logout(
     request: Request,
     response: Response,
     body: LogoutRequest | None = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     user_agent: str | None = Header(default=None),
 ) -> dict[str, str]:
@@ -301,8 +284,7 @@ async def logout(
 
     if token:
         ip_address = request.client.host if request.client else None
-        service = AuthService(db)
-        await service.logout(token, ip_address=ip_address, user_agent=user_agent)
+        await auth_service.logout(token, ip_address=ip_address, user_agent=user_agent)
 
     # Clear auth cookies
     _clear_auth_cookies(response)
@@ -314,11 +296,10 @@ async def logout(
 async def logout_all_sessions(
     response: Response,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> dict[str, int]:
     """Logout all sessions for the current user."""
-    service = AuthService(db)
-    count = await service.logout_all_sessions(current_user.id)
+    count = await auth_service.logout_all_sessions(current_user.id)
 
     # Clear auth cookies
     _clear_auth_cookies(response)
@@ -329,11 +310,10 @@ async def logout_all_sessions(
 @router.get("/me", response_model=UserInfo)
 async def get_current_user_info(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserInfo:
     """Get current user information including roles and permissions."""
-    service = AuthService(db)
-    user_info = await service.get_user_info(current_user.id)
+    user_info = await auth_service.get_user_info(current_user.id)
 
     if user_info is None:
         raise HTTPException(
@@ -350,13 +330,12 @@ async def change_password(
     request: Request,
     body: PasswordChangeRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     user_agent: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Change current user's password."""
     ip_address = request.client.host if request.client else None
-    service = AuthService(db)
-    await service.change_password(
+    await auth_service.change_password(
         user_id=current_user.id,
         current_password=body.current_password,
         new_password=body.new_password,
@@ -373,90 +352,36 @@ async def change_password(
 async def update_profile(
     body: ProfileUpdateRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserInfo:
     """Update current user's profile (name)."""
-    # Update name if provided via repository
-    if body.name is not None:
-        await user_repo.update_name(current_user.id, body.name if body.name else None)
-        await db.commit()
-
-    # Return updated user info
-    user_info = await auth_service.get_user_info(current_user.id)
-    if user_info is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    return user_info
+    return await auth_service.update_profile(
+        user_id=current_user.id,
+        name=body.name,
+    )
 
 
 @router.post("/me/avatar", response_model=AvatarUploadResponse)
 async def upload_avatar(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     file: UploadFile = File(...),
 ) -> AvatarUploadResponse:
     """Upload avatar image for current user."""
-    # Validate content type
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_CONTENT_TYPES)}",
-        )
-
-    # Read file content
     content = await file.read()
-    if len(content) > MAX_AVATAR_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: {MAX_AVATAR_SIZE // (1024 * 1024)} MB",
-        )
 
-    # Validate file signature (magic bytes) to prevent content-type spoofing
-    if not validate_image_signature(content, file.content_type):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File content does not match declared file type",
-        )
-
-    # Ensure avatar directory exists
-    ADMIN_AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Generate unique filename with extension
-    ext = get_extension_from_content_type(file.content_type)
-
-    filename = f"{current_user.id}{ext}"
-    file_path = ADMIN_AVATAR_DIR / filename
-
-    # Remove old avatar with different extension if exists
-    for old_ext in [".jpg", ".png", ".gif", ".webp"]:
-        old_file = ADMIN_AVATAR_DIR / f"{current_user.id}{old_ext}"
-        if old_file.exists() and old_file != file_path:
-            try:
-                old_file.unlink()
-            except OSError as e:
-                logger.warning(f"Failed to delete old avatar file: {e}")
-
-    # Write new avatar
     try:
-        file_path.write_bytes(content)
-    except Exception as e:
-        logger.error(f"Failed to write avatar file: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save avatar",
+        picture_url = await auth_service.upload_avatar(
+            user_id=current_user.id,
+            content=content,
+            content_type=file.content_type or "application/octet-stream",
         )
-
-    # Update picture_url in database via repository
-    picture_url = f"/api/v1/auth/avatar/{current_user.id}"
-    await user_repo.update_avatar(current_user.id, picture_url)
-    await db.commit()
-
-    return AvatarUploadResponse(picture_url=picture_url)
+        return AvatarUploadResponse(picture_url=picture_url)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
 
 @router.get("/avatar/{user_id}")
@@ -502,23 +427,10 @@ async def get_avatar(
 @router.delete("/me/avatar")
 async def delete_avatar(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> dict[str, str]:
     """Delete current user's avatar."""
-    # Remove avatar files
-    for ext in [".jpg", ".png", ".gif", ".webp"]:
-        file_path = ADMIN_AVATAR_DIR / f"{current_user.id}{ext}"
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except OSError as e:
-                logger.warning(f"Failed to delete avatar file: {e}")
-
-    # Clear picture_url in database via repository
-    await user_repo.update_avatar(current_user.id, None)
-    await db.commit()
-
+    await auth_service.delete_avatar(current_user.id)
     return {"message": "Avatar deleted successfully"}
 
 
@@ -528,11 +440,10 @@ async def delete_avatar(
 @router.get("/me/notification-preferences", response_model=UserNotificationPreferencesResponse)
 async def get_notification_preferences(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferencesResponse:
     """Get current user's notification preferences."""
-    repo = UserNotificationPreferenceRepository(db)
-    prefs = await repo.get_by_user_id(current_user.id)
+    prefs = await auth_service.get_notification_preferences(current_user.id)
 
     # Build response with event type info
     pref_responses = []
@@ -560,11 +471,9 @@ async def get_notification_preferences(
 async def update_notification_preferences(
     body: UserNotificationPreferenceBulkUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferencesResponse:
     """Update current user's notification preferences (bulk)."""
-    repo = UserNotificationPreferenceRepository(db)
-
     # Convert to list of dicts for bulk upsert
     prefs_data = [
         {
@@ -576,8 +485,7 @@ async def update_notification_preferences(
         for p in body.preferences
     ]
 
-    prefs = await repo.bulk_upsert(current_user.id, prefs_data)
-    await db.commit()
+    prefs = await auth_service.update_notification_preferences_bulk(current_user.id, prefs_data)
 
     # Build response with event type info
     pref_responses = []
@@ -606,7 +514,7 @@ async def update_single_notification_preference(
     event_type: str,
     body: UserNotificationPreferenceUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferenceResponse:
     """Update a single notification preference."""
     if event_type not in EVENT_TYPE_MAP:
@@ -615,15 +523,13 @@ async def update_single_notification_preference(
             detail=f"Unknown event type: {event_type}",
         )
 
-    repo = UserNotificationPreferenceRepository(db)
-    pref = await repo.upsert(
+    pref = await auth_service.update_notification_preference(
         user_id=current_user.id,
         event_type=event_type,
         enabled=body.enabled,
         slack_dm=body.slack_dm,
         slack_channel=body.slack_channel,
     )
-    await db.commit()
 
     event_info = EVENT_TYPE_MAP[event_type]
     return UserNotificationPreferenceResponse(

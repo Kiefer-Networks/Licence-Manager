@@ -22,7 +22,7 @@ from licence_api.models.dto.provider import (
     ProviderListResponse,
     PaymentMethodSummary,
 )
-from licence_api.routers.payment_methods import calculate_expiry_info
+from licence_api.services.payment_method_service import PaymentMethodService
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
@@ -30,6 +30,7 @@ from licence_api.security.rate_limit import limiter
 from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.pricing_service import PricingService
+from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.file_validation import validate_svg_content
 
@@ -62,6 +63,11 @@ def get_pricing_service(db: AsyncSession = Depends(get_db)) -> PricingService:
     return PricingService(db)
 
 
+def get_provider_service(db: AsyncSession = Depends(get_db)) -> ProviderService:
+    """Get ProviderService instance."""
+    return ProviderService(db)
+
+
 class TestConnectionRequest(BaseModel):
     """Request to test provider connection."""
 
@@ -86,66 +92,10 @@ class SyncResponse(BaseModel):
 @router.get("", response_model=ProviderListResponse)
 async def list_providers(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderListResponse:
     """List all configured providers. Requires providers.view permission."""
-    from licence_api.models.dto.provider import ProviderLicenseStats
-    from licence_api.repositories.license_repository import LicenseRepository
-    from licence_api.repositories.settings_repository import SettingsRepository
-
-    license_repo = LicenseRepository(db)
-    settings_repo = SettingsRepository(db)
-
-    providers_with_counts = await provider_repo.get_all_with_license_counts()
-
-    # Get company domains for external detection
-    domains_setting = await settings_repo.get("company_domains")
-    company_domains = [d.lower() for d in (domains_setting.get("domains") or [])] if domains_setting else []
-
-    # Get license stats per provider
-    license_stats = await license_repo.get_stats_by_provider(company_domains)
-
-    items = []
-    for p, count in providers_with_counts:
-        pm_summary = None
-        if p.payment_method:
-            is_expiring, _ = calculate_expiry_info(p.payment_method)
-            pm_summary = PaymentMethodSummary(
-                id=p.payment_method.id,
-                name=p.payment_method.name,
-                type=p.payment_method.type,
-                is_expiring=is_expiring,
-            )
-
-        # Get stats for this provider
-        stats = license_stats.get(p.id, {})
-        provider_stats = ProviderLicenseStats(
-            active=stats.get("active", 0),
-            assigned=stats.get("assigned", 0),
-            external=stats.get("external", 0),
-            not_in_hris=stats.get("not_in_hris", 0),
-        )
-
-        items.append(
-            ProviderResponse(
-                id=p.id,
-                name=p.name,
-                display_name=p.display_name,
-                logo_url=get_provider_logo(p.name, p.logo_url),
-                enabled=p.enabled,
-                config=p.config,
-                last_sync_at=p.last_sync_at,
-                last_sync_status=p.last_sync_status,
-                license_count=count,
-                license_stats=provider_stats,
-                payment_method_id=p.payment_method_id,
-                payment_method=pm_summary,
-                created_at=p.created_at,
-                updated_at=p.updated_at,
-            )
-        )
-
+    items = await provider_service.list_providers()
     return ProviderListResponse(items=items, total=len(items))
 
 
@@ -153,47 +103,16 @@ async def list_providers(
 async def get_provider(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderResponse:
     """Get a single provider by ID. Requires providers.view permission."""
-    provider = await provider_repo.get_by_id(provider_id)
+    provider = await provider_service.get_provider(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-
-    from licence_api.repositories.license_repository import LicenseRepository
-    license_repo = LicenseRepository(db)
-    counts = await license_repo.count_by_provider()
-    license_count = counts.get(provider_id, 0)
-
-    pm_summary = None
-    if provider.payment_method:
-        is_expiring, _ = calculate_expiry_info(provider.payment_method)
-        pm_summary = PaymentMethodSummary(
-            id=provider.payment_method.id,
-            name=provider.payment_method.name,
-            type=provider.payment_method.type,
-            is_expiring=is_expiring,
-        )
-
-    return ProviderResponse(
-        id=provider.id,
-        name=provider.name,
-        display_name=provider.display_name,
-        logo_url=get_provider_logo(provider.name, provider.logo_url),
-        enabled=provider.enabled,
-        config=provider.config,
-        last_sync_at=provider.last_sync_at,
-        last_sync_status=provider.last_sync_status,
-        license_count=license_count,
-        payment_method_id=provider.payment_method_id,
-        payment_method=pm_summary,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-    )
+    return provider
 
 
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
@@ -201,61 +120,23 @@ async def create_provider(
     http_request: Request,
     request: ProviderCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
-    # Check if provider already exists
-    existing = await provider_repo.get_by_name(request.name)
-    if existing:
+    try:
+        return await provider_service.create_provider(
+            name=request.name,
+            display_name=request.display_name,
+            credentials=request.credentials,
+            config=request.config,
+            user=current_user,
+            request=http_request,
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Provider {request.name} already configured",
+            detail=str(e),
         )
-
-    # Encrypt credentials
-    encryption = get_encryption_service()
-    encrypted_creds = encryption.encrypt(request.credentials)
-
-    provider = await provider_repo.create(
-        name=request.name,
-        display_name=request.display_name,
-        credentials_encrypted=encrypted_creds,
-        config=request.config or {},
-    )
-
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_CREATE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider.id,
-        user=current_user,
-        request=http_request,
-        details={
-            "name": request.name,
-            "display_name": request.display_name,
-        },
-    )
-
-    # Invalidate relevant caches
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
-    await cache.invalidate_dashboard()
-
-    return ProviderResponse(
-        id=provider.id,
-        name=provider.name,
-        display_name=provider.display_name,
-        logo_url=get_provider_logo(provider.name, provider.logo_url),
-        enabled=provider.enabled,
-        config=provider.config,
-        last_sync_at=provider.last_sync_at,
-        last_sync_status=provider.last_sync_status,
-        license_count=0,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-    )
 
 
 @router.put("/{provider_id}", response_model=ProviderResponse)
@@ -264,96 +145,26 @@ async def update_provider(
     provider_id: UUID,
     request: ProviderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderResponse:
     """Update a provider. Requires providers.edit permission."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    result = await provider_service.update_provider(
+        provider_id=provider_id,
+        display_name=request.display_name,
+        logo_url=request.logo_url,
+        enabled=request.enabled,
+        config=request.config,
+        credentials=request.credentials,
+        payment_method_id=request.payment_method_id,
+        user=current_user,
+        request=http_request,
+    )
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-
-    update_data: dict[str, Any] = {}
-    changes: dict[str, Any] = {}
-
-    if request.display_name is not None:
-        update_data["display_name"] = request.display_name
-        changes["display_name"] = {"old": provider.display_name, "new": request.display_name}
-
-    if request.logo_url is not None:
-        update_data["logo_url"] = request.logo_url if request.logo_url else None
-        changes["logo_url"] = {"old": provider.logo_url, "new": request.logo_url}
-
-    if request.enabled is not None:
-        update_data["enabled"] = request.enabled
-        changes["enabled"] = {"old": provider.enabled, "new": request.enabled}
-
-    if request.config is not None:
-        update_data["config"] = request.config
-        changes["config_updated"] = True
-
-    if request.credentials is not None:
-        encryption = get_encryption_service()
-        update_data["credentials_encrypted"] = encryption.encrypt(request.credentials)
-        changes["credentials_updated"] = True
-
-    if request.payment_method_id is not None:
-        update_data["payment_method_id"] = request.payment_method_id
-        changes["payment_method_id"] = {"old": str(provider.payment_method_id) if provider.payment_method_id else None, "new": str(request.payment_method_id)}
-
-    if update_data:
-        provider = await provider_repo.update(provider_id, **update_data)
-
-        # Audit log
-        await audit_service.log(
-            action=AuditAction.PROVIDER_UPDATE,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=http_request,
-            details={"changes": changes},
-        )
-
-        # Invalidate relevant caches
-        cache = await get_cache_service()
-        await cache.invalidate_providers()
-        await cache.invalidate_dashboard()
-
-    from licence_api.repositories.license_repository import LicenseRepository
-    license_repo = LicenseRepository(db)
-    counts = await license_repo.count_by_provider()
-
-    # Refresh to get payment method relationship
-    await db.refresh(provider)
-
-    pm_summary = None
-    if provider.payment_method:
-        is_expiring, _ = calculate_expiry_info(provider.payment_method)
-        pm_summary = PaymentMethodSummary(
-            id=provider.payment_method.id,
-            name=provider.payment_method.name,
-            type=provider.payment_method.type,
-            is_expiring=is_expiring,
-        )
-
-    return ProviderResponse(
-        id=provider.id,
-        name=provider.name,
-        display_name=provider.display_name,
-        logo_url=get_provider_logo(provider.name, provider.logo_url),
-        enabled=provider.enabled,
-        config=provider.config,
-        last_sync_at=provider.last_sync_at,
-        last_sync_status=provider.last_sync_status,
-        license_count=counts.get(provider_id, 0),
-        payment_method_id=provider.payment_method_id,
-        payment_method=pm_summary,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-    )
+    return result
 
 
 # Logo storage directory
@@ -839,13 +650,9 @@ async def get_provider_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> LicenseTypesResponse:
     """Get all license types for a provider with their counts and current pricing. Requires providers.view permission."""
-    from licence_api.repositories.license_repository import LicenseRepository
-
-    license_repo = LicenseRepository(db)
-
     provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
@@ -854,7 +661,7 @@ async def get_provider_license_types(
         )
 
     # Get license type counts
-    type_counts = await license_repo.get_license_type_counts(provider_id)
+    type_counts = await provider_service.get_license_type_counts(provider_id)
 
     # Get current pricing from config
     pricing_config = (provider.config or {}).get("license_pricing", {})
@@ -938,10 +745,8 @@ async def update_provider_pricing(
     provider_id: UUID,
     request: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
     provider = await provider_repo.get_by_id(provider_id)
@@ -965,28 +770,14 @@ async def update_provider_pricing(
             "notes": request.package_pricing.notes,
         }
 
-    # Use pricing service to update
+    # Use pricing service to update (handles audit logging and commit)
     await pricing_service.update_license_pricing(
         provider_id=provider_id,
         pricing_config=pricing_config,
         package_pricing=package_pricing,
-    )
-
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_UPDATE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider_id,
         user=current_user,
         request=http_request,
-        details={
-            "action": "pricing_update",
-            "license_types_count": len(request.pricing),
-            "has_package_pricing": request.package_pricing is not None,
-        },
     )
-
-    await db.commit()
 
     return LicenseTypePricingResponse(
         pricing=request.pricing,
@@ -1021,7 +812,7 @@ async def get_provider_individual_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> IndividualLicenseTypesResponse:
     """Get individual license types extracted from combined strings.
 
@@ -1031,10 +822,6 @@ async def get_provider_individual_license_types(
 
     Requires providers.view permission.
     """
-    from licence_api.repositories.license_repository import LicenseRepository
-
-    license_repo = LicenseRepository(db)
-
     provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
@@ -1043,11 +830,7 @@ async def get_provider_individual_license_types(
         )
 
     # Get individual license type counts (extracted from combined strings)
-    individual_counts = await license_repo.get_individual_license_type_counts(provider_id)
-
-    # Get raw license types to check if any contain commas
-    raw_counts = await license_repo.get_license_type_counts(provider_id)
-    has_combined = any("," in lt for lt in raw_counts.keys())
+    individual_counts, has_combined = await provider_service.get_individual_license_type_counts(provider_id)
 
     # Get current individual pricing from config
     individual_pricing_config = (provider.config or {}).get("individual_license_pricing", {})
@@ -1091,10 +874,9 @@ async def update_provider_individual_pricing(
     provider_id: UUID,
     request: IndividualLicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> IndividualLicenseTypesResponse:
     """Update individual license type pricing.
 
@@ -1127,29 +909,16 @@ async def update_provider_individual_pricing(
             "notes": p.notes,
         }
 
-    # Use pricing service to update
+    # Use pricing service to update (handles audit logging and commit)
     await pricing_service.update_individual_license_pricing(
         provider_id=provider_id,
         individual_pricing_config=individual_pricing_config,
-    )
-
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_UPDATE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider_id,
         user=current_user,
         request=http_request,
-        details={
-            "action": "individual_pricing_update",
-            "license_types_count": len(request.pricing),
-        },
     )
 
-    await db.commit()
-
     # Return updated license types
-    return await get_provider_individual_license_types(provider_id, current_user, provider_repo, db)
+    return await get_provider_individual_license_types(provider_id, current_user, provider_repo, provider_service)
 
 
 @router.post("/sync/avatars", response_model=SyncResponse)

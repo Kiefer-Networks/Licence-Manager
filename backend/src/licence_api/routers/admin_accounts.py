@@ -19,7 +19,6 @@ from licence_api.models.dto.admin_account import (
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.admin_account_service import AdminAccountService
-from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
 
 router = APIRouter()
@@ -34,16 +33,22 @@ class AdminAccountLicenseListResponse(BaseModel):
     page_size: int
 
 
+def get_admin_account_service(
+    db: AsyncSession = Depends(get_db),
+) -> AdminAccountService:
+    """Get AdminAccountService instance."""
+    return AdminAccountService(db)
+
+
 @router.get("/patterns", response_model=AdminAccountPatternListResponse)
 async def list_patterns(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> AdminAccountPatternListResponse:
     """List all admin account patterns.
 
     Requires licenses.view permission.
     """
-    service = AdminAccountService(db)
     return await service.get_all_patterns()
 
 
@@ -51,13 +56,12 @@ async def list_patterns(
 async def get_pattern(
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> AdminAccountPatternResponse:
     """Get a single admin account pattern by ID.
 
     Requires licenses.view permission.
     """
-    service = AdminAccountService(db)
     pattern = await service.get_pattern_by_id(pattern_id)
     if pattern is None:
         raise HTTPException(
@@ -72,15 +76,12 @@ async def create_pattern(
     http_request: Request,
     data: AdminAccountPatternCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> AdminAccountPatternResponse:
     """Create a new admin account pattern.
 
     Requires licenses.edit permission.
     """
-    service = AdminAccountService(db)
-    audit_service = AuditService(db)
-
     # Check if pattern already exists
     existing_patterns = await service.get_all_patterns()
     if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
@@ -89,25 +90,11 @@ async def create_pattern(
             detail=f"Pattern '{data.email_pattern}' already exists",
         )
 
-    pattern = await service.create_pattern(data, created_by=current_user.id)
-
-    # Audit log the creation
-    await audit_service.log(
-        action=AuditAction.ADMIN_ACCOUNT_PATTERN_CREATE,
-        resource_type=ResourceType.ADMIN_ACCOUNT_PATTERN,
-        resource_id=pattern.id,
-        admin_user_id=current_user.id,
-        changes={
-            "email_pattern": data.email_pattern,
-            "name": data.name,
-            "owner_id": str(data.owner_id) if data.owner_id else None,
-        },
+    return await service.create_pattern(
+        data=data,
+        created_by=current_user.id,
         request=http_request,
     )
-
-    await db.commit()
-
-    return pattern
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -115,16 +102,13 @@ async def delete_pattern(
     http_request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> None:
     """Delete an admin account pattern.
 
     Requires licenses.edit permission.
     Note: This does not unmark existing licenses that were marked by this pattern.
     """
-    service = AdminAccountService(db)
-    audit_service = AuditService(db)
-
     # Get pattern before deletion for audit
     pattern = await service.get_pattern_by_id(pattern_id)
     if pattern is None:
@@ -133,29 +117,22 @@ async def delete_pattern(
             detail="Pattern not found",
         )
 
-    await service.delete_pattern(pattern_id)
-
-    # Audit log the deletion
-    await audit_service.log(
-        action=AuditAction.ADMIN_ACCOUNT_PATTERN_DELETE,
-        resource_type=ResourceType.ADMIN_ACCOUNT_PATTERN,
-        resource_id=pattern_id,
+    await service.delete_pattern(
+        pattern_id=pattern_id,
         admin_user_id=current_user.id,
-        changes={
+        request=http_request,
+        pattern_info={
             "email_pattern": pattern.email_pattern,
             "name": pattern.name,
         },
-        request=http_request,
     )
-
-    await db.commit()
 
 
 @router.post("/apply", response_model=ApplyAdminPatternsResponse)
 async def apply_patterns(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> ApplyAdminPatternsResponse:
     """Apply all patterns to all licenses.
 
@@ -164,20 +141,8 @@ async def apply_patterns(
 
     Requires licenses.edit permission.
     """
-    service = AdminAccountService(db)
-    audit_service = AuditService(db)
-
-    result = await service.apply_patterns_to_all_licenses()
-
-    # Audit log the application
-    await audit_service.log(
-        action=AuditAction.ADMIN_ACCOUNT_PATTERNS_APPLY,
-        resource_type=ResourceType.ADMIN_ACCOUNT_PATTERN,
+    result = await service.apply_patterns_to_all_licenses(
         admin_user_id=current_user.id,
-        changes={
-            "updated_count": result.updated_count,
-            "patterns_applied": result.patterns_applied,
-        },
         request=http_request,
     )
 
@@ -185,15 +150,13 @@ async def apply_patterns(
     cache = await get_cache_service()
     await cache.invalidate_dashboard()
 
-    await db.commit()
-
     return result
 
 
 @router.get("/licenses", response_model=AdminAccountLicenseListResponse)
 async def list_admin_account_licenses(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
     search: str | None = Query(default=None, max_length=200),
     provider_id: UUID | None = None,
     sort_by: str = Query(default="external_user_id", max_length=50),
@@ -205,7 +168,6 @@ async def list_admin_account_licenses(
 
     Requires licenses.view permission.
     """
-    service = AdminAccountService(db)
     items, total = await service.get_admin_account_licenses(
         search=search,
         provider_id=provider_id,
@@ -226,7 +188,7 @@ async def list_admin_account_licenses(
 @router.get("/orphaned", response_model=OrphanedAdminAccountsResponse)
 async def get_orphaned_admin_accounts(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> OrphanedAdminAccountsResponse:
     """Get admin accounts where the owner has been offboarded.
 
@@ -235,5 +197,4 @@ async def get_orphaned_admin_accounts(
 
     Requires licenses.view permission.
     """
-    service = AdminAccountService(db)
     return await service.get_orphaned_admin_accounts()

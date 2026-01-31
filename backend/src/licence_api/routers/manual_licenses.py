@@ -1,11 +1,11 @@
 """Manual licenses router for providers without API."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,10 +13,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import require_permission, Permissions
-from licence_api.repositories.license_repository import LicenseRepository
-from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.repositories.employee_repository import EmployeeRepository
-from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
+from licence_api.services.manual_license_service import ManualLicenseService
 
 router = APIRouter()
 
@@ -26,13 +23,13 @@ class ManualLicenseCreate(BaseModel):
 
     provider_id: UUID
     license_type: str | None = None
-    license_key: str | None = None  # Optional license key
-    quantity: int = 1  # Number of licenses to create
+    license_key: str | None = None
+    quantity: int = 1
     monthly_cost: Decimal | None = None
     currency: str = "EUR"
     valid_until: datetime | None = None
     notes: str | None = None
-    employee_id: UUID | None = None  # Optional: directly assign to employee
+    employee_id: UUID | None = None
 
 
 class ManualLicenseUpdate(BaseModel):
@@ -44,7 +41,7 @@ class ManualLicenseUpdate(BaseModel):
     currency: str | None = None
     valid_until: datetime | None = None
     notes: str | None = None
-    employee_id: UUID | None = None  # Assign/unassign
+    employee_id: UUID | None = None
 
 
 class ManualLicenseBulkCreate(BaseModel):
@@ -52,11 +49,16 @@ class ManualLicenseBulkCreate(BaseModel):
 
     provider_id: UUID
     license_type: str | None = None
-    license_keys: list[str]  # List of license keys
+    license_keys: list[str]
     monthly_cost: Decimal | None = None
     currency: str = "EUR"
     valid_until: datetime | None = None
     notes: str | None = None
+
+
+def get_manual_license_service(db: AsyncSession = Depends(get_db)) -> ManualLicenseService:
+    """Get ManualLicenseService instance."""
+    return ManualLicenseService(db)
 
 
 @router.post("", response_model=list[LicenseResponse])
@@ -64,109 +66,28 @@ async def create_manual_licenses(
     http_request: Request,
     request: ManualLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> list[LicenseResponse]:
     """Create one or more manual licenses. Requires licenses.create permission."""
-    provider_repo = ProviderRepository(db)
-    license_repo = LicenseRepository(db)
-
-    # Verify provider exists and is manual type
-    provider = await provider_repo.get_by_id(request.provider_id)
-    if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    # Check if provider is manual type (stored in config)
-    provider_config = provider.config or {}
-    if provider_config.get("provider_type") != "manual":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only add manual licenses to manual providers",
-        )
-
-    created_licenses = []
-    now = datetime.now(timezone.utc)
-
-    for i in range(request.quantity):
-        # Generate external_user_id for manual licenses
-        if request.license_key and request.quantity == 1:
-            external_id = request.license_key
-        else:
-            # Generate unique ID for seat-based or multiple licenses
-            external_id = f"manual-{uuid4().hex[:12]}"
-
-        metadata = {
-            "manual_entry": True,
-            "created_by": str(current_user.id) if current_user.id else "admin",
-        }
-        if request.license_key and request.quantity == 1:
-            metadata["license_key"] = request.license_key
-        if request.valid_until:
-            metadata["valid_until"] = request.valid_until.isoformat()
-        if request.notes:
-            metadata["notes"] = request.notes
-
-        license_orm = await license_repo.create(
+    try:
+        return await service.create_licenses(
             provider_id=request.provider_id,
-            employee_id=request.employee_id,
-            external_user_id=external_id,
+            quantity=request.quantity,
             license_type=request.license_type,
-            status="active" if request.employee_id else "unassigned",
-            assigned_at=now if request.employee_id else None,
-            last_activity_at=None,
+            license_key=request.license_key,
             monthly_cost=request.monthly_cost,
             currency=request.currency,
-            extra_data=metadata,
-            synced_at=now,
-        )
-
-        # Build response
-        employee = None
-        if license_orm.employee_id:
-            employee_repo = EmployeeRepository(db)
-            employee = await employee_repo.get_by_id(license_orm.employee_id)
-
-        created_licenses.append(
-            LicenseResponse(
-                id=license_orm.id,
-                provider_id=license_orm.provider_id,
-                provider_name=provider.display_name,
-                employee_id=license_orm.employee_id,
-                employee_email=employee.email if employee else None,
-                employee_name=employee.full_name if employee else None,
-                external_user_id=license_orm.external_user_id,
-                license_type=license_orm.license_type,
-                status=license_orm.status,
-                assigned_at=license_orm.assigned_at,
-                last_activity_at=license_orm.last_activity_at,
-                monthly_cost=license_orm.monthly_cost,
-                currency=license_orm.currency,
-                metadata=license_orm.extra_data or {},
-                synced_at=license_orm.synced_at,
-            )
-        )
-
-    # Audit log
-    audit = AuditService(db)
-    for lic in created_licenses:
-        await audit.log(
-            action=AuditAction.LICENSE_CREATE,
-            resource_type=ResourceType.LICENSE,
-            resource_id=lic.id,
+            valid_until=request.valid_until,
+            notes=request.notes,
+            employee_id=request.employee_id,
             user=current_user,
             request=http_request,
-            details={
-                "provider_id": str(request.provider_id),
-                "license_type": request.license_type,
-                "employee_id": str(request.employee_id) if request.employee_id else None,
-                "manual_entry": True,
-            },
         )
-
-    await db.commit()
-    return created_licenses
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bulk", response_model=list[LicenseResponse])
@@ -174,99 +95,26 @@ async def create_manual_licenses_bulk(
     http_request: Request,
     request: ManualLicenseBulkCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> list[LicenseResponse]:
     """Create multiple manual licenses with individual keys. Requires licenses.create permission."""
-    provider_repo = ProviderRepository(db)
-    license_repo = LicenseRepository(db)
-
-    # Verify provider exists and is manual type
-    provider = await provider_repo.get_by_id(request.provider_id)
-    if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    provider_config = provider.config or {}
-    if provider_config.get("provider_type") != "manual":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only add manual licenses to manual providers",
-        )
-
-    if len(request.license_keys) > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 licenses per bulk operation",
-        )
-
-    created_licenses = []
-    now = datetime.now(timezone.utc)
-
-    for license_key in request.license_keys:
-        metadata = {
-            "manual_entry": True,
-            "license_key": license_key,
-            "created_by": str(current_user.id) if current_user.id else "admin",
-        }
-        if request.valid_until:
-            metadata["valid_until"] = request.valid_until.isoformat()
-        if request.notes:
-            metadata["notes"] = request.notes
-
-        license_orm = await license_repo.create(
+    try:
+        return await service.create_licenses_bulk(
             provider_id=request.provider_id,
-            employee_id=None,
-            external_user_id=license_key,  # Use key as external ID
+            license_keys=request.license_keys,
             license_type=request.license_type,
-            status="unassigned",
-            assigned_at=None,
-            last_activity_at=None,
             monthly_cost=request.monthly_cost,
             currency=request.currency,
-            extra_data=metadata,
-            synced_at=now,
+            valid_until=request.valid_until,
+            notes=request.notes,
+            user=current_user,
+            request=http_request,
         )
-
-        created_licenses.append(
-            LicenseResponse(
-                id=license_orm.id,
-                provider_id=license_orm.provider_id,
-                provider_name=provider.display_name,
-                employee_id=None,
-                employee_email=None,
-                employee_name=None,
-                external_user_id=license_orm.external_user_id,
-                license_type=license_orm.license_type,
-                status=license_orm.status,
-                assigned_at=None,
-                last_activity_at=None,
-                monthly_cost=license_orm.monthly_cost,
-                currency=license_orm.currency,
-                metadata=license_orm.extra_data or {},
-                synced_at=license_orm.synced_at,
-            )
-        )
-
-    # Audit log - bulk create
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.LICENSE_BULK_CREATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=None,
-        user=current_user,
-        request=http_request,
-        details={
-            "provider_id": str(request.provider_id),
-            "license_type": request.license_type,
-            "count": len(created_licenses),
-            "manual_entry": True,
-        },
-    )
-
-    await db.commit()
-    return created_licenses
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{license_id}", response_model=LicenseResponse)
@@ -275,100 +123,31 @@ async def update_manual_license(
     license_id: UUID,
     request: ManualLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> LicenseResponse:
     """Update a manual license. Requires licenses.edit permission."""
-    license_repo = LicenseRepository(db)
-    provider_repo = ProviderRepository(db)
-    employee_repo = EmployeeRepository(db)
+    try:
+        # Determine if we should unassign
+        unassign = request.employee_id is None and "employee_id" in request.model_fields_set
 
-    # Get license
-    license_orm = await license_repo.get_by_id(license_id)
-    if not license_orm:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
+        return await service.update_license(
+            license_id=license_id,
+            license_type=request.license_type,
+            license_key=request.license_key,
+            monthly_cost=request.monthly_cost,
+            currency=request.currency,
+            valid_until=request.valid_until,
+            notes=request.notes,
+            employee_id=request.employee_id if not unassign else None,
+            unassign=unassign,
+            user=current_user,
+            request=http_request,
         )
-
-    # Verify it's a manual license
-    metadata = license_orm.extra_data or {}
-    if not metadata.get("manual_entry"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only update manual licenses",
-        )
-
-    # Update fields
-    update_data = {}
-
-    if request.license_type is not None:
-        update_data["license_type"] = request.license_type
-
-    if request.monthly_cost is not None:
-        update_data["monthly_cost"] = request.monthly_cost
-
-    if request.currency is not None:
-        update_data["currency"] = request.currency
-
-    if request.employee_id is not None:
-        update_data["employee_id"] = request.employee_id
-        update_data["status"] = "active"
-        update_data["assigned_at"] = datetime.now(timezone.utc)
-    elif request.employee_id is None and "employee_id" in request.model_fields_set:
-        # Explicitly unassign
-        update_data["employee_id"] = None
-        update_data["status"] = "unassigned"
-        update_data["assigned_at"] = None
-
-    # Update metadata
-    if request.license_key is not None:
-        metadata["license_key"] = request.license_key
-    if request.valid_until is not None:
-        metadata["valid_until"] = request.valid_until.isoformat()
-    if request.notes is not None:
-        metadata["notes"] = request.notes
-
-    update_data["extra_data"] = metadata
-
-    # Apply updates
-    license_orm = await license_repo.update(license_id, **update_data)
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.LICENSE_UPDATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        user=current_user,
-        request=http_request,
-        details={"changes": list(update_data.keys()), "manual_entry": True},
-    )
-
-    await db.commit()
-
-    # Get provider and employee for response
-    provider = await provider_repo.get_by_id(license_orm.provider_id)
-    employee = None
-    if license_orm.employee_id:
-        employee = await employee_repo.get_by_id(license_orm.employee_id)
-
-    return LicenseResponse(
-        id=license_orm.id,
-        provider_id=license_orm.provider_id,
-        provider_name=provider.display_name if provider else "Unknown",
-        employee_id=license_orm.employee_id,
-        employee_email=employee.email if employee else None,
-        employee_name=employee.full_name if employee else None,
-        external_user_id=license_orm.external_user_id,
-        license_type=license_orm.license_type,
-        status=license_orm.status,
-        assigned_at=license_orm.assigned_at,
-        last_activity_at=license_orm.last_activity_at,
-        monthly_cost=license_orm.monthly_cost,
-        currency=license_orm.currency,
-        metadata=license_orm.extra_data or {},
-        synced_at=license_orm.synced_at,
-    )
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
@@ -377,11 +156,21 @@ async def assign_manual_license(
     license_id: UUID,
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> LicenseResponse:
     """Assign a manual license to an employee. Requires licenses.assign permission."""
-    request = ManualLicenseUpdate(employee_id=employee_id)
-    return await update_manual_license(http_request, license_id, request, current_user, db)
+    try:
+        return await service.update_license(
+            license_id=license_id,
+            employee_id=employee_id,
+            user=current_user,
+            request=http_request,
+        )
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
@@ -389,62 +178,17 @@ async def unassign_manual_license(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> LicenseResponse:
     """Unassign a manual license from an employee. Requires licenses.assign permission."""
-    license_repo = LicenseRepository(db)
-    provider_repo = ProviderRepository(db)
-
-    # Get license
-    license_orm = await license_repo.get_by_id(license_id)
-    if not license_orm:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
+    try:
+        return await service.unassign_license(
+            license_id=license_id,
+            user=current_user,
+            request=http_request,
         )
-
-    old_employee_id = license_orm.employee_id
-
-    # Update
-    license_orm = await license_repo.update(
-        license_id,
-        employee_id=None,
-        status="unassigned",
-        assigned_at=None,
-    )
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.LICENSE_UNASSIGN,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        user=current_user,
-        request=http_request,
-        details={"previous_employee_id": str(old_employee_id) if old_employee_id else None},
-    )
-
-    await db.commit()
-
-    provider = await provider_repo.get_by_id(license_orm.provider_id)
-
-    return LicenseResponse(
-        id=license_orm.id,
-        provider_id=license_orm.provider_id,
-        provider_name=provider.display_name if provider else "Unknown",
-        employee_id=None,
-        employee_email=None,
-        employee_name=None,
-        external_user_id=license_orm.external_user_id,
-        license_type=license_orm.license_type,
-        status=license_orm.status,
-        assigned_at=None,
-        last_activity_at=license_orm.last_activity_at,
-        monthly_cost=license_orm.monthly_cost,
-        currency=license_orm.currency,
-        metadata=license_orm.extra_data or {},
-        synced_at=license_orm.synced_at,
-    )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.delete("/{license_id}")
@@ -452,42 +196,18 @@ async def delete_manual_license(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> dict:
     """Delete a manual license. Requires licenses.delete permission."""
-    license_repo = LicenseRepository(db)
-
-    # Get license
-    license_orm = await license_repo.get_by_id(license_id)
-    if not license_orm:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
+    try:
+        await service.delete_license(
+            license_id=license_id,
+            user=current_user,
+            request=http_request,
         )
-
-    # Verify it's a manual license
-    metadata = license_orm.extra_data or {}
-    if not metadata.get("manual_entry"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only delete manual licenses",
-        )
-
-    provider_id = license_orm.provider_id
-
-    await license_repo.delete(license_id)
-
-    # Audit log
-    audit = AuditService(db)
-    await audit.log(
-        action=AuditAction.LICENSE_DELETE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        user=current_user,
-        request=http_request,
-        details={"provider_id": str(provider_id), "manual_entry": True},
-    )
-
-    await db.commit()
-
-    return {"success": True, "message": "License deleted"}
+        return {"success": True, "message": "License deleted"}
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

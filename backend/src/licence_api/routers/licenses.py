@@ -20,11 +20,8 @@ from licence_api.models.dto.license import (
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
-from licence_api.services.cache_service import get_cache_service
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
-from licence_api.services.service_account_service import ServiceAccountService
-from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.license_repository import LicenseRepository
@@ -56,16 +53,6 @@ def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
 def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
     """Get MatchingService instance."""
     return MatchingService(db)
-
-
-def get_service_account_service(db: AsyncSession = Depends(get_db)) -> ServiceAccountService:
-    """Get ServiceAccountService instance."""
-    return ServiceAccountService(db)
-
-
-def get_admin_account_service(db: AsyncSession = Depends(get_db)) -> AdminAccountService:
-    """Get AdminAccountService instance."""
-    return AdminAccountService(db)
 
 
 class AssignLicenseRequest(BaseModel):
@@ -234,34 +221,20 @@ async def assign_license(
     license_id: UUID,
     request: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseResponse:
     """Manually assign a license to an employee. Requires licenses.assign permission."""
-    license = await license_service.assign_license_to_employee(license_id, request.employee_id)
+    license = await license_service.assign_license_to_employee(
+        license_id,
+        request.employee_id,
+        user=current_user,
+        request=http_request,
+    )
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
-
-    # Audit log the assignment
-    await audit_service.log(
-        action=AuditAction.LICENSE_ASSIGN,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={"employee_id": str(request.employee_id)},
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache (license stats changed)
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
-
     return license
 
 
@@ -270,39 +243,19 @@ async def unassign_license(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseResponse:
     """Unassign a license from an employee. Requires licenses.assign permission."""
-    # Get current employee before unassigning
-    license_orm = await license_repo.get_by_id(license_id)
-    old_employee_id = str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
-
-    license = await license_service.unassign_license(license_id)
+    license = await license_service.unassign_license(
+        license_id,
+        user=current_user,
+        request=http_request,
+    )
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
-
-    # Audit log the unassignment
-    await audit_service.log(
-        action=AuditAction.LICENSE_UNASSIGN,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={"previous_employee_id": old_employee_id},
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache (license stats changed)
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
-
     return license
 
 
@@ -492,9 +445,7 @@ async def bulk_delete_licenses(
     http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
     """Delete multiple licenses from the database. Requires licenses.bulk_actions permission.
 
@@ -508,23 +459,11 @@ async def bulk_delete_licenses(
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    deleted_count = await license_repo.delete_by_ids(request.license_ids)
-
-    # Audit log the bulk deletion
-    await audit_service.log(
-        action=AuditAction.LICENSE_DELETE,
-        resource_type=ResourceType.LICENSE,
-        admin_user_id=current_user.id,
-        changes={
-            "bulk_operation": True,
-            "requested_count": len(request.license_ids),
-            "deleted_count": deleted_count,
-            "license_ids": [str(lid) for lid in request.license_ids],
-        },
+    deleted_count = await license_service.bulk_delete(
+        license_ids=request.license_ids,
+        user=current_user,
         request=http_request,
     )
-
-    await db.commit()
 
     results = [
         BulkActionResult(
@@ -548,9 +487,7 @@ async def bulk_unassign_licenses(
     http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
     """Unassign multiple licenses from employees. Requires licenses.bulk_actions permission.
 
@@ -564,23 +501,11 @@ async def bulk_unassign_licenses(
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    unassigned_count = await license_repo.unassign_by_ids(request.license_ids)
-
-    # Audit log the bulk unassignment
-    await audit_service.log(
-        action=AuditAction.LICENSE_UNASSIGN,
-        resource_type=ResourceType.LICENSE,
-        admin_user_id=current_user.id,
-        changes={
-            "bulk_operation": True,
-            "requested_count": len(request.license_ids),
-            "unassigned_count": unassigned_count,
-            "license_ids": [str(lid) for lid in request.license_ids],
-        },
+    unassigned_count = await license_service.bulk_unassign(
+        license_ids=request.license_ids,
+        user=current_user,
         request=http_request,
     )
-
-    await db.commit()
 
     results = [
         BulkActionResult(
@@ -605,10 +530,7 @@ async def update_service_account_status(
     license_id: UUID,
     data: ServiceAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    svc_account_service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> LicenseResponse:
     """Mark or unmark a license as a service account. Requires licenses.edit permission.
 
@@ -618,11 +540,14 @@ async def update_service_account_status(
     If apply_globally is True, the email address will be added to the global
     service account patterns list for automatic detection during sync.
     """
-    result = await license_service.update_service_account_status(
+    result = await license_service.update_service_account_with_commit(
         license_id=license_id,
         is_service_account=data.is_service_account,
         service_account_name=data.service_account_name,
         service_account_owner_id=data.service_account_owner_id,
+        apply_globally=data.apply_globally,
+        user=current_user,
+        request=http_request,
     )
 
     if result is None:
@@ -631,52 +556,7 @@ async def update_service_account_status(
             detail="License not found",
         )
 
-    old_values, new_values = result
-
-    # If apply_globally is set, add to global patterns
-    pattern_created = False
-    if data.is_service_account and data.apply_globally:
-        external_user_id = await license_service.get_license_external_user_id(license_id)
-        if external_user_id:
-            pattern = await svc_account_service.create_pattern_from_email(
-                email=external_user_id,
-                name=data.service_account_name,
-                owner_id=data.service_account_owner_id,
-                created_by=current_user.id,
-            )
-            pattern_created = pattern is not None
-
-    # Audit log the change
-    await audit_service.log(
-        action=AuditAction.LICENSE_UPDATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={
-            "old": old_values,
-            "new": {
-                **new_values,
-                "apply_globally": data.apply_globally,
-                "pattern_created": pattern_created,
-            },
-        },
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache (license stats changed)
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
-
-    # Get the full license response
-    license_response = await license_service.get_license(license_id)
-    if license_response is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
-        )
-
+    license_response, _ = result
     return license_response
 
 
@@ -686,10 +566,7 @@ async def update_admin_account_status(
     license_id: UUID,
     data: AdminAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    admin_account_service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> LicenseResponse:
     """Mark or unmark a license as an admin account. Requires licenses.edit permission.
 
@@ -702,11 +579,14 @@ async def update_admin_account_status(
     If apply_globally is True, the email address will be added to the global
     admin account patterns list for automatic detection during sync.
     """
-    result = await license_service.update_admin_account_status(
+    result = await license_service.update_admin_account_with_commit(
         license_id=license_id,
         is_admin_account=data.is_admin_account,
         admin_account_name=data.admin_account_name,
         admin_account_owner_id=data.admin_account_owner_id,
+        apply_globally=data.apply_globally,
+        user=current_user,
+        request=http_request,
     )
 
     if result is None:
@@ -715,52 +595,7 @@ async def update_admin_account_status(
             detail="License not found",
         )
 
-    old_values, new_values = result
-
-    # If apply_globally is set, add to global patterns
-    pattern_created = False
-    if data.is_admin_account and data.apply_globally:
-        external_user_id = await license_service.get_license_external_user_id(license_id)
-        if external_user_id:
-            pattern = await admin_account_service.create_pattern_from_email(
-                email=external_user_id,
-                name=data.admin_account_name,
-                owner_id=data.admin_account_owner_id,
-                created_by=current_user.id,
-            )
-            pattern_created = pattern is not None
-
-    # Audit log the change
-    await audit_service.log(
-        action=AuditAction.LICENSE_UPDATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={
-            "old": old_values,
-            "new": {
-                **new_values,
-                "apply_globally": data.apply_globally,
-                "pattern_created": pattern_created,
-            },
-        },
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache (license stats changed)
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
-
-    # Get the full license response
-    license_response = await license_service.get_license(license_id)
-    if license_response is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
-        )
-
+    license_response, _ = result
     return license_response
 
 
@@ -771,9 +606,7 @@ async def confirm_match(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> MatchActionResponse:
     """Confirm a suggested match for a license. Requires licenses.assign permission.
@@ -781,9 +614,10 @@ async def confirm_match(
     This will move the suggested employee to the confirmed employee assignment.
     GDPR: No private email addresses are stored.
     """
-    license_orm = await matching_service.confirm_match(
+    license_orm = await matching_service.confirm_match_with_commit(
         license_id=license_id,
-        admin_user_id=current_user.id,
+        user=current_user,
+        request=http_request,
     )
 
     if license_orm is None:
@@ -791,25 +625,6 @@ async def confirm_match(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found or no suggested match to confirm",
         )
-
-    # Audit log the confirmation
-    await audit_service.log(
-        action=AuditAction.LICENSE_ASSIGN,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={
-            "match_confirmed": True,
-            "employee_id": str(license_orm.employee_id),
-        },
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
 
     license_response = await license_service.get_license(license_id)
 
@@ -825,18 +640,17 @@ async def reject_match(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> MatchActionResponse:
     """Reject a suggested match for a license. Requires licenses.assign permission.
 
     This will clear the suggested match and mark the license as rejected.
     """
-    license_orm = await matching_service.reject_match(
+    license_orm = await matching_service.reject_match_with_commit(
         license_id=license_id,
-        admin_user_id=current_user.id,
+        user=current_user,
+        request=http_request,
     )
 
     if license_orm is None:
@@ -844,18 +658,6 @@ async def reject_match(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
-
-    # Audit log the rejection
-    await audit_service.log(
-        action=AuditAction.LICENSE_UPDATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={"match_rejected": True},
-        request=http_request,
-    )
-
-    await db.commit()
 
     license_response = await license_service.get_license(license_id)
 
@@ -871,18 +673,17 @@ async def mark_as_external_guest(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> MatchActionResponse:
     """Mark a license as belonging to an external guest. Requires licenses.edit permission.
 
     This confirms that the license is intentionally assigned to someone outside the company.
     """
-    license_orm = await matching_service.mark_as_external_guest(
+    license_orm = await matching_service.mark_as_external_guest_with_commit(
         license_id=license_id,
-        admin_user_id=current_user.id,
+        user=current_user,
+        request=http_request,
     )
 
     if license_orm is None:
@@ -890,22 +691,6 @@ async def mark_as_external_guest(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
-
-    # Audit log the change
-    await audit_service.log(
-        action=AuditAction.LICENSE_UPDATE,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={"marked_as_external_guest": True},
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
 
     license_response = await license_service.get_license(license_id)
 
@@ -922,9 +707,7 @@ async def manual_assign_match(
     license_id: UUID,
     request: ManualAssignRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
-    db: Annotated[AsyncSession, Depends(get_db)],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> MatchActionResponse:
     """Manually assign a license to an employee.
@@ -932,10 +715,11 @@ async def manual_assign_match(
     Requires licenses.assign permission.
     GDPR: No private email addresses are stored.
     """
-    license_orm = await matching_service.assign_to_employee(
+    license_orm = await matching_service.assign_to_employee_with_commit(
         license_id=license_id,
         employee_id=request.employee_id,
-        admin_user_id=current_user.id,
+        user=current_user,
+        request=http_request,
     )
 
     if license_orm is None:
@@ -943,25 +727,6 @@ async def manual_assign_match(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
-
-    # Audit log the assignment
-    await audit_service.log(
-        action=AuditAction.LICENSE_ASSIGN,
-        resource_type=ResourceType.LICENSE,
-        resource_id=license_id,
-        admin_user_id=current_user.id,
-        changes={
-            "employee_id": str(request.employee_id),
-            "manual_assignment": True,
-        },
-        request=http_request,
-    )
-
-    # Invalidate dashboard cache
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    await db.commit()
 
     license_response = await license_service.get_license(license_id)
 

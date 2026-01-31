@@ -16,10 +16,15 @@ from licence_api.services.export_service import ExportService
 router = APIRouter()
 
 
+def get_export_service(db: AsyncSession = Depends(get_db)) -> ExportService:
+    """Get ExportService instance."""
+    return ExportService(db)
+
+
 @router.get("/licenses/csv")
 async def export_licenses_csv(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    export_service: Annotated[ExportService, Depends(get_export_service)],
     provider_id: UUID | None = Query(default=None, description="Filter by provider"),
     department: str | None = Query(default=None, description="Filter by department"),
     status: str | None = Query(default=None, description="Filter by status"),
@@ -28,8 +33,7 @@ async def export_licenses_csv(
 
     Returns a downloadable CSV file with all license data.
     """
-    service = ExportService(db)
-    csv_content = await service.export_licenses_csv(
+    csv_content = await export_service.export_licenses_csv(
         provider_id=provider_id,
         department=department,
         status=status,
@@ -57,7 +61,7 @@ async def export_licenses_csv(
 @router.get("/costs/csv")
 async def export_costs_csv(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    export_service: Annotated[ExportService, Depends(get_export_service)],
     start_date: date | None = Query(default=None, description="Start date"),
     end_date: date | None = Query(default=None, description="End date"),
 ) -> Response:
@@ -65,8 +69,7 @@ async def export_costs_csv(
 
     Returns a downloadable CSV file with cost history.
     """
-    service = ExportService(db)
-    csv_content = await service.export_costs_csv(
+    csv_content = await export_service.export_costs_csv(
         start_date=start_date,
         end_date=end_date,
     )
@@ -86,7 +89,7 @@ async def export_costs_csv(
 @router.get("/full-report/excel")
 async def export_full_report_excel(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    export_service: Annotated[ExportService, Depends(get_export_service)],
 ) -> Response:
     """Export full report to Excel format.
 
@@ -95,8 +98,7 @@ async def export_full_report_excel(
     - Licenses: All license data
     - Costs: Historical cost data
     """
-    service = ExportService(db)
-    excel_content = await service.export_full_report_excel()
+    excel_content = await export_service.export_full_report_excel()
 
     filename = f"license_report_{date.today().isoformat()}.xlsx"
 

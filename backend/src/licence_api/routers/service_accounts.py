@@ -17,7 +17,6 @@ from licence_api.models.dto.service_account import (
     ServiceAccountPatternResponse,
 )
 from licence_api.security.auth import require_permission, Permissions
-from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
 
@@ -33,16 +32,22 @@ class ServiceAccountLicenseListResponse(BaseModel):
     page_size: int
 
 
+def get_service_account_service(
+    db: AsyncSession = Depends(get_db),
+) -> ServiceAccountService:
+    """Get ServiceAccountService instance."""
+    return ServiceAccountService(db)
+
+
 @router.get("/patterns", response_model=ServiceAccountPatternListResponse)
 async def list_patterns(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ServiceAccountPatternListResponse:
     """List all service account patterns.
 
     Requires licenses.view permission.
     """
-    service = ServiceAccountService(db)
     return await service.get_all_patterns()
 
 
@@ -50,13 +55,12 @@ async def list_patterns(
 async def get_pattern(
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ServiceAccountPatternResponse:
     """Get a single service account pattern by ID.
 
     Requires licenses.view permission.
     """
-    service = ServiceAccountService(db)
     pattern = await service.get_pattern_by_id(pattern_id)
     if pattern is None:
         raise HTTPException(
@@ -71,15 +75,12 @@ async def create_pattern(
     http_request: Request,
     data: ServiceAccountPatternCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ServiceAccountPatternResponse:
     """Create a new service account pattern.
 
     Requires licenses.edit permission.
     """
-    service = ServiceAccountService(db)
-    audit_service = AuditService(db)
-
     # Check if pattern already exists
     existing_patterns = await service.get_all_patterns()
     if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
@@ -88,25 +89,11 @@ async def create_pattern(
             detail=f"Pattern '{data.email_pattern}' already exists",
         )
 
-    pattern = await service.create_pattern(data, created_by=current_user.id)
-
-    # Audit log the creation
-    await audit_service.log(
-        action=AuditAction.SERVICE_ACCOUNT_PATTERN_CREATE,
-        resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
-        resource_id=pattern.id,
-        admin_user_id=current_user.id,
-        changes={
-            "email_pattern": data.email_pattern,
-            "name": data.name,
-            "owner_id": str(data.owner_id) if data.owner_id else None,
-        },
+    return await service.create_pattern(
+        data=data,
+        created_by=current_user.id,
         request=http_request,
     )
-
-    await db.commit()
-
-    return pattern
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -114,16 +101,13 @@ async def delete_pattern(
     http_request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> None:
     """Delete a service account pattern.
 
     Requires licenses.edit permission.
     Note: This does not unmark existing licenses that were marked by this pattern.
     """
-    service = ServiceAccountService(db)
-    audit_service = AuditService(db)
-
     # Get pattern before deletion for audit
     pattern = await service.get_pattern_by_id(pattern_id)
     if pattern is None:
@@ -132,29 +116,22 @@ async def delete_pattern(
             detail="Pattern not found",
         )
 
-    await service.delete_pattern(pattern_id)
-
-    # Audit log the deletion
-    await audit_service.log(
-        action=AuditAction.SERVICE_ACCOUNT_PATTERN_DELETE,
-        resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
-        resource_id=pattern_id,
+    await service.delete_pattern(
+        pattern_id=pattern_id,
         admin_user_id=current_user.id,
-        changes={
+        request=http_request,
+        pattern_info={
             "email_pattern": pattern.email_pattern,
             "name": pattern.name,
         },
-        request=http_request,
     )
-
-    await db.commit()
 
 
 @router.post("/apply", response_model=ApplyPatternsResponse)
 async def apply_patterns(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ApplyPatternsResponse:
     """Apply all patterns to all licenses.
 
@@ -163,20 +140,8 @@ async def apply_patterns(
 
     Requires licenses.edit permission.
     """
-    service = ServiceAccountService(db)
-    audit_service = AuditService(db)
-
-    result = await service.apply_patterns_to_all_licenses()
-
-    # Audit log the application
-    await audit_service.log(
-        action=AuditAction.SERVICE_ACCOUNT_PATTERNS_APPLY,
-        resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
+    result = await service.apply_patterns_to_all_licenses(
         admin_user_id=current_user.id,
-        changes={
-            "updated_count": result.updated_count,
-            "patterns_applied": result.patterns_applied,
-        },
         request=http_request,
     )
 
@@ -184,15 +149,13 @@ async def apply_patterns(
     cache = await get_cache_service()
     await cache.invalidate_dashboard()
 
-    await db.commit()
-
     return result
 
 
 @router.get("/licenses", response_model=ServiceAccountLicenseListResponse)
 async def list_service_account_licenses(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
     search: str | None = Query(default=None, max_length=200),
     provider_id: UUID | None = None,
     sort_by: str = Query(default="external_user_id", max_length=50),
@@ -204,7 +167,6 @@ async def list_service_account_licenses(
 
     Requires licenses.view permission.
     """
-    service = ServiceAccountService(db)
     items, total = await service.get_service_account_licenses(
         search=search,
         provider_id=provider_id,

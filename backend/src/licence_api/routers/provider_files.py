@@ -1,12 +1,10 @@
 """Provider files router for document uploads."""
 
-import logging
-import uuid
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,129 +14,12 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_admin
-
-logger = logging.getLogger(__name__)
+from licence_api.services.provider_file_service import (
+    ProviderFileService,
+    VIEWABLE_EXTENSIONS,
+)
 
 router = APIRouter()
-
-# File storage directory
-FILES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "files"
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-
-# Allowed file extensions - only office documents, images, and PDFs
-ALLOWED_EXTENSIONS = {
-    # PDFs
-    ".pdf",
-    # Images
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
-    # Microsoft Office
-    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    # OpenDocument
-    ".odt", ".ods", ".odp",
-}
-
-# File types that can be viewed inline in browser
-VIEWABLE_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
-
-# MIME types for viewable files
-MIME_TYPES = {
-    ".pdf": "application/pdf",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".bmp": "image/bmp",
-    ".doc": "application/msword",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".xls": "application/vnd.ms-excel",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".ppt": "application/vnd.ms-powerpoint",
-    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".odt": "application/vnd.oasis.opendocument.text",
-    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
-    ".odp": "application/vnd.oasis.opendocument.presentation",
-}
-
-# Magic bytes for file type validation - ALL allowed types must have signatures
-FILE_SIGNATURES = {
-    # PDF
-    ".pdf": [b"%PDF"],
-    # Images
-    ".png": [b"\x89PNG\r\n\x1a\n"],
-    ".jpg": [b"\xff\xd8\xff"],
-    ".jpeg": [b"\xff\xd8\xff"],
-    ".gif": [b"GIF87a", b"GIF89a"],
-    ".webp": [b"RIFF"],  # RIFF container, followed by WEBP
-    ".bmp": [b"BM"],
-    # Microsoft Office - OLE compound documents (legacy .doc, .xls, .ppt)
-    ".doc": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
-    ".xls": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
-    ".ppt": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
-    # Office Open XML (ZIP archives) - .docx, .xlsx, .pptx
-    ".docx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-    ".xlsx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-    ".pptx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-    # OpenDocument (also ZIP archives)
-    ".odt": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-    ".ods": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-    ".odp": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
-}
-
-
-def validate_file_signature(content: bytes, extension: str) -> bool:
-    """Validate file content matches expected signature for extension.
-
-    Args:
-        content: File content bytes
-        extension: File extension (e.g., ".pdf")
-
-    Returns:
-        True if file signature matches expected type
-
-    Raises:
-        ValueError if extension has no signature defined (should not happen for allowed types)
-    """
-    ext_lower = extension.lower()
-    signatures = FILE_SIGNATURES.get(ext_lower)
-
-    if not signatures:
-        # All allowed extensions must have signatures defined
-        raise ValueError(f"No signature defined for extension: {ext_lower}")
-
-    # Special handling for WEBP which is RIFF container
-    if ext_lower == ".webp":
-        # Must start with RIFF and contain WEBP
-        if content.startswith(b"RIFF") and len(content) > 12 and content[8:12] == b"WEBP":
-            return True
-        return False
-
-    for sig in signatures:
-        if content.startswith(sig):
-            return True
-    return False
-
-
-def get_safe_mime_type(extension: str, fallback: str = "application/octet-stream") -> str:
-    """Get MIME type for extension, with safe fallback."""
-    return MIME_TYPES.get(extension.lower(), fallback)
-
-
-def validate_file_path(file_path: Path, base_dir: Path) -> bool:
-    """Validate that file path is within base directory (prevents path traversal).
-
-    Args:
-        file_path: Path to validate
-        base_dir: Base directory that path must be within
-
-    Returns:
-        True if path is safe, False otherwise
-    """
-    try:
-        resolved = file_path.resolve()
-        return resolved.is_relative_to(base_dir.resolve())
-    except (ValueError, RuntimeError):
-        return False
 
 
 class ProviderFileResponse(BaseModel):
@@ -152,7 +33,7 @@ class ProviderFileResponse(BaseModel):
     description: str | None
     category: str | None
     created_at: str
-    viewable: bool  # Whether file can be viewed inline in browser
+    viewable: bool
 
     class Config:
         from_attributes = True
@@ -175,6 +56,11 @@ def get_provider_file_repository(db: AsyncSession = Depends(get_db)) -> Provider
     return ProviderFileRepository(db)
 
 
+def get_provider_file_service(db: AsyncSession = Depends(get_db)) -> ProviderFileService:
+    """Get ProviderFileService instance."""
+    return ProviderFileService(db)
+
+
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
 async def list_provider_files(
     provider_id: UUID,
@@ -183,7 +69,6 @@ async def list_provider_files(
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> ProviderFilesListResponse:
     """List all files for a provider."""
-    # Check provider exists
     provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
@@ -214,86 +99,38 @@ async def list_provider_files(
 
 @router.post("/{provider_id}/files", response_model=ProviderFileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_provider_file(
+    http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
+    service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
     category: str | None = Form(default=None),
 ) -> ProviderFileResponse:
     """Upload a file for a provider. Admin only."""
-    # Check provider exists
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    # Validate file
     if file.filename is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No filename provided",
         )
 
-    # Sanitize filename - only keep basename
-    safe_filename = Path(file.filename).name
-    if not safe_filename or "/" in safe_filename or "\\" in safe_filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename",
-        )
-
-    ext = Path(safe_filename).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
-        )
-
-    # Read file content
     content = await file.read()
-    file_size = len(content)
 
-    # Validate file signature (magic bytes)
-    if not validate_file_signature(content, ext):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File content does not match declared file type",
+    try:
+        file_orm = await service.upload_file(
+            provider_id=provider_id,
+            filename=file.filename,
+            content=content,
+            description=description,
+            category=category,
+            user=current_user,
+            request=http_request,
         )
+    except ValueError as e:
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(e))
 
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // 1024 // 1024}MB",
-        )
-
-    # Generate unique filename
-    stored_filename = f"{uuid.uuid4()}{ext}"
-    provider_dir = FILES_DIR / str(provider_id)
-    provider_dir.mkdir(parents=True, exist_ok=True)
-    file_path = provider_dir / stored_filename
-
-    # Save file
-    file_path.write_bytes(content)
-
-    # Create database record via repository
-    file_orm = await file_repo.create_file(
-        provider_id=provider_id,
-        filename=stored_filename,
-        original_name=file.filename,
-        file_type=get_safe_mime_type(ext),
-        file_size=file_size,
-        description=description,
-        category=category,
-    )
-
-    # Commit transaction
-    await db.commit()
-
+    ext = Path(file_orm.filename).suffix.lower()
     return ProviderFileResponse(
         id=file_orm.id,
         provider_id=file_orm.provider_id,
@@ -314,6 +151,7 @@ async def download_provider_file(
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
+    service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
     """Download a provider file."""
     file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
@@ -324,16 +162,8 @@ async def download_provider_file(
             detail="File not found",
         )
 
-    file_path = FILES_DIR / str(provider_id) / file_orm.filename
-
-    # Validate path is within FILES_DIR (prevent path traversal)
-    if not validate_file_path(file_path, FILES_DIR):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
-
-    if not file_path.exists():
+    file_path = service.get_file_path(provider_id, file_orm.filename)
+    if file_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found on disk",
@@ -352,6 +182,7 @@ async def view_provider_file(
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
+    service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
     """View a provider file inline in browser (PDFs and images only)."""
     file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
@@ -362,7 +193,6 @@ async def view_provider_file(
             detail="File not found",
         )
 
-    # Check if file is viewable
     ext = Path(file_orm.filename).suffix.lower()
     if ext not in VIEWABLE_EXTENSIONS:
         raise HTTPException(
@@ -370,54 +200,37 @@ async def view_provider_file(
             detail="This file type cannot be viewed inline. Use download instead.",
         )
 
-    file_path = FILES_DIR / str(provider_id) / file_orm.filename
-
-    # Validate path is within FILES_DIR (prevent path traversal)
-    if not validate_file_path(file_path, FILES_DIR):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
-
-    if not file_path.exists():
+    file_path = service.get_file_path(provider_id, file_orm.filename)
+    if file_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found on disk",
         )
 
-    # Return file for inline viewing (no Content-Disposition: attachment)
     return FileResponse(
         path=file_path,
-        media_type=get_safe_mime_type(ext),
-        # Don't set filename to allow inline viewing
+        media_type=ProviderFileService.get_safe_mime_type(ext),
     )
 
 
 @router.delete("/{provider_id}/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider_file(
+    http_request: Request,
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
+    service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> None:
     """Delete a provider file. Admin only."""
-    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
-
-    if file_orm is None:
+    try:
+        await service.delete_file(
+            provider_id=provider_id,
+            file_id=file_id,
+            user=current_user,
+            request=http_request,
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found",
+            detail=str(e),
         )
-
-    # Delete file from disk
-    file_path = FILES_DIR / str(provider_id) / file_orm.filename
-    if file_path.exists():
-        try:
-            file_path.unlink()
-        except OSError as e:
-            logger.warning(f"Failed to delete file from disk: {e}")
-
-    # Delete from database via repository
-    await file_repo.delete_file(file_orm)
-    await db.commit()
