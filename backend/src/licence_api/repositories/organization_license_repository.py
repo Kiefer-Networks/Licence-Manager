@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 
-from licence_api.models.orm.organization_license import OrganizationLicenseORM
+from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
 from licence_api.repositories.base import BaseRepository
 
 
@@ -154,3 +154,57 @@ class OrganizationLicenseRepository(BaseRepository[OrganizationLicenseORM]):
         """
         await self.session.delete(license_orm)
         await self.session.flush()
+
+    # =========================================================================
+    # Expiration methods (MVC-02 fix)
+    # =========================================================================
+
+    async def get_expired_needing_update(
+        self,
+        today: date,
+        excluded_statuses: list[str],
+    ) -> list[OrganizationLicenseORM]:
+        """Get org licenses that have expired but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_statuses: Statuses to exclude
+
+        Returns:
+            List of org licenses needing status update
+        """
+        result = await self.session.execute(
+            select(OrganizationLicenseORM).where(
+                and_(
+                    OrganizationLicenseORM.expires_at.isnot(None),
+                    OrganizationLicenseORM.expires_at < today,
+                    OrganizationLicenseORM.status.notin_(excluded_statuses),
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_cancelled_needing_update(
+        self,
+        today: date,
+        excluded_status: str,
+    ) -> list[OrganizationLicenseORM]:
+        """Get org licenses with passed cancellation date but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_status: Status to exclude
+
+        Returns:
+            List of org licenses needing status update
+        """
+        result = await self.session.execute(
+            select(OrganizationLicenseORM).where(
+                and_(
+                    OrganizationLicenseORM.cancellation_effective_date.isnot(None),
+                    OrganizationLicenseORM.cancellation_effective_date <= today,
+                    OrganizationLicenseORM.status != excluded_status,
+                )
+            )
+        )
+        return list(result.scalars().all())

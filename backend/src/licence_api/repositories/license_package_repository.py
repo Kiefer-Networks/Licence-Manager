@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 
-from licence_api.models.orm.license_package import LicensePackageORM
+from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
 from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.base import BaseRepository
 
@@ -200,3 +200,58 @@ class LicensePackageRepository(BaseRepository[LicensePackageORM]):
         """
         await self.session.delete(package)
         await self.session.flush()
+
+    # =========================================================================
+    # Expiration methods (MVC-02 fix)
+    # =========================================================================
+
+    async def get_expired_needing_update(
+        self,
+        today: date,
+        excluded_statuses: list[str],
+    ) -> list[LicensePackageORM]:
+        """Get packages that have expired but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_statuses: Statuses to exclude
+
+        Returns:
+            List of packages needing status update
+        """
+        result = await self.session.execute(
+            select(LicensePackageORM).where(
+                and_(
+                    LicensePackageORM.contract_end.isnot(None),
+                    LicensePackageORM.contract_end < today,
+                    LicensePackageORM.status.notin_(excluded_statuses),
+                    LicensePackageORM.auto_renew == False,
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_cancelled_needing_update(
+        self,
+        today: date,
+        excluded_status: str,
+    ) -> list[LicensePackageORM]:
+        """Get packages with passed cancellation date but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_status: Status to exclude
+
+        Returns:
+            List of packages needing status update
+        """
+        result = await self.session.execute(
+            select(LicensePackageORM).where(
+                and_(
+                    LicensePackageORM.cancellation_effective_date.isnot(None),
+                    LicensePackageORM.cancellation_effective_date <= today,
+                    LicensePackageORM.status != excluded_status,
+                )
+            )
+        )
+        return list(result.scalars().all())

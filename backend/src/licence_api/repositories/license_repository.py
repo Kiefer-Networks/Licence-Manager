@@ -878,3 +878,79 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         result = await self.session.execute(query)
         return result.scalar_one()
+
+    # =========================================================================
+    # Expiration and lifecycle methods (MVC-02 fix)
+    # =========================================================================
+
+    async def get_expired_needing_update(
+        self,
+        today: "date",
+        excluded_statuses: list[str],
+    ) -> list[LicenseORM]:
+        """Get licenses that have expired but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_statuses: Statuses to exclude (already expired/cancelled)
+
+        Returns:
+            List of licenses needing status update
+        """
+        from datetime import date
+        result = await self.session.execute(
+            select(LicenseORM).where(
+                and_(
+                    LicenseORM.expires_at.isnot(None),
+                    LicenseORM.expires_at < today,
+                    LicenseORM.status.notin_(excluded_statuses),
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_cancelled_needing_update(
+        self,
+        today: "date",
+        excluded_status: str,
+    ) -> list[LicenseORM]:
+        """Get licenses with passed cancellation date but status not yet updated.
+
+        Args:
+            today: Current date
+            excluded_status: Status to exclude (already cancelled)
+
+        Returns:
+            List of licenses needing status update
+        """
+        from datetime import date
+        result = await self.session.execute(
+            select(LicenseORM).where(
+                and_(
+                    LicenseORM.cancellation_effective_date.isnot(None),
+                    LicenseORM.cancellation_effective_date <= today,
+                    LicenseORM.status != excluded_status,
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_orphaned_admin_accounts(
+        self,
+    ) -> list[tuple[LicenseORM, EmployeeORM, ProviderORM]]:
+        """Get admin account licenses where owner is offboarded.
+
+        Returns:
+            List of tuples (license, employee, provider)
+        """
+        result = await self.session.execute(
+            select(LicenseORM, EmployeeORM, ProviderORM)
+            .join(EmployeeORM, LicenseORM.admin_account_owner_id == EmployeeORM.id)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .where(
+                LicenseORM.is_admin_account == True,
+                LicenseORM.admin_account_owner_id.isnot(None),
+                EmployeeORM.status == "offboarded",
+            )
+        )
+        return list(result.all())
