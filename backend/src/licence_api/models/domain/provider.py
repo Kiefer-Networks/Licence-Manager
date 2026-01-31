@@ -12,7 +12,9 @@ class ProviderName(StrEnum):
     """Provider name enum."""
 
     ADOBE = "adobe"
+    ANTHROPIC = "anthropic"
     ATLASSIAN = "atlassian"
+    AUTH0 = "auth0"
     HIBOB = "hibob"
     CURSOR = "cursor"
     FIGMA = "figma"
@@ -20,6 +22,7 @@ class ProviderName(StrEnum):
     GITLAB = "gitlab"
     GOOGLE_WORKSPACE = "google_workspace"
     JETBRAINS = "jetbrains"
+    MAILJET = "mailjet"
     MANUAL = "manual"
     MATTERMOST = "mattermost"
     MICROSOFT = "microsoft"

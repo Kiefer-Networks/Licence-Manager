@@ -61,6 +61,13 @@ BUILT_IN_LOGOS: dict[str, str] = {
 
     # AI
     "openai": "https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg",
+    "anthropic": "https://upload.wikimedia.org/wikipedia/commons/7/78/Anthropic_logo.svg",
+
+    # Identity / Auth
+    "auth0": "https://cdn.auth0.com/styleguide/latest/lib/logos/img/logo-blue.svg",
+
+    # Email
+    "mailjet": "https://www.mailjet.com/images/logo/mailjet-logo.svg",
 
     # Other
     "dropbox": "https://upload.wikimedia.org/wikipedia/commons/7/78/Dropbox_Icon.svg",

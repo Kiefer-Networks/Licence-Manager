@@ -201,6 +201,7 @@ class JetBrainsProvider(BaseProvider):
                             "metadata": {
                                 "license_id": license_id,
                                 "product_code": product_code,
+                                "email": email,  # Store email for display
                                 "assignee_name": assignee_name,
                                 "assignee_type": assignee_type,
                                 "team_id": team.get("id"),
