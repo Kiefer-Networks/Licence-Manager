@@ -107,7 +107,7 @@ class CacheService:
             await self._client.ping()
             self._connected = True
             logger.info("Redis cache connected successfully")
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning("Failed to connect to Redis for caching: %s", e)
             self._client = None
             self._connected = False
@@ -144,7 +144,7 @@ class CacheService:
 
         try:
             return await self._client.get(key)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error("Cache get error: %s", e)
             return None
 
@@ -173,7 +173,7 @@ class CacheService:
             else:
                 await self._client.set(key, value)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error("Cache set error: %s", e)
             return False
 
@@ -191,7 +191,7 @@ class CacheService:
 
         try:
             return await self._client.delete(*keys)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error("Cache delete error: %s", e)
             return 0
 
@@ -215,7 +215,7 @@ class CacheService:
             if keys:
                 return await self._client.delete(*keys)
             return 0
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error("Cache delete pattern error: %s", e)
             return 0
 
@@ -258,7 +258,7 @@ class CacheService:
             else:
                 json_str = json.dumps(value)
             return await self.set(key, json_str, ttl)
-        except Exception as e:
+        except (redis.RedisError, TypeError, ValueError) as e:
             logger.error("Cache set_json error: %s", e)
             return False
 

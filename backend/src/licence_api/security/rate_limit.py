@@ -3,6 +3,7 @@
 from ipaddress import ip_address, ip_network
 from typing import Sequence
 
+from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -59,7 +60,7 @@ def _is_trusted_proxy(client_ip: str, trusted_proxies: Sequence[str]) -> bool:
     return False
 
 
-def get_real_client_ip(request) -> str:
+def get_real_client_ip(request: Request) -> str:
     """Extract real client IP, handling reverse proxy headers securely.
 
     Only trusts X-Forwarded-For from configured trusted proxies.
