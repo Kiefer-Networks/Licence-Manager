@@ -24,6 +24,7 @@ import {
   Shield,
   UserCog,
   ScrollText,
+  Clock,
 } from 'lucide-react';
 import { useAuth, Permissions } from '@/components/auth-provider';
 
@@ -41,6 +42,7 @@ interface NavItem {
 const mainNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: Permissions.DASHBOARD_VIEW },
   { name: 'Licenses', href: '/licenses', icon: Key, permission: Permissions.LICENSES_VIEW },
+  { name: 'Lifecycle', href: '/lifecycle', icon: Clock, permission: Permissions.LICENSES_VIEW },
   { name: 'Employees', href: '/users', icon: Users, permission: Permissions.USERS_VIEW },
   { name: 'Providers', href: '/providers', icon: Package, permission: Permissions.PROVIDERS_VIEW },
   { name: 'Reports', href: '/reports', icon: FileText, permission: Permissions.REPORTS_VIEW },

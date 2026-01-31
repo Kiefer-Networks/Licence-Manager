@@ -21,9 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, PaymentMethod, PaymentMethodCreate, NotificationRule, NOTIFICATION_EVENT_TYPES } from '@/lib/api';
+import { api, PaymentMethod, PaymentMethodCreate, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, Upload, HardDrive, Info } from 'lucide-react';
+import { BackupExportDialog, BackupRestoreDialog } from '@/components/backup';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function SettingsPage() {
@@ -70,12 +71,27 @@ export default function SettingsPage() {
     is_default: false,
   });
 
+  // Threshold Settings state
+  const [thresholds, setThresholds] = useState<ThresholdSettings>({
+    inactive_days: 30,
+    expiring_days: 90,
+    low_utilization_percent: 70,
+    cost_increase_percent: 20,
+    max_unassigned_licenses: 10,
+  });
+  const [savingThresholds, setSavingThresholds] = useState(false);
+
+  // Backup state
+  const [backupExportDialogOpen, setBackupExportDialogOpen] = useState(false);
+  const [backupRestoreDialogOpen, setBackupRestoreDialogOpen] = useState(false);
+
   useEffect(() => {
     Promise.all([
       fetchCompanyDomains(),
       fetchPaymentMethods(),
       fetchSlackConfig(),
       fetchNotificationRules(),
+      fetchThresholdSettings(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -114,6 +130,35 @@ export default function SettingsPage() {
       handleSilentError('fetchNotificationRules', error);
     }
   }
+
+  async function fetchThresholdSettings() {
+    try {
+      const settings = await api.getThresholdSettings();
+      if (settings) {
+        setThresholds({
+          inactive_days: settings.inactive_days ?? 30,
+          expiring_days: settings.expiring_days ?? 90,
+          low_utilization_percent: settings.low_utilization_percent ?? 70,
+          cost_increase_percent: settings.cost_increase_percent ?? 20,
+          max_unassigned_licenses: settings.max_unassigned_licenses ?? 10,
+        });
+      }
+    } catch (error) {
+      handleSilentError('fetchThresholdSettings', error);
+    }
+  }
+
+  const handleSaveThresholds = async () => {
+    setSavingThresholds(true);
+    try {
+      await api.updateThresholdSettings(thresholds);
+      showToast('success', 'Threshold settings saved');
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to save threshold settings');
+    } finally {
+      setSavingThresholds(false);
+    }
+  };
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -649,7 +694,176 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
+
+        {/* Threshold Settings Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Warning Thresholds</h2>
+            </div>
+          </div>
+
+          <div className="border rounded-lg bg-white p-4 space-y-6">
+            <p className="text-xs text-muted-foreground">
+              Configure thresholds for warnings and notifications. These values determine when alerts are triggered.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Inactive License Threshold (days)</Label>
+                <Input
+                  type="number"
+                  value={thresholds.inactive_days}
+                  onChange={(e) => setThresholds({ ...thresholds, inactive_days: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  max={365}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Licenses inactive for more than this many days will be flagged
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Contract Expiring Soon (days)</Label>
+                <Input
+                  type="number"
+                  value={thresholds.expiring_days}
+                  onChange={(e) => setThresholds({ ...thresholds, expiring_days: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  max={365}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contracts expiring within this many days will trigger alerts
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Low Utilization Threshold (%)</Label>
+                <Input
+                  type="number"
+                  value={thresholds.low_utilization_percent}
+                  onChange={(e) => setThresholds({ ...thresholds, low_utilization_percent: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  max={100}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Providers with utilization below this percentage will be flagged
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Cost Increase Alert (%)</Label>
+                <Input
+                  type="number"
+                  value={thresholds.cost_increase_percent}
+                  onChange={(e) => setThresholds({ ...thresholds, cost_increase_percent: parseInt(e.target.value) || 0 })}
+                  min={1}
+                  max={100}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Alert when monthly costs increase by this percentage
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Max Unassigned Licenses</Label>
+                <Input
+                  type="number"
+                  value={thresholds.max_unassigned_licenses}
+                  onChange={(e) => setThresholds({ ...thresholds, max_unassigned_licenses: parseInt(e.target.value) || 0 })}
+                  min={0}
+                  max={1000}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Alert when unassigned licenses exceed this count per provider
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <Button size="sm" onClick={handleSaveThresholds} disabled={savingThresholds}>
+                {savingThresholds ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Save Thresholds
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* System Backup Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">System Backup</h2>
+            </div>
+          </div>
+
+          <div className="border rounded-lg bg-white p-4 space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 text-blue-700">
+              <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p>
+                  Exportiert alle Provider, Lizenzen, Mitarbeiter und Einstellungen als verschlüsselte Datei.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 text-amber-700">
+              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">Achtung beim Import</p>
+                <p className="text-xs mt-1">
+                  Der Import löscht ALLE bestehenden Daten und ersetzt sie mit dem Backup!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setBackupExportDialogOpen(true)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Backup erstellen
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setBackupRestoreDialogOpen(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Backup importieren
+              </Button>
+            </div>
+          </div>
+        </section>
       </div>
+
+      {/* Backup Dialogs */}
+      <BackupExportDialog
+        open={backupExportDialogOpen}
+        onOpenChange={setBackupExportDialogOpen}
+        onSuccess={() => showToast('success', 'Backup erfolgreich erstellt')}
+        onError={(error) => showToast('error', error)}
+      />
+      <BackupRestoreDialog
+        open={backupRestoreDialogOpen}
+        onOpenChange={setBackupRestoreDialogOpen}
+        onSuccess={() => {
+          showToast('success', 'Backup erfolgreich importiert');
+          // Refresh data after restore
+          Promise.all([
+            fetchCompanyDomains(),
+            fetchPaymentMethods(),
+            fetchSlackConfig(),
+            fetchNotificationRules(),
+            fetchThresholdSettings(),
+          ]);
+        }}
+        onError={(error) => showToast('error', error)}
+      />
 
       {/* Notification Rule Dialog */}
       <Dialog open={ruleDialogOpen} onOpenChange={setRuleDialogOpen}>

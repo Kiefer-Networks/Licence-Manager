@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, DashboardData, PaymentMethod } from '@/lib/api';
+import { api, DashboardData, PaymentMethod, LicenseLifecycleOverview } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { SkeletonDashboard } from '@/components/ui/skeleton';
 import {
@@ -41,12 +41,14 @@ export default function DashboardPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [expiringPaymentMethods, setExpiringPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [lifecycleOverview, setLifecycleOverview] = useState<LicenseLifecycleOverview | null>(null);
 
   useEffect(() => {
     api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
     api.getPaymentMethods().then((data) => {
       setExpiringPaymentMethods(data.items.filter((m) => m.is_expiring));
     }).catch((e) => handleSilentError('getPaymentMethods', e));
+    api.getLicenseLifecycleOverview().then(setLifecycleOverview).catch((e) => handleSilentError('getLifecycleOverview', e));
   }, []);
 
   useEffect(() => {
@@ -115,6 +117,27 @@ export default function DashboardPage() {
             {toast.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
             {toast.text}
           </div>
+        )}
+
+        {/* Expiring Licenses Warning */}
+        {lifecycleOverview && lifecycleOverview.total_expiring_soon > 0 && (
+          <Link href="/lifecycle">
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 flex items-center gap-3 hover:bg-amber-100 transition-colors">
+              <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <p className="font-medium text-amber-800">Licenses Expiring Soon</p>
+                </div>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  {lifecycleOverview.total_expiring_soon} license{lifecycleOverview.total_expiring_soon !== 1 ? 's' : ''} will expire within 90 days
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-amber-400 flex-shrink-0" />
+            </div>
+          </Link>
         )}
 
         {/* Expiring Payment Methods Warning */}
@@ -230,31 +253,36 @@ export default function DashboardPage() {
             </Card>
           </Link>
 
-          <Link href="/settings">
+          <Link href={hrisProviders.length > 0 ? "/providers" : "/settings"}>
             <Card className="hover:border-zinc-300 transition-colors cursor-pointer h-full">
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HRIS Status</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {hrisProviders.length > 0 ? (
-                        <>
-                          <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                          <span className="text-lg font-semibold text-emerald-600">Connected</span>
-                        </>
-                      ) : (
-                        <>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {hrisProviders.length > 0 ? 'HiBob Seats' : 'HRIS Status'}
+                    </p>
+                    {hrisProviders.length > 0 ? (
+                      <>
+                        <p className="text-3xl font-semibold mt-1 tabular-nums">{dashboard?.active_employees || 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          <span className="text-emerald-600">Active seats</span>
+                          {(dashboard?.offboarded_employees || 0) > 0 && (
+                            <span className="text-zinc-400"> · {dashboard?.offboarded_employees} offboarded</span>
+                          )}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 mt-1">
                           <span className="h-3 w-3 rounded-full bg-zinc-300" />
                           <span className="text-lg font-semibold text-zinc-400">Not connected</span>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {hrisProviders.length > 0 ? hrisProviders[0].display_name : 'Setup required'}
-                    </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Setup required</p>
+                      </>
+                    )}
                   </div>
-                  <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-purple-600" />
+                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${hrisProviders.length > 0 ? 'bg-purple-50' : 'bg-zinc-100'}`}>
+                    <Building2 className={`h-5 w-5 ${hrisProviders.length > 0 ? 'text-purple-600' : 'text-zinc-400'}`} />
                   </div>
                 </div>
               </CardContent>
