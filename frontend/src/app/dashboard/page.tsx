@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,12 @@ import Link from 'next/link';
 import { getLocale } from '@/lib/locale';
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard');
+  const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
+  const tProviders = useTranslations('providers');
+  const tEmployees = useTranslations('employees');
+
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -78,9 +85,9 @@ export default function DashboardPage() {
     try {
       const result = await api.triggerSync();
       await fetchDashboard();
-      showToast(result.success ? 'success' : 'error', result.success ? 'Sync completed' : 'Sync failed');
-    } catch (error) {
-      showToast('error', 'Sync failed');
+      showToast(result.success ? 'success' : 'error', result.success ? tProviders('syncSuccess') : tProviders('syncFailed'));
+    } catch {
+      showToast('error', tProviders('syncFailed'));
     } finally {
       setSyncing(false);
     }
@@ -130,10 +137,10 @@ export default function DashboardPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <p className="font-medium text-amber-800">Licenses Expiring Soon</p>
+                  <p className="font-medium text-amber-800">{t('expiringLicenses')}</p>
                 </div>
                 <p className="text-sm text-amber-700 mt-0.5">
-                  {lifecycleOverview.total_expiring_soon} license{lifecycleOverview.total_expiring_soon !== 1 ? 's' : ''} will expire within 90 days
+                  {lifecycleOverview.total_expiring_soon} {tLicenses('license')}{lifecycleOverview.total_expiring_soon !== 1 ? 's' : ''}
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 text-amber-400 flex-shrink-0" />
@@ -151,12 +158,12 @@ export default function DashboardPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <p className="font-medium text-amber-800">Payment Method Expiring Soon</p>
+                  <p className="font-medium text-amber-800">{tCommon('warning')}</p>
                 </div>
                 <p className="text-sm text-amber-700 mt-0.5">
                   {expiringPaymentMethods.length === 1
-                    ? `${expiringPaymentMethods[0].name} expires ${expiringPaymentMethods[0].days_until_expiry !== null && expiringPaymentMethods[0].days_until_expiry !== undefined && expiringPaymentMethods[0].days_until_expiry > 0 ? `in ${expiringPaymentMethods[0].days_until_expiry} days` : 'soon'}`
-                    : `${expiringPaymentMethods.length} payment methods are expiring soon`}
+                    ? `${expiringPaymentMethods[0].name}`
+                    : `${expiringPaymentMethods.length} payment methods`}
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 text-amber-400 flex-shrink-0" />
@@ -167,17 +174,17 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between pt-2">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">License management overview</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{t('overview')}</p>
           </div>
           <div className="flex items-center gap-3">
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
               <SelectTrigger className="w-48 h-8 bg-zinc-50 border-zinc-200 text-xs">
                 <Building2 className="h-3.5 w-3.5 mr-2 text-zinc-400" />
-                <SelectValue placeholder="Department" />
+                <SelectValue placeholder={tEmployees('department')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
+                <SelectItem value="all">{tCommon('all')} {tEmployees('department')}</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                 ))}
@@ -185,7 +192,7 @@ export default function DashboardPage() {
             </Select>
             <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              Sync All
+              {t('syncAll')}
             </Button>
           </div>
         </div>
@@ -197,12 +204,12 @@ export default function DashboardPage() {
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Employees</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tEmployees('title')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">{dashboard?.total_employees || 0}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      <span className="text-emerald-600">{dashboard?.active_employees || 0} active</span>
+                      <span className="text-emerald-600">{dashboard?.active_employees || 0} {tEmployees('active').toLowerCase()}</span>
                       {(dashboard?.offboarded_employees || 0) > 0 && (
-                        <span className="text-zinc-400"> · {dashboard?.offboarded_employees} offboarded</span>
+                        <span className="text-zinc-400"> · {dashboard?.offboarded_employees} {tEmployees('offboarded').toLowerCase()}</span>
                       )}
                     </p>
                   </div>
@@ -219,10 +226,10 @@ export default function DashboardPage() {
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Licenses</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('totalLicenses')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">{totalLicenses}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Across {licenseProviders.length} provider{licenseProviders.length !== 1 ? 's' : ''}
+                      {licenseProviders.length} {tProviders('provider')}{licenseProviders.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <div className="h-10 w-10 rounded-lg bg-zinc-100 flex items-center justify-center">
@@ -238,12 +245,12 @@ export default function DashboardPage() {
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monthly Cost</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('monthlyCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
                       EUR {totalCost.toLocaleString(getLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      All active licenses
+                      {tLicenses('allLicenses')}
                     </p>
                   </div>
                   <div className="h-10 w-10 rounded-lg bg-emerald-50 flex items-center justify-center">
@@ -260,25 +267,22 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {hrisProviders.length > 0 ? 'HiBob Seats' : 'HRIS Status'}
+                      {hrisProviders.length > 0 ? 'HiBob' : 'HRIS'}
                     </p>
                     {hrisProviders.length > 0 ? (
                       <>
                         <p className="text-3xl font-semibold mt-1 tabular-nums">{dashboard?.active_employees || 0}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          <span className="text-emerald-600">Active seats</span>
-                          {(dashboard?.offboarded_employees || 0) > 0 && (
-                            <span className="text-zinc-400"> · {dashboard?.offboarded_employees} offboarded</span>
-                          )}
+                          <span className="text-emerald-600">{tEmployees('active')}</span>
                         </p>
                       </>
                     ) : (
                       <>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="h-3 w-3 rounded-full bg-zinc-300" />
-                          <span className="text-lg font-semibold text-zinc-400">Not connected</span>
+                          <span className="text-lg font-semibold text-zinc-400">{tCommon('disabled')}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Setup required</p>
+                        <p className="text-xs text-muted-foreground mt-1">{tCommon('required')}</p>
                       </>
                     )}
                   </div>
@@ -303,22 +307,22 @@ export default function DashboardPage() {
                       <Package className={`h-5 w-5 ${unassignedCount > 0 ? 'text-amber-600' : 'text-zinc-400'}`} />
                     </div>
                     <div>
-                      <p className="font-medium">Unassigned Licenses</p>
+                      <p className="font-medium">{t('unassignedLicenses')}</p>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Licenses not linked to any employee
+                        {tLicenses('unassigned')}
                       </p>
                       {unassignedCount > 0 && (
                         <div className="flex items-center gap-4 mt-3">
                           <div>
                             <p className="text-2xl font-semibold text-amber-600">{unassignedCount}</p>
-                            <p className="text-xs text-muted-foreground">licenses</p>
+                            <p className="text-xs text-muted-foreground">{tLicenses('license')}s</p>
                           </div>
                           <div className="h-8 w-px bg-zinc-200" />
                           <div>
                             <p className="text-2xl font-semibold text-emerald-600">
                               EUR {potentialSavings.toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                             </p>
-                            <p className="text-xs text-muted-foreground">potential savings/mo</p>
+                            <p className="text-xs text-muted-foreground">{t('perMonth')}</p>
                           </div>
                         </div>
                       )}
@@ -329,7 +333,7 @@ export default function DashboardPage() {
                 {unassignedCount === 0 && (
                   <div className="flex items-center gap-2 mt-3 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-sm font-medium">All licenses assigned</span>
+                    <span className="text-sm font-medium">{tLicenses('assigned')}</span>
                   </div>
                 )}
               </CardContent>
@@ -346,14 +350,14 @@ export default function DashboardPage() {
                       <UserMinus className={`h-5 w-5 ${(dashboard?.recent_offboardings?.length || 0) > 0 ? 'text-red-600' : 'text-zinc-400'}`} />
                     </div>
                     <div>
-                      <p className="font-medium">Offboarded with Licenses</p>
+                      <p className="font-medium">{t('offboardedEmployees')}</p>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Former employees still consuming licenses
+                        {tLicenses('license')}s
                       </p>
                       {(dashboard?.recent_offboardings?.length || 0) > 0 && (
                         <div className="mt-3">
                           <p className="text-2xl font-semibold text-red-600">{dashboard?.recent_offboardings?.length || 0}</p>
-                          <p className="text-xs text-muted-foreground">employees need attention</p>
+                          <p className="text-xs text-muted-foreground">{tEmployees('employee')}s</p>
                         </div>
                       )}
                     </div>
@@ -363,7 +367,7 @@ export default function DashboardPage() {
                 {(dashboard?.recent_offboardings?.length || 0) === 0 && (
                   <div className="flex items-center gap-2 mt-3 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-sm font-medium">No pending offboardings</span>
+                    <span className="text-sm font-medium">{tCommon('noResults')}</span>
                   </div>
                 )}
               </CardContent>
@@ -380,14 +384,14 @@ export default function DashboardPage() {
                       <Globe className={`h-5 w-5 ${externalCount > 0 ? 'text-orange-600' : 'text-zinc-400'}`} />
                     </div>
                     <div>
-                      <p className="font-medium">External Licenses</p>
+                      <p className="font-medium">{tLicenses('external')}</p>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Non-company email addresses
+                        {tLicenses('license')}s
                       </p>
                       {externalCount > 0 && (
                         <div className="mt-3">
                           <p className="text-2xl font-semibold text-orange-600">{externalCount}</p>
-                          <p className="text-xs text-muted-foreground">external licenses</p>
+                          <p className="text-xs text-muted-foreground">{tLicenses('external').toLowerCase()}</p>
                         </div>
                       )}
                     </div>
@@ -397,7 +401,7 @@ export default function DashboardPage() {
                 {externalCount === 0 && (
                   <div className="flex items-center gap-2 mt-3 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-sm font-medium">No external licenses</span>
+                    <span className="text-sm font-medium">{tCommon('noResults')}</span>
                   </div>
                 )}
               </CardContent>
@@ -412,10 +416,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium flex items-center gap-2">
                 <Key className="h-4 w-4 text-muted-foreground" />
-                License Providers
+                {tProviders('title')}
               </h2>
               <Link href="/settings" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                Manage
+                {tCommon('edit')}
               </Link>
             </div>
             <div className="space-y-2">
@@ -430,7 +434,7 @@ export default function DashboardPage() {
                         <div>
                           <p className="font-medium text-sm">{provider.display_name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {provider.total_licenses} license{provider.total_licenses !== 1 ? 's' : ''}
+                            {provider.total_licenses} {tLicenses('license')}{provider.total_licenses !== 1 ? 's' : ''}
                           </p>
                         </div>
                       </div>
@@ -442,7 +446,7 @@ export default function DashboardPage() {
                           <Clock className="h-3 w-3" />
                           {provider.last_sync_at
                             ? new Date(provider.last_sync_at).toLocaleDateString(getLocale())
-                            : 'Never'}
+                            : tCommon('none')}
                         </p>
                       </div>
                     </div>
@@ -451,9 +455,9 @@ export default function DashboardPage() {
               ) : (
                 <div className="text-center py-12 text-muted-foreground border rounded-lg">
                   <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No providers configured</p>
+                  <p className="text-sm">{tCommon('noData')}</p>
                   <Link href="/settings" className="text-xs text-primary hover:underline">
-                    Add provider
+                    {tProviders('addProvider')}
                   </Link>
                 </div>
               )}
@@ -465,7 +469,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium flex items-center gap-2">
                 <UserMinus className="h-4 w-4 text-muted-foreground" />
-                Recent Offboardings
+                {t('offboardedEmployees')}
                 {(dashboard?.recent_offboardings?.length || 0) > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs bg-red-50 text-red-700 border-0">
                     {dashboard?.recent_offboardings?.length}
@@ -473,7 +477,7 @@ export default function DashboardPage() {
                 )}
               </h2>
               <Link href="/reports" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                View all
+                {tCommon('view')}
               </Link>
             </div>
             {dashboard?.recent_offboardings && dashboard.recent_offboardings.length > 0 ? (
@@ -493,7 +497,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {employee.pending_licenses} license{employee.pending_licenses !== 1 ? 's' : ''}
+                        {employee.pending_licenses} {tLicenses('license')}{employee.pending_licenses !== 1 ? 's' : ''}
                       </Badge>
                     </div>
                   </Link>
@@ -502,7 +506,7 @@ export default function DashboardPage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground border rounded-lg">
                 <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
-                <p className="text-sm">No offboarded employees with licenses</p>
+                <p className="text-sm">{tCommon('noResults')}</p>
               </div>
             )}
           </div>
@@ -514,10 +518,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Unassigned License Samples
+                {t('unassignedLicenses')}
               </h2>
               <Link href="/licenses?unassigned=true" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-                View all {unassignedCount}
+                {tCommon('view')} {unassignedCount}
                 <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
@@ -525,10 +529,10 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-zinc-50/50">
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">User</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Provider</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Cost</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{tCommon('user')}</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{tProviders('provider')}</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{tCommon('type')}</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">{tLicenses('cost')}</th>
                   </tr>
                 </thead>
                 <tbody>
