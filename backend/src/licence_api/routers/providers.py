@@ -131,10 +131,10 @@ async def create_provider(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Provider with this name already exists or configuration is invalid",
         )
 
 
