@@ -122,12 +122,20 @@ class LicenseService:
             company_domains=company_domains,
         )
 
+        # Batch load all service account owners to avoid N+1 queries
+        service_account_owner_ids = [
+            license_orm.service_account_owner_id
+            for license_orm, _, _ in results
+            if license_orm.is_service_account and license_orm.service_account_owner_id
+        ]
+        service_account_owners = await self.employee_repo.get_by_ids(service_account_owner_ids)
+
         items = []
         for license_orm, provider_orm, employee_orm in results:
-            # Get service account owner name if set
+            # Get service account owner name from batch-loaded cache
             service_account_owner_name = None
             if license_orm.is_service_account and license_orm.service_account_owner_id:
-                owner = await self.employee_repo.get_by_id(license_orm.service_account_owner_id)
+                owner = service_account_owners.get(license_orm.service_account_owner_id)
                 service_account_owner_name = owner.full_name if owner else None
 
             items.append(
@@ -410,17 +418,26 @@ class LicenseService:
         potential_savings = Decimal("0")
         currencies_found: set[str] = set()
 
-        # Cache for employee names
-        employee_cache: dict[UUID, tuple[str | None, str | None]] = {}
+        # Batch load all employee IDs to avoid N+1 queries
+        employee_ids_to_load: set[UUID] = set()
+        for license_orm, _, _ in results:
+            if license_orm.is_service_account and license_orm.service_account_owner_id:
+                employee_ids_to_load.add(license_orm.service_account_owner_id)
+            if license_orm.suggested_employee_id:
+                employee_ids_to_load.add(license_orm.suggested_employee_id)
 
-        async def get_employee_info(emp_id: UUID | None) -> tuple[str | None, str | None]:
-            """Get employee name and email from cache or DB."""
+        # Load all employees in a single query
+        employee_cache: dict[UUID, tuple[str | None, str | None]] = {}
+        if employee_ids_to_load:
+            employees_map = await self.employee_repo.get_by_ids(list(employee_ids_to_load))
+            for emp_id, emp in employees_map.items():
+                employee_cache[emp_id] = (emp.full_name, emp.email)
+
+        def get_employee_info(emp_id: UUID | None) -> tuple[str | None, str | None]:
+            """Get employee name and email from pre-loaded cache."""
             if emp_id is None:
                 return None, None
-            if emp_id not in employee_cache:
-                emp = await self.employee_repo.get_by_id(emp_id)
-                employee_cache[emp_id] = (emp.full_name, emp.email) if emp else (None, None)
-            return employee_cache[emp_id]
+            return employee_cache.get(emp_id, (None, None))
 
         for license_orm, provider_orm, employee_orm in results:
             is_external = self._check_external_email(
@@ -433,13 +450,13 @@ class LicenseService:
             match_status = license_orm.match_status
             has_suggestion = license_orm.suggested_employee_id is not None
 
-            # Get service account owner name
-            service_account_owner_name, _ = await get_employee_info(
+            # Get service account owner name from pre-loaded cache
+            service_account_owner_name, _ = get_employee_info(
                 license_orm.service_account_owner_id if is_service_account else None
             )
 
-            # Get suggested employee info
-            suggested_name, suggested_email = await get_employee_info(
+            # Get suggested employee info from pre-loaded cache
+            suggested_name, suggested_email = get_employee_info(
                 license_orm.suggested_employee_id
             )
 

@@ -18,6 +18,23 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
 
     model = EmployeeORM
 
+    async def get_by_ids(self, ids: list[UUID]) -> dict[UUID, EmployeeORM]:
+        """Get multiple employees by their IDs in a single query.
+
+        Args:
+            ids: List of employee UUIDs
+
+        Returns:
+            Dict mapping employee ID to EmployeeORM
+        """
+        if not ids:
+            return {}
+        result = await self.session.execute(
+            select(EmployeeORM).where(EmployeeORM.id.in_(ids))
+        )
+        employees = result.scalars().all()
+        return {emp.id: emp for emp in employees}
+
     async def get_by_email(self, email: str) -> EmployeeORM | None:
         """Get employee by email.
 

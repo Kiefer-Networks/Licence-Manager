@@ -575,7 +575,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             .where(LicenseORM.license_type.isnot(None))
         )
 
-        updated_count = 0
+        # Pre-calculate all updates to batch them
+        updates_by_cost: dict[tuple[Decimal | None, str], list[UUID]] = {}
         for license_id, license_type in result.all():
             if not license_type:
                 continue
@@ -592,13 +593,22 @@ class LicenseRepository(BaseRepository[LicenseORM]):
                         total_cost += price
                         currency = curr  # Use the last currency
 
-            # Update the license
-            await self.session.execute(
-                update(LicenseORM)
-                .where(LicenseORM.id == license_id)
-                .values(monthly_cost=total_cost if total_cost > 0 else None, currency=currency)
-            )
-            updated_count += 1
+            # Group by cost/currency for batch update
+            cost_key = (total_cost if total_cost > 0 else None, currency)
+            if cost_key not in updates_by_cost:
+                updates_by_cost[cost_key] = []
+            updates_by_cost[cost_key].append(license_id)
+
+        # Batch update by cost group (reduces N updates to M updates where M = unique cost values)
+        updated_count = 0
+        for (monthly_cost, currency), license_ids in updates_by_cost.items():
+            if license_ids:
+                await self.session.execute(
+                    update(LicenseORM)
+                    .where(LicenseORM.id.in_(license_ids))
+                    .values(monthly_cost=monthly_cost, currency=currency)
+                )
+                updated_count += len(license_ids)
 
         await self.session.flush()
         return updated_count
