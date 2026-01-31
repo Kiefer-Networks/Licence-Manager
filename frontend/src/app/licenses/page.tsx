@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,8 @@ const REMOVABLE_PROVIDERS = ['cursor'];
 type Tab = 'assigned' | 'unassigned' | 'external';
 
 function LicensesContent() {
+  const t = useTranslations('licenses');
+  const tCommon = useTranslations('common');
   const searchParams = useSearchParams();
   const [categorizedData, setCategorizedData] = useState<CategorizedLicensesResponse | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -307,9 +310,14 @@ function LicensesContent() {
                               categorizedData.unassigned.filter(l => l.status !== 'active').length +
                               categorizedData.external.filter(l => l.status !== 'active').length +
                               (categorizedData.service_accounts?.filter(l => l.status !== 'active').length || 0),
+              total_suggested: 0,
+              total_external_review: 0,
+              total_external_guest: 0,
               monthly_cost: categorizedData.stats.monthly_cost,
               potential_savings: categorizedData.stats.potential_savings,
               currency: categorizedData.stats.currency,
+              has_currency_mix: categorizedData.stats.has_currency_mix || false,
+              currencies_found: categorizedData.stats.currencies_found || [],
             }}
           />
         )}
