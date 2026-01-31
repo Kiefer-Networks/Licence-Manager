@@ -15,17 +15,57 @@ from licence_api.models.dto.license import (
     LicenseListResponse,
     CategorizedLicensesResponse,
     ServiceAccountUpdate,
+    AdminAccountUpdate,
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.license_service import LicenseService
+from licence_api.services.matching_service import MatchingService
+from licence_api.services.service_account_service import ServiceAccountService
+from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.license_repository import LicenseRepository
 
 router = APIRouter()
+
+
+# Dependency injection functions
+def get_license_service(db: AsyncSession = Depends(get_db)) -> LicenseService:
+    """Get LicenseService instance."""
+    return LicenseService(db)
+
+
+def get_license_repository(db: AsyncSession = Depends(get_db)) -> LicenseRepository:
+    """Get LicenseRepository instance."""
+    return LicenseRepository(db)
+
+
+def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
+    """Get ProviderRepository instance."""
+    return ProviderRepository(db)
+
+
+def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
+    """Get AuditService instance."""
+    return AuditService(db)
+
+
+def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
+    """Get MatchingService instance."""
+    return MatchingService(db)
+
+
+def get_service_account_service(db: AsyncSession = Depends(get_db)) -> ServiceAccountService:
+    """Get ServiceAccountService instance."""
+    return ServiceAccountService(db)
+
+
+def get_admin_account_service(db: AsyncSession = Depends(get_db)) -> AdminAccountService:
+    """Get AdminAccountService instance."""
+    return AdminAccountService(db)
 
 
 class AssignLicenseRequest(BaseModel):
@@ -64,6 +104,20 @@ class BulkActionResponse(BaseModel):
     results: list[BulkActionResult]
 
 
+class ManualAssignRequest(BaseModel):
+    """Request to manually assign a license to an employee."""
+
+    employee_id: UUID
+
+
+class MatchActionResponse(BaseModel):
+    """Response from match action operations."""
+
+    success: bool
+    message: str
+    license: LicenseResponse | None = None
+
+
 # Allowed status values for licenses
 ALLOWED_LICENSE_STATUSES = {"active", "inactive", "suspended", "pending"}
 
@@ -71,7 +125,7 @@ ALLOWED_LICENSE_STATUSES = {"active", "inactive", "suspended", "pending"}
 @router.get("", response_model=LicenseListResponse)
 async def list_licenses(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,
     employee_id: UUID | None = None,
     status: str | None = None,
@@ -90,8 +144,7 @@ async def list_licenses(
     sanitized_department = sanitize_department(department)
     sanitized_status = sanitize_status(status, ALLOWED_LICENSE_STATUSES)
 
-    service = LicenseService(db)
-    return await service.list_licenses(
+    return await license_service.list_licenses(
         provider_id=provider_id,
         employee_id=employee_id,
         status=sanitized_status,
@@ -109,7 +162,7 @@ async def list_licenses(
 @router.get("/categorized", response_model=CategorizedLicensesResponse)
 async def get_categorized_licenses(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,
     sort_by: str = Query(default="external_user_id", max_length=50),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
@@ -121,11 +174,41 @@ async def get_categorized_licenses(
 
     Requires licenses.view permission.
     """
-    service = LicenseService(db)
-    return await service.get_categorized_licenses(
+    return await license_service.get_categorized_licenses(
         provider_id=provider_id,
         sort_by=sort_by,
         sort_dir=sort_dir,
+    )
+
+
+class PendingSuggestionsResponse(BaseModel):
+    """Response for pending suggestions endpoint."""
+
+    total: int
+    items: list[LicenseResponse]
+
+
+@router.get("/suggestions/pending", response_model=PendingSuggestionsResponse)
+async def get_pending_suggestions(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    provider_id: UUID | None = None,
+) -> PendingSuggestionsResponse:
+    """Get all licenses with pending match suggestions.
+
+    Returns licenses that have a suggested_employee_id but are not yet
+    confirmed or rejected. Useful for review workflows.
+
+    Requires licenses.view permission.
+    """
+    categorized = await license_service.get_categorized_licenses(
+        provider_id=provider_id,
+        sort_by="external_user_id",
+        sort_dir="asc",
+    )
+    return PendingSuggestionsResponse(
+        total=len(categorized.suggested),
+        items=categorized.suggested,
     )
 
 
@@ -133,11 +216,10 @@ async def get_categorized_licenses(
 async def get_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> LicenseResponse:
     """Get a single license by ID. Requires licenses.view permission."""
-    service = LicenseService(db)
-    license = await service.get_license(license_id)
+    license = await license_service.get_license(license_id)
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -153,12 +235,11 @@ async def assign_license(
     request: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseResponse:
     """Manually assign a license to an employee. Requires licenses.assign permission."""
-    service = LicenseService(db)
-    audit_service = AuditService(db)
-
-    license = await service.assign_license_to_employee(license_id, request.employee_id)
+    license = await license_service.assign_license_to_employee(license_id, request.employee_id)
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -190,17 +271,16 @@ async def unassign_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseResponse:
     """Unassign a license from an employee. Requires licenses.assign permission."""
-    service = LicenseService(db)
-    audit_service = AuditService(db)
-
     # Get current employee before unassigning
-    license_repo = LicenseRepository(db)
     license_orm = await license_repo.get_by_id(license_id)
     old_employee_id = str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
 
-    license = await service.unassign_license(license_id)
+    license = await license_service.unassign_license(license_id)
     if license is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -232,6 +312,9 @@ async def remove_license_from_provider(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> RemoveMemberResponse:
     """Remove a user from the provider system. Requires licenses.delete permission.
 
@@ -239,10 +322,6 @@ async def remove_license_from_provider(
     Currently supported providers: Cursor (Enterprise only).
     """
     from licence_api.providers import CursorProvider
-
-    license_repo = LicenseRepository(db)
-    provider_repo = ProviderRepository(db)
-    audit_service = AuditService(db)
 
     # Get the license
     license_orm = await license_repo.get_by_id(license_id)
@@ -311,6 +390,8 @@ async def bulk_remove_from_provider(
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> BulkActionResponse:
     """Remove multiple users from their provider systems. Requires licenses.bulk_actions permission.
 
@@ -320,9 +401,6 @@ async def bulk_remove_from_provider(
     """
     from licence_api.providers import CursorProvider
 
-    license_repo = LicenseRepository(db)
-    provider_repo = ProviderRepository(db)
-    audit_service = AuditService(db)
     encryption = get_encryption_service()
 
     if len(request.license_ids) > 100:
@@ -415,6 +493,8 @@ async def bulk_delete_licenses(
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> BulkActionResponse:
     """Delete multiple licenses from the database. Requires licenses.bulk_actions permission.
 
@@ -422,9 +502,6 @@ async def bulk_delete_licenses(
     It does NOT remove users from the external provider systems.
     Use bulk/remove-from-provider for that.
     """
-    license_repo = LicenseRepository(db)
-    audit_service = AuditService(db)
-
     if len(request.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -472,6 +549,8 @@ async def bulk_unassign_licenses(
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> BulkActionResponse:
     """Unassign multiple licenses from employees. Requires licenses.bulk_actions permission.
 
@@ -479,9 +558,6 @@ async def bulk_unassign_licenses(
     marking them as unassigned. The licenses remain in the database
     and the users remain in the external provider systems.
     """
-    license_repo = LicenseRepository(db)
-    audit_service = AuditService(db)
-
     if len(request.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -530,37 +606,45 @@ async def update_service_account_status(
     data: ServiceAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    svc_account_service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> LicenseResponse:
     """Mark or unmark a license as a service account. Requires licenses.edit permission.
 
     Service accounts are licenses that are intentionally not linked to HRIS employees.
     They appear in a separate category and don't count as "unassigned" problems.
-    """
-    license_repo = LicenseRepository(db)
-    audit_service = AuditService(db)
 
-    license_orm = await license_repo.get_by_id(license_id)
-    if license_orm is None:
+    If apply_globally is True, the email address will be added to the global
+    service account patterns list for automatic detection during sync.
+    """
+    result = await license_service.update_service_account_status(
+        license_id=license_id,
+        is_service_account=data.is_service_account,
+        service_account_name=data.service_account_name,
+        service_account_owner_id=data.service_account_owner_id,
+    )
+
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License not found",
         )
 
-    # Store old values for audit
-    old_values = {
-        "is_service_account": license_orm.is_service_account,
-        "service_account_name": license_orm.service_account_name,
-        "service_account_owner_id": str(license_orm.service_account_owner_id) if license_orm.service_account_owner_id else None,
-    }
+    old_values, new_values = result
 
-    # Update service account fields
-    license_orm.is_service_account = data.is_service_account
-    license_orm.service_account_name = data.service_account_name if data.is_service_account else None
-    license_orm.service_account_owner_id = data.service_account_owner_id if data.is_service_account else None
-
-    # If marking as service account, clear the employee assignment
-    if data.is_service_account and license_orm.employee_id:
-        license_orm.employee_id = None
+    # If apply_globally is set, add to global patterns
+    pattern_created = False
+    if data.is_service_account and data.apply_globally:
+        external_user_id = await license_service.get_license_external_user_id(license_id)
+        if external_user_id:
+            pattern = await svc_account_service.create_pattern_from_email(
+                email=external_user_id,
+                name=data.service_account_name,
+                owner_id=data.service_account_owner_id,
+                created_by=current_user.id,
+            )
+            pattern_created = pattern is not None
 
     # Audit log the change
     await audit_service.log(
@@ -571,9 +655,9 @@ async def update_service_account_status(
         changes={
             "old": old_values,
             "new": {
-                "is_service_account": data.is_service_account,
-                "service_account_name": data.service_account_name,
-                "service_account_owner_id": str(data.service_account_owner_id) if data.service_account_owner_id else None,
+                **new_values,
+                "apply_globally": data.apply_globally,
+                "pattern_created": pattern_created,
             },
         },
         request=http_request,
@@ -584,11 +668,9 @@ async def update_service_account_status(
     await cache.invalidate_dashboard()
 
     await db.commit()
-    await db.refresh(license_orm)
 
     # Get the full license response
-    service = LicenseService(db)
-    license_response = await service.get_license(license_id)
+    license_response = await license_service.get_license(license_id)
     if license_response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -596,3 +678,295 @@ async def update_service_account_status(
         )
 
     return license_response
+
+
+@router.put("/{license_id}/admin-account", response_model=LicenseResponse)
+async def update_admin_account_status(
+    http_request: Request,
+    license_id: UUID,
+    data: AdminAccountUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    admin_account_service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
+) -> LicenseResponse:
+    """Mark or unmark a license as an admin account. Requires licenses.edit permission.
+
+    Admin accounts are personal elevated-privilege accounts (e.g., max-admin@firma.de)
+    that belong to a specific employee. Unlike service accounts, admin accounts
+    ARE linked to people and should be removed when the owner is offboarded.
+
+    If the owner is offboarded, a warning will be shown in the dashboard.
+
+    If apply_globally is True, the email address will be added to the global
+    admin account patterns list for automatic detection during sync.
+    """
+    result = await license_service.update_admin_account_status(
+        license_id=license_id,
+        is_admin_account=data.is_admin_account,
+        admin_account_name=data.admin_account_name,
+        admin_account_owner_id=data.admin_account_owner_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    old_values, new_values = result
+
+    # If apply_globally is set, add to global patterns
+    pattern_created = False
+    if data.is_admin_account and data.apply_globally:
+        external_user_id = await license_service.get_license_external_user_id(license_id)
+        if external_user_id:
+            pattern = await admin_account_service.create_pattern_from_email(
+                email=external_user_id,
+                name=data.admin_account_name,
+                owner_id=data.admin_account_owner_id,
+                created_by=current_user.id,
+            )
+            pattern_created = pattern is not None
+
+    # Audit log the change
+    await audit_service.log(
+        action=AuditAction.LICENSE_UPDATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={
+            "old": old_values,
+            "new": {
+                **new_values,
+                "apply_globally": data.apply_globally,
+                "pattern_created": pattern_created,
+            },
+        },
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache (license stats changed)
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
+    # Get the full license response
+    license_response = await license_service.get_license(license_id)
+    if license_response is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    return license_response
+
+
+# Match management endpoints
+
+@router.post("/{license_id}/match/confirm", response_model=MatchActionResponse)
+async def confirm_match(
+    http_request: Request,
+    license_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    matching_service: Annotated[MatchingService, Depends(get_matching_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+) -> MatchActionResponse:
+    """Confirm a suggested match for a license. Requires licenses.assign permission.
+
+    This will move the suggested employee to the confirmed employee assignment.
+    GDPR: No private email addresses are stored.
+    """
+    license_orm = await matching_service.confirm_match(
+        license_id=license_id,
+        admin_user_id=current_user.id,
+    )
+
+    if license_orm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found or no suggested match to confirm",
+        )
+
+    # Audit log the confirmation
+    await audit_service.log(
+        action=AuditAction.LICENSE_ASSIGN,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={
+            "match_confirmed": True,
+            "employee_id": str(license_orm.employee_id),
+        },
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
+    license_response = await license_service.get_license(license_id)
+
+    return MatchActionResponse(
+        success=True,
+        message="Match confirmed successfully",
+        license=license_response,
+    )
+
+
+@router.post("/{license_id}/match/reject", response_model=MatchActionResponse)
+async def reject_match(
+    http_request: Request,
+    license_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    matching_service: Annotated[MatchingService, Depends(get_matching_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+) -> MatchActionResponse:
+    """Reject a suggested match for a license. Requires licenses.assign permission.
+
+    This will clear the suggested match and mark the license as rejected.
+    """
+    license_orm = await matching_service.reject_match(
+        license_id=license_id,
+        admin_user_id=current_user.id,
+    )
+
+    if license_orm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    # Audit log the rejection
+    await audit_service.log(
+        action=AuditAction.LICENSE_UPDATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={"match_rejected": True},
+        request=http_request,
+    )
+
+    await db.commit()
+
+    license_response = await license_service.get_license(license_id)
+
+    return MatchActionResponse(
+        success=True,
+        message="Match rejected",
+        license=license_response,
+    )
+
+
+@router.post("/{license_id}/match/external-guest", response_model=MatchActionResponse)
+async def mark_as_external_guest(
+    http_request: Request,
+    license_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    matching_service: Annotated[MatchingService, Depends(get_matching_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+) -> MatchActionResponse:
+    """Mark a license as belonging to an external guest. Requires licenses.edit permission.
+
+    This confirms that the license is intentionally assigned to someone outside the company.
+    """
+    license_orm = await matching_service.mark_as_external_guest(
+        license_id=license_id,
+        admin_user_id=current_user.id,
+    )
+
+    if license_orm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    # Audit log the change
+    await audit_service.log(
+        action=AuditAction.LICENSE_UPDATE,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={"marked_as_external_guest": True},
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
+    license_response = await license_service.get_license(license_id)
+
+    return MatchActionResponse(
+        success=True,
+        message="Marked as external guest",
+        license=license_response,
+    )
+
+
+@router.post("/{license_id}/match/assign", response_model=MatchActionResponse)
+async def manual_assign_match(
+    http_request: Request,
+    license_id: UUID,
+    request: ManualAssignRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    matching_service: Annotated[MatchingService, Depends(get_matching_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+) -> MatchActionResponse:
+    """Manually assign a license to an employee.
+
+    Requires licenses.assign permission.
+    GDPR: No private email addresses are stored.
+    """
+    license_orm = await matching_service.assign_to_employee(
+        license_id=license_id,
+        employee_id=request.employee_id,
+        admin_user_id=current_user.id,
+    )
+
+    if license_orm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    # Audit log the assignment
+    await audit_service.log(
+        action=AuditAction.LICENSE_ASSIGN,
+        resource_type=ResourceType.LICENSE,
+        resource_id=license_id,
+        admin_user_id=current_user.id,
+        changes={
+            "employee_id": str(request.employee_id),
+            "manual_assignment": True,
+        },
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    await db.commit()
+
+    license_response = await license_service.get_license(license_id)
+
+    return MatchActionResponse(
+        success=True,
+        message="License assigned successfully",
+        license=license_response,
+    )
