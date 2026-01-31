@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,6 +74,9 @@ export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const providerId = params.id as string;
+  const t = useTranslations('providers');
+  const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -361,8 +365,8 @@ export default function ProviderDetailPage() {
       await fetchProvider();
       await fetchLicenses();
       showToast(result.success ? 'success' : 'error', result.success ? 'Sync completed' : 'Sync failed');
-    } catch (error: any) {
-      showToast('error', error.message || 'Sync failed');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Sync failed');
     } finally {
       setSyncing(false);
     }
@@ -408,8 +412,8 @@ export default function ProviderDetailPage() {
       await fetchLicenses();
       await fetchCategorizedLicenses();
       await fetchProvider();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to add license');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to add license');
     } finally {
       setSavingLicense(false);
     }
@@ -423,8 +427,8 @@ export default function ProviderDetailPage() {
       setAssignDialog(null);
       setSelectedEmployeeId('');
       await fetchLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to assign');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to assign');
     }
   };
 
@@ -433,8 +437,8 @@ export default function ProviderDetailPage() {
       await api.unassignManualLicense(license.id);
       showToast('success', 'License unassigned');
       await fetchLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to unassign');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to unassign');
     }
   };
 
@@ -447,8 +451,8 @@ export default function ProviderDetailPage() {
       await fetchLicenses();
       await fetchCategorizedLicenses();
       await fetchProvider();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to delete');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to delete');
     }
   };
 
@@ -480,8 +484,8 @@ export default function ProviderDetailPage() {
       showToast('success', message);
       setServiceAccountDialog(null);
       await fetchCategorizedLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to update');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to update');
     } finally {
       setSavingServiceAccount(false);
     }
@@ -515,8 +519,8 @@ export default function ProviderDetailPage() {
       showToast('success', message);
       setAdminAccountDialog(null);
       await fetchCategorizedLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to update');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to update');
     } finally {
       setSavingAdminAccount(false);
     }
@@ -585,8 +589,8 @@ export default function ProviderDetailPage() {
       }
       setPackageDialogOpen(false);
       await fetchLicensePackages();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save package');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to save package');
     } finally {
       setSavingPackage(false);
     }
@@ -598,8 +602,8 @@ export default function ProviderDetailPage() {
       await api.deleteLicensePackage(providerId, pkg.id);
       showToast('success', 'Package deleted');
       await fetchLicensePackages();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to delete package');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to delete package');
     }
   };
 
@@ -663,8 +667,8 @@ export default function ProviderDetailPage() {
       }
       setOrgLicenseDialogOpen(false);
       await fetchOrgLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save organization license');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to save organization license');
     } finally {
       setSavingOrgLicense(false);
     }
@@ -676,8 +680,8 @@ export default function ProviderDetailPage() {
       await api.deleteOrganizationLicense(providerId, lic.id);
       showToast('success', 'Organization license deleted');
       await fetchOrgLicenses();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to delete');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to delete');
     }
   };
 
@@ -724,8 +728,8 @@ export default function ProviderDetailPage() {
       await fetchLicenses();
       await fetchCategorizedLicenses();
       showToast('success', 'Pricing saved and applied to licenses');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save pricing');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to save pricing');
     } finally {
       setSavingPricing(false);
     }
@@ -757,8 +761,8 @@ export default function ProviderDetailPage() {
       await fetchCategorizedLicenses();
       await fetchLicenseTypes();
       showToast('success', 'Individual pricing saved and applied to licenses');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save individual pricing');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to save individual pricing');
     } finally {
       setSavingIndividualPricing(false);
     }
@@ -779,8 +783,8 @@ export default function ProviderDetailPage() {
       });
       await fetchProvider();
       showToast('success', 'Settings saved');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to save');
     } finally {
       setSavingSettings(false);
     }
@@ -799,8 +803,8 @@ export default function ProviderDetailPage() {
       showToast('success', 'File uploaded');
       // Reset file input
       e.target.value = '';
-    } catch (error: any) {
-      showToast('error', error.message || 'Upload failed');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setUploadingFile(false);
     }
@@ -812,8 +816,8 @@ export default function ProviderDetailPage() {
       await api.deleteProviderFile(provider.id, fileId);
       await fetchFiles();
       showToast('success', 'File deleted');
-    } catch (error: any) {
-      showToast('error', error.message || 'Delete failed');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Delete failed');
     }
   };
 
@@ -1231,13 +1235,13 @@ export default function ProviderDetailPage() {
                 <CardContent className="space-y-4">
                   {(() => {
                     const licenseInfo = provider.config?.provider_license_info;
-                    const packagePricing = provider.config?.package_pricing || {};
+                    const packagePricing = provider.config?.package_pricing;
                     const packageEdit = pricingEdits['__package__'] || {
-                      cost: packagePricing.cost || '',
-                      currency: packagePricing.currency || 'EUR',
-                      billing_cycle: packagePricing.billing_cycle || 'yearly',
-                      next_billing_date: packagePricing.next_billing_date || '',
-                      notes: packagePricing.notes || '',
+                      cost: packagePricing?.cost || '',
+                      currency: packagePricing?.currency || 'EUR',
+                      billing_cycle: packagePricing?.billing_cycle || 'yearly',
+                      next_billing_date: packagePricing?.next_billing_date || '',
+                      notes: packagePricing?.notes || '',
                     };
                     const updatePackageEdit = (updates: Partial<typeof packageEdit>) => {
                       setPricingEdits({
@@ -2197,7 +2201,7 @@ export default function ProviderDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddLicenseOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setAddLicenseOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleAddLicense} disabled={savingLicense}>
               {savingLicense ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Add {addLicenseMode === 'bulk' ? 'Licenses' : addLicenseMode === 'seats' ? 'Seats' : 'License'}
@@ -2231,7 +2235,7 @@ export default function ProviderDetailPage() {
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAssignDialog(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setAssignDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleAssign} disabled={!selectedEmployeeId}>Assign</Button>
           </DialogFooter>
         </DialogContent>
@@ -2247,8 +2251,8 @@ export default function ProviderDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteDialog(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteLicense}>Delete</Button>
+            <Button variant="ghost" onClick={() => setDeleteDialog(null)}>{tCommon('cancel')}</Button>
+            <Button variant="destructive" onClick={handleDeleteLicense}>{tCommon('delete')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2339,7 +2343,7 @@ export default function ProviderDetailPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setServiceAccountDialog(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setServiceAccountDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveServiceAccount} disabled={savingServiceAccount}>
               {savingServiceAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
@@ -2434,7 +2438,7 @@ export default function ProviderDetailPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAdminAccountDialog(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setAdminAccountDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveAdminAccount} disabled={savingAdminAccount}>
               {savingAdminAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
@@ -2559,7 +2563,7 @@ export default function ProviderDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setPackageDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setPackageDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSavePackage} disabled={savingPackage}>
               {savingPackage && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingPackage ? 'Update' : 'Create'}
@@ -2674,7 +2678,7 @@ export default function ProviderDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOrgLicenseDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setOrgLicenseDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveOrgLicense} disabled={savingOrgLicense}>
               {savingOrgLicense && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingOrgLicense ? 'Update' : 'Create'}

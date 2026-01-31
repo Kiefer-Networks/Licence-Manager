@@ -485,7 +485,7 @@ export default function ProvidersPage() {
       const providerType = dialogMode === 'hris' ? 'hibob' : newProviderType;
       const isManual = isManualProvider(providerType);
 
-      const config: Record<string, any> = {};
+      const config: { provider_type?: string; license_model?: string } = {};
       if (isManual) {
         config.provider_type = 'manual';
         config.license_model = manualConfig.license_model;
@@ -510,8 +510,8 @@ export default function ProvidersPage() {
       await fetchProviders();
       setAddDialogOpen(false);
       showToast('success', `${newProviderName} added`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to add provider');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add provider');
     } finally {
       setSaving(false);
     }
@@ -545,8 +545,8 @@ export default function ProvidersPage() {
       await fetchProviders();
       setEditDialogOpen(false);
       showToast('success', 'Provider updated');
-    } catch (err: any) {
-      setError(err.message || 'Failed to update provider');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update provider');
     } finally {
       setSaving(false);
     }
@@ -560,8 +560,8 @@ export default function ProvidersPage() {
       setDeleteDialogOpen(false);
       setDeletingProvider(null);
       showToast('success', 'Provider deleted');
-    } catch (err: any) {
-      showToast('error', err.message || 'Failed to delete provider');
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Failed to delete provider');
     }
   };
 
@@ -571,8 +571,8 @@ export default function ProvidersPage() {
       const result = await api.syncProvider(providerId);
       await fetchProviders();
       showToast(result.success ? 'success' : 'error', result.success ? 'Sync completed' : 'Sync failed');
-    } catch (err: any) {
-      showToast('error', err.message || 'Sync failed');
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Sync failed');
     } finally {
       setSyncingProviderId(null);
     }
@@ -870,9 +870,9 @@ export default function ProvidersPage() {
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setAddDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleAddProvider} disabled={!newProviderType || !newProviderName || saving}>
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding...</> : 'Add Provider'}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('adding')}</> : t('addProvider')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -882,12 +882,12 @@ export default function ProvidersPage() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Provider</DialogTitle>
-            <DialogDescription>Update settings. Leave credentials empty to keep current values.</DialogDescription>
+            <DialogTitle>{t('editProvider')}</DialogTitle>
+            <DialogDescription>{t('editDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Display Name</Label>
+              <Label className="text-xs font-medium">{t('displayName')}</Label>
               <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} />
             </div>
             {editingProvider && getProviderFields(editingProvider.name).map((field) => (
@@ -897,14 +897,14 @@ export default function ProvidersPage() {
                   type={field.includes('key') || field.includes('token') || field.includes('secret') ? 'password' : 'text'}
                   value={credentials[field] || ''}
                   onChange={(e) => setCredentials({ ...credentials, [field]: e.target.value })}
-                  placeholder="Leave empty to keep current"
+                  placeholder={t('leaveEmptyToKeep')}
                 />
               </div>
             ))}
             {/* Logo upload for manual providers */}
             {editingProvider && (editingProvider.config?.provider_type === 'manual' || editingProvider.name === 'manual') && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Logo</Label>
+                <Label className="text-xs font-medium">{t('logo')}</Label>
                 <div className="flex items-center gap-3">
                   {logoPreview ? (
                     <div className="relative">
@@ -931,19 +931,19 @@ export default function ProvidersPage() {
                     />
                     <span className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
                       <Upload className="h-3 w-3" />
-                      {logoPreview ? 'Change' : 'Upload'}
+                      {logoPreview ? t('changeLogo') : tCommon('upload')}
                     </span>
                   </label>
                 </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP. Max 2MB.</p>
+                <p className="text-xs text-muted-foreground">{t('logoFormats')}</p>
               </div>
             )}
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setEditDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleUpdateProvider} disabled={!newProviderName || saving}>
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : 'Save Changes'}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('saving')}</> : t('saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -953,14 +953,14 @@ export default function ProvidersPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Provider</DialogTitle>
+            <DialogTitle>{t('deleteProvider')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deletingProvider?.display_name}</strong>? All associated licenses will be removed. This cannot be undone.
+              {t('deleteConfirmation', { name: deletingProvider?.display_name || '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteProvider}>Delete Provider</Button>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>{tCommon('cancel')}</Button>
+            <Button variant="destructive" onClick={handleDeleteProvider}>{t('deleteProvider')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
