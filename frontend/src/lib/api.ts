@@ -232,6 +232,92 @@ export interface ProviderLicenseInfo {
   features?: Record<string, boolean>;
 }
 
+// Typed interfaces for replacing 'any' usage
+export interface LicenseTypePricingConfig {
+  cost_per_seat?: string;
+  display_name?: string;
+  billing_cycle?: string;
+  payment_frequency?: string;
+}
+
+export interface ProviderConfig {
+  provider_license_info?: ProviderLicenseInfo;
+  license_pricing?: Record<string, LicenseTypePricingConfig>;
+  license_model?: string;
+  provider_type?: string;
+  package_pricing?: PackagePricing;
+  default_cost?: string;
+  currency?: string;
+  billing_cycle?: string;
+  [key: string]: ProviderLicenseInfo | Record<string, LicenseTypePricingConfig> | PackagePricing | string | number | boolean | null | undefined;
+}
+
+export interface PaymentMethodDetails {
+  // Credit card
+  card_last_four?: string;
+  card_brand?: string;
+  card_expiry_month?: number;
+  card_expiry_year?: number;
+  cardholder_name?: string;
+  card_holder?: string;
+  expiry_month?: string;
+  expiry_year?: string;
+  // Bank account
+  bank_name?: string;
+  account_last_four?: string;
+  account_holder_name?: string;
+  account_holder?: string;
+  iban_last_four?: string;
+  // Other
+  provider_name?: string;
+  // Generic
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface SyncResults {
+  synced?: number;
+  added?: number;
+  updated?: number;
+  removed?: number;
+  errors?: string[];
+  [key: string]: number | string[] | undefined;
+}
+
+export interface LicenseMetadata {
+  last_login?: string;
+  role?: string;
+  department?: string;
+  email?: string;
+  assignee_name?: string;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface AuditLogChanges {
+  old?: Record<string, string | number | boolean | null>;
+  new?: Record<string, string | number | boolean | null>;
+  [key: string]: string | number | boolean | null | Record<string, string | number | boolean | null> | undefined;
+}
+
+export interface ProviderCredentials {
+  api_key?: string;
+  api_secret?: string;
+  client_id?: string;
+  client_secret?: string;
+  access_token?: string;
+  refresh_token?: string;
+  bot_token?: string;
+  admin_api_key?: string;
+  tenant_id?: string;
+  [key: string]: string | undefined;
+}
+
+export interface SlackConfig {
+  bot_token?: string;
+  default_channel?: string;
+  webhook_url?: string;
+  configured?: boolean;
+}
+
 export interface ProviderLicenseStats {
   active: number;
   assigned: number;  // Internal assigned (matched to HRIS)
@@ -246,11 +332,7 @@ export interface Provider {
   display_name: string;
   logo_url?: string | null;
   enabled: boolean;
-  config?: {
-    provider_license_info?: ProviderLicenseInfo;
-    license_pricing?: Record<string, any>;
-    [key: string]: any;
-  };
+  config?: ProviderConfig;
   last_sync_at?: string;
   last_sync_status?: string;
   license_count: number;
@@ -281,7 +363,7 @@ export interface License {
   last_activity_at?: string;
   monthly_cost?: string;
   currency: string;
-  metadata?: Record<string, any>;
+  metadata?: LicenseMetadata;
   synced_at: string;
   is_external_email?: boolean;
   employee_status?: string;
@@ -698,7 +780,7 @@ export interface PaymentMethod {
   id: string;
   name: string;
   type: string;  // credit_card, bank_account, stripe, paypal, invoice, other
-  details: Record<string, any>;
+  details: PaymentMethodDetails;
   is_default: boolean;
   notes?: string | null;
   is_expiring: boolean;
@@ -708,7 +790,7 @@ export interface PaymentMethod {
 export interface PaymentMethodCreate {
   name: string;
   type: string;
-  details: Record<string, any>;
+  details: PaymentMethodDetails;
   is_default?: boolean;
   notes?: string | null;
 }
@@ -748,7 +830,7 @@ export interface IndividualLicenseTypesResponse {
 
 export interface SyncResponse {
   success: boolean;
-  results: Record<string, any>;
+  results: SyncResults;
 }
 
 // License Packages (for seat tracking)
@@ -1105,7 +1187,7 @@ export interface AuditLogEntry {
   action: string;
   resource_type: string;
   resource_id?: string;
-  changes?: Record<string, any>;
+  changes?: AuditLogChanges;
   ip_address?: string;
   created_at: string;
 }
@@ -1183,8 +1265,8 @@ export const api = {
   async createProvider(data: {
     name: string;
     display_name: string;
-    credentials: Record<string, any>;
-    config?: Record<string, any>;
+    credentials: ProviderCredentials;
+    config?: ProviderConfig;
   }): Promise<Provider> {
     return fetchApi<Provider>('/providers', {
       method: 'POST',
@@ -1201,8 +1283,8 @@ export const api = {
     data: {
       display_name?: string;
       enabled?: boolean;
-      credentials?: Record<string, any>;
-      config?: Record<string, any>;
+      credentials?: ProviderCredentials;
+      config?: ProviderConfig;
     }
   ): Promise<Provider> {
     return fetchApi<Provider>(`/providers/${providerId}`, {
@@ -1213,7 +1295,7 @@ export const api = {
 
   async testProviderConnection(
     name: string,
-    credentials: Record<string, any>
+    credentials: ProviderCredentials
   ): Promise<TestConnectionResponse> {
     return fetchApi<TestConnectionResponse>('/providers/test-connection', {
       method: 'POST',
@@ -1879,7 +1961,7 @@ export const api = {
 
   // Slack Settings
   async getSlackConfig(): Promise<{ webhook_url?: string; bot_token?: string; configured: boolean }> {
-    const response = await fetchApi<Record<string, any> | null>('/settings/slack');
+    const response = await fetchApi<SlackConfig | null>('/settings/slack');
     if (!response) {
       return { configured: false };
     }
