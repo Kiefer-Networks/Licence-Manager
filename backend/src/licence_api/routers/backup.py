@@ -56,10 +56,23 @@ async def create_backup(
             user=current_user,
             request=request,
         )
-    except Exception as e:
+    except (ValueError, KeyError, TypeError) as e:
+        # Configuration or data format errors
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid backup configuration",
+        )
+    except (IOError, OSError):
+        # File system errors
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create backup: {str(e)}",
+            detail="Failed to create backup due to storage error",
+        )
+    except Exception:
+        # Generic fallback - don't expose internal details
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create backup",
         )
 
     # Generate filename with timestamp
