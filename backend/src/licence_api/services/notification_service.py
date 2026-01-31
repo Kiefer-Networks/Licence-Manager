@@ -1,14 +1,13 @@
 """Notification service for Slack alerts."""
 
 import logging
-from typing import Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.notification_rule import NotificationRuleORM
+from licence_api.repositories.notification_rule_repository import NotificationRuleRepository
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +18,15 @@ class NotificationService:
     def __init__(self, session: AsyncSession) -> None:
         """Initialize service with database session."""
         self.session = session
+        self.rule_repo = NotificationRuleRepository(session)
 
     async def get_rules(self) -> list[NotificationRuleORM]:
-        """Get all notification rules.
+        """Get all enabled notification rules.
 
         Returns:
             List of notification rules
         """
-        result = await self.session.execute(
-            select(NotificationRuleORM).where(NotificationRuleORM.enabled == True)
-        )
-        return list(result.scalars().all())
+        return await self.rule_repo.get_enabled_rules()
 
     async def get_rule(self, rule_id: UUID) -> NotificationRuleORM | None:
         """Get a notification rule by ID.
@@ -40,10 +37,7 @@ class NotificationService:
         Returns:
             NotificationRuleORM or None
         """
-        result = await self.session.execute(
-            select(NotificationRuleORM).where(NotificationRuleORM.id == rule_id)
-        )
-        return result.scalar_one_or_none()
+        return await self.rule_repo.get_by_id(rule_id)
 
     async def create_rule(
         self,
@@ -61,16 +55,12 @@ class NotificationService:
         Returns:
             Created NotificationRuleORM
         """
-        rule = NotificationRuleORM(
+        return await self.rule_repo.create_rule(
             event_type=event_type,
             slack_channel=slack_channel,
             template=template,
             enabled=True,
         )
-        self.session.add(rule)
-        await self.session.flush()
-        await self.session.refresh(rule)
-        return rule
 
     async def update_rule(
         self,
@@ -90,20 +80,12 @@ class NotificationService:
         Returns:
             Updated NotificationRuleORM or None
         """
-        rule = await self.get_rule(rule_id)
-        if rule is None:
-            return None
-
-        if slack_channel is not None:
-            rule.slack_channel = slack_channel
-        if template is not None:
-            rule.template = template
-        if enabled is not None:
-            rule.enabled = enabled
-
-        await self.session.flush()
-        await self.session.refresh(rule)
-        return rule
+        return await self.rule_repo.update_rule(
+            rule_id=rule_id,
+            slack_channel=slack_channel,
+            template=template,
+            enabled=enabled,
+        )
 
     async def delete_rule(self, rule_id: UUID) -> bool:
         """Delete a notification rule.
@@ -114,13 +96,7 @@ class NotificationService:
         Returns:
             True if deleted, False if not found
         """
-        rule = await self.get_rule(rule_id)
-        if rule is None:
-            return False
-
-        await self.session.delete(rule)
-        await self.session.flush()
-        return True
+        return await self.rule_repo.delete_rule(rule_id)
 
     async def notify_employee_offboarded(
         self,
@@ -140,7 +116,7 @@ class NotificationService:
         Returns:
             True if notification sent successfully
         """
-        rules = await self._get_rules_for_event("employee_offboarded")
+        rules = await self.rule_repo.get_rules_by_event_type("employee_offboarded")
         if not rules:
             return False
 
@@ -187,7 +163,7 @@ Please review and revoke these licenses.
         Returns:
             True if notification sent successfully
         """
-        rules = await self._get_rules_for_event("license_inactive")
+        rules = await self.rule_repo.get_rules_by_event_type("license_inactive")
         if not rules:
             return False
 
@@ -226,7 +202,7 @@ Consider reviewing this license.
         Returns:
             True if notification sent successfully
         """
-        rules = await self._get_rules_for_event("sync_error")
+        rules = await self.rule_repo.get_rules_by_event_type("sync_error")
         if not rules:
             return False
 
@@ -268,7 +244,7 @@ Please check the provider configuration.
         Returns:
             True if notification sent successfully
         """
-        rules = await self._get_rules_for_event("license_expiring")
+        rules = await self.rule_repo.get_rules_by_event_type("license_expiring")
         if not rules:
             return False
 
@@ -293,22 +269,6 @@ Please review and renew these licenses if needed.
             )
 
         return True
-
-    async def _get_rules_for_event(self, event_type: str) -> list[NotificationRuleORM]:
-        """Get notification rules for an event type.
-
-        Args:
-            event_type: Event type
-
-        Returns:
-            List of matching rules
-        """
-        result = await self.session.execute(
-            select(NotificationRuleORM)
-            .where(NotificationRuleORM.event_type == event_type)
-            .where(NotificationRuleORM.enabled == True)
-        )
-        return list(result.scalars().all())
 
     async def _send_slack_message(
         self,
@@ -342,7 +302,7 @@ Please review and renew these licenses if needed.
                     logger.error(f"Slack API error: {result.get('error')}")
                     return False
                 return True
-        except Exception as e:
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             logger.error(f"Failed to send Slack message: {e}")
             return False
 
@@ -385,5 +345,5 @@ Please review and renew these licenses if needed.
                 else:
                     error = result.get("error", "Unknown error")
                     return False, f"Failed to send notification: {error}"
-        except Exception as e:
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             return False, f"Failed to connect to Slack: {str(e)}"
