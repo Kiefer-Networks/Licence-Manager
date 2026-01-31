@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
 import { api, AuditLogEntry } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -73,6 +74,8 @@ function getActionBadgeColor(action: string): string {
 }
 
 export default function AuditLogPage() {
+  const t = useTranslations('audit');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { hasPermission, isLoading: authLoading } = useAuth();
 
@@ -172,14 +175,14 @@ export default function AuditLogPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
-              Track all system activities and changes
+              {t('details')}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadLogs} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
+            {tCommon('refresh')}
           </Button>
         </div>
 
@@ -239,12 +242,12 @@ export default function AuditLogPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[180px]">Timestamp</TableHead>
-                <TableHead className="w-[200px]">User</TableHead>
-                <TableHead className="w-[100px]">Action</TableHead>
-                <TableHead className="w-[150px]">Resource</TableHead>
-                <TableHead>Resource ID</TableHead>
-                <TableHead className="w-[100px]">IP Address</TableHead>
+                <TableHead className="w-[180px]">{t('timestamp')}</TableHead>
+                <TableHead className="w-[200px]">{t('user')}</TableHead>
+                <TableHead className="w-[100px]">{t('action')}</TableHead>
+                <TableHead className="w-[150px]">{t('resource')}</TableHead>
+                <TableHead>{t('resourceType')}</TableHead>
+                <TableHead className="w-[100px]">{t('ipAddress')}</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -253,7 +256,7 @@ export default function AuditLogPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     <FileText className="h-8 w-8 mx-auto mb-2 text-zinc-300" />
-                    No audit logs found
+                    {t('noAuditLogs')}
                   </TableCell>
                 </TableRow>
               ) : (

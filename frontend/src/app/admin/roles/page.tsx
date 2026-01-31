@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
 import { api, Role, Permission, PermissionsByCategory, PermissionCategory } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,8 @@ import {
 import { AppLayout } from '@/components/layout/app-layout';
 
 export default function AdminRolesPage() {
+  const t = useTranslations('roles');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { hasPermission, isLoading: authLoading } = useAuth();
 
