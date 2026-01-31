@@ -62,7 +62,7 @@ class AdobeProvider(BaseProvider):
             )
 
             if response.status_code != 200:
-                logger.error("Failed to get Adobe access token: %s", response.text)
+                logger.error("Failed to get Adobe access token: status=%d", response.status_code)
                 raise ValueError(f"Adobe auth failed: {response.status_code}")
 
             data = response.json()
@@ -118,7 +118,7 @@ class AdobeProvider(BaseProvider):
                 )
 
                 if response.status_code != 200:
-                    logger.error("Failed to fetch Adobe users: %s", response.text)
+                    logger.error("Failed to fetch Adobe users: status=%d", response.status_code)
                     raise ValueError(f"Adobe API error: {response.status_code}")
 
                 data = response.json()

@@ -151,7 +151,7 @@ class HiBobProvider(HRISProvider):
                     raise Exception(f"429 Rate Limited: {response.text[:100]}")
 
                 if response.status_code != 200:
-                    logger.warning(f"Avatar URL fetch failed for {hibob_id}: status={response.status_code}, body={response.text[:200]}")
+                    logger.warning("Avatar URL fetch failed for %s: status=%d", hibob_id, response.status_code)
                     return None
 
                 # Parse the response - could be JSON with URL or just the URL string
@@ -171,7 +171,7 @@ class HiBobProvider(HRISProvider):
                     avatar_url = response.text.strip().strip('"')
 
                 if not avatar_url:
-                    logger.warning(f"No avatar URL found in response for {hibob_id}: {response.text[:200]}")
+                    logger.warning("No avatar URL found in response for %s", hibob_id)
                     return None
 
                 logger.info(f"Got avatar URL for {hibob_id}: {avatar_url}")

@@ -34,16 +34,19 @@ class AtlassianProvider(BaseProvider):
         self.org_id = credentials.get("org_id", "")
         self.admin_email = credentials.get("admin_email", "")
 
+    def _get_basic_auth(self) -> httpx.BasicAuth:
+        """Get httpx BasicAuth for Jira/Confluence REST API.
+
+        Uses httpx.BasicAuth for secure credential handling.
+        """
+        return httpx.BasicAuth(self.admin_email, self.api_token)
+
     def _get_headers(self) -> dict[str, str]:
-        """Get API request headers with Basic auth."""
-        import base64
+        """Get API request headers for requests using BasicAuth.
 
-        # Atlassian uses Basic auth with email:api_token
-        auth_string = f"{self.admin_email}:{self.api_token}"
-        auth_bytes = base64.b64encode(auth_string.encode()).decode()
-
+        Note: Use _get_basic_auth() with httpx client auth parameter.
+        """
         return {
-            "Authorization": f"Basic {auth_bytes}",
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
@@ -93,8 +96,8 @@ class AtlassianProvider(BaseProvider):
                 )
                 if org_response.status_code != 200:
                     logger.error(
-                        "Failed to get organization info: %s",
-                        org_response.text,
+                        "Failed to get organization info: status=%d",
+                        org_response.status_code,
                     )
                     raise ValueError(f"Atlassian API error: {org_response.status_code}")
             except httpx.HTTPError as e:
@@ -117,7 +120,7 @@ class AtlassianProvider(BaseProvider):
                 )
 
                 if response.status_code != 200:
-                    logger.error("Failed to fetch users: %s", response.text)
+                    logger.error("Failed to fetch users: status=%d", response.status_code)
                     raise ValueError(f"Atlassian API error: {response.status_code}")
 
                 data = response.json()
