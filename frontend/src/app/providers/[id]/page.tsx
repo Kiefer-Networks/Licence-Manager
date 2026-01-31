@@ -57,6 +57,7 @@ import {
   Eye,
   Bot,
   Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -115,8 +116,19 @@ export default function ProviderDetailPage() {
     is_service_account: false,
     service_account_name: '',
     service_account_owner_id: '',
+    apply_globally: false,
   });
   const [savingServiceAccount, setSavingServiceAccount] = useState(false);
+
+  // Admin Account Dialog
+  const [adminAccountDialog, setAdminAccountDialog] = useState<License | null>(null);
+  const [adminAccountForm, setAdminAccountForm] = useState({
+    is_admin_account: false,
+    admin_account_name: '',
+    admin_account_owner_id: '',
+    apply_globally: false,
+  });
+  const [savingAdminAccount, setSavingAdminAccount] = useState(false);
 
   // Pricing
   const [licenseTypes, setLicenseTypes] = useState<LicenseTypeInfo[]>([]);
@@ -444,6 +456,7 @@ export default function ProviderDetailPage() {
       is_service_account: license.is_service_account || false,
       service_account_name: license.service_account_name || '',
       service_account_owner_id: license.service_account_owner_id || '',
+      apply_globally: false,  // Always start unchecked
     });
     setServiceAccountDialog(license);
   };
@@ -456,14 +469,55 @@ export default function ProviderDetailPage() {
         is_service_account: serviceAccountForm.is_service_account,
         service_account_name: serviceAccountForm.service_account_name || undefined,
         service_account_owner_id: serviceAccountForm.service_account_owner_id || undefined,
+        apply_globally: serviceAccountForm.apply_globally,
       });
-      showToast('success', serviceAccountForm.is_service_account ? 'Marked as service account' : 'Removed service account flag');
+      const message = serviceAccountForm.is_service_account
+        ? (serviceAccountForm.apply_globally
+          ? 'Marked as service account and added to global patterns'
+          : 'Marked as service account')
+        : 'Removed service account flag';
+      showToast('success', message);
       setServiceAccountDialog(null);
       await fetchCategorizedLicenses();
     } catch (error: any) {
       showToast('error', error.message || 'Failed to update');
     } finally {
       setSavingServiceAccount(false);
+    }
+  };
+
+  const handleOpenAdminAccountDialog = (license: License) => {
+    setAdminAccountForm({
+      is_admin_account: license.is_admin_account || false,
+      admin_account_name: license.admin_account_name || '',
+      admin_account_owner_id: license.admin_account_owner_id || '',
+      apply_globally: false,  // Always start unchecked
+    });
+    setAdminAccountDialog(license);
+  };
+
+  const handleSaveAdminAccount = async () => {
+    if (!adminAccountDialog) return;
+    setSavingAdminAccount(true);
+    try {
+      await api.updateLicenseAdminAccount(adminAccountDialog.id, {
+        is_admin_account: adminAccountForm.is_admin_account,
+        admin_account_name: adminAccountForm.admin_account_name || undefined,
+        admin_account_owner_id: adminAccountForm.admin_account_owner_id || undefined,
+        apply_globally: adminAccountForm.apply_globally,
+      });
+      const message = adminAccountForm.is_admin_account
+        ? (adminAccountForm.apply_globally
+          ? 'Marked as admin account and added to global patterns'
+          : 'Marked as admin account')
+        : 'Removed admin account flag';
+      showToast('success', message);
+      setAdminAccountDialog(null);
+      await fetchCategorizedLicenses();
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to update');
+    } finally {
+      setSavingAdminAccount(false);
     }
   };
 
@@ -1145,6 +1199,7 @@ export default function ProviderDetailPage() {
                 showStats={true}
                 maxUsers={provider?.config?.provider_license_info?.max_users}
                 onServiceAccountClick={handleOpenServiceAccountDialog}
+                onAdminAccountClick={handleOpenAdminAccountDialog}
                 onAssignClick={(license) => setAssignDialog(license)}
                 onDeleteClick={(license) => setDeleteDialog(license)}
               />
@@ -1665,6 +1720,17 @@ export default function ProviderDetailPage() {
                               >
                                 {pkg.utilization_percent}% used
                               </Badge>
+                              {pkg.status === 'cancelled' && (
+                                <Badge variant="destructive">Cancelled</Badge>
+                              )}
+                              {pkg.status === 'expired' && (
+                                <Badge variant="secondary">Expired</Badge>
+                              )}
+                              {pkg.needs_reorder && (
+                                <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
+                                  Needs Reorder
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground font-mono mb-2">{pkg.license_type}</p>
 
@@ -1697,6 +1763,15 @@ export default function ProviderDetailPage() {
                                 {pkg.contract_start && <span>From {new Date(pkg.contract_start).toLocaleDateString('de-DE')}</span>}
                                 {pkg.contract_end && <span>to {new Date(pkg.contract_end).toLocaleDateString('de-DE')}</span>}
                                 {pkg.auto_renew && <Badge variant="secondary" className="text-xs">Auto-renew</Badge>}
+                              </div>
+                            )}
+                            {pkg.cancelled_at && pkg.cancellation_effective_date && (
+                              <div className="flex items-center gap-2 mt-2 text-xs text-red-600">
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>
+                                  Cancellation effective: {new Date(pkg.cancellation_effective_date).toLocaleDateString('de-DE')}
+                                  {pkg.cancellation_reason && ` - ${pkg.cancellation_reason}`}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -2222,13 +2297,13 @@ export default function ProviderDetailPage() {
                   <Label className="text-xs font-medium mb-2 block">Owner (optional)</Label>
                   <Select
                     value={serviceAccountForm.service_account_owner_id}
-                    onValueChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v }))}
+                    onValueChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v === '__none__' ? '' : v }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select responsible employee..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No owner</SelectItem>
+                      <SelectItem value="__none__">No owner</SelectItem>
                       {employees.map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.full_name} ({emp.email})
@@ -2240,6 +2315,25 @@ export default function ProviderDetailPage() {
                     The employee responsible for this service account
                   </p>
                 </div>
+
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="apply_globally"
+                    checked={serviceAccountForm.apply_globally}
+                    onChange={(e) => setServiceAccountForm(prev => ({ ...prev, apply_globally: e.target.checked }))}
+                    className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <Label htmlFor="apply_globally" className="cursor-pointer font-medium">
+                      Apply globally
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Add this email to the global service account patterns list.
+                      All licenses with this email will be automatically marked as service accounts.
+                    </p>
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -2247,6 +2341,101 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setServiceAccountDialog(null)}>Cancel</Button>
             <Button onClick={handleSaveServiceAccount} disabled={savingServiceAccount}>
               {savingServiceAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Account Dialog */}
+      <Dialog open={!!adminAccountDialog} onOpenChange={() => setAdminAccountDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-purple-500" />
+              Admin Account Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure <strong>{adminAccountDialog?.external_user_id}</strong> as an admin account.
+              Admin accounts are elevated-privilege accounts linked to employees.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="is_admin_account"
+                checked={adminAccountForm.is_admin_account}
+                onChange={(e) => setAdminAccountForm(prev => ({ ...prev, is_admin_account: e.target.checked }))}
+                className="h-4 w-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+              />
+              <Label htmlFor="is_admin_account" className="cursor-pointer">
+                Mark as Admin Account
+              </Label>
+            </div>
+
+            {adminAccountForm.is_admin_account && (
+              <>
+                <div>
+                  <Label className="text-xs font-medium mb-2 block">Admin Account Name (optional)</Label>
+                  <Input
+                    placeholder="e.g., IT Admin, Root Access, Domain Admin"
+                    value={adminAccountForm.admin_account_name}
+                    onChange={(e) => setAdminAccountForm(prev => ({ ...prev, admin_account_name: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A descriptive name for this admin account
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-medium mb-2 block">Owner (linked employee)</Label>
+                  <Select
+                    value={adminAccountForm.admin_account_owner_id}
+                    onValueChange={(v) => setAdminAccountForm(prev => ({ ...prev, admin_account_owner_id: v === '__none__' ? '' : v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No owner</SelectItem>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.full_name} ({emp.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The employee who owns this admin account. If offboarded, a warning will be shown.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <input
+                    type="checkbox"
+                    id="apply_globally_admin"
+                    checked={adminAccountForm.apply_globally}
+                    onChange={(e) => setAdminAccountForm(prev => ({ ...prev, apply_globally: e.target.checked }))}
+                    className="h-4 w-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <div>
+                    <Label htmlFor="apply_globally_admin" className="cursor-pointer font-medium">
+                      Apply globally
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Add this email to the global admin account patterns list.
+                      All licenses with this email will be automatically marked as admin accounts.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAdminAccountDialog(null)}>Cancel</Button>
+            <Button onClick={handleSaveAdminAccount} disabled={savingAdminAccount}>
+              {savingAdminAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
             </Button>
           </DialogFooter>
