@@ -1,6 +1,9 @@
 /**
  * Formatting utilities for dates, currencies, and other common formats.
+ * Uses user's locale from browser settings for internationalization.
  */
+
+import { getLocale } from './locale';
 
 /**
  * Format a date as relative time (e.g., "2 hours ago", "3 days ago")
@@ -23,7 +26,7 @@ export function formatRelativeTime(date: string | Date): string {
   if (diffWeek < 4) return `${diffWeek}w ago`;
   if (diffMonth < 12) return `${diffMonth}mo ago`;
 
-  return d.toLocaleDateString('de-DE', {
+  return d.toLocaleDateString(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -31,12 +34,12 @@ export function formatRelativeTime(date: string | Date): string {
 }
 
 /**
- * Format a date for display (German locale)
+ * Format a date for display (uses user's locale)
  */
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-';
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('de-DE', {
+  return d.toLocaleDateString(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -49,7 +52,7 @@ export function formatDate(date: string | Date | null | undefined): string {
 export function formatDateTime(date: string | Date | null | undefined): string {
   if (!date) return '-';
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString('de-DE', {
+  return d.toLocaleString(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -69,7 +72,7 @@ export function formatCurrency(
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return '-';
 
-  return new Intl.NumberFormat('de-DE', {
+  return new Intl.NumberFormat(getLocale(), {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -82,7 +85,7 @@ export function formatCurrency(
  */
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('de-DE').format(value);
+  return new Intl.NumberFormat(getLocale()).format(value);
 }
 
 /**
@@ -115,7 +118,7 @@ export function formatMonthlyCost(
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return '-';
 
-  const formatted = new Intl.NumberFormat('de-DE', {
+  const formatted = new Intl.NumberFormat(getLocale(), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(num);

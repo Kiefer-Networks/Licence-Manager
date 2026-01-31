@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Loader2, ChevronLeft, ChevronRight, FileText, RefreshCw, Filter, Eye } from 'lucide-react';
+import { getLocale } from '@/lib/locale';
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -44,7 +45,7 @@ function formatRelativeTime(dateString: string): string {
   if (diffHour < 24) return `${diffHour}h ago`;
   if (diffDay < 7) return `${diffDay}d ago`;
 
-  return date.toLocaleDateString('de-DE', {
+  return date.toLocaleDateString(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -259,7 +260,7 @@ export default function AuditLogPage() {
                 logs.map((log) => (
                   <TableRow key={log.id} className="hover:bg-zinc-50">
                     <TableCell className="text-sm">
-                      <span title={new Date(log.created_at).toLocaleString('de-DE')}>
+                      <span title={new Date(log.created_at).toLocaleString(getLocale())}>
                         {formatRelativeTime(log.created_at)}
                       </span>
                     </TableCell>
@@ -347,7 +348,7 @@ export default function AuditLogPage() {
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Timestamp</p>
                   <p className="text-sm">
-                    {new Date(selectedLog.created_at).toLocaleString('de-DE', {
+                    {new Date(selectedLog.created_at).toLocaleString(getLocale(), {
                       dateStyle: 'full',
                       timeStyle: 'medium',
                     })}

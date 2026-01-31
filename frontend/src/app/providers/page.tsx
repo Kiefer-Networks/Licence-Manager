@@ -25,6 +25,7 @@ import { api, Provider } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X } from 'lucide-react';
 import Link from 'next/link';
+import { getLocale } from '@/lib/locale';
 
 const hrisProvider = { value: 'hibob', label: 'HiBob', fields: ['auth_token'] };
 
@@ -629,7 +630,7 @@ export default function ProvidersPage() {
                     <div>
                       <p className="font-medium text-sm">{provider.display_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {provider.last_sync_at ? `Last sync: ${new Date(provider.last_sync_at).toLocaleString('de-DE')}` : 'Never synced'}
+                        {provider.last_sync_at ? `Last sync: ${new Date(provider.last_sync_at).toLocaleString(getLocale())}` : 'Never synced'}
                       </p>
                     </div>
                   </div>
@@ -706,7 +707,7 @@ export default function ProvidersPage() {
                             ) : (
                               <>{provider.license_count} license{provider.license_count !== 1 ? 's' : ''}</>
                             )}
-                            {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString('de-DE')}`}
+                            {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString(getLocale())}`}
                           </p>
                         </div>
                       </div>

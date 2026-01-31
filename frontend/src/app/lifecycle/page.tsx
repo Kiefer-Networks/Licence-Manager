@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { CancellationDialog } from '@/components/licenses/CancellationDialog';
 import { RenewDialog } from '@/components/licenses/RenewDialog';
+import { getLocale } from '@/lib/locale';
 
 export default function LifecyclePage() {
   const [overview, setOverview] = useState<LicenseLifecycleOverview | null>(null);
@@ -272,7 +273,7 @@ export default function LifecyclePage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {new Date(license.expires_at).toLocaleDateString('de-DE')}
+                          {new Date(license.expires_at).toLocaleDateString(getLocale())}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
@@ -366,13 +367,13 @@ export default function LifecyclePage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {new Date(license.cancelled_at).toLocaleDateString('de-DE')}
+                          {new Date(license.cancelled_at).toLocaleDateString(getLocale())}
                           {license.cancelled_by_name && (
                             <p className="text-muted-foreground">by {license.cancelled_by_name}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {new Date(license.cancellation_effective_date).toLocaleDateString('de-DE')}
+                          {new Date(license.cancellation_effective_date).toLocaleDateString(getLocale())}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">
                           {license.cancellation_reason || '-'}
@@ -441,7 +442,7 @@ export default function LifecyclePage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          {license.expires_at ? new Date(license.expires_at).toLocaleDateString('de-DE') : '-'}
+                          {license.expires_at ? new Date(license.expires_at).toLocaleDateString(getLocale()) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {license.monthly_cost ? `EUR ${Number(license.monthly_cost).toFixed(2)}` : '-'}

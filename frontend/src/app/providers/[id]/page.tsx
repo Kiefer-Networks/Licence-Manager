@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
+import { getLocale } from '@/lib/locale';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyButton, CopyableText } from '@/components/ui/copy-button';
@@ -1078,7 +1079,7 @@ export default function ProviderDetailPage() {
                 {!isManual && provider.last_sync_at && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Last Sync</span>
-                    <span>{new Date(provider.last_sync_at).toLocaleString('de-DE')}</span>
+                    <span>{new Date(provider.last_sync_at).toLocaleString(getLocale())}</span>
                   </div>
                 )}
               </CardContent>
@@ -1144,7 +1145,7 @@ export default function ProviderDetailPage() {
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Expires</span>
                             <span className={isExpiringSoon ? 'text-red-600 font-medium' : ''}>
-                              {expiresAt.toLocaleDateString('de-DE')}
+                              {expiresAt.toLocaleDateString(getLocale())}
                               {isExpiringSoon && (
                                 <Badge variant="outline" className="ml-2 text-red-600 border-red-200 bg-red-50">
                                   <AlertTriangle className="h-3 w-3 mr-1" />
@@ -1274,7 +1275,7 @@ export default function ProviderDetailPage() {
                           </div>
                           <div className="text-center">
                             <p className="text-xs text-muted-foreground uppercase">{isYearly ? 'Yearly' : 'Monthly'} Cost</p>
-                            <p className="text-xl font-semibold">{packageEdit.currency} {packageCost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xl font-semibold">{packageEdit.currency} {packageCost.toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                           <div className="text-center">
                             <p className="text-xs text-muted-foreground uppercase">Cost per User</p>
@@ -1288,7 +1289,7 @@ export default function ProviderDetailPage() {
                           {expiresAt && (
                             <div className="text-center">
                               <p className="text-xs text-muted-foreground uppercase">Expires</p>
-                              <p className="text-xl font-semibold">{expiresAt.toLocaleDateString('de-DE')}</p>
+                              <p className="text-xl font-semibold">{expiresAt.toLocaleDateString(getLocale())}</p>
                             </div>
                           )}
                         </div>
@@ -1760,8 +1761,8 @@ export default function ProviderDetailPage() {
                             {(pkg.contract_start || pkg.contract_end) && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                {pkg.contract_start && <span>From {new Date(pkg.contract_start).toLocaleDateString('de-DE')}</span>}
-                                {pkg.contract_end && <span>to {new Date(pkg.contract_end).toLocaleDateString('de-DE')}</span>}
+                                {pkg.contract_start && <span>From {new Date(pkg.contract_start).toLocaleDateString(getLocale())}</span>}
+                                {pkg.contract_end && <span>to {new Date(pkg.contract_end).toLocaleDateString(getLocale())}</span>}
                                 {pkg.auto_renew && <Badge variant="secondary" className="text-xs">Auto-renew</Badge>}
                               </div>
                             )}
@@ -1769,7 +1770,7 @@ export default function ProviderDetailPage() {
                               <div className="flex items-center gap-2 mt-2 text-xs text-red-600">
                                 <AlertTriangle className="h-3 w-3" />
                                 <span>
-                                  Cancellation effective: {new Date(pkg.cancellation_effective_date).toLocaleDateString('de-DE')}
+                                  Cancellation effective: {new Date(pkg.cancellation_effective_date).toLocaleDateString(getLocale())}
                                   {pkg.cancellation_reason && ` - ${pkg.cancellation_reason}`}
                                 </span>
                               </div>
@@ -1853,7 +1854,7 @@ export default function ProviderDetailPage() {
                             {lic.renewal_date && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                <span>Renews {new Date(lic.renewal_date).toLocaleDateString('de-DE')}</span>
+                                <span>Renews {new Date(lic.renewal_date).toLocaleDateString(getLocale())}</span>
                               </div>
                             )}
                           </div>
@@ -1994,7 +1995,7 @@ export default function ProviderDetailPage() {
                           {formatFileSize(file.file_size)}
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {new Date(file.created_at).toLocaleDateString('de-DE')}
+                          {new Date(file.created_at).toLocaleDateString(getLocale())}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">

@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
+import { getLocale } from '@/lib/locale';
 
 const REMOVABLE_PROVIDERS = ['cursor'];
 
@@ -304,7 +305,7 @@ export default function UserDetailPage() {
                 <span className="text-xs font-medium uppercase">Start Date</span>
               </div>
               <p className="text-sm font-medium">
-                {employee.start_date ? new Date(employee.start_date).toLocaleDateString('de-DE') : '-'}
+                {employee.start_date ? new Date(employee.start_date).toLocaleDateString(getLocale()) : '-'}
               </p>
             </CardContent>
           </Card>
@@ -374,7 +375,7 @@ export default function UserDetailPage() {
                           {license.last_activity_at ? (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {new Date(license.last_activity_at).toLocaleDateString('de-DE')}
+                              {new Date(license.last_activity_at).toLocaleDateString(getLocale())}
                             </span>
                           ) : '-'}
                         </td>
@@ -425,7 +426,7 @@ export default function UserDetailPage() {
                 <div>
                   <p className="font-medium text-red-600">Offboarded</p>
                   <p className="text-sm text-muted-foreground">
-                    Termination date: {new Date(employee.termination_date).toLocaleDateString('de-DE')}
+                    Termination date: {new Date(employee.termination_date).toLocaleDateString(getLocale())}
                   </p>
                 </div>
               </div>

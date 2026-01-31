@@ -18,6 +18,7 @@ import { handleSilentError } from '@/lib/error-handler';
 import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight, Bot, ShieldCheck, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ServiceAccountsTab } from '@/components/users/ServiceAccountsTab';
+import { getLocale } from '@/lib/locale';
 import { AdminAccountsTab } from '@/components/users/AdminAccountsTab';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -31,7 +32,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('de-DE');
+  return new Date(dateStr).toLocaleDateString(getLocale());
 }
 
 export default function UsersPage() {

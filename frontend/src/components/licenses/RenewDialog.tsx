@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RefreshCw } from 'lucide-react';
+import { getLocale } from '@/lib/locale';
 
 interface RenewDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export function RenewDialog({
             </p>
             {currentExpiration && (
               <p className="text-xs text-emerald-700 mt-1">
-                Current expiration: {new Date(currentExpiration).toLocaleDateString('de-DE')}
+                Current expiration: {new Date(currentExpiration).toLocaleDateString(getLocale())}
               </p>
             )}
           </div>

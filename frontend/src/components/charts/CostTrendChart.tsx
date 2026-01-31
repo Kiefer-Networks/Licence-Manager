@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { CostTrendEntry } from '@/lib/api';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { getLocale } from '@/lib/locale';
 
 interface CostTrendChartProps {
   data: CostTrendEntry[];
@@ -28,7 +29,7 @@ export function CostTrendChart({
 }: CostTrendChartProps) {
   const chartData = useMemo(() => {
     return data.map((entry) => ({
-      month: new Date(entry.month).toLocaleDateString('de-DE', {
+      month: new Date(entry.month).toLocaleDateString(getLocale(), {
         month: 'short',
         year: '2-digit',
       }),
@@ -40,7 +41,7 @@ export function CostTrendChart({
   const currentCost = data.length > 0 ? Number(data[data.length - 1].total_cost) : 0;
 
   const formatCost = (value: number) => {
-    return `EUR ${value.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    return `EUR ${value.toLocaleString(getLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
 
   const TrendIcon = trendDirection === 'up' ? TrendingUp : trendDirection === 'down' ? TrendingDown : Minus;

@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { getLocale } from '@/lib/locale';
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -239,7 +240,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monthly Cost</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
-                      EUR {totalCost.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      EUR {totalCost.toLocaleString(getLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       All active licenses
@@ -315,7 +316,7 @@ export default function DashboardPage() {
                           <div className="h-8 w-px bg-zinc-200" />
                           <div>
                             <p className="text-2xl font-semibold text-emerald-600">
-                              EUR {potentialSavings.toLocaleString('de-DE', { minimumFractionDigits: 0 })}
+                              EUR {potentialSavings.toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                             </p>
                             <p className="text-xs text-muted-foreground">potential savings/mo</p>
                           </div>
@@ -435,12 +436,12 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-sm tabular-nums">
-                          EUR {Number(provider.monthly_cost || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}
+                          EUR {Number(provider.monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
                           <Clock className="h-3 w-3" />
                           {provider.last_sync_at
-                            ? new Date(provider.last_sync_at).toLocaleDateString('de-DE')
+                            ? new Date(provider.last_sync_at).toLocaleDateString(getLocale())
                             : 'Never'}
                         </p>
                       </div>
