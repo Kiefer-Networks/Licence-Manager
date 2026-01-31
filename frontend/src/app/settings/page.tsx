@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,8 @@ import { BackupExportDialog, BackupRestoreDialog } from '@/components/backup';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function SettingsPage() {
+  const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -438,8 +441,8 @@ export default function SettingsPage() {
 
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage company settings and payment methods</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{t('general')}</p>
         </div>
 
         {/* Company Domains Section */}
@@ -447,7 +450,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Company Domains</h2>
+              <h2 className="text-sm font-medium">{t('companyDomains')}</h2>
             </div>
           </div>
 

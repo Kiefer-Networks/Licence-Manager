@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,8 @@ import Link from 'next/link';
 import { getLocale } from '@/lib/locale';
 
 export default function ReportsPage() {
+  const t = useTranslations('reports');
+  const tCommon = useTranslations('common');
   const [inactiveReport, setInactiveReport] = useState<InactiveLicenseReport | null>(null);
   const [offboardingReport, setOffboardingReport] = useState<OffboardingReport | null>(null);
   const [costReport, setCostReport] = useState<CostReport | null>(null);
@@ -118,8 +121,8 @@ export default function ReportsPage() {
         {/* Header */}
         <div className="flex items-start justify-between pt-2">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">License usage and cost analysis</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{t('utilizationReport')}</p>
           </div>
 
           <div className="flex items-center gap-3">
