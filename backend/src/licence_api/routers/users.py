@@ -14,7 +14,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.employee_service import EmployeeService
-from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
+from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,6 +57,12 @@ def get_avatar_base64(hibob_id: str) -> str | None:
 # Allowed status values for employees
 ALLOWED_EMPLOYEE_STATUSES = {"active", "offboarded", "pending", "on_leave"}
 
+# Allowed sort columns for employees (whitelist to prevent injection)
+ALLOWED_EMPLOYEE_SORT_COLUMNS = {
+    "full_name", "email", "department", "status",
+    "start_date", "termination_date", "synced_at",
+}
+
 
 def get_employee_service(db: AsyncSession = Depends(get_db)) -> EmployeeService:
     """Get EmployeeService instance."""
@@ -81,13 +87,14 @@ async def list_employees(
     sanitized_search = sanitize_search(search)
     sanitized_department = sanitize_department(department)
     sanitized_status = sanitize_status(status, ALLOWED_EMPLOYEE_STATUSES)
+    validated_sort_by = validate_sort_by(sort_by, ALLOWED_EMPLOYEE_SORT_COLUMNS, "full_name")
 
     offset = (page - 1) * page_size
     employees, total, license_counts = await employee_service.list_employees(
         status=sanitized_status,
         department=sanitized_department,
         search=sanitized_search,
-        sort_by=sort_by,
+        sort_by=validated_sort_by,
         sort_dir=sort_dir,
         offset=offset,
         limit=page_size,

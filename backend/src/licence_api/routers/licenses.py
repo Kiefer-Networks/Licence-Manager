@@ -19,7 +19,7 @@ from licence_api.models.dto.license import (
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
-from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
+from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
 
 router = APIRouter()
 
@@ -88,6 +88,12 @@ class MatchActionResponse(BaseModel):
 # Allowed status values for licenses
 ALLOWED_LICENSE_STATUSES = {"active", "inactive", "suspended", "pending"}
 
+# Allowed sort columns for licenses (whitelist to prevent injection)
+ALLOWED_LICENSE_SORT_COLUMNS = {
+    "external_user_id", "synced_at", "status", "created_at",
+    "employee_name", "provider_name", "is_external",
+}
+
 
 @router.get("", response_model=LicenseListResponse)
 async def list_licenses(
@@ -110,6 +116,7 @@ async def list_licenses(
     sanitized_search = sanitize_search(search)
     sanitized_department = sanitize_department(department)
     sanitized_status = sanitize_status(status, ALLOWED_LICENSE_STATUSES)
+    validated_sort_by = validate_sort_by(sort_by, ALLOWED_LICENSE_SORT_COLUMNS, "synced_at")
 
     return await license_service.list_licenses(
         provider_id=provider_id,
@@ -119,7 +126,7 @@ async def list_licenses(
         external_only=external,
         search=sanitized_search,
         department=sanitized_department,
-        sort_by=sort_by,
+        sort_by=validated_sort_by,
         sort_dir=sort_dir,
         page=page,
         page_size=page_size,
@@ -141,9 +148,10 @@ async def get_categorized_licenses(
 
     Requires licenses.view permission.
     """
+    validated_sort_by = validate_sort_by(sort_by, ALLOWED_LICENSE_SORT_COLUMNS, "external_user_id")
     return await license_service.get_categorized_licenses(
         provider_id=provider_id,
-        sort_by=sort_by,
+        sort_by=validated_sort_by,
         sort_dir=sort_dir,
     )
 

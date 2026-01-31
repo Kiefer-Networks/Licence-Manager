@@ -19,8 +19,12 @@ from licence_api.models.dto.service_account import (
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
+from licence_api.utils.validation import validate_sort_by
 
 router = APIRouter()
+
+# Allowed sort columns for service account licenses (whitelist to prevent injection)
+ALLOWED_SERVICE_LICENSE_SORT_COLUMNS = {"external_user_id", "synced_at", "created_at"}
 
 
 class ServiceAccountLicenseListResponse(BaseModel):
@@ -167,10 +171,11 @@ async def list_service_account_licenses(
 
     Requires licenses.view permission.
     """
+    validated_sort_by = validate_sort_by(sort_by, ALLOWED_SERVICE_LICENSE_SORT_COLUMNS, "external_user_id")
     items, total = await service.get_service_account_licenses(
         search=search,
         provider_id=provider_id,
-        sort_by=sort_by,
+        sort_by=validated_sort_by,
         sort_dir=sort_dir,
         page=page,
         page_size=page_size,
