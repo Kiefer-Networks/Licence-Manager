@@ -55,7 +55,8 @@ class SlackProvider(BaseProvider):
                 )
                 data = response.json()
                 return data.get("ok", False)
-        except Exception:
+        except Exception as e:
+            logger.warning("Slack connection test failed: %s", e)
             return False
 
     async def fetch_licenses(self) -> list[dict[str, Any]]:
@@ -120,8 +121,8 @@ class SlackProvider(BaseProvider):
                     workspace_plan = plan_map.get(
                         plan, f"Slack {plan.title()}" if plan else "Slack"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to fetch Slack billing info: %s", e)
 
             # Get billing info to know who actually has a paid license
             try:
@@ -134,8 +135,8 @@ class SlackProvider(BaseProvider):
 
                 if billing_data.get("ok"):
                     billable_info = billing_data.get("billable_info", {})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to fetch Slack billable info: %s", e)
 
             # Fetch all users with pagination
             cursor = None
