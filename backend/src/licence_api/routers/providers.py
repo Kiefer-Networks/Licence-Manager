@@ -31,6 +31,7 @@ from licence_api.services.audit_service import AuditService, AuditAction, Resour
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.pricing_service import PricingService
 from licence_api.services.sync_service import SyncService
+from licence_api.utils.file_validation import validate_svg_content
 
 router = APIRouter()
 
@@ -369,7 +370,11 @@ LOGO_SIGNATURES = {
 
 
 def validate_logo_signature(content: bytes, extension: str) -> bool:
-    """Validate logo file content matches expected signature."""
+    """Validate logo file content matches expected signature.
+
+    For SVG files, also validates that the content doesn't contain
+    dangerous elements like scripts or event handlers.
+    """
     ext_lower = extension.lower()
     signatures = LOGO_SIGNATURES.get(ext_lower)
     if not signatures:
@@ -385,7 +390,10 @@ def validate_logo_signature(content: bytes, extension: str) -> bool:
     if ext_lower == ".svg":
         # Check first 1000 bytes for SVG indicators
         header = content[:1000].lower()
-        return b"<svg" in header or b"<?xml" in header
+        if not (b"<svg" in header or b"<?xml" in header):
+            return False
+        # Validate SVG content for dangerous elements
+        return validate_svg_content(content)
 
     for sig in signatures:
         if content.startswith(sig):
