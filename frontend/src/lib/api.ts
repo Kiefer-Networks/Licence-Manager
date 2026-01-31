@@ -1030,6 +1030,7 @@ export interface CurrentUserInfo {
   id: string;
   email: string;
   name?: string;
+  picture_url?: string;
   auth_provider: string;
   roles: string[];
   permissions: string[];

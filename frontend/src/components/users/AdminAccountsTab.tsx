@@ -475,7 +475,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                             {license.admin_account_owner_name}
                           </span>
                           {license.admin_account_owner_status === 'offboarded' && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-red-500" title="Owner offboarded" />
+                            <span title="Owner offboarded"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
                           )}
                         </div>
                       ) : (
@@ -606,7 +606,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                               {license.admin_account_owner_name}
                             </span>
                             {license.admin_account_owner_status === 'offboarded' && (
-                              <AlertTriangle className="h-3.5 w-3.5 text-red-500" title="Owner is offboarded" />
+                              <span title="Owner is offboarded"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
                             )}
                           </div>
                         ) : (
