@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Globe, Skull, UserMinus, Bot } from 'lucide-react';
+import { Globe, Skull, UserMinus, Bot, HelpCircle, UserCheck, AlertCircle } from 'lucide-react';
 
 // Minimal type for LicenseStatusBadge - only the fields it actually needs
 interface LicenseForBadge {
@@ -11,6 +11,10 @@ interface LicenseForBadge {
   status?: string;
   is_service_account?: boolean;
   service_account_name?: string | null;
+  // Match fields
+  match_status?: string | null;
+  match_confidence?: number | null;
+  suggested_employee_name?: string | null;
 }
 
 interface LicenseStatusBadgeProps {
@@ -21,10 +25,14 @@ interface LicenseStatusBadgeProps {
 /**
  * Shows multiple status badges based on license state.
  * Badge Priority (all applicable badges shown):
- * 1. External (orange) - ALWAYS if is_external_email=true
- * 2. Offboarded (red) - if employee status is offboarded
- * 3. Inactive (gray) - if provider status is inactive/suspended
- * 4. Unassigned (amber) - if no employee linked (optional)
+ * 1. Service Account (blue) - intentionally not linked to HRIS
+ * 2. External Guest (green) - confirmed external guest
+ * 3. Suggested Match (purple) - has suggested employee, needs review
+ * 4. External Review (orange) - external email, needs decision
+ * 5. External (orange) - external email (legacy)
+ * 6. Offboarded (red) - if employee status is offboarded
+ * 7. Inactive (gray) - if provider status is inactive/suspended
+ * 8. Unassigned (amber) - if no employee linked (optional)
  */
 export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseStatusBadgeProps) {
   const badges: React.ReactNode[] = [];
@@ -43,8 +51,51 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
     );
   }
 
-  // External badge - ALWAYS shown when is_external_email=true
-  if (license.is_external_email) {
+  // External Guest badge - confirmed external guest
+  if (license.match_status === 'external_guest') {
+    badges.push(
+      <Badge
+        key="external-guest"
+        variant="outline"
+        className="text-green-600 border-green-200 bg-green-50"
+      >
+        <UserCheck className="h-3 w-3 mr-1" />
+        External Guest
+      </Badge>
+    );
+  }
+
+  // Suggested Match badge - has suggested employee, needs review
+  if (license.match_status === 'suggested' && license.suggested_employee_name) {
+    const confidence = license.match_confidence ? Math.round(license.match_confidence * 100) : 0;
+    badges.push(
+      <Badge
+        key="suggested"
+        variant="outline"
+        className="text-purple-600 border-purple-200 bg-purple-50"
+      >
+        <HelpCircle className="h-3 w-3 mr-1" />
+        Suggested: {license.suggested_employee_name} ({confidence}%)
+      </Badge>
+    );
+  }
+
+  // External Review badge - external email needing decision
+  if (license.match_status === 'external_review') {
+    badges.push(
+      <Badge
+        key="external-review"
+        variant="outline"
+        className="text-orange-600 border-orange-200 bg-orange-50"
+      >
+        <AlertCircle className="h-3 w-3 mr-1" />
+        External (Review)
+      </Badge>
+    );
+  }
+
+  // External badge - ALWAYS shown when is_external_email=true (legacy, not categorized yet)
+  if (license.is_external_email && !license.match_status) {
     badges.push(
       <Badge
         key="external"
@@ -85,8 +136,8 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
     );
   }
 
-  // Unassigned badge - if no employee linked
-  if (showUnassigned && !license.employee_id && badges.length === 0) {
+  // Unassigned badge - if no employee linked and no suggested match
+  if (showUnassigned && !license.employee_id && !license.match_status && badges.length === 0) {
     badges.push(
       <Badge
         key="unassigned"

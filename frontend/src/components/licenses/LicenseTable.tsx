@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2 } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ interface LicenseTableProps {
   onToggleSelect?: (id: string) => void;
   onToggleSelectAll?: () => void;
   onServiceAccountClick?: (license: License) => void;
+  onAdminAccountClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
 }
@@ -41,10 +42,11 @@ export function LicenseTable({
   onToggleSelect,
   onToggleSelectAll,
   onServiceAccountClick,
+  onAdminAccountClick,
   onAssignClick,
   onDeleteClick,
 }: LicenseTableProps) {
-  const hasActions = onServiceAccountClick || onAssignClick || onDeleteClick;
+  const hasActions = onServiceAccountClick || onAdminAccountClick || onAssignClick || onDeleteClick;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -80,7 +82,10 @@ export function LicenseTable({
           l.provider_name.toLowerCase().includes(searchLower) ||
           l.license_type?.toLowerCase().includes(searchLower) ||
           l.service_account_name?.toLowerCase().includes(searchLower) ||
-          l.service_account_owner_name?.toLowerCase().includes(searchLower)
+          l.service_account_owner_name?.toLowerCase().includes(searchLower) ||
+          // Search in metadata (e.g., JetBrains email/assignee_name)
+          l.metadata?.email?.toLowerCase().includes(searchLower) ||
+          l.metadata?.assignee_name?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -91,8 +96,9 @@ export function LicenseTable({
 
       switch (sortColumn) {
         case 'external_user_id':
-          aVal = a.external_user_id.toLowerCase();
-          bVal = b.external_user_id.toLowerCase();
+          // Use metadata.email if available (e.g., JetBrains), otherwise external_user_id
+          aVal = (a.metadata?.email || a.external_user_id).toLowerCase();
+          bVal = (b.metadata?.email || b.external_user_id).toLowerCase();
           break;
         case 'employee_name':
           aVal = (a.employee_name || '').toLowerCase();
@@ -223,7 +229,18 @@ export function LicenseTable({
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    <span className="text-muted-foreground">{license.external_user_id}</span>
+                    <div>
+                      {/* Show email from metadata if available (e.g., JetBrains), otherwise external_user_id */}
+                      <span className="text-muted-foreground">
+                        {license.metadata?.email || license.external_user_id}
+                      </span>
+                      {/* Show assignee name if available and different from email */}
+                      {license.metadata?.assignee_name && license.metadata?.email && (
+                        <span className="block text-xs text-muted-foreground/60">
+                          {license.metadata.assignee_name}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {showEmployee && (
                     <td className="px-4 py-3">
@@ -284,13 +301,19 @@ export function LicenseTable({
                               {license.is_service_account ? 'Edit Service Account' : 'Mark as Service Account'}
                             </DropdownMenuItem>
                           )}
+                          {onAdminAccountClick && (
+                            <DropdownMenuItem onClick={() => onAdminAccountClick(license)}>
+                              <ShieldCheck className="h-4 w-4 mr-2" />
+                              {license.is_admin_account ? 'Edit Admin Account' : 'Mark as Admin Account'}
+                            </DropdownMenuItem>
+                          )}
                           {onAssignClick && !license.is_service_account && (
                             <DropdownMenuItem onClick={() => onAssignClick(license)}>
                               <UserPlus className="h-4 w-4 mr-2" />
                               Assign to Employee
                             </DropdownMenuItem>
                           )}
-                          {(onServiceAccountClick || onAssignClick) && onDeleteClick && (
+                          {(onServiceAccountClick || onAdminAccountClick || onAssignClick) && onDeleteClick && (
                             <DropdownMenuSeparator />
                           )}
                           {onDeleteClick && (

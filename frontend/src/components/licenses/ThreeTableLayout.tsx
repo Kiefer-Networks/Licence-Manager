@@ -16,6 +16,7 @@ interface ThreeTableLayoutProps {
   showStats?: boolean;
   maxUsers?: number | null; // For package providers
   onServiceAccountClick?: (license: License) => void;
+  onAdminAccountClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
 }
@@ -23,9 +24,10 @@ interface ThreeTableLayoutProps {
 type Tab = 'assigned' | 'unassigned' | 'external' | 'service_accounts';
 
 // Sort by email alphabetically
+// Use metadata.email if available (e.g., JetBrains), otherwise external_user_id
 const sortByEmail = (a: License, b: License) => {
-  const emailA = (a.external_user_id || '').toLowerCase();
-  const emailB = (b.external_user_id || '').toLowerCase();
+  const emailA = (a.metadata?.email || a.external_user_id || '').toLowerCase();
+  const emailB = (b.metadata?.email || b.external_user_id || '').toLowerCase();
   return emailA.localeCompare(emailB);
 };
 
@@ -39,6 +41,7 @@ export function ThreeTableLayout({
   showStats = true,
   maxUsers = null,
   onServiceAccountClick,
+  onAdminAccountClick,
   onAssignClick,
   onDeleteClick,
 }: ThreeTableLayoutProps) {
@@ -183,6 +186,7 @@ export function ThreeTableLayout({
                   showEmployee={true}
                   emptyMessage="No active licenses outside HRIS"
                   onServiceAccountClick={onServiceAccountClick}
+                  onAdminAccountClick={onAdminAccountClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
                 />
@@ -206,6 +210,7 @@ export function ThreeTableLayout({
                 showEmployee={true}
                 emptyMessage="No inactive licenses"
                 onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -230,6 +235,7 @@ export function ThreeTableLayout({
                 showEmployee={true}
                 emptyMessage="No active external licenses"
                 onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -252,6 +258,7 @@ export function ThreeTableLayout({
                 showEmployee={true}
                 emptyMessage="No inactive external licenses"
                 onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -276,6 +283,7 @@ export function ThreeTableLayout({
                 showEmployee={true}
                 emptyMessage="No active service accounts"
                 onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
                 onDeleteClick={onDeleteClick}
               />
             ) : (
@@ -297,6 +305,7 @@ export function ThreeTableLayout({
                 showEmployee={true}
                 emptyMessage="No inactive service accounts"
                 onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
                 onDeleteClick={onDeleteClick}
               />
             </div>
@@ -310,6 +319,7 @@ export function ThreeTableLayout({
           showEmployee={true}
           emptyMessage={getEmptyMessage()}
           onServiceAccountClick={onServiceAccountClick}
+          onAdminAccountClick={onAdminAccountClick}
           onAssignClick={onAssignClick}
           onDeleteClick={onDeleteClick}
         />
