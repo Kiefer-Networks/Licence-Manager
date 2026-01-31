@@ -78,6 +78,10 @@ class AuditAction:
     ADMIN_ACCOUNT_PATTERN_DELETE = "admin_account_pattern_delete"
     ADMIN_ACCOUNT_PATTERNS_APPLY = "admin_account_patterns_apply"
 
+    # Backup
+    EXPORT = "export"
+    IMPORT = "import"
+
 
 class ResourceType:
     """Standard resource types for audit logging."""
