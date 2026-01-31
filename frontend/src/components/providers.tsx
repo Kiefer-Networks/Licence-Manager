@@ -1,10 +1,17 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NextIntlClientProvider, AbstractIntlMessages } from 'next-intl';
 import { useState } from 'react';
 import { AuthProvider } from '@/components/auth-provider';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+interface ProvidersProps {
+  children: React.ReactNode;
+  locale: string;
+  messages: AbstractIntlMessages;
+}
+
+export function Providers({ children, locale, messages }: ProvidersProps) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -17,8 +24,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
-    </QueryClientProvider>
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>{children}</AuthProvider>
+      </QueryClientProvider>
+    </NextIntlClientProvider>
   );
 }
