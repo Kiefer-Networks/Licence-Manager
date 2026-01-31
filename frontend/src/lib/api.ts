@@ -215,6 +215,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: 'license_inactive', label: 'Inactive License', description: 'When a license has been inactive for 30+ days' },
   { value: 'sync_error', label: 'Sync Error', description: 'When a provider sync fails' },
   { value: 'payment_expiring', label: 'Payment Expiring', description: 'When a payment method is about to expire' },
+  { value: 'license_expiring', label: 'License Expiring', description: 'When a license is about to expire within the configured threshold' },
 ] as const;
 
 export interface ProviderLicenseInfo {
@@ -289,6 +290,27 @@ export interface License {
   service_account_name?: string;
   service_account_owner_id?: string;
   service_account_owner_name?: string;
+  // Admin account fields
+  is_admin_account?: boolean;
+  admin_account_name?: string;
+  admin_account_owner_id?: string;
+  admin_account_owner_name?: string;
+  admin_account_owner_status?: string;
+  // Match fields
+  suggested_employee_id?: string;
+  suggested_employee_name?: string;
+  suggested_employee_email?: string;
+  match_confidence?: number;
+  match_status?: string;  // auto_matched, suggested, confirmed, rejected, external_guest, external_review
+  match_method?: string;  // exact_email, alias, local_part, fuzzy_name
+  // Expiration tracking
+  expires_at?: string;
+  needs_reorder?: boolean;
+  // Cancellation tracking
+  cancelled_at?: string;
+  cancellation_effective_date?: string;
+  cancellation_reason?: string;
+  cancelled_by?: string;
 }
 
 export interface LicenseListResponse {
@@ -305,9 +327,14 @@ export interface LicenseStats {
   total_inactive: number;
   total_external: number;
   total_service_accounts: number;
+  total_suggested: number;
+  total_external_review: number;
+  total_external_guest: number;
   monthly_cost: string;
   potential_savings: string;
   currency: string;
+  has_currency_mix: boolean;
+  currencies_found: string[];
 }
 
 export interface CategorizedLicensesResponse {
@@ -315,7 +342,17 @@ export interface CategorizedLicensesResponse {
   unassigned: License[];
   external: License[];
   service_accounts: License[];
+  // New categories for match workflow
+  suggested: License[];
+  external_review: License[];
+  external_guest: License[];
   stats: LicenseStats;
+}
+
+export interface MatchActionResponse {
+  success: boolean;
+  message: string;
+  license?: License;
 }
 
 export interface Employee {
@@ -420,6 +457,216 @@ export interface CostReport {
   total_cost: string;
   currency: string;
   monthly_costs: MonthlyCost[];
+  has_currency_mix: boolean;
+  currencies_found: string[];
+}
+
+// Quick Win Report Types
+export interface ExpiringContract {
+  package_id: string;
+  provider_id: string;
+  provider_name: string;
+  license_type: string;
+  display_name?: string;
+  total_seats: number;
+  contract_end: string;
+  days_until_expiry: number;
+  auto_renew: boolean;
+  total_cost?: string;
+  currency: string;
+}
+
+export interface ExpiringContractsReport {
+  total_expiring: number;
+  contracts: ExpiringContract[];
+}
+
+export interface ProviderUtilization {
+  provider_id: string;
+  provider_name: string;
+  license_type?: string;
+  purchased_seats: number;
+  active_seats: number;
+  assigned_seats: number;
+  unassigned_seats: number;
+  external_seats: number;
+  utilization_percent: number;
+  monthly_cost?: string;
+  monthly_waste?: string;
+  external_cost?: string;
+  currency: string;
+}
+
+export interface UtilizationReport {
+  total_purchased: number;
+  total_active: number;
+  total_assigned: number;
+  total_unassigned: number;
+  total_external: number;
+  overall_utilization: number;
+  total_monthly_cost: string;
+  total_monthly_waste: string;
+  total_external_cost: string;
+  currency: string;
+  providers: ProviderUtilization[];
+}
+
+export interface CostTrendEntry {
+  month: string;
+  total_cost: string;
+  license_count: number;
+  currency: string;
+}
+
+export interface CostTrendReport {
+  months: CostTrendEntry[];
+  trend_direction: 'up' | 'down' | 'stable';
+  percent_change: number;
+  currency: string;
+  has_data: boolean;
+}
+
+export interface DuplicateAccount {
+  email: string;
+  occurrences: number;
+  providers: string[];
+  names: string[];
+  license_ids: string[];
+  total_monthly_cost?: string;
+}
+
+export interface DuplicateAccountsReport {
+  total_duplicates: number;
+  potential_savings: string;
+  currency: string;
+  duplicates: DuplicateAccount[];
+}
+
+// Cost Breakdown Reports
+export interface DepartmentCost {
+  department: string;
+  employee_count: number;
+  license_count: number;
+  total_monthly_cost: string;
+  cost_per_employee: string;
+  top_providers: string[];
+  currency: string;
+}
+
+export interface CostsByDepartmentReport {
+  total_departments: number;
+  total_monthly_cost: string;
+  average_cost_per_employee: string;
+  currency: string;
+  departments: DepartmentCost[];
+}
+
+export interface EmployeeLicenseInfo {
+  provider_name: string;
+  license_type?: string;
+  monthly_cost?: string;
+}
+
+export interface EmployeeCost {
+  employee_id: string;
+  employee_name: string;
+  employee_email: string;
+  department?: string;
+  status: string;
+  license_count: number;
+  total_monthly_cost: string;
+  licenses: EmployeeLicenseInfo[];
+  currency: string;
+}
+
+export interface CostsByEmployeeReport {
+  total_employees: number;
+  total_monthly_cost: string;
+  average_cost_per_employee: string;
+  median_cost_per_employee: string;
+  max_cost_employee?: string;
+  currency: string;
+  employees: EmployeeCost[];
+}
+
+// License Lifecycle Types
+export interface ExpiringLicense {
+  license_id: string;
+  provider_id: string;
+  provider_name: string;
+  external_user_id: string;
+  license_type?: string;
+  employee_id?: string;
+  employee_name?: string;
+  expires_at: string;
+  days_until_expiry: number;
+  monthly_cost?: string;
+  needs_reorder: boolean;
+  status: string;
+}
+
+export interface ExpiringLicensesReport {
+  total_expiring: number;
+  expiring_within_30_days: number;
+  expiring_within_90_days: number;
+  needs_reorder_count: number;
+  licenses: ExpiringLicense[];
+}
+
+export interface CancelledLicense {
+  license_id: string;
+  provider_id: string;
+  provider_name: string;
+  external_user_id: string;
+  license_type?: string;
+  employee_id?: string;
+  employee_name?: string;
+  cancelled_at: string;
+  cancellation_effective_date: string;
+  cancellation_reason?: string;
+  cancelled_by_name?: string;
+  monthly_cost?: string;
+  is_effective: boolean;
+}
+
+export interface CancelledLicensesReport {
+  total_cancelled: number;
+  pending_effective: number;
+  already_effective: number;
+  licenses: CancelledLicense[];
+}
+
+export interface LicenseLifecycleOverview {
+  total_active: number;
+  total_expiring_soon: number;
+  total_expired: number;
+  total_cancelled: number;
+  total_needs_reorder: number;
+  expiring_licenses: ExpiringLicense[];
+  cancelled_licenses: CancelledLicense[];
+}
+
+// Cancellation Request/Response Types
+export interface CancellationRequest {
+  effective_date: string;
+  reason?: string;
+}
+
+export interface CancellationResponse {
+  id: string;
+  cancelled_at: string;
+  cancellation_effective_date: string;
+  cancellation_reason?: string;
+  cancelled_by?: string;
+}
+
+export interface RenewRequest {
+  new_expiration_date: string;
+  clear_cancellation?: boolean;
+}
+
+export interface NeedsReorderUpdate {
+  needs_reorder: boolean;
 }
 
 export interface TestConnectionResponse {
@@ -523,6 +770,13 @@ export interface LicensePackage {
   contract_end?: string;
   auto_renew: boolean;
   notes?: string;
+  // Cancellation tracking
+  cancelled_at?: string;
+  cancellation_effective_date?: string;
+  cancellation_reason?: string;
+  cancelled_by?: string;
+  needs_reorder?: boolean;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -586,6 +840,103 @@ export interface ServiceAccountUpdate {
   is_service_account: boolean;
   service_account_name?: string;
   service_account_owner_id?: string;
+  apply_globally?: boolean;  // Add email to global service account patterns
+}
+
+// Service Account Patterns
+export interface ServiceAccountPattern {
+  id: string;
+  email_pattern: string;
+  name?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  match_count: number;
+}
+
+export interface ServiceAccountPatternCreate {
+  email_pattern: string;
+  name?: string;
+  owner_id?: string;
+  notes?: string;
+}
+
+export interface ServiceAccountPatternListResponse {
+  items: ServiceAccountPattern[];
+  total: number;
+}
+
+export interface ApplyPatternsResponse {
+  updated_count: number;
+  patterns_applied: number;
+}
+
+export interface ServiceAccountLicenseListResponse {
+  items: License[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// Admin Account Update
+export interface AdminAccountUpdate {
+  is_admin_account: boolean;
+  admin_account_name?: string;
+  admin_account_owner_id?: string;
+  apply_globally?: boolean;
+}
+
+// Admin Account Patterns
+export interface AdminAccountPattern {
+  id: string;
+  email_pattern: string;
+  name?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  match_count: number;
+}
+
+export interface AdminAccountPatternCreate {
+  email_pattern: string;
+  name?: string;
+  owner_id?: string;
+  notes?: string;
+}
+
+export interface AdminAccountPatternListResponse {
+  items: AdminAccountPattern[];
+  total: number;
+}
+
+export interface AdminAccountLicenseListResponse {
+  items: License[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface OrphanedAdminAccountWarning {
+  license_id: string;
+  external_user_id: string;
+  provider_id: string;
+  provider_name: string;
+  admin_account_name?: string | null;
+  owner_id: string;
+  owner_name: string;
+  owner_email: string;
+  offboarded_at?: string | null;
+}
+
+export interface OrphanedAdminAccountsResponse {
+  items: OrphanedAdminAccountWarning[];
+  total: number;
 }
 
 // ============================================================================
@@ -698,6 +1049,51 @@ export interface PasswordChangeRequest {
 }
 
 // ============================================================================
+// Threshold Settings Types
+// ============================================================================
+
+export interface ThresholdSettings {
+  inactive_days: number;
+  expiring_days: number;
+  low_utilization_percent: number;
+  cost_increase_percent: number;
+  max_unassigned_licenses: number;
+}
+
+// ============================================================================
+// User Notification Preferences Types
+// ============================================================================
+
+export interface NotificationEventType {
+  code: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface UserNotificationPreference {
+  id: string;
+  event_type: string;
+  event_name: string;
+  event_description: string;
+  enabled: boolean;
+  slack_dm: boolean;
+  slack_channel?: string;
+}
+
+export interface UserNotificationPreferenceUpdate {
+  event_type: string;
+  enabled: boolean;
+  slack_dm: boolean;
+  slack_channel?: string;
+}
+
+export interface UserNotificationPreferencesResponse {
+  preferences: UserNotificationPreference[];
+  available_event_types: NotificationEventType[];
+}
+
+// ============================================================================
 // Audit Log Types
 // ============================================================================
 
@@ -719,6 +1115,44 @@ export interface AuditLogListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+// ============================================================================
+// Backup & Restore Types
+// ============================================================================
+
+export interface BackupInfoResponse {
+  valid_format: boolean;
+  version?: string;
+  created_at?: string;
+  requires_password: boolean;
+  error?: string;
+}
+
+export interface BackupRestoreImportCounts {
+  providers: number;
+  licenses: number;
+  employees: number;
+  license_packages: number;
+  organization_licenses: number;
+  payment_methods: number;
+  provider_files: number;
+  cost_snapshots: number;
+  settings: number;
+  notification_rules: number;
+}
+
+export interface BackupRestoreValidation {
+  providers_tested: number;
+  providers_valid: number;
+  providers_failed: string[];
+}
+
+export interface BackupRestoreResponse {
+  success: boolean;
+  imported: BackupRestoreImportCounts;
+  validation: BackupRestoreValidation;
+  error?: string;
 }
 
 // API Functions
@@ -925,6 +1359,11 @@ export const api = {
     return fetchApi<CategorizedLicensesResponse>(`/licenses/categorized${query}`);
   },
 
+  async getPendingSuggestions(providerId?: string): Promise<{ total: number; items: License[] }> {
+    const query = providerId ? `?provider_id=${providerId}` : '';
+    return fetchApi<{ total: number; items: License[] }>(`/licenses/suggestions/pending${query}`);
+  },
+
   async getLicenses(params: {
     page?: number;
     page_size?: number;
@@ -986,6 +1425,131 @@ export const api = {
     return fetchApi<License>(`/licenses/${licenseId}/service-account`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  // Service Account Patterns
+  async getServiceAccountPatterns(): Promise<ServiceAccountPatternListResponse> {
+    return fetchApi<ServiceAccountPatternListResponse>('/service-accounts/patterns');
+  },
+
+  async createServiceAccountPattern(data: ServiceAccountPatternCreate): Promise<ServiceAccountPattern> {
+    return fetchApi<ServiceAccountPattern>('/service-accounts/patterns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteServiceAccountPattern(patternId: string): Promise<void> {
+    await fetchApi(`/service-accounts/patterns/${patternId}`, { method: 'DELETE' });
+  },
+
+  async applyServiceAccountPatterns(): Promise<ApplyPatternsResponse> {
+    return fetchApi<ApplyPatternsResponse>('/service-accounts/apply', {
+      method: 'POST',
+    });
+  },
+
+  async getServiceAccountLicenses(params: {
+    search?: string;
+    provider_id?: string;
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<ServiceAccountLicenseListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.set('search', params.search);
+    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
+    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
+    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
+    if (params.page) searchParams.set('page', params.page.toString());
+    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchApi<ServiceAccountLicenseListResponse>(`/service-accounts/licenses${query}`);
+  },
+
+  // Admin Account Management
+  async updateLicenseAdminAccount(licenseId: string, data: AdminAccountUpdate): Promise<License> {
+    return fetchApi<License>(`/licenses/${licenseId}/admin-account`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Admin Account Patterns
+  async getAdminAccountPatterns(): Promise<AdminAccountPatternListResponse> {
+    return fetchApi<AdminAccountPatternListResponse>('/admin-accounts/patterns');
+  },
+
+  async createAdminAccountPattern(data: AdminAccountPatternCreate): Promise<AdminAccountPattern> {
+    return fetchApi<AdminAccountPattern>('/admin-accounts/patterns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteAdminAccountPattern(patternId: string): Promise<void> {
+    await fetchApi(`/admin-accounts/patterns/${patternId}`, { method: 'DELETE' });
+  },
+
+  async applyAdminAccountPatterns(): Promise<ApplyPatternsResponse> {
+    return fetchApi<ApplyPatternsResponse>('/admin-accounts/apply', {
+      method: 'POST',
+    });
+  },
+
+  async getAdminAccountLicenses(params: {
+    search?: string;
+    provider_id?: string;
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<AdminAccountLicenseListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.set('search', params.search);
+    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
+    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
+    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
+    if (params.page) searchParams.set('page', params.page.toString());
+    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchApi<AdminAccountLicenseListResponse>(`/admin-accounts/licenses${query}`);
+  },
+
+  async getOrphanedAdminAccounts(): Promise<OrphanedAdminAccountsResponse> {
+    return fetchApi<OrphanedAdminAccountsResponse>('/admin-accounts/orphaned');
+  },
+
+  // License Match Management (GDPR-compliant: no private emails stored)
+  async confirmLicenseMatch(licenseId: string): Promise<MatchActionResponse> {
+    return fetchApi<MatchActionResponse>(`/licenses/${licenseId}/match/confirm`, {
+      method: 'POST',
+    });
+  },
+
+  async rejectLicenseMatch(licenseId: string): Promise<MatchActionResponse> {
+    return fetchApi<MatchActionResponse>(`/licenses/${licenseId}/match/reject`, {
+      method: 'POST',
+    });
+  },
+
+  async markAsExternalGuest(licenseId: string): Promise<MatchActionResponse> {
+    return fetchApi<MatchActionResponse>(`/licenses/${licenseId}/match/external-guest`, {
+      method: 'POST',
+    });
+  },
+
+  async assignLicenseToEmployee(
+    licenseId: string,
+    employeeId: string,
+  ): Promise<MatchActionResponse> {
+    return fetchApi<MatchActionResponse>(`/licenses/${licenseId}/match/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ employee_id: employeeId }),
     });
   },
 
@@ -1167,6 +1731,98 @@ export const api = {
     return fetchApi<CostReport>(`/reports/costs${query}`);
   },
 
+  // Quick Win Reports
+  async getExpiringContractsReport(days: number = 90): Promise<ExpiringContractsReport> {
+    return fetchApi<ExpiringContractsReport>(`/reports/expiring-contracts?days=${days}`);
+  },
+
+  async getUtilizationReport(): Promise<UtilizationReport> {
+    return fetchApi<UtilizationReport>('/reports/utilization');
+  },
+
+  async getCostTrendReport(months: number = 6): Promise<CostTrendReport> {
+    return fetchApi<CostTrendReport>(`/reports/cost-trend?months=${months}`);
+  },
+
+  async getDuplicateAccountsReport(): Promise<DuplicateAccountsReport> {
+    return fetchApi<DuplicateAccountsReport>('/reports/duplicate-accounts');
+  },
+
+  // Cost Breakdown Reports
+  async getCostsByDepartmentReport(): Promise<CostsByDepartmentReport> {
+    return fetchApi<CostsByDepartmentReport>('/reports/costs-by-department');
+  },
+
+  async getCostsByEmployeeReport(department?: string, limit: number = 100): Promise<CostsByEmployeeReport> {
+    const params = new URLSearchParams();
+    if (department) params.set('department', department);
+    params.set('limit', limit.toString());
+    return fetchApi<CostsByEmployeeReport>(`/reports/costs-by-employee?${params.toString()}`);
+  },
+
+  // License Lifecycle Reports
+  async getExpiringLicensesReport(days: number = 90): Promise<ExpiringLicensesReport> {
+    return fetchApi<ExpiringLicensesReport>(`/reports/expiring-licenses?days=${days}`);
+  },
+
+  async getCancelledLicensesReport(): Promise<CancelledLicensesReport> {
+    return fetchApi<CancelledLicensesReport>('/reports/cancelled-licenses');
+  },
+
+  async getLicenseLifecycleOverview(): Promise<LicenseLifecycleOverview> {
+    return fetchApi<LicenseLifecycleOverview>('/reports/lifecycle-overview');
+  },
+
+  // Cancellation & Renewal
+  async cancelLicense(licenseId: string, request: CancellationRequest): Promise<CancellationResponse> {
+    return fetchApi<CancellationResponse>(`/licenses/${licenseId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async renewLicense(licenseId: string, request: RenewRequest): Promise<{ success: boolean; expires_at?: string; status: string }> {
+    return fetchApi<{ success: boolean; expires_at?: string; status: string }>(`/licenses/${licenseId}/renew`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async setLicenseNeedsReorder(licenseId: string, needsReorder: boolean): Promise<{ success: boolean; needs_reorder: boolean }> {
+    return fetchApi<{ success: boolean; needs_reorder: boolean }>(`/licenses/${licenseId}/needs-reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ needs_reorder: needsReorder }),
+    });
+  },
+
+  async cancelPackage(packageId: string, request: CancellationRequest): Promise<CancellationResponse> {
+    return fetchApi<CancellationResponse>(`/packages/${packageId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async renewPackage(packageId: string, request: RenewRequest): Promise<{ success: boolean; contract_end?: string; status: string }> {
+    return fetchApi<{ success: boolean; contract_end?: string; status: string }>(`/packages/${packageId}/renew`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async setPackageNeedsReorder(packageId: string, needsReorder: boolean): Promise<{ success: boolean; needs_reorder: boolean }> {
+    return fetchApi<{ success: boolean; needs_reorder: boolean }>(`/packages/${packageId}/needs-reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ needs_reorder: needsReorder }),
+    });
+  },
+
+  async cancelOrgLicense(orgLicenseId: string, request: CancellationRequest): Promise<CancellationResponse> {
+    return fetchApi<CancellationResponse>(`/org-licenses/${orgLicenseId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
   // Departments
   async getDepartments(): Promise<string[]> {
     return fetchApi<string[]>('/users/employees/departments');
@@ -1310,6 +1966,80 @@ export const api = {
         current_password: currentPassword,
         new_password: newPassword,
       }),
+    });
+  },
+
+  // Profile Update
+  async updateProfile(data: { name?: string }): Promise<CurrentUserInfo> {
+    return fetchApi<CurrentUserInfo>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async uploadAvatar(file: File): Promise<{ picture_url: string; message: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Get CSRF token for file upload
+    const csrfTokenValue = await getCsrfToken();
+
+    const url = `${API_BASE}/api/v1/auth/me/avatar`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Failed to upload avatar');
+    }
+
+    return response.json();
+  },
+
+  async deleteAvatar(): Promise<void> {
+    await fetchApi('/auth/me/avatar', { method: 'DELETE' });
+  },
+
+  // User Notification Preferences
+  async getNotificationPreferences(): Promise<UserNotificationPreferencesResponse> {
+    return fetchApi<UserNotificationPreferencesResponse>('/auth/me/notification-preferences');
+  },
+
+  async updateNotificationPreferences(preferences: UserNotificationPreferenceUpdate[]): Promise<UserNotificationPreferencesResponse> {
+    return fetchApi<UserNotificationPreferencesResponse>('/auth/me/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ preferences }),
+    });
+  },
+
+  async updateSingleNotificationPreference(
+    eventType: string,
+    data: UserNotificationPreferenceUpdate
+  ): Promise<UserNotificationPreference> {
+    return fetchApi<UserNotificationPreference>(`/auth/me/notification-preferences/${eventType}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ============================================================================
+  // Threshold Settings
+  // ============================================================================
+
+  async getThresholdSettings(): Promise<ThresholdSettings> {
+    return fetchApi<ThresholdSettings>('/settings/thresholds');
+  },
+
+  async updateThresholdSettings(settings: ThresholdSettings): Promise<ThresholdSettings> {
+    return fetchApi<ThresholdSettings>('/settings/thresholds', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     });
   },
 
@@ -1528,6 +2258,62 @@ export const api = {
   },
 
   // ============================================================================
+  // Exports
+  // ============================================================================
+
+  /**
+   * Get export URL with query parameters.
+   */
+  getExportUrl(
+    type: 'licenses' | 'costs' | 'full-report',
+    format: 'csv' | 'excel',
+    params?: { providerId?: string; department?: string; status?: string; startDate?: string; endDate?: string }
+  ): string {
+    const searchParams = new URLSearchParams();
+
+    if (params?.providerId) searchParams.set('provider_id', params.providerId);
+    if (params?.department) searchParams.set('department', params.department);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.startDate) searchParams.set('start_date', params.startDate);
+    if (params?.endDate) searchParams.set('end_date', params.endDate);
+
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
+    switch (type) {
+      case 'licenses':
+        return `${API_BASE}/api/v1/exports/licenses/csv${query}`;
+      case 'costs':
+        return `${API_BASE}/api/v1/exports/costs/csv${query}`;
+      case 'full-report':
+        return `${API_BASE}/api/v1/exports/full-report/excel`;
+    }
+  },
+
+  /**
+   * Download an export file.
+   */
+  async downloadExport(url: string, filename: string): Promise<void> {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  // ============================================================================
   // Auth Helpers
   // ============================================================================
 
@@ -1560,5 +2346,83 @@ export const api = {
   async refreshCsrfToken(): Promise<string> {
     csrfToken = null;
     return getCsrfToken();
+  },
+
+  // ============================================================================
+  // Backup & Restore
+  // ============================================================================
+
+  /**
+   * Create an encrypted backup of all system data.
+   * Returns the backup file as a Blob.
+   */
+  async createBackup(password: string): Promise<Blob> {
+    const csrfTokenValue = await getCsrfToken();
+
+    const response = await fetch(`${API_BASE}/api/v1/backup/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include',
+      body: JSON.stringify({ password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Backup failed' }));
+      throw new Error(error.detail || 'Backup failed');
+    }
+
+    return response.blob();
+  },
+
+  /**
+   * Restore system from an encrypted backup.
+   * WARNING: This deletes ALL existing data!
+   */
+  async restoreBackup(file: File, password: string): Promise<BackupRestoreResponse> {
+    const csrfTokenValue = await getCsrfToken();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('password', password);
+
+    const response = await fetch(`${API_BASE}/api/v1/backup/restore`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Restore failed' }));
+      throw new Error(error.detail || 'Restore failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get information about a backup file without decrypting.
+   */
+  async getBackupInfo(file: File): Promise<BackupInfoResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/api/v1/backup/info`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get backup info' }));
+      throw new Error(error.detail || 'Failed to get backup info');
+    }
+
+    return response.json();
   },
 };
