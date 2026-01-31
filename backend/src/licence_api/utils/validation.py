@@ -123,3 +123,34 @@ def sanitize_status(status: str | None, allowed_values: set[str] | None = None) 
         return None
 
     return status
+
+
+def validate_against_whitelist(
+    value: str | None,
+    allowed_values: set[str],
+    max_length: int = 50,
+) -> str | None:
+    """Validate a string value against a whitelist of allowed values.
+
+    Args:
+        value: Raw string value
+        allowed_values: Set of allowed values
+        max_length: Maximum allowed length
+
+    Returns:
+        Validated value or None if invalid
+    """
+    if value is None:
+        return None
+
+    # Truncate and strip
+    value = value[:max_length].strip()
+
+    if not value:
+        return None
+
+    # Validate against whitelist
+    if value not in allowed_values:
+        return None
+
+    return value

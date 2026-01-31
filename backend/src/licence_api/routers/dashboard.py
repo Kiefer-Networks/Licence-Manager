@@ -11,6 +11,7 @@ from licence_api.models.dto.dashboard import DashboardResponse
 from licence_api.security.auth import get_current_user
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.report_service import ReportService
+from licence_api.utils.validation import sanitize_department
 
 router = APIRouter()
 
@@ -28,6 +29,9 @@ async def get_dashboard(
 
     Response is cached for 5 minutes to improve performance.
     """
+    # Sanitize input
+    department = sanitize_department(department)
+
     # Try to get from cache
     cache = await get_cache_service()
     cached = await cache.get_dashboard(department=department)

@@ -13,8 +13,29 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.services.audit_service import AuditAction, ResourceType
+from licence_api.utils.validation import validate_against_whitelist
 
 router = APIRouter()
+
+# Whitelists for audit filter validation
+ALLOWED_ACTIONS = {
+    AuditAction.LOGIN, AuditAction.LOGIN_FAILED, AuditAction.LOGOUT,
+    AuditAction.LOGOUT_ALL, AuditAction.PASSWORD_CHANGE, AuditAction.PASSWORD_RESET,
+    AuditAction.USER_CREATE, AuditAction.USER_UPDATE, AuditAction.USER_DELETE,
+    AuditAction.ROLE_ASSIGN, AuditAction.ROLE_REVOKE,
+    AuditAction.PROVIDER_CREATE, AuditAction.PROVIDER_UPDATE, AuditAction.PROVIDER_DELETE,
+    AuditAction.PROVIDER_SYNC, AuditAction.LICENSE_ASSIGN, AuditAction.LICENSE_UNASSIGN,
+    AuditAction.LICENSE_UPDATE, AuditAction.SETTINGS_UPDATE, AuditAction.EXPORT,
+    AuditAction.IMPORT,
+}
+ALLOWED_RESOURCE_TYPES = {
+    ResourceType.USER, ResourceType.ROLE, ResourceType.PERMISSION,
+    ResourceType.PROVIDER, ResourceType.LICENSE, ResourceType.EMPLOYEE,
+    ResourceType.SETTINGS, ResourceType.SETTING, ResourceType.NOTIFICATION_RULE,
+    ResourceType.PAYMENT_METHOD, ResourceType.FILE, ResourceType.SESSION,
+    ResourceType.SERVICE_ACCOUNT_PATTERN, ResourceType.ADMIN_ACCOUNT_PATTERN,
+}
 
 
 class AuditLogResponse(BaseModel):
@@ -76,6 +97,10 @@ async def list_audit_logs(
     admin_user_id: UUID | None = Query(None),
 ) -> AuditLogListResponse:
     """List audit logs with optional filters. Requires audit.view permission."""
+    # Validate filter inputs against whitelists
+    action = validate_against_whitelist(action, ALLOWED_ACTIONS)
+    resource_type = validate_against_whitelist(resource_type, ALLOWED_RESOURCE_TYPES)
+
     offset = (page - 1) * page_size
 
     # Get logs with filters
