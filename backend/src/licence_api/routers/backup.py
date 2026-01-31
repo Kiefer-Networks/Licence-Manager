@@ -23,9 +23,9 @@ router = APIRouter()
 # Maximum backup file size: 500MB
 MAX_BACKUP_SIZE = 500 * 1024 * 1024
 
-# Rate limits for backup operations
-BACKUP_EXPORT_LIMIT = "2/hour"
-BACKUP_RESTORE_LIMIT = "2/hour"
+# Rate limits for backup operations (restrictive to prevent abuse)
+BACKUP_EXPORT_LIMIT = "1/hour"
+BACKUP_RESTORE_LIMIT = "1/hour"
 BACKUP_INFO_LIMIT = "10/minute"
 
 
