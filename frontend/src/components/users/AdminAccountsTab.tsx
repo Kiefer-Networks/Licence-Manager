@@ -43,7 +43,25 @@ import {
   Globe,
   Check,
   AlertTriangle,
+  Users,
+  AlertCircle,
 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+
+// Type for grouped admin accounts
+interface GroupedAdminAccount {
+  email: string;
+  name: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+  owner_status: string | null;
+  licenses: License[];
+  providers: { id: string; name: string; status: string }[];
+  hasGlobalPattern: boolean;
+  hasSuspended: boolean;
+  activeCount: number;
+  suspendedCount: number;
+}
 
 interface AdminAccountsTabProps {
   providers: Provider[];
@@ -181,8 +199,8 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       setShowAddPattern(false);
       setNewPattern({ email_pattern: '', name: '', owner_id: '', notes: '' });
       loadPatterns();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to create pattern');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
     } finally {
       setCreatingPattern(false);
     }
@@ -254,8 +272,8 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       showToast('success', 'Pattern created - this email will now be recognized globally');
       setMakeGlobalLicense(null);
       loadPatterns();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to create pattern');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
     } finally {
       setMakingGlobal(false);
     }
@@ -268,6 +286,60 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
 
   const licensesPageSize = 50;
   const licensesTotalPages = Math.ceil(licensesTotal / licensesPageSize);
+
+  // Group licenses by email
+  const groupedAccounts: GroupedAdminAccount[] = (() => {
+    const grouped = new Map<string, GroupedAdminAccount>();
+
+    for (const license of licenses) {
+      const email = license.external_user_id;
+      const existing = grouped.get(email);
+
+      if (existing) {
+        existing.licenses.push(license);
+        existing.providers.push({
+          id: license.provider_id,
+          name: license.provider_name,
+          status: license.status,
+        });
+        if (license.status === 'suspended' || license.status === 'inactive') {
+          existing.hasSuspended = true;
+          existing.suspendedCount++;
+        } else if (license.status === 'active') {
+          existing.activeCount++;
+        }
+      } else {
+        grouped.set(email, {
+          email,
+          name: license.admin_account_name || null,
+          owner_id: license.admin_account_owner_id || null,
+          owner_name: license.admin_account_owner_name || null,
+          owner_status: license.admin_account_owner_status || null,
+          licenses: [license],
+          providers: [{
+            id: license.provider_id,
+            name: license.provider_name,
+            status: license.status,
+          }],
+          hasGlobalPattern: isEmailGlobal(email),
+          hasSuspended: license.status === 'suspended' || license.status === 'inactive',
+          activeCount: license.status === 'active' ? 1 : 0,
+          suspendedCount: (license.status === 'suspended' || license.status === 'inactive') ? 1 : 0,
+        });
+      }
+    }
+
+    return Array.from(grouped.values());
+  })();
+
+  // Calculate summary statistics
+  const summaryStats = {
+    uniqueAdmins: groupedAccounts.length,
+    totalLicenses: licenses.length,
+    uniqueProviders: new Set(licenses.map(l => l.provider_id)).size,
+    suspendedLicenses: licenses.filter(l => l.status === 'suspended' || l.status === 'inactive').length,
+    adminsWithSuspended: groupedAccounts.filter(a => a.hasSuspended).length,
+  };
 
   return (
     <div className="space-y-8">
@@ -386,6 +458,83 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           </p>
         </div>
 
+        {/* Summary Cards */}
+        {!loadingLicenses && licenses.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Users className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-purple-700">{summaryStats.uniqueAdmins}</p>
+                    <p className="text-xs text-purple-600">Admin Accounts</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <ShieldCheck className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-blue-700">{summaryStats.totalLicenses}</p>
+                    <p className="text-xs text-blue-600">Total Licenses</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <Building2 className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-emerald-700">{summaryStats.uniqueProviders}</p>
+                    <p className="text-xs text-emerald-600">Providers</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {summaryStats.suspendedLicenses > 0 ? (
+              <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold text-amber-700">{summaryStats.suspendedLicenses}</p>
+                      <p className="text-xs text-amber-600">Suspended</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="bg-gradient-to-br from-zinc-50 to-white border-zinc-100">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-zinc-100 rounded-lg">
+                      <Check className="h-4 w-4 text-zinc-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold text-zinc-700">0</p>
+                      <p className="text-xs text-zinc-600">Suspended</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 max-w-xs">
@@ -419,17 +568,17 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           </Select>
 
           <span className="text-sm text-muted-foreground ml-auto">
-            {licensesTotal} license{licensesTotal !== 1 ? 's' : ''}
+            {summaryStats.uniqueAdmins} admin{summaryStats.uniqueAdmins !== 1 ? 's' : ''} • {licensesTotal} license{licensesTotal !== 1 ? 's' : ''}
           </span>
         </div>
 
-        {/* Licenses Table */}
+        {/* Grouped Licenses Table */}
         <div className="border rounded-lg bg-white overflow-hidden">
           {loadingLicenses ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
             </div>
-          ) : licenses.length === 0 ? (
+          ) : groupedAccounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <ShieldCheck className="h-8 w-8 mb-2 opacity-30" />
               <p className="text-sm">No admin account licenses</p>
@@ -443,7 +592,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       Email <SortIcon column="external_user_id" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Providers</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -451,30 +600,41 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 </tr>
               </thead>
               <tbody>
-                {licenses.map((license) => (
-                  <tr key={license.id} className="border-b last:border-0 hover:bg-zinc-50/50">
+                {groupedAccounts.map((account) => (
+                  <tr key={account.email} className={`border-b last:border-0 hover:bg-zinc-50/50 ${account.hasSuspended ? 'bg-amber-50/30' : ''}`}>
                     <td className="px-4 py-3">
                       <code className="text-sm bg-zinc-100 px-2 py-0.5 rounded">
-                        {license.external_user_id}
+                        {account.email}
                       </code>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{license.provider_name}</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {account.providers.map((provider, idx) => (
+                          <Badge
+                            key={`${provider.id}-${idx}`}
+                            variant="outline"
+                            className={`text-xs ${
+                              provider.status === 'active'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                            }`}
+                          >
+                            {provider.name}
+                          </Badge>
+                        ))}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {license.admin_account_name || '-'}
+                      {account.name || '-'}
                     </td>
                     <td className="px-4 py-3">
-                      {license.admin_account_owner_name ? (
+                      {account.owner_name ? (
                         <div className="flex items-center gap-1.5">
                           <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className={license.admin_account_owner_status === 'offboarded' ? 'text-red-600' : 'text-muted-foreground'}>
-                            {license.admin_account_owner_name}
+                          <span className={account.owner_status === 'offboarded' ? 'text-red-600' : 'text-muted-foreground'}>
+                            {account.owner_name}
                           </span>
-                          {license.admin_account_owner_status === 'offboarded' && (
+                          {account.owner_status === 'offboarded' && (
                             <span title="Owner offboarded"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
                           )}
                         </div>
@@ -483,13 +643,21 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={license.status === 'active' ? 'secondary' : 'outline'}
-                             className={license.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                        {license.status}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {account.activeCount > 0 && (
+                          <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-0 text-xs">
+                            {account.activeCount} active
+                          </Badge>
+                        )}
+                        {account.suspendedCount > 0 && (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                            {account.suspendedCount} suspended
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {isEmailGlobal(license.external_user_id) ? (
+                      {account.hasGlobalPattern ? (
                         <div
                           className="inline-flex items-center gap-1 text-emerald-600"
                           title="This email matches a global pattern"
@@ -501,7 +669,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setMakeGlobalLicense(license)}
+                          onClick={() => setMakeGlobalLicense(account.licenses[0])}
                           className="text-muted-foreground hover:text-foreground"
                           title="Make global pattern"
                         >
