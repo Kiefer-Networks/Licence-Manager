@@ -28,24 +28,25 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True
     )
 
-    # Relationships
+    # Relationships - use lazy="select" for collections to avoid N+1 queries
+    # Load explicitly with selectinload() when needed
     licenses: Mapped[list["LicenseORM"]] = relationship(
-        "LicenseORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+        "LicenseORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
     files: Mapped[list["ProviderFileORM"]] = relationship(
-        "ProviderFileORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+        "ProviderFileORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
     payment_method: Mapped["PaymentMethodORM | None"] = relationship(
-        "PaymentMethodORM", lazy="selectin"
+        "PaymentMethodORM", lazy="joined"
     )
     license_packages: Mapped[list["LicensePackageORM"]] = relationship(
-        "LicensePackageORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+        "LicensePackageORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
     organization_licenses: Mapped[list["OrganizationLicenseORM"]] = relationship(
-        "OrganizationLicenseORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+        "OrganizationLicenseORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
     cost_snapshots: Mapped[list["CostSnapshotORM"]] = relationship(
-        "CostSnapshotORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+        "CostSnapshotORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
 
 

@@ -24,11 +24,12 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    # Relationships
+    # Relationships - use lazy="select" for collections to avoid N+1 queries
+    # Load explicitly with selectinload() when needed
     licenses: Mapped[list["LicenseORM"]] = relationship(
         "LicenseORM",
         back_populates="employee",
-        lazy="selectin",
+        lazy="select",
         foreign_keys="[LicenseORM.employee_id]",
     )
 

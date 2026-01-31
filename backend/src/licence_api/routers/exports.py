@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.security.auth import get_current_user
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.export_service import ExportService
 
 router = APIRouter()
@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("/licenses/csv")
 async def export_licenses_csv(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     db: Annotated[AsyncSession, Depends(get_db)],
     provider_id: UUID | None = Query(default=None, description="Filter by provider"),
     department: str | None = Query(default=None, description="Filter by department"),
@@ -56,7 +56,7 @@ async def export_licenses_csv(
 
 @router.get("/costs/csv")
 async def export_costs_csv(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     db: Annotated[AsyncSession, Depends(get_db)],
     start_date: date | None = Query(default=None, description="Start date"),
     end_date: date | None = Query(default=None, description="End date"),
@@ -85,7 +85,7 @@ async def export_costs_csv(
 
 @router.get("/full-report/excel")
 async def export_full_report_excel(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Export full report to Excel format.

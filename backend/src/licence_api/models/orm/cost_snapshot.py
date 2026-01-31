@@ -30,8 +30,8 @@ class CostSnapshotORM(Base, UUIDMixin, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR")
     breakdown: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    # Relationships
-    provider = relationship("ProviderORM", back_populates="cost_snapshots")
+    # Relationships - explicit lazy loading
+    provider = relationship("ProviderORM", back_populates="cost_snapshots", lazy="select")
 
     __table_args__ = (
         UniqueConstraint("snapshot_date", "provider_id", name="uq_cost_snapshot_date_provider"),

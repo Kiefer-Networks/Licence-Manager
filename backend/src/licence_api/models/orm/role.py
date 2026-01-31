@@ -17,11 +17,12 @@ class RoleORM(Base, UUIDMixin, TimestampMixin):
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    # Relationships
+    # Relationships - explicit lazy loading to avoid N+1
     permissions: Mapped[list["PermissionORM"]] = relationship(
         "PermissionORM",
         secondary="role_permissions",
         back_populates="roles",
+        lazy="select",
     )
     users: Mapped[list["AdminUserORM"]] = relationship(
         "AdminUserORM",
@@ -29,4 +30,5 @@ class RoleORM(Base, UUIDMixin, TimestampMixin):
         back_populates="roles",
         primaryjoin="RoleORM.id == user_roles.c.role_id",
         secondaryjoin="AdminUserORM.id == user_roles.c.user_id",
+        lazy="select",
     )

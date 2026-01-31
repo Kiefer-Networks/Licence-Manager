@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,8 @@ from licence_api.models.dto.backup import (
     BackupInfoResponse,
     RestoreResponse,
 )
-from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter
 from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.backup_service import BackupService
 
@@ -23,9 +24,16 @@ router = APIRouter()
 # Maximum backup file size: 500MB
 MAX_BACKUP_SIZE = 500 * 1024 * 1024
 
+# Rate limits for backup operations
+BACKUP_EXPORT_LIMIT = "2/hour"
+BACKUP_RESTORE_LIMIT = "2/hour"
+BACKUP_INFO_LIMIT = "10/minute"
+
 
 @router.post("/export")
+@limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
+    http_request: Request,
     request: BackupExportRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -71,7 +79,9 @@ async def create_backup(
 
 
 @router.post("/restore", response_model=RestoreResponse)
+@limiter.limit(BACKUP_RESTORE_LIMIT)
 async def restore_backup(
+    http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
@@ -138,8 +148,10 @@ async def restore_backup(
 
 
 @router.post("/info", response_model=BackupInfoResponse)
+@limiter.limit(BACKUP_INFO_LIMIT)
 async def get_backup_info(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    http_request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     file: UploadFile = File(...),
 ) -> BackupInfoResponse:
     """Get information about a backup file without decrypting.
@@ -147,7 +159,7 @@ async def get_backup_info(
     This endpoint validates the file format and returns basic info.
     Does not require the password.
 
-    Any authenticated user can check backup info.
+    Requires system.admin permission.
     """
     # Validate file
     if file.filename is None:

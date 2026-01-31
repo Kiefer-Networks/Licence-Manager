@@ -37,6 +37,8 @@ router = APIRouter()
 
 # Rate limit for credential testing to prevent brute force
 TEST_CONNECTION_LIMIT = "10/minute"
+# Rate limit for sync operations to prevent abuse
+SYNC_LIMIT = "5/minute"
 
 
 # Dependency injection functions
@@ -695,6 +697,7 @@ async def test_provider_connection(
 
 
 @router.post("/sync", response_model=SyncResponse)
+@limiter.limit(SYNC_LIMIT)
 async def trigger_sync(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
@@ -735,6 +738,7 @@ async def trigger_sync(
 
 
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
+@limiter.limit(SYNC_LIMIT)
 async def sync_provider(
     http_request: Request,
     provider_id: UUID,
