@@ -58,6 +58,13 @@ class LicensePackageResponse(BaseModel):
     contract_end: date | None = None
     auto_renew: bool = True
     notes: str | None = None
+    # Cancellation tracking
+    cancelled_at: datetime | None = None
+    cancellation_effective_date: date | None = None
+    cancellation_reason: str | None = None
+    cancelled_by: UUID | None = None
+    needs_reorder: bool = False
+    status: str = "active"
     created_at: datetime
     updated_at: datetime
 

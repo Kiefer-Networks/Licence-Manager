@@ -44,6 +44,9 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
     organization_licenses: Mapped[list["OrganizationLicenseORM"]] = relationship(
         "OrganizationLicenseORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
     )
+    cost_snapshots: Mapped[list["CostSnapshotORM"]] = relationship(
+        "CostSnapshotORM", back_populates="provider", lazy="selectin", cascade="all, delete-orphan"
+    )
 
 
 # Import here to avoid circular import
@@ -52,3 +55,4 @@ from licence_api.models.orm.provider_file import ProviderFileORM  # noqa: E402, 
 from licence_api.models.orm.payment_method import PaymentMethodORM  # noqa: E402, F401
 from licence_api.models.orm.license_package import LicensePackageORM  # noqa: E402, F401
 from licence_api.models.orm.organization_license import OrganizationLicenseORM  # noqa: E402, F401
+from licence_api.models.orm.cost_snapshot import CostSnapshotORM  # noqa: E402, F401

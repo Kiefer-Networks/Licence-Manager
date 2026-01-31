@@ -1,6 +1,6 @@
 """License DTOs."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -36,6 +36,27 @@ class LicenseResponse(BaseModel):
     service_account_name: str | None = None
     service_account_owner_id: UUID | None = None
     service_account_owner_name: str | None = None
+    # Admin account fields (personal admin accounts linked to employees)
+    is_admin_account: bool = False
+    admin_account_name: str | None = None
+    admin_account_owner_id: UUID | None = None
+    admin_account_owner_name: str | None = None
+    admin_account_owner_status: str | None = None  # active, offboarded - for warning display
+    # Match fields
+    suggested_employee_id: UUID | None = None
+    suggested_employee_name: str | None = None
+    suggested_employee_email: str | None = None
+    match_confidence: float | None = None
+    match_status: str | None = None  # auto_matched, suggested, confirmed, rejected, external_guest, external_review
+    match_method: str | None = None  # exact_email, alias, local_part, fuzzy_name
+    # Expiration tracking
+    expires_at: date | None = None
+    needs_reorder: bool = False
+    # Cancellation tracking
+    cancelled_at: datetime | None = None
+    cancellation_effective_date: date | None = None
+    cancellation_reason: str | None = None
+    cancelled_by: UUID | None = None
 
     class Config:
         """Pydantic config."""
@@ -61,9 +82,16 @@ class LicenseStats(BaseModel):
     total_inactive: int
     total_external: int
     total_service_accounts: int = 0
+    total_admin_accounts: int = 0
+    total_orphaned_admin_accounts: int = 0  # Admin accounts with offboarded owners
+    total_suggested: int = 0  # Licenses with suggested matches
+    total_external_review: int = 0  # External licenses needing review
+    total_external_guest: int = 0  # Confirmed external guests
     monthly_cost: Decimal
     potential_savings: Decimal  # Unassigned + offboarded licenses
     currency: str = "EUR"
+    has_currency_mix: bool = False  # True if licenses have different currencies
+    currencies_found: list[str] = []  # List of all currencies found
 
 
 class CategorizedLicensesResponse(BaseModel):
@@ -73,6 +101,12 @@ class CategorizedLicensesResponse(BaseModel):
     unassigned: list[LicenseResponse]
     external: list[LicenseResponse]
     service_accounts: list[LicenseResponse]
+    admin_accounts: list[LicenseResponse] = []  # Personal admin accounts
+    orphaned_admin_accounts: list[LicenseResponse] = []  # Admin accounts with offboarded owners
+    # New categories for match workflow
+    suggested: list[LicenseResponse] = []  # Licenses with suggested matches
+    external_review: list[LicenseResponse] = []  # External licenses needing review
+    external_guest: list[LicenseResponse] = []  # Confirmed external guests
     stats: LicenseStats
 
 
@@ -82,3 +116,13 @@ class ServiceAccountUpdate(BaseModel):
     is_service_account: bool
     service_account_name: str | None = None
     service_account_owner_id: UUID | None = None
+    apply_globally: bool = False  # Add email to global service account patterns
+
+
+class AdminAccountUpdate(BaseModel):
+    """Update admin account status for a license."""
+
+    is_admin_account: bool
+    admin_account_name: str | None = None
+    admin_account_owner_id: UUID | None = None
+    apply_globally: bool = False  # Add email to global admin account patterns

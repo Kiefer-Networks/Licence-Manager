@@ -18,6 +18,8 @@ from licence_api.models.orm.refresh_token import RefreshTokenORM
 from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.models.orm.organization_license import OrganizationLicenseORM
+from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
+from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 
 __all__ = [
     "Base",
@@ -38,4 +40,6 @@ __all__ = [
     "PasswordHistoryORM",
     "LicensePackageORM",
     "OrganizationLicenseORM",
+    "UserNotificationPreferenceORM",
+    "CostSnapshotORM",
 ]

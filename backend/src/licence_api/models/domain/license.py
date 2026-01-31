@@ -16,6 +16,8 @@ class LicenseStatus(StrEnum):
     SUSPENDED = "suspended"
     PENDING = "pending"
     UNASSIGNED = "unassigned"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 class License(BaseModel):

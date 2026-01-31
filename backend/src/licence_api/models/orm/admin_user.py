@@ -52,3 +52,8 @@ class AdminUserORM(Base, UUIDMixin, TimestampMixin):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    notification_preferences: Mapped[list["UserNotificationPreferenceORM"]] = relationship(
+        "UserNotificationPreferenceORM",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
