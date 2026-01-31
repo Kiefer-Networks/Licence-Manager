@@ -47,6 +47,9 @@ class AuditAction:
     LICENSE_UPDATE = "license_update"
     LICENSE_DELETE = "license_delete"
     LICENSE_BULK_CREATE = "license_bulk_create"
+    LICENSE_PACKAGE_CREATE = "license_package_create"
+    LICENSE_PACKAGE_UPDATE = "license_package_update"
+    LICENSE_PACKAGE_DELETE = "license_package_delete"
 
     # Settings
     SETTINGS_UPDATE = "settings_update"
