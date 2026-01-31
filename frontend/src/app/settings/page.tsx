@@ -153,8 +153,9 @@ export default function SettingsPage() {
     try {
       await api.updateThresholdSettings(thresholds);
       showToast('success', 'Threshold settings saved');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save threshold settings');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save threshold settings';
+      showToast('error', message);
     } finally {
       setSavingThresholds(false);
     }
@@ -186,8 +187,9 @@ export default function SettingsPage() {
     try {
       await api.setCompanyDomains(companyDomains);
       showToast('success', 'Company domains saved');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save domains');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save domains';
+      showToast('error', message);
     } finally {
       setSavingDomains(false);
     }
@@ -273,8 +275,9 @@ export default function SettingsPage() {
       setPaymentMethodDialogOpen(false);
       resetPaymentMethodForm();
       setEditingPaymentMethod(null);
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save payment method');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save payment method';
+      showToast('error', message);
     } finally {
       setSavingPaymentMethod(false);
     }
@@ -285,8 +288,9 @@ export default function SettingsPage() {
       await api.deletePaymentMethod(id);
       await fetchPaymentMethods();
       showToast('success', 'Payment method deleted');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to delete payment method');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete payment method';
+      showToast('error', message);
     }
   };
 
@@ -302,8 +306,9 @@ export default function SettingsPage() {
       setSlackConfigured(true);
       setSlackBotToken('');
       showToast('success', 'Slack configuration saved');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save Slack configuration');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save Slack configuration';
+      showToast('error', message);
     } finally {
       setSavingSlack(false);
     }
@@ -322,8 +327,9 @@ export default function SettingsPage() {
       } else {
         showToast('error', result.message);
       }
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to send test notification');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to send test notification';
+      showToast('error', message);
     } finally {
       setTestingSlack(false);
     }
@@ -368,8 +374,9 @@ export default function SettingsPage() {
       }
       await fetchNotificationRules();
       setRuleDialogOpen(false);
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to save notification rule');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save notification rule';
+      showToast('error', message);
     }
   };
 
@@ -378,8 +385,9 @@ export default function SettingsPage() {
       await api.updateNotificationRule(rule.id, { enabled: !rule.enabled });
       await fetchNotificationRules();
       showToast('success', `Rule ${rule.enabled ? 'disabled' : 'enabled'}`);
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to update rule');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update rule';
+      showToast('error', message);
     }
   };
 
@@ -388,8 +396,9 @@ export default function SettingsPage() {
       await api.deleteNotificationRule(id);
       await fetchNotificationRules();
       showToast('success', 'Notification rule deleted');
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to delete rule');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete rule';
+      showToast('error', message);
     }
   };
 
