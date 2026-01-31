@@ -39,8 +39,8 @@ def get_backup_service(
 @router.post("/export")
 @limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
-    http_request: Request,
-    request: BackupExportRequest,
+    request: Request,
+    body: BackupExportRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
 ) -> Response:
@@ -52,9 +52,9 @@ async def create_backup(
     """
     try:
         backup_data = await service.create_backup(
-            password=request.password,
+            password=body.password,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except Exception as e:
         raise HTTPException(
@@ -79,7 +79,7 @@ async def create_backup(
 @router.post("/restore", response_model=RestoreResponse)
 @limiter.limit(BACKUP_RESTORE_LIMIT)
 async def restore_backup(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
     file: UploadFile = File(...),
@@ -127,14 +127,14 @@ async def restore_backup(
         file_data=content,
         password=password,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
 
 @router.post("/info", response_model=BackupInfoResponse)
 @limiter.limit(BACKUP_INFO_LIMIT)
 async def get_backup_info(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     file: UploadFile = File(...),
 ) -> BackupInfoResponse:

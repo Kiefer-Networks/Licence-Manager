@@ -239,9 +239,11 @@ async def refresh_token(
     body: RefreshTokenRequest | None = None,
     auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
+    user_agent: str | None = Header(default=None),
 ) -> TokenResponse:
     """Refresh access token using refresh token.
 
+    Implements refresh token rotation for enhanced security.
     Accepts refresh token from request body or httpOnly cookie.
     """
     # Prefer cookie over body for security
@@ -255,10 +257,15 @@ async def refresh_token(
             detail="Refresh token required",
         )
 
-    token_response = await auth_service.refresh_access_token(token)
+    ip_address = request.client.host if request.client else None
+    token_response = await auth_service.refresh_access_token(
+        token,
+        user_agent=user_agent,
+        ip_address=ip_address,
+    )
 
-    # Update access token cookie
-    _set_auth_cookies(response, token_response.access_token, None)
+    # Update both access and refresh token cookies (rotation)
+    _set_auth_cookies(response, token_response.access_token, token_response.refresh_token)
 
     return token_response
 

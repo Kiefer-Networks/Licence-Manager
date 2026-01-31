@@ -66,8 +66,8 @@ async def list_users(
 @router.post("/users", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
 @limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def create_user(
-    http_request: Request,
-    request: UserCreateRequest,
+    request: Request,
+    body: UserCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
     user_agent: str | None = Header(default=None),
@@ -75,9 +75,9 @@ async def create_user(
     """Create a new user with local authentication."""
     try:
         return await service.create_user(
-            request=request,
+            request=body,
             current_user=current_user,
-            http_request=http_request,
+            http_request=request,
             user_agent=user_agent,
         )
     except ValueError as e:
