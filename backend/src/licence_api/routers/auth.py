@@ -38,6 +38,10 @@ from licence_api.security.rate_limit import (
 from licence_api.services.auth_service import AuthService
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
+from licence_api.utils.file_validation import (
+    validate_image_signature,
+    get_extension_from_content_type,
+)
 
 
 # Dependency injection functions
@@ -412,17 +416,18 @@ async def upload_avatar(
             detail=f"File too large. Maximum size: {MAX_AVATAR_SIZE // (1024 * 1024)} MB",
         )
 
+    # Validate file signature (magic bytes) to prevent content-type spoofing
+    if not validate_image_signature(content, file.content_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match declared file type",
+        )
+
     # Ensure avatar directory exists
     ADMIN_AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
     # Generate unique filename with extension
-    ext = ".jpg"
-    if file.content_type == "image/png":
-        ext = ".png"
-    elif file.content_type == "image/gif":
-        ext = ".gif"
-    elif file.content_type == "image/webp":
-        ext = ".webp"
+    ext = get_extension_from_content_type(file.content_type)
 
     filename = f"{current_user.id}{ext}"
     file_path = ADMIN_AVATAR_DIR / filename
@@ -457,8 +462,9 @@ async def upload_avatar(
 @router.get("/avatar/{user_id}")
 async def get_avatar(
     user_id: str,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
 ) -> Response:
-    """Get avatar image for a user."""
+    """Get avatar image for a user. Requires authentication."""
     # Validate user_id to prevent path traversal
     try:
         uuid.UUID(user_id)
