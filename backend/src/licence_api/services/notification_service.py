@@ -345,3 +345,45 @@ Please review and renew these licenses if needed.
         except Exception as e:
             logger.error(f"Failed to send Slack message: {e}")
             return False
+
+    async def send_test_notification(
+        self,
+        channel: str,
+        token: str,
+    ) -> tuple[bool, str]:
+        """Send a test notification to verify Slack integration.
+
+        Args:
+            channel: Slack channel to send to
+            token: Slack bot token
+
+        Returns:
+            Tuple of (success, message)
+        """
+        test_message = (
+            ":white_check_mark: *Test Notification*\n\n"
+            "This is a test message from the License Management System. "
+            "If you received this, your Slack integration is working correctly!"
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://slack.com/api/chat.postMessage",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "channel": channel,
+                        "text": test_message,
+                        "mrkdwn": True,
+                    },
+                    timeout=10.0,
+                )
+                result = response.json()
+
+                if result.get("ok"):
+                    return True, f"Test notification sent successfully to {channel}"
+                else:
+                    error = result.get("error", "Unknown error")
+                    return False, f"Failed to send notification: {error}"
+        except Exception as e:
+            return False, f"Failed to connect to Slack: {str(e)}"

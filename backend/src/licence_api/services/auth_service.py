@@ -265,14 +265,23 @@ class AuthService:
     async def refresh_access_token(
         self,
         refresh_token: str,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
     ) -> TokenResponse:
-        """Refresh access token using refresh token.
+        """Refresh access token using refresh token with token rotation.
+
+        Implements refresh token rotation for enhanced security:
+        - Old refresh token is revoked after single use
+        - New refresh token is issued with each refresh
+        - Prevents token replay attacks
 
         Args:
             refresh_token: Refresh token
+            user_agent: User agent string for new token
+            ip_address: IP address for new token
 
         Returns:
-            New TokenResponse
+            New TokenResponse with rotated refresh token
 
         Raises:
             HTTPException: If refresh token is invalid
@@ -300,6 +309,9 @@ class AuthService:
                 detail="User not found or inactive",
             )
 
+        # Revoke the old refresh token (one-time use)
+        await self.token_repo.revoke_token(token_record.id)
+
         # Get user permissions
         roles, permissions = self._aggregate_permissions(user)
 
@@ -312,9 +324,23 @@ class AuthService:
             permissions=permissions,
         )
 
+        # Create new refresh token (rotation)
+        raw_refresh, refresh_hash = create_refresh_token()
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
+
+        await self.token_repo.create_token(
+            user_id=user.id,
+            token_hash=refresh_hash,
+            expires_at=expires_at,
+            user_agent=user_agent or token_record.user_agent,
+            ip_address=ip_address or token_record.ip_address,
+        )
+
+        await self.session.commit()
+
         return TokenResponse(
             access_token=access_token,
-            refresh_token=None,  # Don't issue new refresh token
+            refresh_token=raw_refresh,  # Return new rotated refresh token
             expires_in=settings.jwt_expiration_hours * 3600,
         )
 

@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.domain.provider import ProviderName
 from licence_api.models.dto.license import (
     LicenseResponse,
     LicenseListResponse,
@@ -18,13 +17,9 @@ from licence_api.models.dto.license import (
     AdminAccountUpdate,
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
-from licence_api.security.encryption import get_encryption_service
-from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status
-from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.repositories.license_repository import LicenseRepository
 
 router = APIRouter()
 
@@ -33,21 +28,6 @@ router = APIRouter()
 def get_license_service(db: AsyncSession = Depends(get_db)) -> LicenseService:
     """Get LicenseService instance."""
     return LicenseService(db)
-
-
-def get_license_repository(db: AsyncSession = Depends(get_db)) -> LicenseRepository:
-    """Get LicenseRepository instance."""
-    return LicenseRepository(db)
-
-
-def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
-    """Get ProviderRepository instance."""
-    return ProviderRepository(db)
-
-
-def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
-    """Get AuditService instance."""
-    return AuditService(db)
 
 
 def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
@@ -264,76 +244,27 @@ async def remove_license_from_provider(
     http_request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> RemoveMemberResponse:
     """Remove a user from the provider system. Requires licenses.delete permission.
 
     This will attempt to remove the user from the external provider (e.g., Cursor).
     Currently supported providers: Cursor (Enterprise only).
     """
-    from licence_api.providers import CursorProvider
-
-    # Get the license
-    license_orm = await license_repo.get_by_id(license_id)
-    if license_orm is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License not found",
-        )
-
-    # Get the provider
-    provider = await provider_repo.get_by_id(license_orm.provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    # Check if provider supports remote removal
-    if provider.name != ProviderName.CURSOR:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Provider {provider.display_name} does not support remote user removal",
-        )
-
-    # Decrypt credentials and create provider instance
-    encryption = get_encryption_service()
-    credentials = encryption.decrypt(provider.credentials_encrypted)
-
     try:
-        cursor_provider = CursorProvider(credentials)
-        result = await cursor_provider.remove_member(license_orm.external_user_id)
-
-        # If successful, delete the license from our database
-        if result["success"]:
-            await license_repo.delete(license_id)
-
-            # Audit log the deletion
-            await audit_service.log(
-                action=AuditAction.LICENSE_DELETE,
-                resource_type=ResourceType.LICENSE,
-                resource_id=license_id,
-                admin_user_id=current_user.id,
-                changes={
-                    "external_user_id": license_orm.external_user_id,
-                    "provider": provider.display_name,
-                    "removed_from_provider": True,
-                },
-                request=http_request,
-            )
-            await db.commit()
-
+        result = await license_service.remove_from_provider(
+            license_id=license_id,
+            user=current_user,
+            request=http_request,
+        )
         return RemoveMemberResponse(
             success=result["success"],
             message=result["message"],
         )
     except ValueError as e:
-        return RemoveMemberResponse(
-            success=False,
-            message=str(e),
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
 
 
@@ -342,9 +273,7 @@ async def bulk_remove_from_provider(
     http_request: Request,
     request: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    license_repo: Annotated[LicenseRepository, Depends(get_license_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
     """Remove multiple users from their provider systems. Requires licenses.bulk_actions permission.
 
@@ -352,91 +281,30 @@ async def bulk_remove_from_provider(
     Currently supported providers: Cursor (Enterprise only).
     Licenses from unsupported providers will be skipped with an error message.
     """
-    from licence_api.providers import CursorProvider
-
-    encryption = get_encryption_service()
-
     if len(request.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    # Fetch all licenses with their providers
-    licenses_with_providers = await license_repo.get_by_ids_with_providers(request.license_ids)
-
-    # Group by provider for efficient credential decryption
-    provider_credentials: dict[UUID, dict] = {}
-    results: list[BulkActionResult] = []
-    successful = 0
-    failed = 0
-    deleted_license_ids: list[UUID] = []
-
-    for license_orm, provider in licenses_with_providers:
-        # Check if provider supports remote removal
-        if provider.name != ProviderName.CURSOR:
-            results.append(BulkActionResult(
-                license_id=str(license_orm.id),
-                success=False,
-                message=f"Provider {provider.display_name} does not support remote user removal",
-            ))
-            failed += 1
-            continue
-
-        # Get or decrypt credentials
-        if provider.id not in provider_credentials:
-            provider_credentials[provider.id] = encryption.decrypt(provider.credentials_encrypted)
-
-        try:
-            cursor_provider = CursorProvider(provider_credentials[provider.id])
-            result = await cursor_provider.remove_member(license_orm.external_user_id)
-
-            if result["success"]:
-                await license_repo.delete(license_orm.id)
-                deleted_license_ids.append(license_orm.id)
-                successful += 1
-                results.append(BulkActionResult(
-                    license_id=str(license_orm.id),
-                    success=True,
-                    message=result["message"],
-                ))
-            else:
-                failed += 1
-                results.append(BulkActionResult(
-                    license_id=str(license_orm.id),
-                    success=False,
-                    message=result.get("message", "Unknown error"),
-                ))
-        except ValueError as e:
-            failed += 1
-            results.append(BulkActionResult(
-                license_id=str(license_orm.id),
-                success=False,
-                message=str(e),
-            ))
-
-    # Audit log the bulk operation
-    if deleted_license_ids:
-        await audit_service.log(
-            action=AuditAction.LICENSE_DELETE,
-            resource_type=ResourceType.LICENSE,
-            admin_user_id=current_user.id,
-            changes={
-                "bulk_operation": True,
-                "deleted_count": len(deleted_license_ids),
-                "deleted_ids": [str(lid) for lid in deleted_license_ids],
-                "removed_from_provider": True,
-            },
-            request=http_request,
-        )
-
-    await db.commit()
+    result = await license_service.bulk_remove_from_provider(
+        license_ids=request.license_ids,
+        user=current_user,
+        request=http_request,
+    )
 
     return BulkActionResponse(
-        total=len(request.license_ids),
-        successful=successful,
-        failed=failed,
-        results=results,
+        total=result["total"],
+        successful=result["successful"],
+        failed=result["failed"],
+        results=[
+            BulkActionResult(
+                license_id=r["license_id"],
+                success=r["success"],
+                message=r["message"],
+            )
+            for r in result["results"]
+        ],
     )
 
 

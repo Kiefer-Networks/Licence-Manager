@@ -1,5 +1,7 @@
 """Provider service for provider management operations."""
 
+import uuid as uuid_module
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -7,6 +9,18 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.provider_logos import get_provider_logo
+from licence_api.utils.file_validation import validate_svg_content
+
+# Logo storage configuration
+LOGOS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "provider_logos"
+MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2 MB
+ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
+IMAGE_SIGNATURES = {
+    ".png": [b"\x89PNG\r\n\x1a\n"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".webp": [b"RIFF"],
+}
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.provider import (
     PaymentMethodSummary,
@@ -345,3 +359,217 @@ class ProviderService:
             created_at=provider.created_at,
             updated_at=provider.updated_at,
         )
+
+    def _validate_logo_signature(self, content: bytes, ext: str) -> bool:
+        """Validate image file signature matches extension.
+
+        Args:
+            content: File content bytes
+            ext: File extension (e.g., '.png')
+
+        Returns:
+            True if signature matches or is valid SVG
+        """
+        ext_lower = ext.lower()
+        signatures = IMAGE_SIGNATURES.get(ext_lower, [])
+
+        # WEBP has a more complex structure
+        if ext_lower == ".webp":
+            if len(content) < 12:
+                return False
+            if not content.startswith(b"RIFF"):
+                return False
+            if content[8:12] != b"WEBP":
+                return False
+            return True
+
+        # Special handling for SVG (text-based)
+        if ext_lower == ".svg":
+            header = content[:1000].lower()
+            if not (b"<svg" in header or b"<?xml" in header):
+                return False
+            return validate_svg_content(content)
+
+        for sig in signatures:
+            if content.startswith(sig):
+                return True
+        return False
+
+    async def upload_logo(
+        self,
+        provider_id: UUID,
+        content: bytes,
+        filename: str,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> str:
+        """Upload a logo for a provider.
+
+        Args:
+            provider_id: Provider UUID
+            content: Logo file content
+            filename: Original filename
+            user: Admin user making the upload
+            request: HTTP request for audit logging
+
+        Returns:
+            Logo URL
+
+        Raises:
+            ValueError: If validation fails
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        # Validate filename and extension
+        safe_filename = Path(filename).name
+        ext = Path(safe_filename).suffix.lower()
+
+        if ext not in ALLOWED_LOGO_EXTENSIONS:
+            raise ValueError(
+                f"File type not allowed. Allowed: {', '.join(ALLOWED_LOGO_EXTENSIONS)}"
+            )
+
+        if len(content) > MAX_LOGO_SIZE:
+            raise ValueError(
+                f"File too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB"
+            )
+
+        if not self._validate_logo_signature(content, ext):
+            raise ValueError("File content does not match declared file type")
+
+        # Save file
+        LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+        stored_filename = f"{uuid_module.uuid4()}{ext}"
+        file_path = LOGOS_DIR / stored_filename
+
+        # Delete old logo if exists
+        if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
+            old_filename = provider.logo_url.split("/")[-1]
+            old_path = LOGOS_DIR / old_filename
+            if old_path.exists():
+                old_path.unlink()
+
+        file_path.write_bytes(content)
+
+        # Update provider with logo URL
+        logo_url = f"/api/v1/providers/{provider_id}/logo/{stored_filename}"
+        await self.provider_repo.update(provider_id, logo_url=logo_url)
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PROVIDER_UPDATE,
+                resource_type=ResourceType.PROVIDER,
+                resource_id=provider_id,
+                user=user,
+                request=request,
+                details={"action": "logo_upload", "filename": safe_filename},
+            )
+
+        # Invalidate caches
+        cache = await get_cache_service()
+        await cache.invalidate_providers()
+
+        await self.session.commit()
+
+        return logo_url
+
+    async def delete_logo(
+        self,
+        provider_id: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> None:
+        """Delete a provider's logo.
+
+        Args:
+            provider_id: Provider UUID
+            user: Admin user making the deletion
+            request: HTTP request for audit logging
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        # Delete file if exists
+        if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
+            old_filename = provider.logo_url.split("/")[-1]
+            old_path = LOGOS_DIR / old_filename
+            if old_path.exists():
+                old_path.unlink()
+
+        # Clear logo URL
+        await self.provider_repo.update(provider_id, logo_url=None)
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PROVIDER_UPDATE,
+                resource_type=ResourceType.PROVIDER,
+                resource_id=provider_id,
+                user=user,
+                request=request,
+                details={"action": "logo_delete"},
+            )
+
+        # Invalidate caches
+        cache = await get_cache_service()
+        await cache.invalidate_providers()
+
+        await self.session.commit()
+
+    async def delete_provider(
+        self,
+        provider_id: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> bool:
+        """Delete a provider.
+
+        Args:
+            provider_id: Provider UUID
+            user: Admin user making the deletion
+            request: HTTP request for audit logging
+
+        Returns:
+            True if deleted, False if not found
+        """
+        # Get provider info for audit before deletion
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            return False
+
+        provider_name = provider.name
+        provider_display_name = provider.display_name
+
+        deleted = await self.provider_repo.delete(provider_id)
+        if not deleted:
+            return False
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PROVIDER_DELETE,
+                resource_type=ResourceType.PROVIDER,
+                resource_id=provider_id,
+                user=user,
+                request=request,
+                details={
+                    "name": provider_name,
+                    "display_name": provider_display_name,
+                },
+            )
+
+        # Invalidate relevant caches
+        cache = await get_cache_service()
+        await cache.invalidate_providers()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+
+        return True

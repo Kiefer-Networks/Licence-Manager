@@ -11,6 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 
 router = APIRouter()
@@ -105,6 +106,11 @@ class TestNotificationResponse(BaseModel):
 def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
     """Get SettingsService instance."""
     return SettingsService(db)
+
+
+def get_notification_service(db: AsyncSession = Depends(get_db)) -> NotificationService:
+    """Get NotificationService instance."""
+    return NotificationService(db)
 
 
 @router.get("/status", response_model=SetupStatusResponse)
@@ -345,12 +351,11 @@ async def delete_notification_rule(
 async def test_slack_notification(
     request: TestNotificationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
-    service: Annotated[SettingsService, Depends(get_settings_service)],
+    settings_service: Annotated[SettingsService, Depends(get_settings_service)],
+    notification_service: Annotated[NotificationService, Depends(get_notification_service)],
 ) -> TestNotificationResponse:
     """Send a test notification to Slack. Requires settings.edit permission."""
-    import httpx
-
-    slack_config = await service.get("slack")
+    slack_config = await settings_service.get("slack")
 
     if not slack_config or not slack_config.get("bot_token"):
         return TestNotificationResponse(
@@ -360,33 +365,9 @@ async def test_slack_notification(
 
     bot_token = slack_config["bot_token"]
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://slack.com/api/chat.postMessage",
-                headers={"Authorization": f"Bearer {bot_token}"},
-                json={
-                    "channel": request.channel,
-                    "text": ":white_check_mark: *Test Notification*\n\nThis is a test message from the License Management System. If you received this, your Slack integration is working correctly!",
-                    "mrkdwn": True,
-                },
-                timeout=10.0,
-            )
-            result = response.json()
+    success, message = await notification_service.send_test_notification(
+        channel=request.channel,
+        token=bot_token,
+    )
 
-            if result.get("ok"):
-                return TestNotificationResponse(
-                    success=True,
-                    message=f"Test notification sent successfully to {request.channel}",
-                )
-            else:
-                error = result.get("error", "Unknown error")
-                return TestNotificationResponse(
-                    success=False,
-                    message=f"Failed to send notification: {error}",
-                )
-    except Exception as e:
-        return TestNotificationResponse(
-            success=False,
-            message=f"Failed to connect to Slack: {str(e)}",
-        )
+    return TestNotificationResponse(success=success, message=message)

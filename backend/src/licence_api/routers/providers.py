@@ -224,81 +224,32 @@ async def upload_provider_logo(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     file: UploadFile = File(...),
 ) -> LogoUploadResponse:
     """Upload a logo for a provider. Requires providers.edit permission."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    # Validate file
     if file.filename is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No filename provided",
         )
 
-    safe_filename = Path(file.filename).name
-    ext = Path(safe_filename).suffix.lower()
-
-    if ext not in ALLOWED_LOGO_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_LOGO_EXTENSIONS)}",
-        )
-
-    # Read and validate content
     content = await file.read()
-    if len(content) > MAX_LOGO_SIZE:
+
+    try:
+        logo_url = await provider_service.upload_logo(
+            provider_id=provider_id,
+            content=content,
+            filename=file.filename,
+            user=current_user,
+            request=http_request,
+        )
+        return LogoUploadResponse(logo_url=logo_url)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB",
+            detail=str(e),
         )
-
-    if not validate_logo_signature(content, ext):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File content does not match declared file type",
-        )
-
-    # Save file
-    LOGOS_DIR.mkdir(parents=True, exist_ok=True)
-    stored_filename = f"{uuid_module.uuid4()}{ext}"
-    file_path = LOGOS_DIR / stored_filename
-
-    # Delete old logo if exists
-    if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
-        old_filename = provider.logo_url.split("/")[-1]
-        old_path = LOGOS_DIR / old_filename
-        if old_path.exists():
-            old_path.unlink()
-
-    file_path.write_bytes(content)
-
-    # Update provider with logo URL
-    logo_url = f"/api/v1/providers/{provider_id}/logo/{stored_filename}"
-    await provider_repo.update(provider_id, logo_url=logo_url)
-
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_UPDATE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider_id,
-        user=current_user,
-        request=http_request,
-        details={"action": "logo_upload", "filename": safe_filename},
-    )
-
-    # Invalidate caches
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
-
-    return LogoUploadResponse(logo_url=logo_url)
 
 
 @router.get("/{provider_id}/logo/{filename}")
@@ -357,40 +308,20 @@ async def delete_provider_logo(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> None:
     """Delete a provider's logo. Requires providers.edit permission."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        await provider_service.delete_logo(
+            provider_id=provider_id,
+            user=current_user,
+            request=http_request,
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
+            detail=str(e),
         )
-
-    # Delete file if exists
-    if provider.logo_url and provider.logo_url.startswith("/api/v1/providers/"):
-        old_filename = provider.logo_url.split("/")[-1]
-        old_path = LOGOS_DIR / old_filename
-        if old_path.exists():
-            old_path.unlink()
-
-    # Clear logo URL
-    await provider_repo.update(provider_id, logo_url=None)
-
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_UPDATE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider_id,
-        user=current_user,
-        request=http_request,
-        details={"action": "logo_delete"},
-    )
-
-    # Invalidate caches
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -398,57 +329,31 @@ async def delete_provider(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> None:
     """Delete a provider. Requires providers.delete permission."""
-    # Get provider info for audit before deletion
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    provider_name = provider.name
-    provider_display_name = provider.display_name
-
-    deleted = await provider_repo.delete(provider_id)
+    deleted = await provider_service.delete_provider(
+        provider_id=provider_id,
+        user=current_user,
+        request=http_request,
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    # Audit log
-    await audit_service.log(
-        action=AuditAction.PROVIDER_DELETE,
-        resource_type=ResourceType.PROVIDER,
-        resource_id=provider_id,
-        user=current_user,
-        request=http_request,
-        details={
-            "name": provider_name,
-            "display_name": provider_display_name,
-        },
-    )
-
-    # Invalidate relevant caches
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
-    await cache.invalidate_dashboard()
-
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
 @limiter.limit(TEST_CONNECTION_LIMIT)
 async def test_provider_connection(
-    http_request: Request,
-    request: TestConnectionRequest,
+    request: Request,
+    body: TestConnectionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
 ) -> TestConnectionResponse:
     """Test provider connection with given credentials. Requires providers.create permission."""
     # Manual providers don't need connection test
-    if request.name == "manual":
+    if body.name == "manual":
         return TestConnectionResponse(
             success=True,
             message="Manual provider - no connection test needed",
@@ -486,15 +391,15 @@ async def test_provider_connection(
         ProviderName.JETBRAINS: JetBrainsProvider,
     }
 
-    provider_class = providers.get(ProviderName(request.name) if request.name in [e.value for e in ProviderName] else None)
+    provider_class = providers.get(ProviderName(body.name) if body.name in [e.value for e in ProviderName] else None)
     if provider_class is None:
         return TestConnectionResponse(
             success=False,
-            message=f"Unknown provider: {request.name}",
+            message=f"Unknown provider: {body.name}",
         )
 
     try:
-        provider = provider_class(request.credentials)
+        provider = provider_class(body.credentials)
         success = await provider.test_connection()
         return TestConnectionResponse(
             success=success,
@@ -510,7 +415,7 @@ async def test_provider_connection(
 @router.post("/sync", response_model=SyncResponse)
 @limiter.limit(SYNC_LIMIT)
 async def trigger_sync(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
@@ -526,7 +431,7 @@ async def trigger_sync(
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"results": results, "scope": "single" if provider_id else "all"},
         )
 
@@ -542,7 +447,7 @@ async def trigger_sync(
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"error": str(e), "success": False},
         )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
@@ -551,7 +456,7 @@ async def trigger_sync(
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
 @limiter.limit(SYNC_LIMIT)
 async def sync_provider(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
@@ -567,7 +472,7 @@ async def sync_provider(
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"results": results},
         )
 
@@ -588,7 +493,7 @@ async def sync_provider(
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"error": str(e), "success": False},
         )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
