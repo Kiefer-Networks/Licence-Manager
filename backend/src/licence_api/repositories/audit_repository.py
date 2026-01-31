@@ -145,3 +145,33 @@ class AuditRepository(BaseRepository[AuditLogORM]):
         total = count_result.scalar_one()
 
         return logs, total
+
+    async def get_distinct_resource_types(self) -> list[str]:
+        """Get all distinct resource types from audit logs.
+
+        Returns:
+            List of unique resource types, ordered alphabetically.
+        """
+        from sqlalchemy import distinct
+
+        result = await self.session.execute(
+            select(distinct(AuditLogORM.resource_type))
+            .where(AuditLogORM.resource_type.isnot(None))
+            .order_by(AuditLogORM.resource_type)
+        )
+        return [row[0] for row in result.all()]
+
+    async def get_distinct_actions(self) -> list[str]:
+        """Get all distinct actions from audit logs.
+
+        Returns:
+            List of unique actions, ordered alphabetically.
+        """
+        from sqlalchemy import distinct
+
+        result = await self.session.execute(
+            select(distinct(AuditLogORM.action))
+            .where(AuditLogORM.action.isnot(None))
+            .order_by(AuditLogORM.action)
+        )
+        return [row[0] for row in result.all()]

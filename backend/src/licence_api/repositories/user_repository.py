@@ -326,6 +326,78 @@ class UserRepository(BaseRepository[AdminUserORM]):
         )
         return result.scalar_one()
 
+    async def get_emails_by_ids(self, user_ids: set[UUID]) -> dict[UUID, str]:
+        """Get email addresses for multiple user IDs.
+
+        Args:
+            user_ids: Set of user UUIDs
+
+        Returns:
+            Dict mapping user ID to email address
+        """
+        if not user_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(AdminUserORM.id, AdminUserORM.email).where(
+                AdminUserORM.id.in_(user_ids)
+            )
+        )
+        return {row.id: row.email for row in result.all()}
+
+    async def get_email_by_id(self, user_id: UUID) -> str | None:
+        """Get email address for a single user ID.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Email address or None if not found
+        """
+        result = await self.session.execute(
+            select(AdminUserORM.email).where(AdminUserORM.id == user_id)
+        )
+        row = result.first()
+        return row.email if row else None
+
+    async def update_name(self, user_id: UUID, name: str | None) -> AdminUserORM | None:
+        """Update user's display name.
+
+        Args:
+            user_id: User UUID
+            name: New name (or None to clear)
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.name = name
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def update_avatar(self, user_id: UUID, avatar_url: str | None) -> AdminUserORM | None:
+        """Update user's avatar URL.
+
+        Args:
+            user_id: User UUID
+            avatar_url: New avatar URL (or None to clear)
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.avatar_url = avatar_url
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
 
 class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
     """Repository for refresh token operations."""
