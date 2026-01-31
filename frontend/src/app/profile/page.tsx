@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/components/auth-provider';
 import { api, UserNotificationPreference, NotificationEventType, UserNotificationPreferenceUpdate } from '@/lib/api';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -14,6 +15,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2 } from 'lucide-react';
 
 export default function ProfilePage() {
+  const t = useTranslations('profile');
+  const tCommon = useTranslations('common');
+  const tNav = useTranslations('nav');
   const { user, refreshUser } = useAuth();
 
   // General tab state
@@ -114,10 +118,10 @@ export default function ProfilePage() {
 
       const response = await api.updateNotificationPreferences(updates);
       setNotifPrefs(response.preferences);
-      setNotifSuccess('Notification preferences saved');
+      setNotifSuccess(t('preferencesSaved'));
       setTimeout(() => setNotifSuccess(''), 3000);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save preferences';
+      const errorMessage = err instanceof Error ? err.message : t('failedToSave');
       setNotifError(errorMessage);
     } finally {
       setNotifSaving(false);
@@ -131,13 +135,18 @@ export default function ProfilePage() {
     return acc;
   }, {} as Record<string, NotificationEventType[]>);
 
+  const tLicenses = useTranslations('licenses');
+  const tEmployees = useTranslations('employees');
+  const tDashboard = useTranslations('dashboard');
+  const tSettings = useTranslations('settings');
+
   const categoryLabels: Record<string, string> = {
-    licenses: 'Licenses',
-    employees: 'Employees',
-    utilization: 'Utilization',
-    costs: 'Costs',
-    duplicates: 'Duplicates',
-    system: 'System',
+    licenses: tLicenses('title'),
+    employees: tEmployees('title'),
+    utilization: tDashboard('overview'),
+    costs: tDashboard('totalCost'),
+    duplicates: tDashboard('alerts'),
+    system: tSettings('general'),
   };
 
   // Handle name save
@@ -149,10 +158,10 @@ export default function ProfilePage() {
     try {
       await api.updateProfile({ name: name || undefined });
       await refreshUser?.();
-      setGeneralSuccess('Name updated successfully');
+      setGeneralSuccess(t('nameUpdated'));
       setTimeout(() => setGeneralSuccess(''), 3000);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update name';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setGeneralError(errorMessage);
     } finally {
       setNameSaving(false);
@@ -167,13 +176,13 @@ export default function ProfilePage() {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      setGeneralError('Invalid file type. Allowed: JPG, PNG, GIF, WebP');
+      setGeneralError(t('invalidFileType'));
       return;
     }
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setGeneralError('File too large. Maximum size: 5 MB');
+      setGeneralError(t('fileTooLarge'));
       return;
     }
 
@@ -184,10 +193,10 @@ export default function ProfilePage() {
     try {
       await api.uploadAvatar(file);
       await refreshUser?.();
-      setGeneralSuccess('Avatar uploaded successfully');
+      setGeneralSuccess(t('avatarUploaded'));
       setTimeout(() => setGeneralSuccess(''), 3000);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to upload avatar';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setGeneralError(errorMessage);
     } finally {
       setAvatarUploading(false);
@@ -206,10 +215,10 @@ export default function ProfilePage() {
     try {
       await api.deleteAvatar();
       await refreshUser?.();
-      setGeneralSuccess('Avatar deleted successfully');
+      setGeneralSuccess(t('avatarDeleted'));
       setTimeout(() => setGeneralSuccess(''), 3000);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete avatar';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setGeneralError(errorMessage);
     } finally {
       setAvatarUploading(false);
@@ -223,12 +232,12 @@ export default function ProfilePage() {
     setSecuritySuccess('');
 
     if (newPassword !== confirmPassword) {
-      setSecurityError('New passwords do not match');
+      setSecurityError(t('passwordsDoNotMatch'));
       return;
     }
 
     if (newPassword.length < 12) {
-      setSecurityError('Password must be at least 12 characters');
+      setSecurityError(t('passwordTooShort'));
       return;
     }
 
@@ -236,12 +245,12 @@ export default function ProfilePage() {
 
     try {
       await api.changePassword(currentPassword, newPassword);
-      setSecuritySuccess('Password changed successfully');
+      setSecuritySuccess(t('passwordChanged'));
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setSecurityError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -251,9 +260,9 @@ export default function ProfilePage() {
   const handleLogoutAllSessions = async () => {
     try {
       const result = await api.logoutAllSessions();
-      setSecuritySuccess(`Logged out from ${result.sessions_revoked} sessions`);
+      setSecuritySuccess(t('loggedOutSessions', { count: result.sessions_revoked }));
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to logout sessions';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setSecurityError(errorMessage);
     }
   };
@@ -262,23 +271,23 @@ export default function ProfilePage() {
     <AppLayout>
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Profile</h1>
-          <p className="text-muted-foreground">Manage your account settings</p>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
 
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <User className="h-4 w-4" />
-              General
+              {t('general')}
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              Security
+              {t('security')}
             </TabsTrigger>
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              Notifications
+              {t('notifications')}
             </TabsTrigger>
           </TabsList>
 
@@ -298,8 +307,8 @@ export default function ProfilePage() {
             {/* Avatar Section */}
             <Card>
               <CardHeader>
-                <CardTitle>Profile Picture</CardTitle>
-                <CardDescription>Upload a profile picture to personalize your account</CardDescription>
+                <CardTitle>{t('profilePicture')}</CardTitle>
+                <CardDescription>{t('profilePictureDescription')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-6">
@@ -338,7 +347,7 @@ export default function ProfilePage() {
                       disabled={avatarUploading}
                     >
                       <Camera className="h-4 w-4 mr-2" />
-                      Upload Photo
+                      {t('uploadPhoto')}
                     </Button>
                     {user?.picture_url && (
                       <Button
@@ -349,11 +358,11 @@ export default function ProfilePage() {
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Remove
+                        {t('removePhoto')}
                       </Button>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      JPG, PNG, GIF or WebP. Max 5MB.
+                      {t('photoFormats')}
                     </p>
                   </div>
                 </div>
@@ -363,8 +372,8 @@ export default function ProfilePage() {
             {/* Display Name */}
             <Card>
               <CardHeader>
-                <CardTitle>Display Name</CardTitle>
-                <CardDescription>This name will be shown across the application</CardDescription>
+                <CardTitle>{t('displayName')}</CardTitle>
+                <CardDescription>{t('displayNameDescription')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -373,7 +382,7 @@ export default function ProfilePage() {
                       <Input
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="Enter your display name"
+                        placeholder={t('enterDisplayName')}
                         className="text-base"
                       />
                     </div>
@@ -384,16 +393,16 @@ export default function ProfilePage() {
                       {nameSaving ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Saving...
+                          {t('saving')}
                         </>
                       ) : (
-                        'Save Name'
+                        t('saveName')
                       )}
                     </Button>
                   </div>
                   {name !== (user?.name || '') && (
                     <p className="text-sm text-amber-600">
-                      You have unsaved changes
+                      {tCommon('unsavedChanges')}
                     </p>
                   )}
                 </div>
@@ -403,18 +412,18 @@ export default function ProfilePage() {
             {/* Account Info */}
             <Card>
               <CardHeader>
-                <CardTitle>Account Information</CardTitle>
-                <CardDescription>Your account details (read-only)</CardDescription>
+                <CardTitle>{t('accountInfo')}</CardTitle>
+                <CardDescription>{t('accountInfoDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs">Email</Label>
+                    <Label className="text-muted-foreground text-xs">{tCommon('email')}</Label>
                     <p className="font-medium">{user?.email}</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs">Roles</Label>
+                    <Label className="text-muted-foreground text-xs">{tNav('roles')}</Label>
                     <div className="flex flex-wrap gap-1">
                       {user?.roles.map((role) => (
                         <Badge key={role} variant="secondary">{role}</Badge>
@@ -431,8 +440,8 @@ export default function ProfilePage() {
             {/* Change Password */}
             <Card>
               <CardHeader>
-                <CardTitle>Change Password</CardTitle>
-                <CardDescription>Update your password</CardDescription>
+                <CardTitle>{t('changePassword')}</CardTitle>
+                <CardDescription>{t('updatePassword')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleChangePassword} className="space-y-4">
@@ -447,7 +456,7 @@ export default function ProfilePage() {
                     </div>
                   )}
                   <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
+                    <Label htmlFor="current-password">{t('currentPassword')}</Label>
                     <Input
                       id="current-password"
                       type="password"
@@ -457,7 +466,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
+                    <Label htmlFor="new-password">{t('newPassword')}</Label>
                     <Input
                       id="new-password"
                       type="password"
@@ -467,11 +476,11 @@ export default function ProfilePage() {
                       required
                     />
                     <p className="text-xs text-muted-foreground">
-                      Minimum 12 characters, including uppercase, lowercase, number, and special character.
+                      {t('passwordRequirements')}
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <Label htmlFor="confirm-password">{t('confirmNewPassword')}</Label>
                     <Input
                       id="confirm-password"
                       type="password"
@@ -482,7 +491,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Changing...' : 'Change Password'}
+                    {isSubmitting ? t('changing') : t('changePassword')}
                   </Button>
                 </form>
               </CardContent>
@@ -491,16 +500,16 @@ export default function ProfilePage() {
             {/* Session Management */}
             <Card>
               <CardHeader>
-                <CardTitle>Active Sessions</CardTitle>
-                <CardDescription>Manage your active sessions</CardDescription>
+                <CardTitle>{t('activeSessions')}</CardTitle>
+                <CardDescription>{t('manageSessionsDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-3">
-                    If you suspect your account has been compromised, you can sign out of all active sessions.
+                    {t('sessionCompromised')}
                   </p>
                   <Button variant="outline" onClick={handleLogoutAllSessions}>
-                    Sign out all other sessions
+                    {t('signOutAllSessions')}
                   </Button>
                 </div>
               </CardContent>
@@ -513,10 +522,10 @@ export default function ProfilePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="h-5 w-5" />
-                  Notification Preferences
+                  {t('notificationPreferences')}
                 </CardTitle>
                 <CardDescription>
-                  Choose how and when you want to be notified about license management events
+                  {t('notificationDescription')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -541,11 +550,11 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-6 text-sm text-muted-foreground border-b pb-4">
                       <div className="flex items-center gap-2">
                         <Bell className="h-4 w-4" />
-                        <span>Enabled</span>
+                        <span>{tCommon('enabled')}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MessageSquare className="h-4 w-4" />
-                        <span>Slack DM</span>
+                        <span>{t('slackDm')}</span>
                       </div>
                     </div>
 
@@ -601,10 +610,10 @@ export default function ProfilePage() {
                         {notifSaving ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
+                            {t('saving')}
                           </>
                         ) : (
-                          'Save Preferences'
+                          t('savePreferences')
                         )}
                       </Button>
                     </div>
