@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Supported locales
+const locales = ['en', 'de'];
+const defaultLocale = 'en';
+
 // Routes that are always public (no authentication required)
 const publicRoutes = [
   '/auth/signin',
@@ -23,10 +27,37 @@ const protectedRoutes = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const response = NextResponse.next();
+
+  // Handle locale detection and cookie setting
+  const localeCookie = request.cookies.get('locale');
+  if (!localeCookie) {
+    // Detect locale from Accept-Language header
+    const acceptLanguage = request.headers.get('accept-language');
+    let detectedLocale = defaultLocale;
+
+    if (acceptLanguage) {
+      const preferredLocale = acceptLanguage
+        .split(',')
+        .map((lang) => lang.split(';')[0].trim().substring(0, 2))
+        .find((lang) => locales.includes(lang));
+
+      if (preferredLocale) {
+        detectedLocale = preferredLocale;
+      }
+    }
+
+    // Set locale cookie for future requests
+    response.cookies.set('locale', detectedLocale, {
+      path: '/',
+      maxAge: 365 * 24 * 60 * 60, // 1 year
+      sameSite: 'lax',
+    });
+  }
 
   // Allow public routes without authentication check
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    return NextResponse.next();
+    return response;
   }
 
   // Allow static files and API routes
@@ -35,7 +66,7 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/api') ||
     pathname.includes('.')
   ) {
-    return NextResponse.next();
+    return response;
   }
 
   // Check for authentication cookie (httpOnly cookie set by backend)
@@ -53,19 +84,56 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith('/') && !pathname.includes(':') && !pathname.startsWith('//')) {
       signinUrl.searchParams.set('callbackUrl', pathname);
     }
-    return NextResponse.redirect(signinUrl);
+    const redirectResponse = NextResponse.redirect(signinUrl);
+    // Copy locale cookie to redirect response
+    if (!localeCookie) {
+      const acceptLanguage = request.headers.get('accept-language');
+      let detectedLocale = defaultLocale;
+      if (acceptLanguage) {
+        const preferredLocale = acceptLanguage
+          .split(',')
+          .map((lang) => lang.split(';')[0].trim().substring(0, 2))
+          .find((lang) => locales.includes(lang));
+        if (preferredLocale) {
+          detectedLocale = preferredLocale;
+        }
+      }
+      redirectResponse.cookies.set('locale', detectedLocale, {
+        path: '/',
+        maxAge: 365 * 24 * 60 * 60,
+        sameSite: 'lax',
+      });
+    }
+    return redirectResponse;
   }
 
   // Root path redirects
   if (pathname === '/') {
-    if (accessToken) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    } else {
-      return NextResponse.redirect(new URL('/auth/signin', request.url));
+    const redirectUrl = accessToken ? '/dashboard' : '/auth/signin';
+    const redirectResponse = NextResponse.redirect(new URL(redirectUrl, request.url));
+    // Copy locale cookie to redirect response
+    if (!localeCookie) {
+      const acceptLanguage = request.headers.get('accept-language');
+      let detectedLocale = defaultLocale;
+      if (acceptLanguage) {
+        const preferredLocale = acceptLanguage
+          .split(',')
+          .map((lang) => lang.split(';')[0].trim().substring(0, 2))
+          .find((lang) => locales.includes(lang));
+        if (preferredLocale) {
+          detectedLocale = preferredLocale;
+        }
+      }
+      redirectResponse.cookies.set('locale', detectedLocale, {
+        path: '/',
+        maxAge: 365 * 24 * 60 * 60,
+        sameSite: 'lax',
+      });
     }
+    return redirectResponse;
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
