@@ -83,8 +83,8 @@ async def create_user(
     except ValueError as e:
         error_msg = str(e).lower()
         if "already registered" in error_msg:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user data")
 
 
 @router.get("/users/{user_id}", response_model=UserInfo)
@@ -125,8 +125,8 @@ async def update_user(
     except ValueError as e:
         error_msg = str(e).lower()
         if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid update data")
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -148,8 +148,8 @@ async def delete_user(
     except ValueError as e:
         error_msg = str(e).lower()
         if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user")
 
 
 @router.post("/users/{user_id}/reset-password")
@@ -175,8 +175,8 @@ async def reset_user_password(
     except ValueError as e:
         error_msg = str(e).lower()
         if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password reset failed")
 
 
 @router.post("/users/{user_id}/unlock")
@@ -191,8 +191,8 @@ async def unlock_user(
     try:
         await service.unlock_user(user_id)
         return {"message": "User unlocked successfully"}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
 @router.get("/users/{user_id}/sessions", response_model=list[SessionInfo])
@@ -256,8 +256,8 @@ async def create_role(
     """Create a custom role."""
     try:
         return await service.create_role(request)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role already exists or invalid data")
 
 
 @router.get("/roles/{role_id}", response_model=RoleResponse)
@@ -287,10 +287,10 @@ async def update_role(
             request=request,
             current_user=current_user,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system role")
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -305,8 +305,8 @@ async def delete_role(
     except ValueError as e:
         error_msg = str(e).lower()
         if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete role")
 
 
 # ============================================================================

@@ -54,8 +54,8 @@ async def cancel_license(
             cancellation_reason=license_orm.cancellation_reason,
             cancelled_by=license_orm.cancelled_by,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="License not found")
 
 
 @router.post("/licenses/{license_id}/renew")
@@ -81,8 +81,8 @@ async def renew_license(
             "expires_at": license_orm.expires_at.isoformat() if license_orm.expires_at else None,
             "status": license_orm.status,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="License not found")
 
 
 @router.patch("/licenses/{license_id}/needs-reorder")
@@ -102,8 +102,8 @@ async def set_license_needs_reorder(
             "success": True,
             "needs_reorder": license_orm.needs_reorder,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="License not found")
 
 
 # ==================== PACKAGE CANCELLATION ====================
@@ -135,8 +135,8 @@ async def cancel_package(
             cancellation_reason=package.cancellation_reason,
             cancelled_by=package.cancelled_by,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Package not found")
 
 
 @router.post("/packages/{package_id}/renew")
@@ -162,8 +162,8 @@ async def renew_package(
             "contract_end": package.contract_end.isoformat() if package.contract_end else None,
             "status": package.status,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Package not found")
 
 
 @router.patch("/packages/{package_id}/needs-reorder")
@@ -183,8 +183,8 @@ async def set_package_needs_reorder(
             "success": True,
             "needs_reorder": package.needs_reorder,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Package not found")
 
 
 # ==================== ORGANIZATION LICENSE CANCELLATION ====================
@@ -216,5 +216,5 @@ async def cancel_org_license(
             cancellation_reason=org_license.cancellation_reason,
             cancelled_by=org_license.cancelled_by,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Organization license not found")
