@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,8 @@ interface SetupStatus {
 }
 
 export default function SetupPage() {
+  const t = useTranslations('setup');
+  const tProviders = useTranslations('providers');
   const router = useRouter();
   const [step, setStep] = useState<SetupStep>('welcome');
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
@@ -73,8 +76,8 @@ export default function SetupPage() {
       setStep('providers');
     } catch (err: unknown) {
       // Sanitize error message - don't expose internal details
-      const message = err instanceof Error ? err.message : 'Configuration failed';
-      setError(message.includes('token') ? 'Invalid credentials' : message);
+      const message = err instanceof Error ? err.message : t('configurationFailed');
+      setError(message.includes('token') ? t('invalidCredentials') : message);
     } finally {
       setLoading(false);
     }
@@ -95,10 +98,10 @@ export default function SetupPage() {
   };
 
   const steps = [
-    { id: 'welcome', label: 'Welcome' },
+    { id: 'welcome', label: t('welcome') },
     { id: 'hibob', label: 'HiBob' },
-    { id: 'providers', label: 'Providers' },
-    { id: 'complete', label: 'Complete' },
+    { id: 'providers', label: tProviders('title') },
+    { id: 'complete', label: t('complete') },
   ];
 
   const currentStepIndex = steps.findIndex((s) => s.id === step);
@@ -132,9 +135,9 @@ export default function SetupPage() {
         {step === 'welcome' && (
           <Card>
             <CardHeader className="text-center">
-              <CardTitle className="text-3xl">License Management System</CardTitle>
+              <CardTitle className="text-3xl">{t('welcomeMessage')}</CardTitle>
               <CardDescription className="text-lg">
-                Track and manage software licenses across your organization
+                {t('welcomeDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -144,9 +147,9 @@ export default function SetupPage() {
                     <CheckCircle className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Sync with HiBob</h3>
+                    <h3 className="font-medium">{t('syncWithHibob')}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Automatically import employees from your HRIS
+                      {t('syncDescription')}
                     </p>
                   </div>
                 </div>
@@ -155,9 +158,9 @@ export default function SetupPage() {
                     <CheckCircle className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Track Multiple Providers</h3>
+                    <h3 className="font-medium">{t('trackMultipleProviders')}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Google Workspace, Slack, OpenAI, Figma, and more
+                      {t('trackDescription')}
                     </p>
                   </div>
                 </div>
@@ -166,15 +169,15 @@ export default function SetupPage() {
                     <CheckCircle className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Get Alerts</h3>
+                    <h3 className="font-medium">{t('getAlerts')}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Slack notifications for offboarding and inactive licenses
+                      {t('notificationsDescription')}
                     </p>
                   </div>
                 </div>
               </div>
               <Button onClick={() => setStep('hibob')} className="w-full" size="lg">
-                Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                {t('getStarted')} <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>
@@ -183,24 +186,23 @@ export default function SetupPage() {
         {step === 'hibob' && (
           <Card>
             <CardHeader>
-              <CardTitle>Connect HiBob</CardTitle>
+              <CardTitle>{t('connectHibob')}</CardTitle>
               <CardDescription>
-                Connect your HiBob account to sync employee data.
-                This is your source of truth for employees.
+                {t('hibobDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="hibob-auth-token">Auth Token (Base64)</Label>
+                <Label htmlFor="hibob-auth-token">{t('authToken')}</Label>
                 <Input
                   id="hibob-auth-token"
                   type="password"
                   value={hibobAuthToken}
                   onChange={(e) => setHibobAuthToken(e.target.value)}
-                  placeholder="Base64 encoded user:password"
+                  placeholder={t('authTokenPlaceholder')}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Base64 encoded string of service_user_id:api_key for Basic Auth
+                  {t('authTokenHelp')}
                 </p>
               </div>
               {error && (
@@ -211,7 +213,7 @@ export default function SetupPage() {
                 disabled={!hibobAuthToken || loading}
                 className="w-full"
               >
-                {loading ? 'Connecting...' : 'Connect HiBob'}
+                {loading ? t('connecting') : t('connectHibob')}
               </Button>
             </CardContent>
           </Card>
@@ -220,32 +222,32 @@ export default function SetupPage() {
         {step === 'providers' && (
           <Card>
             <CardHeader>
-              <CardTitle>Add More Providers</CardTitle>
+              <CardTitle>{t('addMoreProviders')}</CardTitle>
               <CardDescription>
-                You can add more license providers now or later from Settings.
+                {t('providersDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4">
                 <Button variant="outline" className="justify-start" disabled>
-                  Google Workspace (Coming next)
+                  {tProviders('google')} ({t('comingNext')})
                 </Button>
                 <Button variant="outline" className="justify-start" disabled>
-                  Slack
+                  {tProviders('slack')}
                 </Button>
                 <Button variant="outline" className="justify-start" disabled>
-                  OpenAI
+                  {tProviders('openai')}
                 </Button>
                 <Button variant="outline" className="justify-start" disabled>
-                  Figma
+                  {tProviders('figma')}
                 </Button>
               </div>
               <div className="flex gap-4">
                 <Button variant="outline" onClick={handleSkipProviders} className="flex-1">
-                  Skip for Now
+                  {t('skipForNow')}
                 </Button>
                 <Button onClick={() => setStep('complete')} className="flex-1">
-                  Continue
+                  {t('continue')}
                 </Button>
               </div>
             </CardContent>
@@ -256,15 +258,14 @@ export default function SetupPage() {
           <Card>
             <CardHeader className="text-center">
               <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
-              <CardTitle>Setup Complete!</CardTitle>
+              <CardTitle>{t('completeTitle')}</CardTitle>
               <CardDescription>
-                Your license management system is ready to use.
-                We'll start syncing your data in the background.
+                {t('completeDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={handleComplete} className="w-full" size="lg">
-                Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+                {t('goToDashboard')} <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>

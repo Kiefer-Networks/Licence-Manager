@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,10 @@ import { RenewDialog } from '@/components/licenses/RenewDialog';
 import { getLocale } from '@/lib/locale';
 
 export default function LifecyclePage() {
+  const t = useTranslations('lifecycle');
+  const tLicenses = useTranslations('licenses');
+  const tProviders = useTranslations('providers');
+  const tCommon = useTranslations('common');
   const [overview, setOverview] = useState<LicenseLifecycleOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('expiring');
@@ -68,10 +73,10 @@ export default function LifecyclePage() {
         effective_date: effectiveDate,
         reason: reason || undefined,
       });
-      showToast('success', 'License cancelled');
+      showToast('success', t('licenseCancelled'));
       fetchOverview();
     } catch (error) {
-      showToast('error', 'Failed to cancel license');
+      showToast('error', t('failedToCancel'));
     }
   };
 
@@ -82,20 +87,20 @@ export default function LifecyclePage() {
         new_expiration_date: newExpirationDate,
         clear_cancellation: clearCancellation,
       });
-      showToast('success', 'License renewed');
+      showToast('success', t('licenseRenewed'));
       fetchOverview();
     } catch (error) {
-      showToast('error', 'Failed to renew license');
+      showToast('error', t('failedToRenew'));
     }
   };
 
   const handleToggleNeedsReorder = async (license: ExpiringLicense) => {
     try {
       await api.setLicenseNeedsReorder(license.license_id, !license.needs_reorder);
-      showToast('success', license.needs_reorder ? 'Removed from reorder list' : 'Added to reorder list');
+      showToast('success', license.needs_reorder ? t('removedFromReorder') : t('addedToReorder'));
       fetchOverview();
     } catch (error) {
-      showToast('error', 'Failed to update');
+      showToast('error', t('failedToUpdate'));
     }
   };
 
@@ -127,9 +132,9 @@ export default function LifecyclePage() {
 
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-semibold tracking-tight">License Lifecycle</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Track expiring, cancelled, and needs-reorder licenses
+            {t('subtitle')}
           </p>
         </div>
 
@@ -139,7 +144,7 @@ export default function LifecyclePage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('active')}</p>
                   <p className="text-2xl font-semibold mt-1 tabular-nums text-emerald-600">
                     {overview?.total_active || 0}
                   </p>
@@ -153,7 +158,7 @@ export default function LifecyclePage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expiring Soon</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('expiringSoon')}</p>
                   <p className={`text-2xl font-semibold mt-1 tabular-nums ${overview?.total_expiring_soon ? 'text-amber-600' : ''}`}>
                     {overview?.total_expiring_soon || 0}
                   </p>
@@ -167,7 +172,7 @@ export default function LifecyclePage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expired</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('expired')}</p>
                   <p className={`text-2xl font-semibold mt-1 tabular-nums ${overview?.total_expired ? 'text-red-600' : ''}`}>
                     {overview?.total_expired || 0}
                   </p>
@@ -181,7 +186,7 @@ export default function LifecyclePage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cancelled</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('cancelled')}</p>
                   <p className="text-2xl font-semibold mt-1 tabular-nums">
                     {overview?.total_cancelled || 0}
                   </p>
@@ -195,7 +200,7 @@ export default function LifecyclePage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Needs Reorder</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('needsReorder')}</p>
                   <p className={`text-2xl font-semibold mt-1 tabular-nums ${overview?.total_needs_reorder ? 'text-blue-600' : ''}`}>
                     {overview?.total_needs_reorder || 0}
                   </p>
@@ -211,7 +216,7 @@ export default function LifecyclePage() {
           <TabsList>
             <TabsTrigger value="expiring" className="gap-1.5">
               <Clock className="h-4 w-4" />
-              Expiring
+              {t('expiringLicenses')}
               {(overview?.total_expiring_soon || 0) > 0 && (
                 <Badge variant="secondary" className="ml-1 bg-amber-100 text-amber-700">
                   {overview?.total_expiring_soon}
@@ -220,7 +225,7 @@ export default function LifecyclePage() {
             </TabsTrigger>
             <TabsTrigger value="cancelled" className="gap-1.5">
               <Ban className="h-4 w-4" />
-              Cancelled
+              {t('cancelled')}
               {(overview?.total_cancelled || 0) > 0 && (
                 <Badge variant="secondary" className="ml-1">
                   {overview?.total_cancelled}
@@ -229,7 +234,7 @@ export default function LifecyclePage() {
             </TabsTrigger>
             <TabsTrigger value="reorder" className="gap-1.5">
               <ShoppingCart className="h-4 w-4" />
-              Needs Reorder
+              {t('needsReorder')}
               {needsReorderLicenses.length > 0 && (
                 <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-700">
                   {needsReorderLicenses.length}
@@ -245,12 +250,12 @@ export default function LifecyclePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-zinc-50/50">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">License</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Expires</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Days Left</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('license')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tProviders('provider')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('expires')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('daysLeft')}</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('cost')}</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -280,7 +285,7 @@ export default function LifecyclePage() {
                             variant={license.days_until_expiry <= 7 ? 'destructive' : license.days_until_expiry <= 30 ? 'default' : 'secondary'}
                             className={license.days_until_expiry <= 7 ? '' : license.days_until_expiry <= 30 ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : ''}
                           >
-                            {license.days_until_expiry} days
+                            {license.days_until_expiry} {t('days')}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
@@ -329,7 +334,7 @@ export default function LifecyclePage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground border rounded-lg bg-white">
                 <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
-                <p className="text-sm">No licenses expiring soon</p>
+                <p className="text-sm">{t('noExpiringLicenses')}</p>
               </div>
             )}
           </TabsContent>
@@ -341,13 +346,13 @@ export default function LifecyclePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-zinc-50/50">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">License</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cancelled</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Effective Date</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Reason</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('license')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tProviders('provider')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('cancelled')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('effectiveDate')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('reason')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -369,7 +374,7 @@ export default function LifecyclePage() {
                         <td className="px-4 py-3 text-xs">
                           {new Date(license.cancelled_at).toLocaleDateString(getLocale())}
                           {license.cancelled_by_name && (
-                            <p className="text-muted-foreground">by {license.cancelled_by_name}</p>
+                            <p className="text-muted-foreground">{t('cancelledBy')} {license.cancelled_by_name}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -380,7 +385,7 @@ export default function LifecyclePage() {
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant={license.is_effective ? 'secondary' : 'outline'}>
-                            {license.is_effective ? 'Effective' : 'Pending'}
+                            {license.is_effective ? t('effective') : t('pending')}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -406,7 +411,7 @@ export default function LifecyclePage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground border rounded-lg bg-white">
                 <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
-                <p className="text-sm">No cancelled licenses</p>
+                <p className="text-sm">{t('noCancelledLicenses')}</p>
               </div>
             )}
           </TabsContent>
@@ -418,11 +423,11 @@ export default function LifecyclePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-zinc-50/50">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">License</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Expires</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('license')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tProviders('provider')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('expires')}</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('cost')}</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -479,7 +484,7 @@ export default function LifecyclePage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground border rounded-lg bg-white">
                 <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
-                <p className="text-sm">No licenses marked for reorder</p>
+                <p className="text-sm">{t('noReorderLicenses')}</p>
               </div>
             )}
           </TabsContent>
@@ -490,8 +495,8 @@ export default function LifecyclePage() {
           open={cancelDialogOpen}
           onOpenChange={setCancelDialogOpen}
           onConfirm={handleCancel}
-          title="Cancel License"
-          description="Schedule this license for cancellation."
+          title={t('cancelLicense')}
+          description={t('cancelDescription')}
           itemName={selectedLicense?.external_user_id || ''}
         />
 
@@ -499,8 +504,8 @@ export default function LifecyclePage() {
           open={renewDialogOpen}
           onOpenChange={setRenewDialogOpen}
           onConfirm={handleRenew}
-          title="Renew License"
-          description="Extend the expiration date of this license."
+          title={t('renewLicense')}
+          description={t('renewDescription')}
           itemName={selectedLicense?.external_user_id || ''}
           currentExpiration={(selectedLicense as ExpiringLicense)?.expires_at}
           hasPendingCancellation={!!(selectedLicense as CancelledLicense)?.cancelled_at}
