@@ -53,7 +53,7 @@ def get_avatar_base64(hibob_id: str) -> str | None:
         avatar_bytes = avatar_path.read_bytes()
         b64 = base64.b64encode(avatar_bytes).decode("utf-8")
         return f"data:image/jpeg;base64,{b64}"
-    except Exception:
+    except (OSError, IOError):
         return None
 
 

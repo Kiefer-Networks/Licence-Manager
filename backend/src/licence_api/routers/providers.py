@@ -405,10 +405,15 @@ async def test_provider_connection(
             success=success,
             message="Connection successful" if success else "Connection failed",
         )
-    except Exception:
+    except (ValueError, KeyError, TypeError) as e:
         return TestConnectionResponse(
             success=False,
-            message="Connection failed. Please verify your credentials.",
+            message=f"Configuration error: {str(e)}",
+        )
+    except (ConnectionError, TimeoutError, OSError):
+        return TestConnectionResponse(
+            success=False,
+            message="Connection failed. Please verify your credentials and network.",
         )
 
 

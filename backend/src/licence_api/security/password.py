@@ -47,7 +47,8 @@ class PasswordService:
         """
         try:
             return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-        except Exception:
+        except (ValueError, UnicodeDecodeError, UnicodeEncodeError):
+            # Invalid hash format or encoding issues
             return False
 
     def validate_password_strength(self, password: str) -> tuple[bool, list[str]]:

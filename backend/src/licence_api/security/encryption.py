@@ -5,6 +5,7 @@ import json
 import os
 from typing import Any
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from licence_api.config import get_settings
@@ -118,7 +119,7 @@ class EncryptionService:
                 aesgcm = AESGCM(key)
                 plaintext = aesgcm.decrypt(nonce, ciphertext, None)
                 return json.loads(plaintext.decode("utf-8"))
-            except Exception:
+            except (InvalidTag, ValueError, json.JSONDecodeError):
                 pass  # Fall through to try all keys
 
         # Legacy format or version key failed: try all keys
@@ -136,7 +137,7 @@ class EncryptionService:
                     aesgcm = AESGCM(key)
                     plaintext = aesgcm.decrypt(nonce, ciphertext, None)
                     return json.loads(plaintext.decode("utf-8"))
-                except Exception:
+                except (InvalidTag, ValueError, json.JSONDecodeError):
                     continue
 
         raise ValueError("Decryption failed: no valid key found")
