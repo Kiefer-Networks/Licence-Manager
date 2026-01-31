@@ -17,13 +17,16 @@ class EncryptionService:
     Supports key versioning for seamless key rotation:
     - New data is always encrypted with the current (latest) key
     - Old data can be decrypted with any known key version
-    - Version byte prefix identifies which key was used
+    - Magic bytes + version prefix identifies versioned data
 
     Data format:
-    - Version 0 (legacy): nonce (12 bytes) + ciphertext (no version prefix)
-    - Version 1+: version (1 byte) + nonce (12 bytes) + ciphertext
+    - Legacy (v0): nonce (12 bytes) + ciphertext (no prefix)
+    - Versioned (v1+): magic (2 bytes) + version (1 byte) + nonce (12 bytes) + ciphertext
     """
 
+    # Magic bytes to identify versioned encryption format (0xEC = "Encrypted")
+    MAGIC_BYTES = b"\xEC\x01"
+    MAGIC_SIZE = 2
     NONCE_SIZE = 12  # 96 bits for GCM
     VERSION_SIZE = 1  # 1 byte for version (0-255)
     CURRENT_VERSION = 1  # Current encryption version
@@ -77,15 +80,15 @@ class EncryptionService:
             data: Dictionary to encrypt
 
         Returns:
-            Encrypted bytes (version + nonce + ciphertext)
+            Encrypted bytes (magic + version + nonce + ciphertext)
         """
         plaintext = json.dumps(data).encode("utf-8")
         nonce = os.urandom(self.NONCE_SIZE)
         ciphertext = self._current_aesgcm.encrypt(nonce, plaintext, None)
 
-        # Prepend version byte (current version uses latest key index)
+        # Prepend magic bytes and version (current version uses latest key index)
         version = len(self._key_chain) - 1  # Index of current key
-        return bytes([version]) + nonce + ciphertext
+        return self.MAGIC_BYTES + bytes([version]) + nonce + ciphertext
 
     def decrypt(self, encrypted_data: bytes) -> dict[str, Any]:
         """Decrypt bytes to a dictionary, trying appropriate key(s).
@@ -102,29 +105,41 @@ class EncryptionService:
         if len(encrypted_data) < self.NONCE_SIZE + 1:
             raise ValueError("Invalid encrypted data: too short")
 
-        # Check if data has version prefix (version 1+) or is legacy (version 0)
-        first_byte = encrypted_data[0]
+        # Check for magic bytes to detect versioned format
+        has_magic = encrypted_data[: self.MAGIC_SIZE] == self.MAGIC_BYTES
 
-        # Heuristic: if first byte is a valid version index, treat as versioned
-        # Otherwise, treat as legacy unversioned data
-        if first_byte < len(self._key_chain):
-            # Versioned data: first byte is key index
-            version = first_byte
-            nonce = encrypted_data[self.VERSION_SIZE : self.VERSION_SIZE + self.NONCE_SIZE]
-            ciphertext = encrypted_data[self.VERSION_SIZE + self.NONCE_SIZE :]
+        if has_magic:
+            # New versioned format: magic + version + nonce + ciphertext
+            header_size = self.MAGIC_SIZE + self.VERSION_SIZE
+            if len(encrypted_data) < header_size + self.NONCE_SIZE + 1:
+                raise ValueError("Invalid encrypted data: too short for versioned format")
+
+            version = encrypted_data[self.MAGIC_SIZE]
+            nonce = encrypted_data[header_size : header_size + self.NONCE_SIZE]
+            ciphertext = encrypted_data[header_size + self.NONCE_SIZE :]
 
             # Try the specified key version first
-            key = self._key_chain[version]
-            try:
-                aesgcm = AESGCM(key)
-                plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-                return json.loads(plaintext.decode("utf-8"))
-            except (InvalidTag, ValueError, json.JSONDecodeError):
-                pass  # Fall through to try all keys
+            if version < len(self._key_chain):
+                key = self._key_chain[version]
+                try:
+                    aesgcm = AESGCM(key)
+                    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+                    return json.loads(plaintext.decode("utf-8"))
+                except (InvalidTag, ValueError, json.JSONDecodeError):
+                    pass  # Fall through to try all keys
 
-        # Legacy format or version key failed: try all keys
-        # For legacy data: nonce is at position 0
-        for offset in [self.VERSION_SIZE, 0]:  # Try versioned offset first, then legacy
+        # Legacy format (no magic bytes) or versioned key failed: try all keys
+        # Try different offsets for backwards compatibility
+        offsets_to_try = []
+
+        if has_magic:
+            # Versioned format failed, try again with all keys
+            offsets_to_try.append(self.MAGIC_SIZE + self.VERSION_SIZE)
+        else:
+            # Legacy format: try old versioned (1 byte) and unversioned (0 bytes)
+            offsets_to_try.extend([1, 0])
+
+        for offset in offsets_to_try:
             if len(encrypted_data) < offset + self.NONCE_SIZE + 1:
                 continue
 
