@@ -1,6 +1,6 @@
 """Provider files router for document uploads."""
 
-import os
+import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -9,14 +9,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.orm.provider_file import ProviderFileORM
+from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -123,6 +124,23 @@ def get_safe_mime_type(extension: str, fallback: str = "application/octet-stream
     return MIME_TYPES.get(extension.lower(), fallback)
 
 
+def validate_file_path(file_path: Path, base_dir: Path) -> bool:
+    """Validate that file path is within base directory (prevents path traversal).
+
+    Args:
+        file_path: Path to validate
+        base_dir: Base directory that path must be within
+
+    Returns:
+        True if path is safe, False otherwise
+    """
+    try:
+        resolved = file_path.resolve()
+        return resolved.is_relative_to(base_dir.resolve())
+    except (ValueError, RuntimeError):
+        return False
+
+
 class ProviderFileResponse(BaseModel):
     """Provider file response."""
     id: UUID
@@ -146,28 +164,34 @@ class ProviderFilesListResponse(BaseModel):
     total: int
 
 
+# Dependency injection functions
+def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
+    """Get ProviderRepository instance."""
+    return ProviderRepository(db)
+
+
+def get_provider_file_repository(db: AsyncSession = Depends(get_db)) -> ProviderFileRepository:
+    """Get ProviderFileRepository instance."""
+    return ProviderFileRepository(db)
+
+
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
 async def list_provider_files(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> ProviderFilesListResponse:
     """List all files for a provider."""
     # Check provider exists
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    result = await db.execute(
-        select(ProviderFileORM)
-        .where(ProviderFileORM.provider_id == provider_id)
-        .order_by(ProviderFileORM.created_at.desc())
-    )
-    files = list(result.scalars().all())
+    files = await file_repo.get_by_provider(provider_id)
 
     items = [
         ProviderFileResponse(
@@ -193,14 +217,15 @@ async def upload_provider_file(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
     category: str | None = Form(default=None),
 ) -> ProviderFileResponse:
     """Upload a file for a provider. Admin only."""
     # Check provider exists
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -255,8 +280,8 @@ async def upload_provider_file(
     # Save file
     file_path.write_bytes(content)
 
-    # Create database record - use our validated MIME type, not the client-provided one
-    file_orm = ProviderFileORM(
+    # Create database record via repository
+    file_orm = await file_repo.create_file(
         provider_id=provider_id,
         filename=stored_filename,
         original_name=file.filename,
@@ -265,9 +290,9 @@ async def upload_provider_file(
         description=description,
         category=category,
     )
-    db.add(file_orm)
+
+    # Commit transaction
     await db.commit()
-    await db.refresh(file_orm)
 
     return ProviderFileResponse(
         id=file_orm.id,
@@ -288,15 +313,10 @@ async def download_provider_file(
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> FileResponse:
     """Download a provider file."""
-    result = await db.execute(
-        select(ProviderFileORM)
-        .where(ProviderFileORM.id == file_id)
-        .where(ProviderFileORM.provider_id == provider_id)
-    )
-    file_orm = result.scalar_one_or_none()
+    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
 
     if file_orm is None:
         raise HTTPException(
@@ -307,14 +327,7 @@ async def download_provider_file(
     file_path = FILES_DIR / str(provider_id) / file_orm.filename
 
     # Validate path is within FILES_DIR (prevent path traversal)
-    try:
-        resolved = file_path.resolve()
-        if not resolved.is_relative_to(FILES_DIR.resolve()):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
-    except (ValueError, RuntimeError):
+    if not validate_file_path(file_path, FILES_DIR):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
@@ -338,15 +351,10 @@ async def view_provider_file(
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> FileResponse:
     """View a provider file inline in browser (PDFs and images only)."""
-    result = await db.execute(
-        select(ProviderFileORM)
-        .where(ProviderFileORM.id == file_id)
-        .where(ProviderFileORM.provider_id == provider_id)
-    )
-    file_orm = result.scalar_one_or_none()
+    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
 
     if file_orm is None:
         raise HTTPException(
@@ -365,14 +373,7 @@ async def view_provider_file(
     file_path = FILES_DIR / str(provider_id) / file_orm.filename
 
     # Validate path is within FILES_DIR (prevent path traversal)
-    try:
-        resolved = file_path.resolve()
-        if not resolved.is_relative_to(FILES_DIR.resolve()):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
-    except (ValueError, RuntimeError):
+    if not validate_file_path(file_path, FILES_DIR):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
@@ -398,14 +399,10 @@ async def delete_provider_file(
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> None:
     """Delete a provider file. Admin only."""
-    result = await db.execute(
-        select(ProviderFileORM)
-        .where(ProviderFileORM.id == file_id)
-        .where(ProviderFileORM.provider_id == provider_id)
-    )
-    file_orm = result.scalar_one_or_none()
+    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
 
     if file_orm is None:
         raise HTTPException(
@@ -416,8 +413,11 @@ async def delete_provider_file(
     # Delete file from disk
     file_path = FILES_DIR / str(provider_id) / file_orm.filename
     if file_path.exists():
-        file_path.unlink()
+        try:
+            file_path.unlink()
+        except OSError as e:
+            logger.warning(f"Failed to delete file from disk: {e}")
 
-    # Delete from database
-    await db.delete(file_orm)
+    # Delete from database via repository
+    await file_repo.delete_file(file_orm)
     await db.commit()
