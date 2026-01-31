@@ -351,7 +351,12 @@ async def test_provider_connection(
     body: TestConnectionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
 ) -> TestConnectionResponse:
-    """Test provider connection with given credentials. Requires providers.create permission."""
+    """Test provider connection with given credentials. Requires providers.create permission.
+
+    Security Note (INJ-03): SSRF risk is mitigated by using a hardcoded allowlist of
+    provider classes. External API URLs are defined within each provider class, not
+    by user input. User-provided credentials are only used for authentication.
+    """
     # Manual providers don't need connection test
     if body.name == "manual":
         return TestConnectionResponse(
@@ -405,10 +410,10 @@ async def test_provider_connection(
             success=success,
             message="Connection successful" if success else "Connection failed",
         )
-    except (ValueError, KeyError, TypeError) as e:
+    except (ValueError, KeyError, TypeError):
         return TestConnectionResponse(
             success=False,
-            message=f"Configuration error: {str(e)}",
+            message="Invalid provider configuration. Please check your credentials.",
         )
     except (ConnectionError, TimeoutError, OSError):
         return TestConnectionResponse(

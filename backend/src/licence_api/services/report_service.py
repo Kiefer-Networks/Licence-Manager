@@ -1,4 +1,16 @@
-"""Report service for generating license reports."""
+"""Report service for generating license reports.
+
+Architecture Note (MVC-04):
+    This service performs complex reporting and analytics operations that involve
+    specialized aggregations, multi-table joins, and business-specific calculations.
+    While it uses repositories where possible, some methods may use direct SQLAlchemy
+    queries for complex reporting scenarios that don't fit the standard repository
+    pattern. This is an accepted exception for reporting/analytics services, as:
+    1. Report queries are read-only and don't modify state
+    2. They often require specialized aggregations not suitable for generic repos
+    3. Performance optimization may require query-specific tuning
+    4. The queries are business-domain specific and unlikely to be reused
+"""
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal

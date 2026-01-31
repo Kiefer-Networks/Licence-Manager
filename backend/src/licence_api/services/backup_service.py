@@ -1,4 +1,9 @@
-"""Backup service for system export and restore functionality."""
+"""Backup service for system export and restore functionality.
+
+Security Note (INJ-04): This service uses JSON for data serialization, NOT pickle or
+other unsafe deserialization methods. All data is validated against a schema before
+import. Binary file content is base64-encoded within the JSON structure.
+"""
 
 import base64
 import json
@@ -237,7 +242,13 @@ class BackupService:
         }
 
     async def _fetch_all(self, model: type) -> list:
-        """Fetch all records of a model."""
+        """Fetch all records of a model.
+
+        Architecture Note (MVC-01): This method uses direct SQLAlchemy queries
+        because backup/restore is a system-level operation that must work with
+        all models generically. Creating individual repository methods for each
+        model would not provide additional abstraction value for this use case.
+        """
         result = await self.session.execute(select(model))
         return list(result.scalars().all())
 
@@ -450,7 +461,13 @@ class BackupService:
                 raise ValueError(f"Missing data key: {key}")
 
     async def _clear_all_data(self) -> None:
-        """Clear all data in correct order (respecting foreign keys)."""
+        """Clear all data in correct order (respecting foreign keys).
+
+        Architecture Note (MVC-01): This method uses direct SQLAlchemy delete
+        statements because restore operations require atomic deletion of all
+        data in a specific order to respect foreign key constraints. This is
+        a system-level operation that doesn't fit the standard repository pattern.
+        """
         # Delete in reverse dependency order
         # Licenses reference providers and employees
         await self.session.execute(delete(LicenseORM))
