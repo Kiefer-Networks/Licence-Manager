@@ -398,6 +398,41 @@ class UserRepository(BaseRepository[AdminUserORM]):
         await self.session.refresh(user)
         return user
 
+    async def delete_user(self, user_id: UUID) -> bool:
+        """Delete a user and clean up related data.
+
+        Deletes the user, their roles, and tokens.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return False
+
+        # Delete user roles
+        await self.session.execute(
+            delete(UserRoleORM).where(UserRoleORM.user_id == user_id)
+        )
+
+        # Delete refresh tokens
+        await self.session.execute(
+            delete(RefreshTokenORM).where(RefreshTokenORM.user_id == user_id)
+        )
+
+        # Delete password history
+        await self.session.execute(
+            delete(PasswordHistoryORM).where(PasswordHistoryORM.user_id == user_id)
+        )
+
+        # Delete the user
+        await self.session.delete(user)
+        await self.session.flush()
+        return True
+
 
 class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
     """Repository for refresh token operations."""

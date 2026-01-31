@@ -322,7 +322,8 @@ async def delete_user(
         user_agent=user_agent,
     )
 
-    await db.delete(user)
+    # Delete user via repository (handles cleanup of related data)
+    await user_repo.delete_user(user_id)
     await db.commit()
 
 
