@@ -1,6 +1,6 @@
 """License packages router."""
 
-from typing import Annotated
+from typing import Annotated, Any, TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,10 +14,12 @@ from licence_api.models.dto.license_package import (
     LicensePackageResponse,
     LicensePackageUpdate,
 )
-from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.repositories.license_package_repository import LicensePackageRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import require_permission, Permissions
+
+if TYPE_CHECKING:
+    from licence_api.models.orm.license_package import LicensePackageORM
 
 router = APIRouter()
 
@@ -36,7 +38,7 @@ def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepos
 
 
 def _build_package_response(
-    package: LicensePackageORM,
+    package: "LicensePackageORM",
     assigned_seats: int,
 ) -> LicensePackageResponse:
     """Build license package response with utilization stats."""
