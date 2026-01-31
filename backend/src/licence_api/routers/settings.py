@@ -11,6 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.security.rate_limit import limiter
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 
@@ -114,10 +115,16 @@ def get_notification_service(db: AsyncSession = Depends(get_db)) -> Notification
 
 
 @router.get("/status", response_model=SetupStatusResponse)
+@limiter.limit("30/minute")
 async def get_setup_status(
+    request: Request,
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusResponse:
-    """Get basic setup status."""
+    """Get basic setup status.
+
+    This is a public endpoint - no authentication required.
+    Rate limited to prevent abuse.
+    """
     status = await service.get_setup_status()
     return SetupStatusResponse(is_complete=status.is_complete)
 
