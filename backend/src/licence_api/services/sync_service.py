@@ -14,7 +14,11 @@ from licence_api.models.domain.provider import ProviderName, SyncStatus
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
+from licence_api.repositories.service_account_pattern_repository import ServiceAccountPatternRepository
+from licence_api.repositories.admin_account_pattern_repository import AdminAccountPatternRepository
+from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
+from licence_api.services.matching_service import MatchingService
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,8 @@ class SyncService:
         self.provider_repo = ProviderRepository(session)
         self.employee_repo = EmployeeRepository(session)
         self.license_repo = LicenseRepository(session)
+        self.svc_account_pattern_repo = ServiceAccountPatternRepository(session)
+        self.admin_account_pattern_repo = AdminAccountPatternRepository(session)
         self.encryption = get_encryption_service()
 
     async def sync_all_providers(self) -> dict[str, Any]:
@@ -138,7 +144,9 @@ class SyncService:
         """
         from licence_api.providers import (
             AdobeProvider,
+            AnthropicProvider,
             AtlassianProvider,
+            Auth0Provider,
             CursorProvider,
             FigmaProvider,
             GitHubProvider,
@@ -146,6 +154,7 @@ class SyncService:
             GoogleWorkspaceProvider,
             HiBobProvider,
             JetBrainsProvider,
+            MailjetProvider,
             MattermostProvider,
             MicrosoftProvider,
             MiroProvider,
@@ -156,7 +165,9 @@ class SyncService:
 
         providers = {
             ProviderName.ADOBE: AdobeProvider,
+            ProviderName.ANTHROPIC: AnthropicProvider,
             ProviderName.ATLASSIAN: AtlassianProvider,
+            ProviderName.AUTH0: Auth0Provider,
             ProviderName.CURSOR: CursorProvider,
             ProviderName.FIGMA: FigmaProvider,
             ProviderName.GITHUB: GitHubProvider,
@@ -164,6 +175,7 @@ class SyncService:
             ProviderName.GOOGLE_WORKSPACE: GoogleWorkspaceProvider,
             ProviderName.HIBOB: HiBobProvider,
             ProviderName.JETBRAINS: JetBrainsProvider,
+            ProviderName.MAILJET: MailjetProvider,
             ProviderName.MATTERMOST: MattermostProvider,
             ProviderName.MICROSOFT: MicrosoftProvider,
             ProviderName.MIRO: MiroProvider,
@@ -323,6 +335,13 @@ class SyncService:
     ) -> dict[str, Any]:
         """Sync licenses from a provider.
 
+        Uses multi-level matching to assign licenses to employees:
+        1. Exact email match (company emails only)
+        2. Local part match (suggests matches for review)
+        3. Fuzzy name match (suggests matches for review)
+
+        GDPR: No private emails are stored. External matches are only suggested.
+
         Args:
             provider: Provider instance
             provider_id: Provider UUID
@@ -339,14 +358,18 @@ class SyncService:
         provider_orm = await self.provider_repo.get_by_id(provider_id)
         pricing_config = (provider_orm.config or {}).get("license_pricing", {}) if provider_orm else {}
 
-        for lic_data in licenses:
-            # Try to match with employee by email
-            employee_id = None
-            if "email" in lic_data:
-                employee = await self.employee_repo.get_by_email(lic_data["email"])
-                if employee:
-                    employee_id = employee.id
+        # Get company domains for matching
+        settings_repo = SettingsRepository(self.session)
+        domains_setting = await settings_repo.get("company_domains")
+        company_domains = domains_setting.get("domains", []) if domains_setting else []
 
+        # Initialize matching service
+        matching_service = MatchingService(self.session)
+
+        # Track licenses for batch matching
+        new_licenses: list[tuple[dict, Any]] = []
+
+        for lic_data in licenses:
             existing = await self.license_repo.get_by_provider_and_external_id(
                 provider_id,
                 lic_data["external_user_id"],
@@ -372,10 +395,52 @@ class SyncService:
                     # perpetual/one_time - no recurring monthly cost
                     monthly_cost = Decimal("0")
 
-            await self.license_repo.upsert(
+            # Use matching service for employee assignment
+            # Use email field if available (e.g., JetBrains provides email separately from license ID)
+            # Fall back to external_user_id (which is typically an email for most providers)
+            match_identifier = lic_data.get("email") or lic_data["external_user_id"]
+            match_result = await matching_service.match_license(
+                match_identifier,
+                company_domains,
+            )
+
+            # Determine employee_id and match fields
+            employee_id = None
+            suggested_employee_id = None
+            match_confidence = match_result.confidence if match_result.confidence > 0 else None
+            match_method = match_result.method
+            match_status = match_result.status
+
+            if match_result.should_auto_assign:
+                employee_id = match_result.employee_id
+            elif match_result.should_suggest:
+                suggested_employee_id = match_result.employee_id
+
+            # Check for global service account patterns
+            svc_pattern = await self.svc_account_pattern_repo.matches_email(
+                lic_data["external_user_id"]
+            )
+            is_service_account = svc_pattern is not None
+            service_account_name = svc_pattern.name if svc_pattern else None
+            service_account_owner_id = svc_pattern.owner_id if svc_pattern else None
+
+            # Check for global admin account patterns (only if not a service account)
+            admin_pattern = None
+            is_admin_account = False
+            admin_account_name = None
+            admin_account_owner_id = None
+            if not is_service_account:
+                admin_pattern = await self.admin_account_pattern_repo.matches_email(
+                    lic_data["external_user_id"]
+                )
+                is_admin_account = admin_pattern is not None
+                admin_account_name = admin_pattern.name if admin_pattern else None
+                admin_account_owner_id = admin_pattern.owner_id if admin_pattern else None
+
+            license_orm = await self.license_repo.upsert(
                 provider_id=provider_id,
                 external_user_id=lic_data["external_user_id"],
-                employee_id=employee_id,
+                employee_id=employee_id if not is_service_account else None,
                 license_type=license_type,
                 status=lic_data.get("status", "active"),
                 assigned_at=lic_data.get("assigned_at"),
@@ -386,10 +451,39 @@ class SyncService:
                 synced_at=synced_at,
             )
 
+            # Update service account fields if pattern matched
+            if is_service_account:
+                license_orm.is_service_account = True
+                license_orm.service_account_name = service_account_name
+                license_orm.service_account_owner_id = service_account_owner_id
+                # Clear match fields for service accounts
+                license_orm.suggested_employee_id = None
+                license_orm.match_confidence = None
+                license_orm.match_method = None
+                license_orm.match_status = None
+            elif is_admin_account:
+                # Admin accounts are personal, so they keep the employee link if matched
+                license_orm.is_admin_account = True
+                license_orm.admin_account_name = admin_account_name
+                license_orm.admin_account_owner_id = admin_account_owner_id
+                # Update match fields normally
+                license_orm.suggested_employee_id = suggested_employee_id
+                license_orm.match_confidence = match_confidence
+                license_orm.match_method = match_method
+                license_orm.match_status = match_status
+            else:
+                # Update match fields
+                license_orm.suggested_employee_id = suggested_employee_id
+                license_orm.match_confidence = match_confidence
+                license_orm.match_method = match_method
+                license_orm.match_status = match_status
+
             if existing:
                 updated += 1
             else:
                 created += 1
+
+        await self.session.flush()
 
         # Store provider metadata (e.g., license info) if available
         if hasattr(provider, "get_provider_metadata"):

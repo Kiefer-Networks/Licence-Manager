@@ -7,6 +7,7 @@ from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
 
 __all__ = [
     "BaseRepository",
@@ -16,4 +17,5 @@ __all__ = [
     "LicenseRepository",
     "AuditRepository",
     "SettingsRepository",
+    "UserNotificationPreferenceRepository",
 ]

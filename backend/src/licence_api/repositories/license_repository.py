@@ -57,6 +57,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         limit: int = 100,
         external_only: bool = False,
         company_domains: list[str] | None = None,
+        service_accounts_only: bool = False,
+        admin_accounts_only: bool = False,
     ) -> tuple[list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]], int]:
         """Get licenses with provider and employee details.
 
@@ -73,6 +75,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             limit: Pagination limit
             external_only: Only return licenses with external emails
             company_domains: Company domains for external email detection
+            service_accounts_only: Only return licenses marked as service accounts
+            admin_accounts_only: Only return licenses marked as admin accounts
 
         Returns:
             Tuple of (license details, total count)
@@ -103,6 +107,14 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         if unassigned_only:
             query = query.where(LicenseORM.employee_id.is_(None))
             count_query = count_query.where(LicenseORM.employee_id.is_(None))
+
+        if service_accounts_only:
+            query = query.where(LicenseORM.is_service_account == True)
+            count_query = count_query.where(LicenseORM.is_service_account == True)
+
+        if admin_accounts_only:
+            query = query.where(LicenseORM.is_admin_account == True)
+            count_query = count_query.where(LicenseORM.is_admin_account == True)
 
         if department:
             query = query.where(EmployeeORM.department == department)
@@ -758,6 +770,57 @@ class LicenseRepository(BaseRepository[LicenseORM]):
                 stats[provider_id]["not_in_hris"] += 1
 
         return stats
+
+    async def get_assigned_counts_by_provider_and_type(
+        self,
+    ) -> dict[tuple[str, str | None], int]:
+        """Get counts of assigned licenses grouped by provider_id and license_type.
+
+        Used for utilization reporting to compare purchased seats vs assigned seats.
+
+        Returns:
+            Dict mapping (provider_id_str, license_type) to count of assigned licenses
+        """
+        result = await self.session.execute(
+            select(
+                LicenseORM.provider_id,
+                LicenseORM.license_type,
+                func.count(),
+            )
+            .where(LicenseORM.status == "active")
+            .group_by(LicenseORM.provider_id, LicenseORM.license_type)
+        )
+
+        counts: dict[tuple[str, str | None], int] = {}
+        for provider_id, license_type, count in result.all():
+            key = (str(provider_id), license_type)
+            counts[key] = count
+
+        return counts
+
+    async def get_assigned_counts_by_provider(self) -> dict[str, int]:
+        """Get counts of active licenses grouped by provider_id only.
+
+        Used for utilization reporting when no license_type distinction is needed
+        (e.g., when using provider_license_info fallback).
+
+        Returns:
+            Dict mapping provider_id_str to count of active licenses
+        """
+        result = await self.session.execute(
+            select(
+                LicenseORM.provider_id,
+                func.count(),
+            )
+            .where(LicenseORM.status == "active")
+            .group_by(LicenseORM.provider_id)
+        )
+
+        counts: dict[str, int] = {}
+        for provider_id, count in result.all():
+            counts[str(provider_id)] = count
+
+        return counts
 
     async def count_external_licenses(
         self,

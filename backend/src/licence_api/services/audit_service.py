@@ -65,6 +65,16 @@ class AuditAction:
     # Employee
     EMPLOYEE_UPDATE = "employee_update"
 
+    # Service Account Patterns
+    SERVICE_ACCOUNT_PATTERN_CREATE = "service_account_pattern_create"
+    SERVICE_ACCOUNT_PATTERN_DELETE = "service_account_pattern_delete"
+    SERVICE_ACCOUNT_PATTERNS_APPLY = "service_account_patterns_apply"
+
+    # Admin Account Patterns
+    ADMIN_ACCOUNT_PATTERN_CREATE = "admin_account_pattern_create"
+    ADMIN_ACCOUNT_PATTERN_DELETE = "admin_account_pattern_delete"
+    ADMIN_ACCOUNT_PATTERNS_APPLY = "admin_account_patterns_apply"
+
 
 class ResourceType:
     """Standard resource types for audit logging."""
@@ -81,6 +91,8 @@ class ResourceType:
     PAYMENT_METHOD = "payment_method"
     FILE = "file"
     SESSION = "session"
+    SERVICE_ACCOUNT_PATTERN = "service_account_pattern"
+    ADMIN_ACCOUNT_PATTERN = "admin_account_pattern"
 
 
 class AuditService:
