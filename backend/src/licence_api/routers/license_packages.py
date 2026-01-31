@@ -1,8 +1,7 @@
 """License packages router."""
 
-from decimal import Decimal
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +20,19 @@ from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import require_permission, Permissions
 
 router = APIRouter()
+
+
+# Dependency injection functions
+def get_license_package_repository(
+    db: AsyncSession = Depends(get_db),
+) -> LicensePackageRepository:
+    """Get LicensePackageRepository instance."""
+    return LicensePackageRepository(db)
+
+
+def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
+    """Get ProviderRepository instance."""
+    return ProviderRepository(db)
 
 
 def _build_package_response(
@@ -63,10 +75,10 @@ def _build_package_response(
 async def list_license_packages(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    package_repo: Annotated[LicensePackageRepository, Depends(get_license_package_repository)],
 ) -> LicensePackageListResponse:
     """List all license packages for a provider."""
-    provider_repo = ProviderRepository(db)
     provider = await provider_repo.get(provider_id)
     if not provider:
         raise HTTPException(
@@ -74,9 +86,8 @@ async def list_license_packages(
             detail="Provider not found",
         )
 
-    repo = LicensePackageRepository(db)
-    packages = await repo.get_by_provider(provider_id)
-    assigned_counts = await repo.get_all_assigned_seats_counts(provider_id)
+    packages = await package_repo.get_by_provider(provider_id)
+    assigned_counts = await package_repo.get_all_assigned_seats_counts(provider_id)
 
     items = [
         _build_package_response(p, assigned_counts.get(p.license_type, 0))
@@ -92,9 +103,10 @@ async def create_license_package(
     data: LicensePackageCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    package_repo: Annotated[LicensePackageRepository, Depends(get_license_package_repository)],
 ) -> LicensePackageResponse:
     """Create a new license package."""
-    provider_repo = ProviderRepository(db)
     provider = await provider_repo.get(provider_id)
     if not provider:
         raise HTTPException(
@@ -102,18 +114,15 @@ async def create_license_package(
             detail="Provider not found",
         )
 
-    repo = LicensePackageRepository(db)
-
     # Check if package already exists for this type
-    existing = await repo.get_by_provider_and_type(provider_id, data.license_type)
+    existing = await package_repo.get_by_provider_and_type(provider_id, data.license_type)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"License package for type '{data.license_type}' already exists",
         )
 
-    package = LicensePackageORM(
-        id=uuid4(),
+    package = await package_repo.create_package(
         provider_id=provider_id,
         license_type=data.license_type,
         display_name=data.display_name,
@@ -127,11 +136,9 @@ async def create_license_package(
         auto_renew=data.auto_renew,
         notes=data.notes,
     )
-    db.add(package)
     await db.commit()
-    await db.refresh(package)
 
-    assigned = await repo.get_assigned_seats_count(provider_id, data.license_type)
+    assigned = await package_repo.get_assigned_seats_count(provider_id, data.license_type)
     return _build_package_response(package, assigned)
 
 
@@ -142,26 +149,22 @@ async def update_license_package(
     data: LicensePackageUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    package_repo: Annotated[LicensePackageRepository, Depends(get_license_package_repository)],
 ) -> LicensePackageResponse:
     """Update a license package."""
-    repo = LicensePackageRepository(db)
-    package = await repo.get(package_id)
+    package = await package_repo.get_by_provider_and_id(provider_id, package_id)
 
-    if not package or package.provider_id != provider_id:
+    if not package:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License package not found",
         )
 
-    # Update fields
     update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(package, key, value)
-
+    package = await package_repo.update_package(package, **update_data)
     await db.commit()
-    await db.refresh(package)
 
-    assigned = await repo.get_assigned_seats_count(provider_id, package.license_type)
+    assigned = await package_repo.get_assigned_seats_count(provider_id, package.license_type)
     return _build_package_response(package, assigned)
 
 
@@ -171,16 +174,16 @@ async def delete_license_package(
     package_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    package_repo: Annotated[LicensePackageRepository, Depends(get_license_package_repository)],
 ) -> None:
     """Delete a license package."""
-    repo = LicensePackageRepository(db)
-    package = await repo.get(package_id)
+    package = await package_repo.get_by_provider_and_id(provider_id, package_id)
 
-    if not package or package.provider_id != provider_id:
+    if not package:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="License package not found",
         )
 
-    await repo.delete(package_id)
+    await package_repo.delete_package(package)
     await db.commit()
