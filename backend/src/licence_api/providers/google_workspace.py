@@ -1,10 +1,12 @@
 """Google Workspace provider integration."""
 
 import json
+import time
 from datetime import datetime
 from typing import Any
 
 import httpx
+from jose import jwt
 
 from licence_api.providers.base import BaseProvider
 
@@ -40,9 +42,6 @@ class GoogleWorkspaceProvider(BaseProvider):
         """
         if self._access_token:
             return self._access_token
-
-        import time
-        from jose import jwt
 
         now = int(time.time())
         payload = {
