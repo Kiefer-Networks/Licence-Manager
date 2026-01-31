@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "licence_session"
     session_cookie_secure: bool = True
     session_cookie_httponly: bool = True
-    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "strict"
 
     # CORS settings
     cors_origins: str = "http://localhost:3000"  # Comma-separated list
@@ -99,6 +99,26 @@ class Settings(BaseSettings):
 
     # Audit settings
     audit_retention_days: int = 365  # How long to keep audit logs
+
+    @model_validator(mode="after")
+    def validate_database_url(self) -> "Settings":
+        """Validate database URL format and security requirements."""
+        url = str(self.database_url)
+
+        # Ensure PostgreSQL URL format
+        if not url.startswith(("postgresql://", "postgres://")):
+            raise ValueError(
+                "DATABASE_URL must be a PostgreSQL URL starting with 'postgresql://' or 'postgres://'"
+            )
+
+        # In production, require SSL/TLS connection
+        if self.environment == "production" and "sslmode=" not in url:
+            raise ValueError(
+                "DATABASE_URL must include sslmode parameter in production "
+                "(e.g., sslmode=require or sslmode=verify-full)"
+            )
+
+        return self
 
     @property
     def async_database_url(self) -> str:
