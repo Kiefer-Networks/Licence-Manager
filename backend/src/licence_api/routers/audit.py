@@ -4,16 +4,14 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.orm.audit_log import AuditLogORM
-from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.repositories.audit_repository import AuditRepository
+from licence_api.repositories.user_repository import UserRepository
 from licence_api.security.auth import require_permission, Permissions
 
 router = APIRouter()
@@ -55,10 +53,22 @@ class ActionsResponse(BaseModel):
     actions: list[str]
 
 
+# Dependency injection functions
+def get_audit_repository(db: AsyncSession = Depends(get_db)) -> AuditRepository:
+    """Get AuditRepository instance."""
+    return AuditRepository(db)
+
+
+def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
+    """Get UserRepository instance."""
+    return UserRepository(db)
+
+
 @router.get("", response_model=AuditLogListResponse)
 async def list_audit_logs(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=10, le=100),
     action: str | None = Query(None),
@@ -66,11 +76,10 @@ async def list_audit_logs(
     admin_user_id: UUID | None = Query(None),
 ) -> AuditLogListResponse:
     """List audit logs with optional filters. Requires audit.view permission."""
-    repo = AuditRepository(db)
     offset = (page - 1) * page_size
 
     # Get logs with filters
-    logs, total = await repo.get_recent(
+    logs, total = await audit_repo.get_recent(
         limit=page_size,
         offset=offset,
         action=action,
@@ -82,18 +91,9 @@ async def list_audit_logs(
         logs = [log for log in logs if log.admin_user_id == admin_user_id]
         total = len(logs)
 
-    # Fetch admin user emails for the logs
+    # Fetch admin user emails via repository
     user_ids = {log.admin_user_id for log in logs if log.admin_user_id}
-    user_emails: dict[UUID, str] = {}
-
-    if user_ids:
-        result = await db.execute(
-            select(AdminUserORM.id, AdminUserORM.email).where(
-                AdminUserORM.id.in_(user_ids)
-            )
-        )
-        for row in result.all():
-            user_emails[row.id] = row.email
+    user_emails = await user_repo.get_emails_by_ids(user_ids)
 
     items = [
         AuditLogResponse(
@@ -124,32 +124,20 @@ async def list_audit_logs(
 @router.get("/resource-types", response_model=ResourceTypesResponse)
 async def list_resource_types(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
 ) -> ResourceTypesResponse:
     """Get list of unique resource types. Requires audit.view permission."""
-    from sqlalchemy import distinct
-
-    result = await db.execute(
-        select(distinct(AuditLogORM.resource_type)).order_by(AuditLogORM.resource_type)
-    )
-    resource_types = [row[0] for row in result.all()]
-
+    resource_types = await audit_repo.get_distinct_resource_types()
     return ResourceTypesResponse(resource_types=resource_types)
 
 
 @router.get("/actions", response_model=ActionsResponse)
 async def list_actions(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
 ) -> ActionsResponse:
     """Get list of unique actions. Requires audit.view permission."""
-    from sqlalchemy import distinct
-
-    result = await db.execute(
-        select(distinct(AuditLogORM.action)).order_by(AuditLogORM.action)
-    )
-    actions = [row[0] for row in result.all()]
-
+    actions = await audit_repo.get_distinct_actions()
     return ActionsResponse(actions=actions)
 
 
@@ -157,13 +145,11 @@ async def list_actions(
 async def get_audit_log(
     log_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> AuditLogResponse:
     """Get a single audit log entry. Requires audit.view permission."""
-    from fastapi import HTTPException, status
-
-    repo = AuditRepository(db)
-    log = await repo.get(log_id)
+    log = await audit_repo.get(log_id)
 
     if not log:
         raise HTTPException(
@@ -171,15 +157,10 @@ async def get_audit_log(
             detail="Audit log not found",
         )
 
-    # Get admin user email
+    # Get admin user email via repository
     admin_email = None
     if log.admin_user_id:
-        result = await db.execute(
-            select(AdminUserORM.email).where(AdminUserORM.id == log.admin_user_id)
-        )
-        row = result.first()
-        if row:
-            admin_email = row.email
+        admin_email = await user_repo.get_email_by_id(log.admin_user_id)
 
     return AuditLogResponse(
         id=log.id,
