@@ -1,8 +1,7 @@
 """Organization licenses router."""
 
-from decimal import Decimal
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +14,6 @@ from licence_api.models.dto.organization_license import (
     OrganizationLicenseResponse,
     OrganizationLicenseUpdate,
 )
-from licence_api.models.orm.organization_license import OrganizationLicenseORM
 from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import require_permission, Permissions
@@ -23,14 +21,27 @@ from licence_api.security.auth import require_permission, Permissions
 router = APIRouter()
 
 
+# Dependency injection functions
+def get_organization_license_repository(
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationLicenseRepository:
+    """Get OrganizationLicenseRepository instance."""
+    return OrganizationLicenseRepository(db)
+
+
+def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
+    """Get ProviderRepository instance."""
+    return ProviderRepository(db)
+
+
 @router.get("/{provider_id}/org-licenses", response_model=OrganizationLicenseListResponse)
 async def list_organization_licenses(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    license_repo: Annotated[OrganizationLicenseRepository, Depends(get_organization_license_repository)],
 ) -> OrganizationLicenseListResponse:
     """List all organization licenses for a provider."""
-    provider_repo = ProviderRepository(db)
     provider = await provider_repo.get(provider_id)
     if not provider:
         raise HTTPException(
@@ -38,9 +49,8 @@ async def list_organization_licenses(
             detail="Provider not found",
         )
 
-    repo = OrganizationLicenseRepository(db)
-    licenses = await repo.get_by_provider(provider_id)
-    total_cost = await repo.get_total_monthly_cost(provider_id)
+    licenses = await license_repo.get_by_provider(provider_id)
+    total_cost = await license_repo.get_total_monthly_cost(provider_id)
 
     items = [
         OrganizationLicenseResponse(
@@ -74,9 +84,10 @@ async def create_organization_license(
     data: OrganizationLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    license_repo: Annotated[OrganizationLicenseRepository, Depends(get_organization_license_repository)],
 ) -> OrganizationLicenseResponse:
     """Create a new organization license."""
-    provider_repo = ProviderRepository(db)
     provider = await provider_repo.get(provider_id)
     if not provider:
         raise HTTPException(
@@ -84,8 +95,7 @@ async def create_organization_license(
             detail="Provider not found",
         )
 
-    license_orm = OrganizationLicenseORM(
-        id=uuid4(),
+    license_orm = await license_repo.create_organization_license(
         provider_id=provider_id,
         name=data.name,
         license_type=data.license_type,
@@ -97,9 +107,7 @@ async def create_organization_license(
         renewal_date=data.renewal_date,
         notes=data.notes,
     )
-    db.add(license_orm)
     await db.commit()
-    await db.refresh(license_orm)
 
     return OrganizationLicenseResponse(
         id=license_orm.id,
@@ -125,24 +133,20 @@ async def update_organization_license(
     data: OrganizationLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[OrganizationLicenseRepository, Depends(get_organization_license_repository)],
 ) -> OrganizationLicenseResponse:
     """Update an organization license."""
-    repo = OrganizationLicenseRepository(db)
-    license_orm = await repo.get(license_id)
+    license_orm = await license_repo.get_by_provider_and_id(provider_id, license_id)
 
-    if not license_orm or license_orm.provider_id != provider_id:
+    if not license_orm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization license not found",
         )
 
-    # Update fields
     update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(license_orm, key, value)
-
+    license_orm = await license_repo.update_organization_license(license_orm, **update_data)
     await db.commit()
-    await db.refresh(license_orm)
 
     return OrganizationLicenseResponse(
         id=license_orm.id,
@@ -167,16 +171,16 @@ async def delete_organization_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    license_repo: Annotated[OrganizationLicenseRepository, Depends(get_organization_license_repository)],
 ) -> None:
     """Delete an organization license."""
-    repo = OrganizationLicenseRepository(db)
-    license_orm = await repo.get(license_id)
+    license_orm = await license_repo.get_by_provider_and_id(provider_id, license_id)
 
-    if not license_orm or license_orm.provider_id != provider_id:
+    if not license_orm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization license not found",
         )
 
-    await repo.delete(license_id)
+    await license_repo.delete_organization_license(license_orm)
     await db.commit()
