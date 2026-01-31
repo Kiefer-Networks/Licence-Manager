@@ -248,6 +248,52 @@ Please check the provider configuration.
 
         return True
 
+    async def notify_license_expiring(
+        self,
+        provider_name: str,
+        license_type: str | None,
+        days_until_expiry: int,
+        affected_count: int,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for expiring licenses.
+
+        Args:
+            provider_name: Provider name
+            license_type: License type (optional)
+            days_until_expiry: Days until expiration
+            affected_count: Number of affected licenses
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self._get_rules_for_event("license_expiring")
+        if not rules:
+            return False
+
+        type_str = f" ({license_type})" if license_type else ""
+        urgency = ":rotating_light:" if days_until_expiry <= 7 else ":warning:"
+
+        message = f"""
+{urgency} *License Expiration Alert*
+
+*Provider:* {provider_name}{type_str}
+*Expiring in:* {days_until_expiry} day{"s" if days_until_expiry != 1 else ""}
+*Affected Licenses:* {affected_count}
+
+Please review and renew these licenses if needed.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
     async def _get_rules_for_event(self, event_type: str) -> list[NotificationRuleORM]:
         """Get notification rules for an event type.
 
