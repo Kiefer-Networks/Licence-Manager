@@ -20,7 +20,7 @@ function isValidCallbackUrl(url: string | null): boolean {
   if (url.startsWith('//')) return false;
   if (url.includes(':')) return false;
   // Validate against allowed path pattern
-  return /^\/[a-zA-Z0-9\/_\-?=&]*$/.test(url);
+  return /^\/[a-zA-Z0-9/_\-?=&]*$/.test(url);
 }
 
 function SignInContent() {

@@ -180,8 +180,8 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       setShowAddPattern(false);
       setNewPattern({ email_pattern: '', name: '', owner_id: '', notes: '' });
       loadPatterns();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to create pattern');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
     } finally {
       setCreatingPattern(false);
     }
@@ -253,8 +253,8 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       showToast('success', 'Pattern created - this email will now be recognized globally');
       setMakeGlobalLicense(null);
       loadPatterns();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to create pattern');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
     } finally {
       setMakingGlobal(false);
     }
