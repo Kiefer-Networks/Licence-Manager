@@ -11,7 +11,6 @@ import logging
 import os
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -22,6 +21,7 @@ from fastapi import Request
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import FILES_DIR
 from licence_api.models.dto.backup import (
     BackupInfoResponse,
     BackupMetadata,
@@ -58,9 +58,6 @@ BACKUP_VERSION = "1.0"
 SALT_SIZE = 16
 NONCE_SIZE = 12
 PBKDF2_ITERATIONS = 600000
-
-# File storage directory (must match provider_files.py)
-FILES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "files"
 
 
 class BackupService:

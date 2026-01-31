@@ -2,13 +2,13 @@
 
 import base64
 import logging
-from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import AVATAR_DIR
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse
@@ -18,9 +18,6 @@ from licence_api.utils.validation import sanitize_department, sanitize_search, s
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Avatar storage directory (same as sync_service.py)
-AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "avatars"
 
 
 def get_avatar_base64(hibob_id: str) -> str | None:

@@ -4,12 +4,12 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import AVATAR_DIR
 from licence_api.models.domain.provider import ProviderName, SyncStatus
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
@@ -21,9 +21,6 @@ from licence_api.security.encryption import get_encryption_service
 from licence_api.services.matching_service import MatchingService
 
 logger = logging.getLogger(__name__)
-
-# Avatar storage directory
-AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "avatars"
 
 
 class SyncService:

@@ -1,18 +1,18 @@
 """Provider service for provider management operations."""
 
 import uuid as uuid_module
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import PROVIDER_LOGOS_DIR
 from licence_api.constants.provider_logos import get_provider_logo
 from licence_api.utils.file_validation import validate_svg_content
 
 # Logo storage configuration
-LOGOS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "provider_logos"
+LOGOS_DIR = PROVIDER_LOGOS_DIR
 MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2 MB
 ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 IMAGE_SIGNATURES = {

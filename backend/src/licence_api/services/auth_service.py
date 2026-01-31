@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -10,6 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.config import get_settings
+from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.models.dto.auth import TokenResponse, UserInfo
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
@@ -29,8 +29,6 @@ from licence_api.utils.file_validation import (
 
 logger = logging.getLogger(__name__)
 
-# Avatar storage directory for admin users
-ADMIN_AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "admin_avatars"
 MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 

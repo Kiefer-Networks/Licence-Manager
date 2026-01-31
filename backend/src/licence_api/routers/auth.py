@@ -1,7 +1,6 @@
 """Authentication router."""
 
 import uuid
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
@@ -34,13 +33,13 @@ from licence_api.security.rate_limit import (
     AUTH_REFRESH_LIMIT,
     limiter,
 )
+from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.services.auth_service import AuthService
 
-
-# Avatar storage directory for admin users (for get_avatar endpoint)
-ADMIN_AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "admin_avatars"
-
 router = APIRouter()
+
+# CSRF token TTL in seconds (8 hours)
+CSRF_TOKEN_TTL_SECONDS = 8 * 3600
 
 
 # Dependency injection
@@ -195,7 +194,7 @@ async def get_csrf_token(response: Response) -> CsrfTokenResponse:
         httponly=False,  # Must be readable by JavaScript for CSRF protection
         secure=is_secure,
         samesite=settings.session_cookie_samesite,
-        max_age=8 * 3600,  # 8 hours
+        max_age=CSRF_TOKEN_TTL_SECONDS,
         path="/",
     )
 

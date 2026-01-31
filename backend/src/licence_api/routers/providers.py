@@ -2,7 +2,6 @@
 
 import copy
 import uuid as uuid_module
-from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -11,6 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import LOGOS_DIR
 from licence_api.constants.provider_logos import get_provider_logo
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
@@ -26,7 +26,7 @@ from licence_api.services.payment_method_service import PaymentMethodService
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.encryption import get_encryption_service
-from licence_api.security.rate_limit import limiter
+from licence_api.security.rate_limit import limiter, PROVIDER_TEST_CONNECTION_LIMIT, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.pricing_service import PricingService
@@ -36,10 +36,9 @@ from licence_api.utils.file_validation import validate_svg_content
 
 router = APIRouter()
 
-# Rate limit for credential testing to prevent brute force
-TEST_CONNECTION_LIMIT = "10/minute"
-# Rate limit for sync operations to prevent abuse
-SYNC_LIMIT = "5/minute"
+# Use centralized rate limits
+TEST_CONNECTION_LIMIT = PROVIDER_TEST_CONNECTION_LIMIT
+SYNC_LIMIT = SENSITIVE_OPERATION_LIMIT
 
 
 # Dependency injection functions
@@ -167,8 +166,6 @@ async def update_provider(
     return result
 
 
-# Logo storage directory
-LOGOS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "logos"
 ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2MB
 

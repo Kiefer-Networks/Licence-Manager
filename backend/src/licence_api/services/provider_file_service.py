@@ -2,12 +2,12 @@
 
 import logging
 import uuid
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants.paths import FILES_DIR
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
@@ -15,8 +15,6 @@ from licence_api.services.audit_service import AuditAction, AuditService, Resour
 
 logger = logging.getLogger(__name__)
 
-# File storage directory
-FILES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "files"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Allowed file extensions - only office documents, images, and PDFs
