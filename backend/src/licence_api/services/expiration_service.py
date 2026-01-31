@@ -3,9 +3,9 @@
 from datetime import date, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy import select, and_
 
 from licence_api.models.domain.license import LicenseStatus
 from licence_api.models.orm.license import LicenseORM
@@ -13,6 +13,9 @@ from licence_api.models.orm.license_package import LicensePackageORM, PackageSta
 from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.provider import ProviderORM
+from licence_api.repositories.license_repository import LicenseRepository
+from licence_api.repositories.license_package_repository import LicensePackageRepository
+from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
 
 
 class ExpirationService:
@@ -21,6 +24,9 @@ class ExpirationService:
     def __init__(self, session: AsyncSession) -> None:
         """Initialize service with database session."""
         self.session = session
+        self.license_repo = LicenseRepository(session)
+        self.package_repo = LicensePackageRepository(session)
+        self.org_license_repo = OrganizationLicenseRepository(session)
 
     async def check_and_update_expired_licenses(self) -> dict:
         """Check for expired licenses and update their status.
@@ -45,91 +51,57 @@ class ExpirationService:
             "org_licenses_cancelled": 0,
         }
 
-        # Update expired licenses
-        result = await self.session.execute(
-            select(LicenseORM).where(
-                and_(
-                    LicenseORM.expires_at.isnot(None),
-                    LicenseORM.expires_at < today,
-                    LicenseORM.status != LicenseStatus.EXPIRED,
-                    LicenseORM.status != LicenseStatus.CANCELLED,
-                )
-            )
+        # Update expired licenses using repository
+        expired_licenses = await self.license_repo.get_expired_needing_update(
+            today=today,
+            excluded_statuses=[LicenseStatus.EXPIRED, LicenseStatus.CANCELLED],
         )
-        for license_orm in result.scalars().all():
+        for license_orm in expired_licenses:
             license_orm.status = LicenseStatus.EXPIRED
             counts["licenses_expired"] += 1
 
-        # Update cancelled licenses (effective date passed)
-        result = await self.session.execute(
-            select(LicenseORM).where(
-                and_(
-                    LicenseORM.cancellation_effective_date.isnot(None),
-                    LicenseORM.cancellation_effective_date <= today,
-                    LicenseORM.status != LicenseStatus.CANCELLED,
-                )
-            )
+        # Update cancelled licenses using repository
+        cancelled_licenses = await self.license_repo.get_cancelled_needing_update(
+            today=today,
+            excluded_status=LicenseStatus.CANCELLED,
         )
-        for license_orm in result.scalars().all():
+        for license_orm in cancelled_licenses:
             license_orm.status = LicenseStatus.CANCELLED
             counts["licenses_cancelled"] += 1
 
-        # Update expired packages
-        result = await self.session.execute(
-            select(LicensePackageORM).where(
-                and_(
-                    LicensePackageORM.contract_end.isnot(None),
-                    LicensePackageORM.contract_end < today,
-                    LicensePackageORM.status != PackageStatus.EXPIRED,
-                    LicensePackageORM.status != PackageStatus.CANCELLED,
-                    LicensePackageORM.auto_renew == False,  # Only expire if not auto-renewing
-                )
-            )
+        # Update expired packages using repository
+        expired_packages = await self.package_repo.get_expired_needing_update(
+            today=today,
+            excluded_statuses=[PackageStatus.EXPIRED, PackageStatus.CANCELLED],
         )
-        for package in result.scalars().all():
+        for package in expired_packages:
             package.status = PackageStatus.EXPIRED
             counts["packages_expired"] += 1
 
-        # Update cancelled packages (effective date passed)
-        result = await self.session.execute(
-            select(LicensePackageORM).where(
-                and_(
-                    LicensePackageORM.cancellation_effective_date.isnot(None),
-                    LicensePackageORM.cancellation_effective_date <= today,
-                    LicensePackageORM.status != PackageStatus.CANCELLED,
-                )
-            )
+        # Update cancelled packages using repository
+        cancelled_packages = await self.package_repo.get_cancelled_needing_update(
+            today=today,
+            excluded_status=PackageStatus.CANCELLED,
         )
-        for package in result.scalars().all():
+        for package in cancelled_packages:
             package.status = PackageStatus.CANCELLED
             counts["packages_cancelled"] += 1
 
-        # Update expired org licenses
-        result = await self.session.execute(
-            select(OrganizationLicenseORM).where(
-                and_(
-                    OrganizationLicenseORM.expires_at.isnot(None),
-                    OrganizationLicenseORM.expires_at < today,
-                    OrganizationLicenseORM.status != OrgLicenseStatus.EXPIRED,
-                    OrganizationLicenseORM.status != OrgLicenseStatus.CANCELLED,
-                )
-            )
+        # Update expired org licenses using repository
+        expired_org_licenses = await self.org_license_repo.get_expired_needing_update(
+            today=today,
+            excluded_statuses=[OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED],
         )
-        for org_lic in result.scalars().all():
+        for org_lic in expired_org_licenses:
             org_lic.status = OrgLicenseStatus.EXPIRED
             counts["org_licenses_expired"] += 1
 
-        # Update cancelled org licenses (effective date passed)
-        result = await self.session.execute(
-            select(OrganizationLicenseORM).where(
-                and_(
-                    OrganizationLicenseORM.cancellation_effective_date.isnot(None),
-                    OrganizationLicenseORM.cancellation_effective_date <= today,
-                    OrganizationLicenseORM.status != OrgLicenseStatus.CANCELLED,
-                )
-            )
+        # Update cancelled org licenses using repository
+        cancelled_org_licenses = await self.org_license_repo.get_cancelled_needing_update(
+            today=today,
+            excluded_status=OrgLicenseStatus.CANCELLED,
         )
-        for org_lic in result.scalars().all():
+        for org_lic in cancelled_org_licenses:
             org_lic.status = OrgLicenseStatus.CANCELLED
             counts["org_licenses_cancelled"] += 1
 

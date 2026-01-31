@@ -244,25 +244,8 @@ class AdminAccountService:
         Returns:
             OrphanedAdminAccountsResponse with list of warnings
         """
-        from sqlalchemy import select
-        from licence_api.models.orm.license import LicenseORM
-        from licence_api.models.orm.employee import EmployeeORM
-        from licence_api.models.orm.provider import ProviderORM
-
-        # Query for admin accounts with offboarded owners
-        query = (
-            select(LicenseORM, EmployeeORM, ProviderORM)
-            .join(EmployeeORM, LicenseORM.admin_account_owner_id == EmployeeORM.id)
-            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
-            .where(
-                LicenseORM.is_admin_account == True,
-                LicenseORM.admin_account_owner_id.isnot(None),
-                EmployeeORM.status == "offboarded",
-            )
-        )
-
-        result = await self.session.execute(query)
-        rows = result.all()
+        # Use repository method instead of direct SQLAlchemy query (MVC-03 fix)
+        rows = await self.license_repo.get_orphaned_admin_accounts()
 
         items = []
         for license_orm, employee_orm, provider_orm in rows:
