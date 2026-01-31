@@ -29,12 +29,34 @@ from licence_api.security.encryption import get_encryption_service
 from licence_api.security.rate_limit import limiter
 from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
 from licence_api.services.cache_service import get_cache_service
+from licence_api.services.pricing_service import PricingService
 from licence_api.services.sync_service import SyncService
 
 router = APIRouter()
 
 # Rate limit for credential testing to prevent brute force
 TEST_CONNECTION_LIMIT = "10/minute"
+
+
+# Dependency injection functions
+def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
+    """Get ProviderRepository instance."""
+    return ProviderRepository(db)
+
+
+def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
+    """Get AuditService instance."""
+    return AuditService(db)
+
+
+def get_sync_service(db: AsyncSession = Depends(get_db)) -> SyncService:
+    """Get SyncService instance."""
+    return SyncService(db)
+
+
+def get_pricing_service(db: AsyncSession = Depends(get_db)) -> PricingService:
+    """Get PricingService instance."""
+    return PricingService(db)
 
 
 class TestConnectionRequest(BaseModel):
@@ -61,6 +83,7 @@ class SyncResponse(BaseModel):
 @router.get("", response_model=ProviderListResponse)
 async def list_providers(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderListResponse:
     """List all configured providers. Requires providers.view permission."""
@@ -68,11 +91,10 @@ async def list_providers(
     from licence_api.repositories.license_repository import LicenseRepository
     from licence_api.repositories.settings_repository import SettingsRepository
 
-    repo = ProviderRepository(db)
     license_repo = LicenseRepository(db)
     settings_repo = SettingsRepository(db)
 
-    providers_with_counts = await repo.get_all_with_license_counts()
+    providers_with_counts = await provider_repo.get_all_with_license_counts()
 
     # Get company domains for external detection
     domains_setting = await settings_repo.get("company_domains")
@@ -128,11 +150,11 @@ async def list_providers(
 async def get_provider(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
     """Get a single provider by ID. Requires providers.view permission."""
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -176,13 +198,13 @@ async def create_provider(
     http_request: Request,
     request: ProviderCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
-    repo = ProviderRepository(db)
-
     # Check if provider already exists
-    existing = await repo.get_by_name(request.name)
+    existing = await provider_repo.get_by_name(request.name)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -193,7 +215,7 @@ async def create_provider(
     encryption = get_encryption_service()
     encrypted_creds = encryption.encrypt(request.credentials)
 
-    provider = await repo.create(
+    provider = await provider_repo.create(
         name=request.name,
         display_name=request.display_name,
         credentials_encrypted=encrypted_creds,
@@ -201,8 +223,7 @@ async def create_provider(
     )
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_CREATE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider.id,
@@ -240,11 +261,12 @@ async def update_provider(
     provider_id: UUID,
     request: ProviderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProviderResponse:
     """Update a provider. Requires providers.edit permission."""
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -280,11 +302,10 @@ async def update_provider(
         changes["payment_method_id"] = {"old": str(provider.payment_method_id) if provider.payment_method_id else None, "new": str(request.payment_method_id)}
 
     if update_data:
-        provider = await repo.update(provider_id, **update_data)
+        provider = await provider_repo.update(provider_id, **update_data)
 
         # Audit log
-        audit = AuditService(db)
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_UPDATE,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
@@ -382,12 +403,12 @@ async def upload_provider_logo(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     file: UploadFile = File(...),
 ) -> LogoUploadResponse:
     """Upload a logo for a provider. Requires providers.edit permission."""
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -440,11 +461,10 @@ async def upload_provider_logo(
 
     # Update provider with logo URL
     logo_url = f"/api/v1/providers/{provider_id}/logo/{stored_filename}"
-    await repo.update(provider_id, logo_url=logo_url)
+    await provider_repo.update(provider_id, logo_url=logo_url)
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_UPDATE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider_id,
@@ -516,11 +536,11 @@ async def delete_provider_logo(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> None:
     """Delete a provider's logo. Requires providers.edit permission."""
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -535,11 +555,10 @@ async def delete_provider_logo(
             old_path.unlink()
 
     # Clear logo URL
-    await repo.update(provider_id, logo_url=None)
+    await provider_repo.update(provider_id, logo_url=None)
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_UPDATE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider_id,
@@ -558,13 +577,12 @@ async def delete_provider(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> None:
     """Delete a provider. Requires providers.delete permission."""
-    repo = ProviderRepository(db)
-
     # Get provider info for audit before deletion
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -574,7 +592,7 @@ async def delete_provider(
     provider_name = provider.name
     provider_display_name = provider.display_name
 
-    deleted = await repo.delete(provider_id)
+    deleted = await provider_repo.delete(provider_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -582,8 +600,7 @@ async def delete_provider(
         )
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_DELETE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider_id,
@@ -618,9 +635,12 @@ async def test_provider_connection(
 
     from licence_api.providers import (
         AdobeProvider,
+        AnthropicProvider,
         AtlassianProvider,
+        Auth0Provider,
         HiBobProvider,
         GoogleWorkspaceProvider,
+        MailjetProvider,
         MicrosoftProvider,
         OpenAIProvider,
         FigmaProvider,
@@ -631,9 +651,12 @@ async def test_provider_connection(
 
     providers = {
         ProviderName.ADOBE: AdobeProvider,
+        ProviderName.ANTHROPIC: AnthropicProvider,
         ProviderName.ATLASSIAN: AtlassianProvider,
+        ProviderName.AUTH0: Auth0Provider,
         ProviderName.HIBOB: HiBobProvider,
         ProviderName.GOOGLE_WORKSPACE: GoogleWorkspaceProvider,
+        ProviderName.MAILJET: MailjetProvider,
         ProviderName.MICROSOFT: MicrosoftProvider,
         ProviderName.OPENAI: OpenAIProvider,
         ProviderName.FIGMA: FigmaProvider,
@@ -667,18 +690,16 @@ async def test_provider_connection(
 async def trigger_sync(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    sync_service: Annotated[SyncService, Depends(get_sync_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     provider_id: UUID | None = None,
 ) -> SyncResponse:
     """Trigger a sync operation. Requires providers.sync permission."""
-    service = SyncService(db)
-    audit = AuditService(db)
-
     try:
-        results = await service.trigger_sync(provider_id)
+        results = await sync_service.trigger_sync(provider_id)
 
         # Audit log
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
@@ -694,7 +715,7 @@ async def trigger_sync(
         return SyncResponse(success=True, results=results)
     except Exception as e:
         # Audit failed sync
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
@@ -710,17 +731,15 @@ async def sync_provider(
     http_request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    sync_service: Annotated[SyncService, Depends(get_sync_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> SyncResponse:
     """Sync a specific provider. Requires providers.sync permission."""
-    service = SyncService(db)
-    audit = AuditService(db)
-
     try:
-        results = await service.sync_provider(provider_id)
+        results = await sync_service.sync_provider(provider_id)
 
         # Audit log
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
@@ -741,7 +760,7 @@ async def sync_provider(
         )
     except Exception as e:
         # Audit failed sync
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
@@ -807,15 +826,15 @@ class LicenseTypesResponse(BaseModel):
 async def get_provider_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LicenseTypesResponse:
     """Get all license types for a provider with their counts and current pricing. Requires providers.view permission."""
     from licence_api.repositories.license_repository import LicenseRepository
 
-    repo = ProviderRepository(db)
     license_repo = LicenseRepository(db)
 
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -861,11 +880,10 @@ async def get_provider_license_types(
 async def get_provider_pricing(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
 ) -> LicenseTypePricingResponse:
     """Get license type pricing for a provider. Requires providers.view permission."""
-    repo = ProviderRepository(db)
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -909,99 +927,41 @@ async def update_provider_pricing(
     request: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
-    from licence_api.repositories.license_repository import LicenseRepository
-    from decimal import Decimal
-
-    repo = ProviderRepository(db)
-    license_repo = LicenseRepository(db)
-
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    # Create a copy of config to ensure SQLAlchemy detects the change
-    config = copy.deepcopy(provider.config) if provider.config else {}
+    # Build pricing config
+    pricing_config = PricingService.build_pricing_config_dict(request.pricing)
 
-    # Handle package pricing (for providers like Mattermost with bulk licenses)
+    # Build package pricing config
+    package_pricing = None
     if request.package_pricing and request.package_pricing.cost:
-        package_config = {
+        package_pricing = {
             "cost": request.package_pricing.cost,
             "currency": request.package_pricing.currency,
             "billing_cycle": request.package_pricing.billing_cycle,
             "next_billing_date": request.package_pricing.next_billing_date,
             "notes": request.package_pricing.notes,
         }
-        config["package_pricing"] = package_config
 
-        # Calculate monthly package cost
-        package_cost = Decimal(request.package_pricing.cost)
-        if request.package_pricing.billing_cycle == "yearly":
-            monthly_package_cost = package_cost / 12
-        else:
-            monthly_package_cost = package_cost
-
-        # Get package size (max_users) from provider_license_info
-        license_info = config.get("provider_license_info", {})
-        max_users = license_info.get("max_users", 0)
-
-        if max_users > 0:
-            # Calculate cost per user based on package size (not active users)
-            # Example: 52250 EUR/year / 500 users = 104.50 EUR/year per user = 8.71 EUR/month per user
-            cost_per_license = monthly_package_cost / max_users
-            await license_repo.update_all_active_pricing(
-                provider_id=provider_id,
-                monthly_cost=cost_per_license,
-                currency=request.package_pricing.currency,
-            )
-    else:
-        # Clear package pricing if not provided
-        config.pop("package_pricing", None)
-
-    # Build individual license type pricing config
-    pricing_config = {}
-    for p in request.pricing:
-        if p.cost and p.cost != "0":
-            pricing_config[p.license_type] = {
-                "cost": p.cost,
-                "currency": p.currency,
-                "billing_cycle": p.billing_cycle,
-                "payment_frequency": p.payment_frequency,
-                "display_name": p.display_name,
-                "next_billing_date": p.next_billing_date,
-                "notes": p.notes,
-            }
-
-    config["license_pricing"] = pricing_config
-    await repo.update(provider_id, config=config)
-
-    # Apply individual license type pricing (overrides package pricing for specific types)
-    for p in request.pricing:
-        if p.cost:
-            # Calculate monthly equivalent cost
-            cost = Decimal(p.cost)
-            if p.billing_cycle == "yearly":
-                monthly_cost = cost / 12
-            elif p.billing_cycle == "monthly":
-                monthly_cost = cost
-            else:
-                # perpetual/one_time - no recurring monthly cost
-                monthly_cost = Decimal("0")
-
-            await license_repo.update_pricing_by_type(
-                provider_id=provider_id,
-                license_type=p.license_type,
-                monthly_cost=monthly_cost,
-                currency=p.currency,
-            )
+    # Use pricing service to update
+    await pricing_service.update_license_pricing(
+        provider_id=provider_id,
+        pricing_config=pricing_config,
+        package_pricing=package_pricing,
+    )
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_UPDATE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider_id,
@@ -1048,6 +1008,7 @@ class IndividualLicenseTypePricingRequest(BaseModel):
 async def get_provider_individual_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IndividualLicenseTypesResponse:
     """Get individual license types extracted from combined strings.
@@ -1060,10 +1021,9 @@ async def get_provider_individual_license_types(
     """
     from licence_api.repositories.license_repository import LicenseRepository
 
-    repo = ProviderRepository(db)
     license_repo = LicenseRepository(db)
 
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1120,6 +1080,9 @@ async def update_provider_individual_pricing(
     request: IndividualLicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     db: Annotated[AsyncSession, Depends(get_db)],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> IndividualLicenseTypesResponse:
     """Update individual license type pricing.
 
@@ -1132,26 +1095,15 @@ async def update_provider_individual_pricing(
 
     Requires providers.edit permission.
     """
-    from licence_api.repositories.license_repository import LicenseRepository
-    from decimal import Decimal
-
-    repo = ProviderRepository(db)
-    license_repo = LicenseRepository(db)
-
-    provider = await repo.get_by_id(provider_id)
+    provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    # Create a copy of config to ensure SQLAlchemy detects the change
-    config = copy.deepcopy(provider.config) if provider.config else {}
-
-    # Build individual license type pricing config
+    # Build individual pricing config
     individual_pricing_config = {}
-    individual_pricing_dict: dict[str, tuple[Decimal | None, str]] = {}
-
     for p in request.pricing:
         individual_pricing_config[p.license_type] = {
             "cost": p.cost,
@@ -1163,29 +1115,14 @@ async def update_provider_individual_pricing(
             "notes": p.notes,
         }
 
-        # Calculate monthly cost for the pricing dict
-        if p.cost:
-            cost = Decimal(p.cost)
-            if p.billing_cycle == "yearly":
-                monthly_cost = cost / 12
-            elif p.billing_cycle == "monthly":
-                monthly_cost = cost
-            else:
-                monthly_cost = Decimal("0")
-            individual_pricing_dict[p.license_type] = (monthly_cost, p.currency)
-
-    config["individual_license_pricing"] = individual_pricing_config
-    await repo.update(provider_id, config=config)
-
-    # Apply individual pricing to all licenses (sum of individual prices)
-    await license_repo.update_pricing_by_individual_type(
+    # Use pricing service to update
+    await pricing_service.update_individual_license_pricing(
         provider_id=provider_id,
-        individual_pricing=individual_pricing_dict,
+        individual_pricing_config=individual_pricing_config,
     )
 
     # Audit log
-    audit = AuditService(db)
-    await audit.log(
+    await audit_service.log(
         action=AuditAction.PROVIDER_UPDATE,
         resource_type=ResourceType.PROVIDER,
         resource_id=provider_id,
@@ -1200,14 +1137,15 @@ async def update_provider_individual_pricing(
     await db.commit()
 
     # Return updated license types
-    return await get_provider_individual_license_types(provider_id, current_user, db)
+    return await get_provider_individual_license_types(provider_id, current_user, provider_repo, db)
 
 
 @router.post("/sync/avatars", response_model=SyncResponse)
 async def resync_avatars(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    sync_service: Annotated[SyncService, Depends(get_sync_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     force: bool = False,
 ) -> SyncResponse:
     """Resync all employee avatars from HiBob.
@@ -1218,14 +1156,11 @@ async def resync_avatars(
 
     Requires providers.sync permission.
     """
-    service = SyncService(db)
-    audit = AuditService(db)
-
     try:
-        results = await service.resync_avatars(force=force)
+        results = await sync_service.resync_avatars(force=force)
 
         # Audit log
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
@@ -1242,7 +1177,7 @@ async def resync_avatars(
         )
     except Exception as e:
         # Audit failed sync
-        await audit.log(
+        await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
