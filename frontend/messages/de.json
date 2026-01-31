@@ -253,7 +253,24 @@
     "auth0": "Auth0",
     "onepassword": "1Password",
     "mailjet": "Mailjet",
-    "manual": "Manuell"
+    "manual": "Manuell",
+    "adding": "Wird hinzugefügt...",
+    "saving": "Wird gespeichert...",
+    "saveChanges": "Änderungen speichern",
+    "editDescription": "Einstellungen aktualisieren. Zugangsdaten leer lassen, um aktuelle Werte beizubehalten.",
+    "leaveEmptyToKeep": "Leer lassen für aktuelle Werte",
+    "changeLogo": "Ändern",
+    "logoFormats": "PNG, JPG, SVG oder WebP. Max. 2MB.",
+    "deleteConfirmation": "Sind Sie sicher, dass Sie {name} löschen möchten? Alle zugehörigen Lizenzen werden entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "selectType": "Typ auswählen",
+    "licenseModel": "Lizenzmodell",
+    "seatBased": "Sitzbasiert (pro Benutzer)",
+    "licenseBased": "Lizenzbasiert (übertragbar)",
+    "manualProviderNote": "Nach dem Erstellen können Sie im Preisgestaltungs-Tab Lizenzschlüssel oder Plätze hinzufügen und Preise konfigurieren.",
+    "hrisProvider": "HRIS-Anbieter",
+    "licenseProvider": "Lizenzanbieter",
+    "noProviders": "Keine Anbieter konfiguriert",
+    "configureProvider": "Verbinden Sie Ihren ersten Anbieter, um Lizenzen zu verfolgen"
   },
   "employees": {
     "title": "Mitarbeiter",
@@ -307,7 +324,14 @@
     "failedToDelete": "Benutzer-Löschung fehlgeschlagen",
     "failedToResetPassword": "Passwort-Zurücksetzung fehlgeschlagen",
     "cannotDeleteSelf": "Sie können Ihr eigenes Konto nicht löschen",
-    "cannotDeactivateSelf": "Sie können Ihr eigenes Konto nicht deaktivieren"
+    "cannotDeactivateSelf": "Sie können Ihr eigenes Konto nicht deaktivieren",
+    "addUserDescription": "Einen neuen Admin-Benutzer zum System hinzufügen.",
+    "editUserDescription": "Benutzerinformationen und Rollen aktualisieren.",
+    "deleteUserConfirmation": "Sind Sie sicher, dass Sie {email} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "creating": "Wird erstellt...",
+    "saving": "Wird gespeichert...",
+    "saveChanges": "Änderungen speichern",
+    "deleting": "Wird gelöscht..."
   },
   "roles": {
     "title": "Rollen",
@@ -332,7 +356,14 @@
     "superadmin": "Super-Administrator",
     "admin": "Administrator",
     "manager": "Manager",
-    "viewer": "Betrachter"
+    "viewer": "Betrachter",
+    "addRoleDescription": "Erstellen Sie eine neue benutzerdefinierte Rolle mit spezifischen Berechtigungen.",
+    "editRoleDescription": "Rolleneinstellungen und Berechtigungen aktualisieren.",
+    "deleteRoleConfirmation": "Sind Sie sicher, dass Sie die Rolle \"{name}\" löschen möchten? Benutzer mit dieser Rolle verlieren diese Berechtigungen. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "creating": "Wird erstellt...",
+    "saving": "Wird gespeichert...",
+    "saveChanges": "Änderungen speichern",
+    "deleting": "Wird gelöscht..."
   },
   "serviceAccounts": {
     "title": "Service-Accounts",

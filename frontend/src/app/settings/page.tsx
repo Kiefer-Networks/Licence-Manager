@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, PaymentMethod, PaymentMethodCreate, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings } from '@/lib/api';
+import { api, PaymentMethod, PaymentMethodCreate, PaymentMethodDetails, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, Upload, HardDrive, Info } from 'lucide-react';
 import { BackupExportDialog, BackupRestoreDialog } from '@/components/backup';
@@ -243,17 +243,17 @@ export default function SettingsPage() {
   const handleSavePaymentMethod = async () => {
     setSavingPaymentMethod(true);
     try {
-      const details: Record<string, any> = {};
+      const details: PaymentMethodDetails = {};
 
       if (paymentMethodForm.type === 'credit_card') {
-        details.card_holder = paymentMethodForm.card_holder;
+        details.cardholder_name = paymentMethodForm.card_holder;
         details.card_last_four = paymentMethodForm.card_last_four;
-        details.expiry_month = paymentMethodForm.expiry_month;
-        details.expiry_year = paymentMethodForm.expiry_year;
+        details.card_expiry_month = paymentMethodForm.expiry_month ? parseInt(paymentMethodForm.expiry_month) : undefined;
+        details.card_expiry_year = paymentMethodForm.expiry_year ? parseInt(paymentMethodForm.expiry_year) : undefined;
       } else if (paymentMethodForm.type === 'bank_account') {
         details.bank_name = paymentMethodForm.bank_name;
-        details.account_holder = paymentMethodForm.account_holder;
-        details.iban_last_four = paymentMethodForm.iban_last_four;
+        details.account_holder_name = paymentMethodForm.account_holder;
+        details.account_last_four = paymentMethodForm.iban_last_four;
       } else {
         details.provider_name = paymentMethodForm.provider_name;
       }
@@ -941,9 +941,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRuleDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setRuleDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveRule} disabled={!ruleForm.event_type || !ruleForm.slack_channel}>
-              {editingRule ? 'Save Changes' : 'Create Rule'}
+              {editingRule ? tCommon('save') : tCommon('create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1104,9 +1104,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setPaymentMethodDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setPaymentMethodDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSavePaymentMethod} disabled={!paymentMethodForm.name || savingPaymentMethod}>
-              {savingPaymentMethod ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (editingPaymentMethod ? 'Save Changes' : 'Add Payment Method')}
+              {savingPaymentMethod ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {tCommon('loading')}</> : (editingPaymentMethod ? tCommon('save') : tCommon('add'))}
             </Button>
           </DialogFooter>
         </DialogContent>

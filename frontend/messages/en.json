@@ -253,7 +253,24 @@
     "auth0": "Auth0",
     "onepassword": "1Password",
     "mailjet": "Mailjet",
-    "manual": "Manual"
+    "manual": "Manual",
+    "adding": "Adding...",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "editDescription": "Update settings. Leave credentials empty to keep current values.",
+    "leaveEmptyToKeep": "Leave empty to keep current",
+    "changeLogo": "Change",
+    "logoFormats": "PNG, JPG, SVG or WebP. Max 2MB.",
+    "deleteConfirmation": "Are you sure you want to delete {name}? All associated licenses will be removed. This cannot be undone.",
+    "selectType": "Select type",
+    "licenseModel": "License Model",
+    "seatBased": "Seat-based (per user)",
+    "licenseBased": "License-based (transferable)",
+    "manualProviderNote": "After creating the provider, you can add license keys or seats and configure pricing in the Pricing tab.",
+    "hrisProvider": "HRIS Provider",
+    "licenseProvider": "License Provider",
+    "noProviders": "No providers configured",
+    "configureProvider": "Connect your first provider to start tracking licenses"
   },
   "employees": {
     "title": "Employees",
@@ -307,7 +324,14 @@
     "failedToDelete": "Failed to delete user",
     "failedToResetPassword": "Failed to reset password",
     "cannotDeleteSelf": "Cannot delete your own account",
-    "cannotDeactivateSelf": "Cannot deactivate your own account"
+    "cannotDeactivateSelf": "Cannot deactivate your own account",
+    "addUserDescription": "Add a new admin user to the system.",
+    "editUserDescription": "Update user information and roles.",
+    "deleteUserConfirmation": "Are you sure you want to delete {email}? This action cannot be undone.",
+    "creating": "Creating...",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "deleting": "Deleting..."
   },
   "roles": {
     "title": "Roles",
@@ -332,7 +356,14 @@
     "superadmin": "Super Admin",
     "admin": "Admin",
     "manager": "Manager",
-    "viewer": "Viewer"
+    "viewer": "Viewer",
+    "addRoleDescription": "Create a new custom role with specific permissions.",
+    "editRoleDescription": "Update role settings and permissions.",
+    "deleteRoleConfirmation": "Are you sure you want to delete the role \"{name}\"? Users with this role will lose these permissions. This action cannot be undone.",
+    "creating": "Creating...",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "deleting": "Deleting..."
   },
   "serviceAccounts": {
     "title": "Service Accounts",

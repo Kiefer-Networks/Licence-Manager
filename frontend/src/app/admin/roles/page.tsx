@@ -416,8 +416,8 @@ export default function AdminRolesPage() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Role</DialogTitle>
-            <DialogDescription>Create a new custom role with specific permissions.</DialogDescription>
+            <DialogTitle>{t('addRole')}</DialogTitle>
+            <DialogDescription>{t('addRoleDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {formErrors.length > 0 && (
@@ -462,10 +462,10 @@ export default function AdminRolesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleCreateRole} disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Role'}
+              {isSubmitting ? t('creating') : t('addRole')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -475,8 +475,8 @@ export default function AdminRolesPage() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Role</DialogTitle>
-            <DialogDescription>Update role settings and permissions.</DialogDescription>
+            <DialogTitle>{t('editRole')}</DialogTitle>
+            <DialogDescription>{t('editRoleDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {formErrors.length > 0 && (
@@ -517,10 +517,10 @@ export default function AdminRolesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleUpdateRole} disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? t('saving') : t('saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -567,7 +567,7 @@ export default function AdminRolesPage() {
             )}
           </div>
           <DialogFooter>
-            <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => setViewDialogOpen(false)}>{tCommon('close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -576,17 +576,17 @@ export default function AdminRolesPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Role</DialogTitle>
+            <DialogTitle>{t('deleteRole')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the role &quot;{selectedRole?.name}&quot;? Users with this role will lose these permissions. This action cannot be undone.
+              {t('deleteRoleConfirmation', { name: selectedRole?.name || '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button variant="destructive" onClick={handleDeleteRole} disabled={isSubmitting}>
-              {isSubmitting ? 'Deleting...' : 'Delete Role'}
+              {isSubmitting ? t('deleting') : t('deleteRole')}
             </Button>
           </DialogFooter>
         </DialogContent>

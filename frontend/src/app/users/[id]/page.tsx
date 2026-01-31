@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +53,8 @@ export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
   const employeeId = params.id as string;
+  const t = useTranslations('licenses');
+  const tCommon = useTranslations('common');
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -134,8 +137,8 @@ export default function UserDetailPage() {
       setSelectedLicenseId('');
       await fetchLicenses();
       await fetchEmployee();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to assign');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to assign');
     } finally {
       setActionLoading(false);
     }
@@ -159,8 +162,8 @@ export default function UserDetailPage() {
       setUnassignDialog(null);
       await fetchLicenses();
       await fetchEmployee();
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to unassign');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to unassign');
     } finally {
       setActionLoading(false);
     }
@@ -179,8 +182,8 @@ export default function UserDetailPage() {
       } else {
         showToast('error', result.message);
       }
-    } catch (error: any) {
-      showToast('error', error.message || 'Failed to remove');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to remove');
     } finally {
       setActionLoading(false);
     }
@@ -469,10 +472,10 @@ export default function UserDetailPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setAssignDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleAssignLicense} disabled={!selectedLicenseId || actionLoading}>
               {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Assign
+              {t('confirmMatch')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -494,10 +497,10 @@ export default function UserDetailPage() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setUnassignDialog(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setUnassignDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleUnassignLicense} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Unassign
+              {t('unassignLicense')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -544,10 +547,10 @@ export default function UserDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button variant="ghost" onClick={() => setRemoveDialog(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setRemoveDialog(null)}>{tCommon('cancel')}</Button>
             <Button variant="destructive" onClick={handleRemoveFromProvider} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Remove License
+              {t('removeFromProvider')}
             </Button>
           </DialogFooter>
         </DialogContent>

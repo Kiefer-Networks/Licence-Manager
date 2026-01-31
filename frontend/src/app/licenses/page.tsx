@@ -797,7 +797,7 @@ function LicensesContent() {
       <Dialog open={bulkActionDialog === 'remove'} onOpenChange={() => setBulkActionDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove from Provider</DialogTitle>
+            <DialogTitle>{t('removeFromProvider')}</DialogTitle>
             <DialogDescription>
               This will remove {removableLicenses.length} user(s) from their provider system via API.
             </DialogDescription>
@@ -821,11 +821,11 @@ function LicensesContent() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleBulkRemove} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Remove {removableLicenses.length} Licenses
+              {tCommon('remove')} {removableLicenses.length} {t('title')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -835,7 +835,7 @@ function LicensesContent() {
       <Dialog open={bulkActionDialog === 'delete'} onOpenChange={() => setBulkActionDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete from Database</DialogTitle>
+            <DialogTitle>{t('bulkDelete')}</DialogTitle>
             <DialogDescription>
               This will delete {selectedIds.size} license(s) from the local database.
             </DialogDescription>
@@ -859,11 +859,11 @@ function LicensesContent() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Delete {selectedIds.size} Licenses
+              {tCommon('delete')} {selectedIds.size} {t('title')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -873,7 +873,7 @@ function LicensesContent() {
       <Dialog open={bulkActionDialog === 'unassign'} onOpenChange={() => setBulkActionDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unassign Licenses</DialogTitle>
+            <DialogTitle>{t('bulkUnassign')}</DialogTitle>
             <DialogDescription>
               This will unassign {assignedLicenses.length} license(s) from their employees.
             </DialogDescription>
@@ -897,11 +897,11 @@ function LicensesContent() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleBulkUnassign} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Unassign {assignedLicenses.length} Licenses
+              {t('unassignLicense')} ({assignedLicenses.length})
             </Button>
           </DialogFooter>
         </DialogContent>

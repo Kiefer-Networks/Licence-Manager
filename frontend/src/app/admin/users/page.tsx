@@ -373,8 +373,8 @@ export default function AdminUsersPage() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>Add a new admin user to the system.</DialogDescription>
+            <DialogTitle>{t('addUser')}</DialogTitle>
+            <DialogDescription>{t('addUserDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {formErrors.length > 0 && (
@@ -432,10 +432,10 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleCreateUser} disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create User'}
+              {isSubmitting ? t('creating') : t('addUser')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -445,8 +445,8 @@ export default function AdminUsersPage() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user information and roles.</DialogDescription>
+            <DialogTitle>{t('editUser')}</DialogTitle>
+            <DialogDescription>{t('editUserDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {formErrors.length > 0 && (
@@ -490,10 +490,10 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleUpdateUser} disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? t('saving') : t('saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -503,17 +503,17 @@ export default function AdminUsersPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
+            <DialogTitle>{t('deleteUser')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete {selectedUser?.email}? This action cannot be undone.
+              {t('deleteUserConfirmation', { email: selectedUser?.email || '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button variant="destructive" onClick={handleDeleteUser} disabled={isSubmitting}>
-              {isSubmitting ? 'Deleting...' : 'Delete User'}
+              {isSubmitting ? t('deleting') : t('deleteUser')}
             </Button>
           </DialogFooter>
         </DialogContent>
