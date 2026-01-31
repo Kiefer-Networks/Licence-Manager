@@ -2,12 +2,18 @@
 
 import copy
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+
+if TYPE_CHECKING:
+    from licence_api.models.domain.admin_user import AdminUser
 
 
 class PricingService:
@@ -18,12 +24,15 @@ class PricingService:
         self.session = session
         self.provider_repo = ProviderRepository(session)
         self.license_repo = LicenseRepository(session)
+        self.audit_service = AuditService(session)
 
     async def update_license_pricing(
         self,
         provider_id: UUID,
         pricing_config: dict,
         package_pricing: dict | None = None,
+        user: "AdminUser | None" = None,
+        request: Request | None = None,
     ) -> None:
         """Update license pricing for a provider.
 
@@ -31,6 +40,8 @@ class PricingService:
             provider_id: Provider UUID
             pricing_config: Dict of license_type -> pricing info
             package_pricing: Optional package pricing for bulk licenses
+            user: Admin user making the change
+            request: HTTP request for audit logging
         """
         provider = await self.provider_repo.get_by_id(provider_id)
         if provider is None:
@@ -92,10 +103,29 @@ class PricingService:
                     currency=price_info.get("currency", "EUR"),
                 )
 
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PROVIDER_UPDATE,
+                resource_type=ResourceType.PROVIDER,
+                resource_id=provider_id,
+                user=user,
+                request=request,
+                details={
+                    "action": "pricing_update",
+                    "license_types_count": len(pricing_config),
+                    "has_package_pricing": package_pricing is not None,
+                },
+            )
+
+        await self.session.commit()
+
     async def update_individual_license_pricing(
         self,
         provider_id: UUID,
         individual_pricing_config: dict,
+        user: "AdminUser | None" = None,
+        request: Request | None = None,
     ) -> None:
         """Update individual license type pricing (for combined license types).
 
@@ -109,6 +139,8 @@ class PricingService:
         Args:
             provider_id: Provider UUID
             individual_pricing_config: Dict of license_type -> pricing info
+            user: Admin user making the change
+            request: HTTP request for audit logging
         """
         provider = await self.provider_repo.get_by_id(provider_id)
         if provider is None:
@@ -144,6 +176,22 @@ class PricingService:
             provider_id=provider_id,
             individual_pricing=individual_pricing_dict,
         )
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PROVIDER_UPDATE,
+                resource_type=ResourceType.PROVIDER,
+                resource_id=provider_id,
+                user=user,
+                request=request,
+                details={
+                    "action": "individual_pricing_update",
+                    "license_types_count": len(individual_pricing_config),
+                },
+            )
+
+        await self.session.commit()
 
     @staticmethod
     def calculate_monthly_cost(cost: Decimal, billing_cycle: str) -> Decimal:

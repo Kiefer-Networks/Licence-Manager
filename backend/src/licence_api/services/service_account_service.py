@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.dto.license import LicenseResponse
@@ -19,6 +20,7 @@ from licence_api.repositories.service_account_pattern_repository import (
     ServiceAccountPatternRepository,
 )
 from licence_api.repositories.user_repository import UserRepository
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
 
 class ServiceAccountService:
@@ -32,6 +34,7 @@ class ServiceAccountService:
         self.employee_repo = EmployeeRepository(session)
         self.provider_repo = ProviderRepository(session)
         self.user_repo = UserRepository(session)
+        self.audit_service = AuditService(session)
 
     def _pattern_to_response(
         self,
@@ -91,12 +94,14 @@ class ServiceAccountService:
         self,
         data: ServiceAccountPatternCreate,
         created_by: UUID | None = None,
+        request: Request | None = None,
     ) -> ServiceAccountPatternResponse:
         """Create a new service account pattern.
 
         Args:
             data: Pattern creation data
             created_by: Admin user ID who created the pattern
+            request: HTTP request for audit logging
 
         Returns:
             Created ServiceAccountPatternResponse
@@ -109,24 +114,71 @@ class ServiceAccountService:
             created_by=created_by,
         )
 
+        # Audit log the creation
+        await self.audit_service.log(
+            action=AuditAction.SERVICE_ACCOUNT_PATTERN_CREATE,
+            resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
+            resource_id=pattern.id,
+            admin_user_id=created_by,
+            changes={
+                "email_pattern": data.email_pattern,
+                "name": data.name,
+                "owner_id": str(data.owner_id) if data.owner_id else None,
+            },
+            request=request,
+        )
+
+        await self.session.commit()
+
         match_count = await self.pattern_repo.get_match_count(pattern.id)
         return self._pattern_to_response(pattern, match_count)
 
-    async def delete_pattern(self, pattern_id: UUID) -> bool:
+    async def delete_pattern(
+        self,
+        pattern_id: UUID,
+        admin_user_id: UUID | None = None,
+        request: Request | None = None,
+        pattern_info: dict | None = None,
+    ) -> bool:
         """Delete a service account pattern.
 
         Args:
             pattern_id: Pattern UUID
+            admin_user_id: Admin user deleting the pattern
+            request: HTTP request for audit logging
+            pattern_info: Pattern info for audit log (email_pattern, name)
 
         Returns:
             True if deleted, False if not found
         """
-        return await self.pattern_repo.delete(pattern_id)
+        result = await self.pattern_repo.delete(pattern_id)
 
-    async def apply_patterns_to_all_licenses(self) -> ApplyPatternsResponse:
+        if result and admin_user_id:
+            # Audit log the deletion
+            await self.audit_service.log(
+                action=AuditAction.SERVICE_ACCOUNT_PATTERN_DELETE,
+                resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
+                resource_id=pattern_id,
+                admin_user_id=admin_user_id,
+                changes=pattern_info or {},
+                request=request,
+            )
+            await self.session.commit()
+
+        return result
+
+    async def apply_patterns_to_all_licenses(
+        self,
+        admin_user_id: UUID | None = None,
+        request: Request | None = None,
+    ) -> ApplyPatternsResponse:
         """Apply all patterns to all licenses.
 
         Marks matching licenses as service accounts.
+
+        Args:
+            admin_user_id: Admin user applying patterns
+            request: HTTP request for audit logging
 
         Returns:
             ApplyPatternsResponse with count of updated licenses
@@ -151,7 +203,20 @@ class ServiceAccountService:
             if pattern_updates > 0:
                 patterns_applied += 1
 
-        await self.session.flush()
+        # Audit log the application
+        if admin_user_id:
+            await self.audit_service.log(
+                action=AuditAction.SERVICE_ACCOUNT_PATTERNS_APPLY,
+                resource_type=ResourceType.SERVICE_ACCOUNT_PATTERN,
+                admin_user_id=admin_user_id,
+                changes={
+                    "updated_count": updated_count,
+                    "patterns_applied": patterns_applied,
+                },
+                request=request,
+            )
+
+        await self.session.commit()
 
         return ApplyPatternsResponse(
             updated_count=updated_count,

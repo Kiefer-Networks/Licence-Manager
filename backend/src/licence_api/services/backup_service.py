@@ -7,12 +7,13 @@ import os
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
+from fastapi import Request
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,10 @@ from licence_api.models.dto.backup import (
     RestoreResponse,
     RestoreValidation,
 )
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+
+if TYPE_CHECKING:
+    from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -60,6 +65,7 @@ class BackupService:
         """Initialize backup service with database session."""
         self.session = session
         self.encryption = get_encryption_service()
+        self.audit_service = AuditService(session) if session else None
 
     # =========================================================================
     # Encryption utilities
@@ -132,18 +138,37 @@ class BackupService:
     # Export functionality
     # =========================================================================
 
-    async def create_backup(self, password: str) -> bytes:
+    async def create_backup(
+        self,
+        password: str,
+        user: "AdminUser | None" = None,
+        request: Request | None = None,
+    ) -> bytes:
         """Create an encrypted backup of all system data.
 
         Args:
             password: Password for encryption
+            user: Admin user creating the backup
+            request: HTTP request for audit logging
 
         Returns:
             Encrypted backup file bytes
         """
         data = await self._collect_data()
         json_data = json.dumps(data, default=self._json_serializer).encode("utf-8")
-        return self._encrypt(json_data, password)
+        backup_data = self._encrypt(json_data, password)
+
+        # Audit log
+        if user and self.audit_service:
+            await self.audit_service.log(
+                action=AuditAction.EXPORT,
+                resource_type=ResourceType.SYSTEM,
+                user_id=user.id,
+                details={"action": "backup_created"},
+            )
+            await self.session.commit()
+
+        return backup_data
 
     def _json_serializer(self, obj: Any) -> Any:
         """Custom JSON serializer for special types."""
@@ -294,7 +319,13 @@ class BackupService:
     # Restore functionality
     # =========================================================================
 
-    async def restore_backup(self, file_data: bytes, password: str) -> RestoreResponse:
+    async def restore_backup(
+        self,
+        file_data: bytes,
+        password: str,
+        user: "AdminUser | None" = None,
+        request: Request | None = None,
+    ) -> RestoreResponse:
         """Restore system from encrypted backup.
 
         WARNING: This deletes ALL existing data!
@@ -302,6 +333,8 @@ class BackupService:
         Args:
             file_data: Encrypted backup file
             password: Decryption password
+            user: Admin user performing the restore
+            request: HTTP request for audit logging
 
         Returns:
             Restore response with import counts and validation results
@@ -369,6 +402,21 @@ class BackupService:
 
         # Validate provider credentials
         validation = await self._validate_providers()
+
+        # Audit log successful restore
+        if user and self.audit_service:
+            await self.audit_service.log(
+                action=AuditAction.IMPORT,
+                resource_type=ResourceType.SYSTEM,
+                user_id=user.id,
+                details={
+                    "action": "backup_restored",
+                    "imported": counts.model_dump(),
+                    "providers_valid": validation.providers_valid,
+                    "providers_failed": len(validation.providers_failed),
+                },
+            )
+            await self.session.commit()
 
         return RestoreResponse(
             success=True,

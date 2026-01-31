@@ -12,12 +12,16 @@ from difflib import SequenceMatcher
 from typing import Literal
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+from licence_api.services.cache_service import get_cache_service
 
 
 # Match status constants
@@ -82,6 +86,7 @@ class MatchingService:
         self.session = session
         self.employee_repo = EmployeeRepository(session)
         self.license_repo = LicenseRepository(session)
+        self.audit_service = AuditService(session)
 
         # Caches populated during matching
         self._email_to_employee: dict[str, EmployeeORM] = {}
@@ -545,3 +550,159 @@ class MatchingService:
 
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    # =========================================================================
+    # Methods with commit (for use from routers)
+    # =========================================================================
+
+    async def confirm_match_with_commit(
+        self,
+        license_id: UUID,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> LicenseORM | None:
+        """Confirm a suggested match with full side effects.
+
+        Args:
+            license_id: License UUID
+            user: Admin user who confirmed
+            request: HTTP request for audit logging
+
+        Returns:
+            Updated license or None if not found
+        """
+        license = await self.confirm_match(license_id, user.id)
+        if license is None:
+            return None
+
+        # Audit log the confirmation
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_ASSIGN,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={
+                "match_confirmed": True,
+                "employee_id": str(license.employee_id),
+            },
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+        return license
+
+    async def reject_match_with_commit(
+        self,
+        license_id: UUID,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> LicenseORM | None:
+        """Reject a suggested match with full side effects.
+
+        Args:
+            license_id: License UUID
+            user: Admin user who rejected
+            request: HTTP request for audit logging
+
+        Returns:
+            Updated license or None if not found
+        """
+        license = await self.reject_match(license_id, user.id)
+        if license is None:
+            return None
+
+        # Audit log the rejection
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UPDATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={"match_rejected": True},
+            request=request,
+        )
+
+        await self.session.commit()
+        return license
+
+    async def mark_as_external_guest_with_commit(
+        self,
+        license_id: UUID,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> LicenseORM | None:
+        """Mark a license as external guest with full side effects.
+
+        Args:
+            license_id: License UUID
+            user: Admin user who marked
+            request: HTTP request for audit logging
+
+        Returns:
+            Updated license or None if not found
+        """
+        license = await self.mark_as_external_guest(license_id, user.id)
+        if license is None:
+            return None
+
+        # Audit log the change
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UPDATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={"marked_as_external_guest": True},
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+        return license
+
+    async def assign_to_employee_with_commit(
+        self,
+        license_id: UUID,
+        employee_id: UUID,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> LicenseORM | None:
+        """Manually assign a license to an employee with full side effects.
+
+        Args:
+            license_id: License UUID
+            employee_id: Employee UUID to assign
+            user: Admin user who assigned
+            request: HTTP request for audit logging
+
+        Returns:
+            Updated license or None if not found
+        """
+        license = await self.assign_to_employee(license_id, employee_id, user.id)
+        if license is None:
+            return None
+
+        # Audit log the assignment
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_ASSIGN,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={
+                "employee_id": str(employee_id),
+                "manual_assignment": True,
+            },
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+        return license

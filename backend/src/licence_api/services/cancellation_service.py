@@ -58,7 +58,7 @@ class CancellationService:
         if effective_date <= date.today():
             license_orm.status = LicenseStatus.CANCELLED
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(license_orm)
         return license_orm
 
@@ -102,7 +102,7 @@ class CancellationService:
         if effective_date <= date.today():
             package.status = PackageStatus.CANCELLED
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(package)
         return package
 
@@ -146,7 +146,7 @@ class CancellationService:
         if effective_date <= date.today():
             org_license.status = OrgLicenseStatus.CANCELLED
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(org_license)
         return org_license
 
@@ -190,7 +190,7 @@ class CancellationService:
             if license_orm.status in (LicenseStatus.CANCELLED, LicenseStatus.EXPIRED):
                 license_orm.status = LicenseStatus.ACTIVE
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(license_orm)
         return license_orm
 
@@ -236,7 +236,7 @@ class CancellationService:
             if package.status in (PackageStatus.CANCELLED, PackageStatus.EXPIRED):
                 package.status = PackageStatus.ACTIVE
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(package)
         return package
 
@@ -267,7 +267,7 @@ class CancellationService:
 
         license_orm.needs_reorder = needs_reorder
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(license_orm)
         return license_orm
 
@@ -300,6 +300,6 @@ class CancellationService:
 
         package.needs_reorder = needs_reorder
 
-        await self.session.flush()
+        await self.session.commit()
         await self.session.refresh(package)
         return package

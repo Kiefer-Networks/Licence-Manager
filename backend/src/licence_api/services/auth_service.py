@@ -1,6 +1,9 @@
 """Authentication service."""
 
+import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,6 +14,7 @@ from licence_api.models.dto.auth import TokenResponse, UserInfo
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
+from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
 from licence_api.security.auth import (
     create_access_token,
     create_refresh_token,
@@ -18,6 +22,17 @@ from licence_api.security.auth import (
     verify_google_token,
 )
 from licence_api.security.password import get_password_service
+from licence_api.utils.file_validation import (
+    validate_image_signature,
+    get_extension_from_content_type,
+)
+
+logger = logging.getLogger(__name__)
+
+# Avatar storage directory for admin users
+ADMIN_AVATAR_DIR = Path(__file__).parent.parent.parent.parent / "data" / "admin_avatars"
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 
 class AuthService:
@@ -30,6 +45,7 @@ class AuthService:
         self.role_repo = RoleRepository(session)
         self.token_repo = RefreshTokenRepository(session)
         self.audit_repo = AuditRepository(session)
+        self.notification_pref_repo = UserNotificationPreferenceRepository(session)
         self.password_service = get_password_service()
 
     async def authenticate_local(
@@ -468,3 +484,173 @@ class AuthService:
                 permissions.add(perm.code)
 
         return roles, sorted(permissions)
+
+    # Profile management methods
+
+    async def update_profile(
+        self,
+        user_id: UUID,
+        name: str | None = None,
+    ) -> UserInfo:
+        """Update user profile.
+
+        Args:
+            user_id: User UUID
+            name: New name (None to clear)
+
+        Returns:
+            Updated UserInfo
+
+        Raises:
+            HTTPException: If user not found
+        """
+        if name is not None:
+            await self.user_repo.update_name(user_id, name if name else None)
+            await self.session.commit()
+
+        user_info = await self.get_user_info(user_id)
+        if user_info is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        return user_info
+
+    async def upload_avatar(
+        self,
+        user_id: UUID,
+        content: bytes,
+        content_type: str,
+    ) -> str:
+        """Upload user avatar.
+
+        Args:
+            user_id: User UUID
+            content: Image content bytes
+            content_type: Content type (e.g., image/jpeg)
+
+        Returns:
+            Avatar URL
+
+        Raises:
+            ValueError: If validation fails
+        """
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            raise ValueError(f"Invalid file type. Allowed: {', '.join(ALLOWED_CONTENT_TYPES)}")
+
+        if len(content) > MAX_AVATAR_SIZE:
+            raise ValueError(f"File too large. Maximum size: {MAX_AVATAR_SIZE // (1024 * 1024)} MB")
+
+        if not validate_image_signature(content, content_type):
+            raise ValueError("File content does not match declared file type")
+
+        # Ensure avatar directory exists
+        ADMIN_AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename
+        ext = get_extension_from_content_type(content_type)
+        filename = f"{user_id}{ext}"
+        file_path = ADMIN_AVATAR_DIR / filename
+
+        # Remove old avatar with different extension
+        for old_ext in [".jpg", ".png", ".gif", ".webp"]:
+            old_file = ADMIN_AVATAR_DIR / f"{user_id}{old_ext}"
+            if old_file.exists() and old_file != file_path:
+                try:
+                    old_file.unlink()
+                except OSError as e:
+                    logger.warning(f"Failed to delete old avatar file: {e}")
+
+        # Write new avatar
+        try:
+            file_path.write_bytes(content)
+        except Exception as e:
+            logger.error(f"Failed to write avatar file: {e}")
+            raise ValueError("Failed to save avatar")
+
+        # Update picture_url in database
+        picture_url = f"/api/v1/auth/avatar/{user_id}"
+        await self.user_repo.update_avatar(user_id, picture_url)
+        await self.session.commit()
+
+        return picture_url
+
+    async def delete_avatar(self, user_id: UUID) -> None:
+        """Delete user avatar.
+
+        Args:
+            user_id: User UUID
+        """
+        # Remove avatar files
+        for ext in [".jpg", ".png", ".gif", ".webp"]:
+            file_path = ADMIN_AVATAR_DIR / f"{user_id}{ext}"
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except OSError as e:
+                    logger.warning(f"Failed to delete avatar file: {e}")
+
+        # Clear picture_url in database
+        await self.user_repo.update_avatar(user_id, None)
+        await self.session.commit()
+
+    # Notification preference methods
+
+    async def get_notification_preferences(self, user_id: UUID) -> list:
+        """Get user notification preferences.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            List of notification preference records
+        """
+        return await self.notification_pref_repo.get_by_user_id(user_id)
+
+    async def update_notification_preferences_bulk(
+        self,
+        user_id: UUID,
+        preferences: list[dict[str, Any]],
+    ) -> list:
+        """Update notification preferences in bulk.
+
+        Args:
+            user_id: User UUID
+            preferences: List of preference dicts with event_type, enabled, etc.
+
+        Returns:
+            Updated list of notification preference records
+        """
+        prefs = await self.notification_pref_repo.bulk_upsert(user_id, preferences)
+        await self.session.commit()
+        return prefs
+
+    async def update_notification_preference(
+        self,
+        user_id: UUID,
+        event_type: str,
+        enabled: bool | None = None,
+        slack_dm: bool | None = None,
+        slack_channel: str | None = None,
+    ):
+        """Update a single notification preference.
+
+        Args:
+            user_id: User UUID
+            event_type: Event type code
+            enabled: Enable/disable
+            slack_dm: Enable Slack DM
+            slack_channel: Slack channel name
+
+        Returns:
+            Updated notification preference record
+        """
+        pref = await self.notification_pref_repo.upsert(
+            user_id=user_id,
+            event_type=event_type,
+            enabled=enabled,
+            slack_dm=slack_dm,
+            slack_channel=slack_channel,
+        )
+        await self.session.commit()
+        return pref

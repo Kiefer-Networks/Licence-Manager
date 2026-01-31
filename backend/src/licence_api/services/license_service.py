@@ -3,10 +3,12 @@
 from typing import Any
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decimal import Decimal
 
+from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import (
     LicenseResponse,
     LicenseListResponse,
@@ -16,6 +18,8 @@ from licence_api.models.dto.license import (
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+from licence_api.services.cache_service import get_cache_service
 from licence_api.utils.domain_check import is_company_email
 
 
@@ -28,6 +32,7 @@ class LicenseService:
         self.license_repo = LicenseRepository(session)
         self.employee_repo = EmployeeRepository(session)
         self.settings_repo = SettingsRepository(session)
+        self.audit_service = AuditService(session)
 
     async def _get_company_domains(self) -> list[str]:
         """Get company domains from settings."""
@@ -259,12 +264,16 @@ class LicenseService:
         self,
         license_id: UUID,
         employee_id: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicenseResponse | None:
         """Manually assign a license to an employee.
 
         Args:
             license_id: License UUID
             employee_id: Employee UUID
+            user: Admin user making the assignment
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicenseResponse or None if not found
@@ -280,17 +289,45 @@ class LicenseService:
         if license_orm is None:
             return None
 
+        # Audit log the assignment
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.LICENSE_ASSIGN,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                admin_user_id=user.id,
+                changes={"employee_id": str(employee_id)},
+                request=request,
+            )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+
         return await self.get_license(license_id)
 
-    async def unassign_license(self, license_id: UUID) -> LicenseResponse | None:
+    async def unassign_license(
+        self,
+        license_id: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> LicenseResponse | None:
         """Unassign a license from employee.
 
         Args:
             license_id: License UUID
+            user: Admin user making the unassignment
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicenseResponse or None if not found
         """
+        # Get current employee before unassigning
+        license_orm = await self.license_repo.get_by_id(license_id)
+        old_employee_id = str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
+
         license_orm = await self.license_repo.update(
             license_id,
             employee_id=None,
@@ -299,6 +336,23 @@ class LicenseService:
 
         if license_orm is None:
             return None
+
+        # Audit log the unassignment
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.LICENSE_UNASSIGN,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                admin_user_id=user.id,
+                changes={"previous_employee_id": old_employee_id},
+                request=request,
+            )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
 
         return await self.get_license(license_id)
 
@@ -597,3 +651,229 @@ class LicenseService:
         """
         license_orm = await self.license_repo.get_by_id(license_id)
         return license_orm.external_user_id if license_orm else None
+
+    async def update_service_account_with_commit(
+        self,
+        license_id: UUID,
+        is_service_account: bool,
+        service_account_name: str | None,
+        service_account_owner_id: UUID | None,
+        apply_globally: bool,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> tuple[LicenseResponse, bool] | None:
+        """Update service account status with full side effects.
+
+        Args:
+            license_id: License UUID
+            is_service_account: Whether this is a service account
+            service_account_name: Name of the service account
+            service_account_owner_id: Owner employee ID
+            apply_globally: Whether to add to global patterns
+            user: Admin user making the change
+            request: HTTP request for audit logging
+
+        Returns:
+            Tuple of (license response, pattern_created) or None if not found
+        """
+        from licence_api.services.service_account_service import ServiceAccountService
+
+        result = await self.update_service_account_status(
+            license_id=license_id,
+            is_service_account=is_service_account,
+            service_account_name=service_account_name,
+            service_account_owner_id=service_account_owner_id,
+        )
+
+        if result is None:
+            return None
+
+        old_values, new_values = result
+
+        # If apply_globally is set, add to global patterns
+        pattern_created = False
+        if is_service_account and apply_globally:
+            external_user_id = await self.get_license_external_user_id(license_id)
+            if external_user_id:
+                svc_account_service = ServiceAccountService(self.session)
+                pattern = await svc_account_service.create_pattern_from_email(
+                    email=external_user_id,
+                    name=service_account_name,
+                    owner_id=service_account_owner_id,
+                    created_by=user.id,
+                )
+                pattern_created = pattern is not None
+
+        # Audit log the change
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UPDATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={
+                "old": old_values,
+                "new": {
+                    **new_values,
+                    "apply_globally": apply_globally,
+                    "pattern_created": pattern_created,
+                },
+            },
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+
+        license_response = await self.get_license(license_id)
+        return (license_response, pattern_created) if license_response else None
+
+    async def update_admin_account_with_commit(
+        self,
+        license_id: UUID,
+        is_admin_account: bool,
+        admin_account_name: str | None,
+        admin_account_owner_id: UUID | None,
+        apply_globally: bool,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> tuple[LicenseResponse, bool] | None:
+        """Update admin account status with full side effects.
+
+        Args:
+            license_id: License UUID
+            is_admin_account: Whether this is an admin account
+            admin_account_name: Name of the admin account
+            admin_account_owner_id: Owner employee ID
+            apply_globally: Whether to add to global patterns
+            user: Admin user making the change
+            request: HTTP request for audit logging
+
+        Returns:
+            Tuple of (license response, pattern_created) or None if not found
+        """
+        from licence_api.services.admin_account_service import AdminAccountService
+
+        result = await self.update_admin_account_status(
+            license_id=license_id,
+            is_admin_account=is_admin_account,
+            admin_account_name=admin_account_name,
+            admin_account_owner_id=admin_account_owner_id,
+        )
+
+        if result is None:
+            return None
+
+        old_values, new_values = result
+
+        # If apply_globally is set, add to global patterns
+        pattern_created = False
+        if is_admin_account and apply_globally:
+            external_user_id = await self.get_license_external_user_id(license_id)
+            if external_user_id:
+                admin_account_service = AdminAccountService(self.session)
+                pattern = await admin_account_service.create_pattern_from_email(
+                    email=external_user_id,
+                    name=admin_account_name,
+                    owner_id=admin_account_owner_id,
+                    created_by=user.id,
+                )
+                pattern_created = pattern is not None
+
+        # Audit log the change
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UPDATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={
+                "old": old_values,
+                "new": {
+                    **new_values,
+                    "apply_globally": apply_globally,
+                    "pattern_created": pattern_created,
+                },
+            },
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+
+        license_response = await self.get_license(license_id)
+        return (license_response, pattern_created) if license_response else None
+
+    async def bulk_delete(
+        self,
+        license_ids: list[UUID],
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> int:
+        """Delete multiple licenses from the database.
+
+        Args:
+            license_ids: List of license IDs to delete
+            user: Admin user making the deletion
+            request: HTTP request for audit logging
+
+        Returns:
+            Number of deleted licenses
+        """
+        deleted_count = await self.license_repo.delete_by_ids(license_ids)
+
+        # Audit log the bulk deletion
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_DELETE,
+            resource_type=ResourceType.LICENSE,
+            admin_user_id=user.id,
+            changes={
+                "bulk_operation": True,
+                "requested_count": len(license_ids),
+                "deleted_count": deleted_count,
+                "license_ids": [str(lid) for lid in license_ids],
+            },
+            request=request,
+        )
+
+        await self.session.commit()
+        return deleted_count
+
+    async def bulk_unassign(
+        self,
+        license_ids: list[UUID],
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> int:
+        """Unassign multiple licenses from employees.
+
+        Args:
+            license_ids: List of license IDs to unassign
+            user: Admin user making the unassignment
+            request: HTTP request for audit logging
+
+        Returns:
+            Number of unassigned licenses
+        """
+        unassigned_count = await self.license_repo.unassign_by_ids(license_ids)
+
+        # Audit log the bulk unassignment
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UNASSIGN,
+            resource_type=ResourceType.LICENSE,
+            admin_user_id=user.id,
+            changes={
+                "bulk_operation": True,
+                "requested_count": len(license_ids),
+                "unassigned_count": unassigned_count,
+                "license_ids": [str(lid) for lid in license_ids],
+            },
+            request=request,
+        )
+
+        await self.session.commit()
+        return unassigned_count
