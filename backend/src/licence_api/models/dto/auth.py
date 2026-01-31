@@ -131,3 +131,62 @@ class SessionInfo(BaseModel):
     created_at: datetime
     expires_at: datetime
     is_current: bool = False
+
+
+# User Notification Preferences DTOs
+
+
+class NotificationEventType(BaseModel):
+    """Notification event type info."""
+
+    code: str
+    name: str
+    description: str
+    category: str
+
+
+class UserNotificationPreferenceResponse(BaseModel):
+    """User notification preference response."""
+
+    id: UUID
+    event_type: str
+    event_name: str
+    event_description: str
+    enabled: bool
+    slack_dm: bool
+    slack_channel: str | None = None
+
+
+class UserNotificationPreferenceUpdate(BaseModel):
+    """User notification preference update request."""
+
+    event_type: str
+    enabled: bool = True
+    slack_dm: bool = False
+    slack_channel: str | None = None
+
+
+class UserNotificationPreferenceBulkUpdate(BaseModel):
+    """Bulk update notification preferences."""
+
+    preferences: list[UserNotificationPreferenceUpdate]
+
+
+class UserNotificationPreferencesResponse(BaseModel):
+    """User notification preferences response with available event types."""
+
+    preferences: list[UserNotificationPreferenceResponse]
+    available_event_types: list[NotificationEventType]
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Profile update request for the current user."""
+
+    name: str | None = Field(default=None, max_length=255)
+
+
+class AvatarUploadResponse(BaseModel):
+    """Avatar upload response."""
+
+    picture_url: str
+    message: str = "Avatar uploaded successfully"

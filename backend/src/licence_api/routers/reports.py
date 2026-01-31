@@ -9,10 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.report import (
+    CancelledLicensesReport,
     CostReportResponse,
-    InactiveLicenseReport,
-    OffboardingReport,
+    CostsByDepartmentReport,
+    CostsByEmployeeReport,
+    CostTrendReport,
+    DuplicateAccountsReport,
+    ExpiringContractsReport,
+    ExpiringLicensesReport,
     ExternalUsersReport,
+    InactiveLicenseReport,
+    LicenseLifecycleOverview,
+    OffboardingReport,
+    UtilizationReport,
 )
 from licence_api.security.auth import get_current_user
 from licence_api.services.report_service import ReportService
@@ -73,3 +82,142 @@ async def get_external_users_report(
     """Get report of licenses with external (non-company) email addresses."""
     service = ReportService(db)
     return await service.get_external_users_report(department=department)
+
+
+# ==================== QUICK WINS ====================
+
+
+@router.get("/expiring-contracts", response_model=ExpiringContractsReport)
+async def get_expiring_contracts_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: int = Query(default=90, ge=1, le=365, description="Days ahead to check for expiry"),
+) -> ExpiringContractsReport:
+    """Get report of contracts expiring within specified days.
+
+    Helps IT teams plan renewal negotiations and avoid auto-renewal surprises.
+    """
+    service = ReportService(db)
+    return await service.get_expiring_contracts(days_ahead=days)
+
+
+@router.get("/utilization", response_model=UtilizationReport)
+async def get_utilization_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UtilizationReport:
+    """Get license utilization report comparing purchased vs assigned seats.
+
+    Identifies over-provisioned licenses where you're paying for more seats
+    than are actually being used.
+    """
+    service = ReportService(db)
+    return await service.get_utilization_report()
+
+
+@router.get("/cost-trend", response_model=CostTrendReport)
+async def get_cost_trend_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    months: int = Query(default=6, ge=1, le=24, description="Number of months to show"),
+) -> CostTrendReport:
+    """Get cost trend over the last N months.
+
+    Shows how license costs have changed over time, helping identify
+    spending patterns and budget planning.
+    """
+    service = ReportService(db)
+    return await service.get_cost_trend(months=months)
+
+
+@router.get("/duplicate-accounts", response_model=DuplicateAccountsReport)
+async def get_duplicate_accounts_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DuplicateAccountsReport:
+    """Get report of potential duplicate accounts across providers.
+
+    Identifies accounts with the same email appearing multiple times
+    within the same provider, which may indicate duplicate licenses.
+    """
+    service = ReportService(db)
+    return await service.get_duplicate_accounts()
+
+
+# ==================== COST BREAKDOWN REPORTS ====================
+
+
+@router.get("/costs-by-department", response_model=CostsByDepartmentReport)
+async def get_costs_by_department_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CostsByDepartmentReport:
+    """Get cost breakdown grouped by department.
+
+    Shows license costs per department, employee count, and top providers.
+    Helps identify which departments have the highest software costs.
+    """
+    service = ReportService(db)
+    return await service.get_costs_by_department()
+
+
+@router.get("/costs-by-employee", response_model=CostsByEmployeeReport)
+async def get_costs_by_employee_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    department: str | None = Query(default=None, description="Filter by department"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum employees to return"),
+) -> CostsByEmployeeReport:
+    """Get cost breakdown grouped by employee.
+
+    Shows license costs per employee, sorted by highest cost first.
+    Includes median and average statistics for benchmarking.
+    """
+    service = ReportService(db)
+    return await service.get_costs_by_employee(department=department, limit=limit)
+
+
+# ==================== LICENSE LIFECYCLE REPORTS ====================
+
+
+@router.get("/expiring-licenses", response_model=ExpiringLicensesReport)
+async def get_expiring_licenses_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: int = Query(default=90, ge=1, le=365, description="Days ahead to check for expiry"),
+) -> ExpiringLicensesReport:
+    """Get report of licenses expiring within specified days.
+
+    Shows licenses that will expire soon, along with counts for different time windows
+    and licenses that are marked as needing reorder.
+    """
+    service = ReportService(db)
+    return await service.get_expiring_licenses_report(days_ahead=days)
+
+
+@router.get("/cancelled-licenses", response_model=CancelledLicensesReport)
+async def get_cancelled_licenses_report(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CancelledLicensesReport:
+    """Get report of cancelled licenses.
+
+    Shows licenses that have been cancelled, including those with pending
+    effective dates and those already effective.
+    """
+    service = ReportService(db)
+    return await service.get_cancelled_licenses_report()
+
+
+@router.get("/lifecycle-overview", response_model=LicenseLifecycleOverview)
+async def get_lifecycle_overview(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LicenseLifecycleOverview:
+    """Get comprehensive license lifecycle overview.
+
+    Combines counts of active, expiring, expired, cancelled, and needs-reorder
+    licenses along with detailed lists of expiring and cancelled licenses.
+    """
+    service = ReportService(db)
+    return await service.get_license_lifecycle_overview()

@@ -35,6 +35,31 @@ class CompanyDomainsResponse(BaseModel):
     domains: list[str]
 
 
+# Threshold Settings Models
+
+
+class ThresholdSettings(BaseModel):
+    """Threshold settings for warnings and notifications."""
+
+    # License inactivity threshold (days)
+    inactive_days: int = 30
+
+    # Contract expiring soon threshold (days)
+    expiring_days: int = 90
+
+    # Low utilization threshold (percentage)
+    low_utilization_percent: int = 70
+
+    # Cost increase threshold (percentage)
+    cost_increase_percent: int = 20
+
+    # Maximum unused licenses before warning
+    max_unassigned_licenses: int = 10
+
+
+DEFAULT_THRESHOLDS = ThresholdSettings()
+
+
 class NotificationRuleCreate(BaseModel):
     """Create notification rule request."""
 
@@ -178,6 +203,58 @@ async def set_company_domains(
 
     await db.commit()
     return CompanyDomainsResponse(domains=domains)
+
+
+# Thresholds endpoints (must be before /{key} wildcard routes)
+
+
+@router.get("/thresholds", response_model=ThresholdSettings)
+async def get_threshold_settings(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ThresholdSettings:
+    """Get threshold settings for warnings and notifications."""
+    repo = SettingsRepository(db)
+    settings = await repo.get("thresholds")
+
+    if settings is None:
+        return DEFAULT_THRESHOLDS
+
+    return ThresholdSettings(**settings)
+
+
+@router.put("/thresholds", response_model=ThresholdSettings)
+async def update_threshold_settings(
+    http_request: Request,
+    request: ThresholdSettings,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ThresholdSettings:
+    """Update threshold settings."""
+    repo = SettingsRepository(db)
+
+    # Get old value for audit
+    old_settings = await repo.get("thresholds")
+
+    # Save new settings
+    await repo.set("thresholds", request.model_dump())
+
+    # Audit log
+    audit = AuditService(db)
+    await audit.log(
+        action=AuditAction.SETTING_UPDATE,
+        resource_type=ResourceType.SETTING,
+        resource_id="thresholds",
+        user=current_user,
+        request=http_request,
+        details={"old": old_settings, "new": request.model_dump()},
+    )
+    await db.commit()
+
+    return request
+
+
+# Wildcard key routes (must be after all specific routes)
 
 
 @router.get("/{key}", response_model=dict[str, Any] | None)

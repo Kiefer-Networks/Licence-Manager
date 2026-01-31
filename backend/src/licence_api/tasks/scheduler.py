@@ -108,6 +108,65 @@ async def check_offboarded_employees_job() -> None:
             await session.rollback()
 
 
+async def check_expiring_licenses_job() -> None:
+    """Background job to check for expiring licenses and update expired ones."""
+    from licence_api.database import async_session_maker
+    from licence_api.services.expiration_service import ExpirationService
+    from licence_api.services.notification_service import NotificationService
+    from licence_api.repositories.settings_repository import SettingsRepository
+
+    logger.info("Checking for expiring and expired licenses")
+
+    async with async_session_maker() as session:
+        try:
+            expiration_service = ExpirationService(session)
+            notification_service = NotificationService(session)
+            settings_repo = SettingsRepository(session)
+
+            # First, update any licenses that have expired or have effective cancellation dates
+            update_counts = await expiration_service.check_and_update_expired_licenses()
+            logger.info(f"Updated expired/cancelled licenses: {update_counts}")
+
+            # Get threshold settings
+            thresholds = await settings_repo.get("thresholds")
+            expiring_days = thresholds.get("expiring_days", 30) if thresholds else 30
+
+            # Get expiring licenses for notification
+            expiring = await expiration_service.get_expiring_licenses(days_ahead=expiring_days)
+
+            if expiring:
+                # Get Slack token from settings
+                slack_config = await settings_repo.get("slack_config")
+                if slack_config and slack_config.get("bot_token"):
+                    # Group by provider for notifications
+                    from collections import defaultdict
+                    by_provider: dict = defaultdict(list)
+                    for lic, provider, employee in expiring:
+                        by_provider[provider.display_name].append(lic)
+
+                    for provider_name, licenses in by_provider.items():
+                        if licenses:
+                            # Get min days until expiry for this provider
+                            min_days = min(
+                                (lic.expires_at - datetime.now().date()).days
+                                for lic in licenses
+                                if lic.expires_at
+                            )
+                            await notification_service.notify_license_expiring(
+                                provider_name=provider_name,
+                                license_type=licenses[0].license_type,
+                                days_until_expiry=min_days,
+                                affected_count=len(licenses),
+                                slack_token=slack_config["bot_token"],
+                            )
+
+            await session.commit()
+            logger.info(f"Expiring licenses check completed: {len(expiring)} found")
+        except Exception as e:
+            logger.error(f"Expiring licenses check failed: {e}")
+            await session.rollback()
+
+
 async def start_scheduler() -> None:
     """Start the background task scheduler."""
     global _scheduler
@@ -140,6 +199,15 @@ async def start_scheduler() -> None:
         trigger=IntervalTrigger(hours=6),
         id="check_offboarded_employees",
         name="Check offboarded employees",
+        replace_existing=True,
+    )
+
+    # Schedule expiring licenses check (daily)
+    _scheduler.add_job(
+        check_expiring_licenses_job,
+        trigger=IntervalTrigger(hours=24),
+        id="check_expiring_licenses",
+        name="Check expiring licenses",
         replace_existing=True,
     )
 

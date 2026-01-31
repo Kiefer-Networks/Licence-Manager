@@ -22,7 +22,7 @@ from licence_api.middleware.error_handler import (
     sqlalchemy_exception_handler,
     validation_exception_handler,
 )
-from licence_api.routers import audit, auth, dashboard, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, providers, rbac, reports, settings, users
+from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, exports, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, providers, rbac, reports, service_accounts, settings, users
 from licence_api.security.rate_limit import limiter
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
@@ -136,7 +136,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-CSRF-Token"],
     )
 
@@ -150,11 +150,16 @@ def create_app() -> FastAPI:
     app.include_router(license_packages.router, prefix="/api/v1/providers", tags=["License Packages"])
     app.include_router(organization_licenses.router, prefix="/api/v1/providers", tags=["Organization Licenses"])
     app.include_router(licenses.router, prefix="/api/v1/licenses", tags=["Licenses"])
+    app.include_router(service_accounts.router, prefix="/api/v1/service-accounts", tags=["Service Accounts"])
+    app.include_router(admin_accounts.router, prefix="/api/v1/admin-accounts", tags=["Admin Accounts"])
     app.include_router(manual_licenses.router, prefix="/api/v1/manual-licenses", tags=["Manual Licenses"])
     app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+    app.include_router(cancellation.router, prefix="/api/v1", tags=["Cancellation"])
     app.include_router(settings.router, prefix="/api/v1/settings", tags=["Settings"])
     app.include_router(payment_methods.router, prefix="/api/v1/payment-methods", tags=["Payment Methods"])
     app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
+    app.include_router(exports.router, prefix="/api/v1/exports", tags=["Exports"])
+    app.include_router(backup.router, prefix="/api/v1/backup", tags=["Backup"])
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:
