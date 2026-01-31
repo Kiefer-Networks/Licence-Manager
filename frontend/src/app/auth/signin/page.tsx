@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ function isValidCallbackUrl(url: string | null): boolean {
 }
 
 function SignInContent() {
+  const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -52,7 +54,7 @@ function SignInContent() {
       await login(email, password);
       // AuthProvider's login() already pushes to /dashboard
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      const errorMessage = err instanceof Error ? err.message : t('invalidCredentials');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -72,9 +74,9 @@ function SignInContent() {
     <div className="flex min-h-screen items-center justify-center bg-muted/50">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">License Management</CardTitle>
+          <CardTitle className="text-2xl">{t('signIn')}</CardTitle>
           <CardDescription>
-            Sign in to manage your organization's software licenses
+            {t('pleaseSignIn')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -86,7 +88,7 @@ function SignInContent() {
 
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('emailAddress')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -99,11 +101,11 @@ function SignInContent() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('password')}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder={t('password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -112,7 +114,7 @@ function SignInContent() {
               />
             </div>
             <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? t('signingIn') : t('signIn')}
             </Button>
           </form>
         </CardContent>
