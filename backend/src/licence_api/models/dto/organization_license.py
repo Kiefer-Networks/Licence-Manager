@@ -12,9 +12,9 @@ class OrganizationLicenseCreate(BaseModel):
 
     name: str = Field(max_length=255)
     license_type: str | None = Field(default=None, max_length=255)
-    quantity: int | None = None
+    quantity: int | None = Field(default=None, ge=1)
     unit: str | None = Field(default=None, max_length=50)
-    monthly_cost: Decimal | None = None
+    monthly_cost: Decimal | None = Field(default=None, ge=0)
     currency: str = Field(default="EUR", max_length=10)
     billing_cycle: str | None = Field(default=None, max_length=50)
     renewal_date: date | None = None
@@ -26,7 +26,7 @@ class OrganizationLicenseUpdate(BaseModel):
 
     name: str | None = Field(default=None, max_length=255)
     license_type: str | None = Field(default=None, max_length=255)
-    quantity: int | None = None
+    quantity: int | None = Field(default=None, ge=1)
     unit: str | None = Field(default=None, max_length=50)
     monthly_cost: Decimal | None = None
     currency: str | None = Field(default=None, max_length=10)
