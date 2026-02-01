@@ -46,7 +46,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { formatMonthlyCost } from '@/lib/format';
 import { Button } from '@/components/ui/button';
-import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts } from '@/lib/export';
+import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
 import { LicenseStatusBadge } from '@/components/licenses';
 import { CostTrendChart } from '@/components/charts';
 import { ExportButton } from '@/components/exports';
@@ -56,6 +56,30 @@ import { getLocale } from '@/lib/locale';
 export default function ReportsPage() {
   const t = useTranslations('reports');
   const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
+  const tExport = useTranslations('export');
+
+  // Build export translations object
+  const exportTranslations: ExportTranslations = {
+    provider: tExport('provider'),
+    userId: tExport('userId'),
+    employee: tExport('employee'),
+    email: tExport('email'),
+    daysInactive: tExport('daysInactive'),
+    monthlyCost: tExport('monthlyCost'),
+    terminationDate: tExport('terminationDate'),
+    daysSinceOffboarding: tExport('daysSinceOffboarding'),
+    pendingLicenses: tExport('pendingLicenses'),
+    licenseCount: tExport('licenseCount'),
+    externalEmail: tExport('externalEmail'),
+    assignedEmployee: tExport('assignedEmployee'),
+    employeeEmail: tExport('employeeEmail'),
+    status: tExport('status'),
+    licenseType: tExport('licenseType'),
+    licenses: tExport('licenses'),
+    total: tExport('total'),
+    unassigned: tExport('unassigned'),
+  };
   const [inactiveReport, setInactiveReport] = useState<InactiveLicenseReport | null>(null);
   const [offboardingReport, setOffboardingReport] = useState<OffboardingReport | null>(null);
   const [costReport, setCostReport] = useState<CostReport | null>(null);
@@ -135,10 +159,10 @@ export default function ReportsPage() {
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
               <SelectTrigger className="w-52 h-9 bg-zinc-50 border-zinc-200">
                 <Building2 className="h-4 w-4 mr-2 text-zinc-400" />
-                <SelectValue placeholder="Department" />
+                <SelectValue placeholder={tLicenses('department')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
+                <SelectItem value="all">{tLicenses('allDepartments')}</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                 ))}
@@ -156,11 +180,11 @@ export default function ReportsPage() {
             <TabsList className="bg-zinc-100/50 p-1 flex-wrap h-auto gap-1">
               <TabsTrigger value="utilization" className="gap-1.5 data-[state=active]:bg-white">
                 <BarChart3 className="h-3.5 w-3.5" />
-                Utilization
+                {t('utilization')}
               </TabsTrigger>
               <TabsTrigger value="expiring" className="gap-1.5 data-[state=active]:bg-white">
                 <CalendarClock className="h-3.5 w-3.5" />
-                Expiring
+                {t('expiring')}
                 {expiringContractsReport && expiringContractsReport.total_expiring > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-amber-100 text-amber-700 border-0">
                     {expiringContractsReport.total_expiring}
@@ -169,7 +193,7 @@ export default function ReportsPage() {
               </TabsTrigger>
               <TabsTrigger value="duplicates" className="gap-1.5 data-[state=active]:bg-white">
                 <Users2 className="h-3.5 w-3.5" />
-                Duplicates
+                {t('duplicates')}
                 {duplicateAccountsReport && duplicateAccountsReport.total_duplicates > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-amber-100 text-amber-700 border-0">
                     {duplicateAccountsReport.total_duplicates}
@@ -178,27 +202,27 @@ export default function ReportsPage() {
               </TabsTrigger>
               <TabsTrigger value="inactive" className="gap-1.5 data-[state=active]:bg-white">
                 <Clock className="h-3.5 w-3.5" />
-                Inactive
+                {t('inactive')}
               </TabsTrigger>
               <TabsTrigger value="offboarding" className="gap-1.5 data-[state=active]:bg-white">
                 <UserMinus className="h-3.5 w-3.5" />
-                Offboarding
+                {t('offboarding')}
               </TabsTrigger>
               <TabsTrigger value="external" className="gap-1.5 data-[state=active]:bg-white">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                External
+                {t('external')}
               </TabsTrigger>
               <TabsTrigger value="costs" className="gap-1.5 data-[state=active]:bg-white">
                 <Wallet className="h-3.5 w-3.5" />
-                Costs
+                {t('costs')}
               </TabsTrigger>
               <TabsTrigger value="costs-department" className="gap-1.5 data-[state=active]:bg-white">
                 <Building2 className="h-3.5 w-3.5" />
-                By Department
+                {t('byDepartment')}
               </TabsTrigger>
               <TabsTrigger value="costs-employee" className="gap-1.5 data-[state=active]:bg-white">
                 <User className="h-3.5 w-3.5" />
-                By Employee
+                {t('byEmployee')}
               </TabsTrigger>
             </TabsList>
 
@@ -208,30 +232,30 @@ export default function ReportsPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active Licenses</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('activeLicenses')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">{utilizationReport?.total_active || 0}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Across all providers</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('acrossAllProviders')}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tLicenses('assigned')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-emerald-600">{utilizationReport?.total_assigned || 0}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Linked to employees</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('linkedToEmployees')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-amber-200 bg-amber-50/30">
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unassigned</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tLicenses('unassigned')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-amber-600">{utilizationReport?.total_unassigned || 0}</p>
-                    <p className="text-xs text-muted-foreground mt-1">No employee linked</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('noEmployeeLinked')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-blue-200 bg-blue-50/30">
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">External</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('external')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-blue-600">{utilizationReport?.total_external || 0}</p>
-                    <p className="text-xs text-muted-foreground mt-1">External emails</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('externalEmails')}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -240,38 +264,38 @@ export default function ReportsPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monthly Cost</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tLicenses('monthlyCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
                       EUR {Number(utilizationReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">Total license costs</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('totalLicenseCosts')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-amber-200 bg-amber-50/30">
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unassigned Cost</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('unassignedCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-amber-600">
                       EUR {Number(utilizationReport?.total_monthly_waste || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">No employee linked</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('noEmployeeLinked')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-blue-200 bg-blue-50/30">
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">External Cost</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('externalCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-blue-600">
                       EUR {Number(utilizationReport?.total_external_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">External email licenses</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('externalEmailLicenses')}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-5 pb-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Utilization</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('utilization')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
                       {utilizationReport?.overall_utilization || 0}%
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">Assigned / Active</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('assignedDivActive')}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -288,8 +312,8 @@ export default function ReportsPage() {
                   ) : (
                     <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                       <BarChart3 className="h-8 w-8 mb-2 opacity-30" />
-                      <p className="text-sm">No cost history available</p>
-                      <p className="text-xs mt-1">Historical data will appear after the first monthly snapshot</p>
+                      <p className="text-sm">{t('noCostHistoryAvailable')}</p>
+                      <p className="text-xs mt-1">{t('historicalDataWillAppear')}</p>
                     </div>
                   )}
                 </CardContent>
@@ -301,14 +325,14 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">Active</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">Assigned</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">Unassigned</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">External</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">Cost</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-amber-600">Unassigned €</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-blue-600">External €</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">{tLicenses('active')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">{tLicenses('assigned')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">{tLicenses('unassigned')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">{t('external')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-amber-600">{tLicenses('unassigned')} €</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-blue-600">{t('external')} €</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -369,8 +393,8 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <BarChart3 className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No license data available</p>
-                    <p className="text-xs mt-1">Sync providers to see utilization data</p>
+                    <p className="text-sm">{t('noLicenseDataAvailable')}</p>
+                    <p className="text-xs mt-1">{t('syncProvidersToSeeData')}</p>
                   </div>
                 )}
               </div>
@@ -388,7 +412,7 @@ export default function ReportsPage() {
                     <p className={`text-3xl font-semibold tabular-nums ${expiringContractsReport?.total_expiring ? 'text-amber-600' : ''}`}>
                       {expiringContractsReport?.total_expiring || 0}
                     </p>
-                    <p className="text-sm text-muted-foreground">Contracts expiring in the next 90 days</p>
+                    <p className="text-sm text-muted-foreground">{t('contractsExpiringIn90Days')}</p>
                   </div>
                 </div>
               </div>
@@ -399,12 +423,12 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">License Type</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Seats</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Expires</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Auto-Renew</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('licenseType')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('seats')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('expiring')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('autoRenew')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('totalCost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -429,7 +453,7 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <Badge variant={contract.auto_renew ? 'secondary' : 'outline'}>
-                              {contract.auto_renew ? 'Yes' : 'No'}
+                              {contract.auto_renew ? tCommon('yes') : tCommon('no')}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
@@ -444,7 +468,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <CalendarClock className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No contracts expiring in the next 90 days</p>
+                    <p className="text-sm">{t('noContractsExpiring90Days')}</p>
                   </div>
                 )}
               </div>
@@ -455,16 +479,16 @@ export default function ReportsPage() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Duplicate Accounts</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('duplicateAccounts')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">{duplicateAccountsReport?.total_duplicates || 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Same email in same provider</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('sameEmailInProvider')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Potential Savings</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('potentialSavings')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums text-emerald-600">
                     EUR {Number(duplicateAccountsReport?.potential_savings || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Per month if consolidated</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('perMonthIfConsolidated')}</p>
                 </div>
               </div>
 
@@ -474,10 +498,10 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Occurrences</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Providers</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('email')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('occurrences')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('providers')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('totalCost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -506,7 +530,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <Users2 className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No duplicate accounts found</p>
+                    <p className="text-sm">{t('noDuplicatesFound')}</p>
                   </div>
                 )}
               </div>
@@ -522,29 +546,30 @@ export default function ReportsPage() {
                   size="sm"
                   onClick={() => inactiveReport && exportInactiveLicenses(
                     inactiveReport.licenses,
+                    exportTranslations,
                     selectedDepartment !== 'all' ? selectedDepartment : undefined
                   )}
                   disabled={!inactiveReport || inactiveReport.licenses.length === 0}
                   className="gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Export CSV
+                  {t('exportCSV')}
                 </Button>
               </div>
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Inactive Licenses</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('inactiveLicenses')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">{inactiveReport?.total_inactive || 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">No activity in {inactiveReport?.threshold_days || 30} days</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('noActivityInDays', { days: inactiveReport?.threshold_days || 30 })}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Potential Savings</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('potentialSavings')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums text-emerald-600">
                     €{Number(inactiveReport?.potential_savings || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Per month if revoked</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('perMonthIfRevoked')}</p>
                 </div>
               </div>
 
@@ -554,11 +579,11 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Days Inactive</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('daysInactive')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -598,14 +623,14 @@ export default function ReportsPage() {
                                   {isOffboarded && (
                                     <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-xs">
                                       <Skull className="h-3 w-3 mr-1" />
-                                      Offboarded
+                                      {t('offboarded')}
                                     </Badge>
                                   )}
                                 </div>
                               ) : (
                                 <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
                                   <Package className="h-3 w-3 mr-1" />
-                                  Unassigned
+                                  {t('unassigned')}
                                 </Badge>
                               )}
                             </td>
@@ -625,7 +650,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <Clock className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No inactive licenses found</p>
+                    <p className="text-sm">{t('noInactiveLicensesFound')}</p>
                   </div>
                 )}
               </div>
@@ -641,13 +666,14 @@ export default function ReportsPage() {
                   size="sm"
                   onClick={() => offboardingReport && exportOffboarding(
                     offboardingReport.employees,
+                    exportTranslations,
                     selectedDepartment !== 'all' ? selectedDepartment : undefined
                   )}
                   disabled={!offboardingReport || offboardingReport.employees.length === 0}
                   className="gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Export CSV
+                  {t('exportCSV')}
                 </Button>
               </div>
 
@@ -661,7 +687,7 @@ export default function ReportsPage() {
                     <p className="text-3xl font-semibold tabular-nums text-red-600">
                       {offboardingReport?.total_offboarded_with_licenses || 0}
                     </p>
-                    <p className="text-sm text-muted-foreground">Offboarded employees with active licenses</p>
+                    <p className="text-sm text-muted-foreground">{t('offboardedWithLicenses')}</p>
                   </div>
                 </div>
               </div>
@@ -672,10 +698,10 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Termination</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Days Since</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pending Licenses</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('termination')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('daysSince')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('pendingLicenses')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -712,7 +738,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <UserMinus className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No offboarded employees with pending licenses</p>
+                    <p className="text-sm">{t('noOffboardedWithPending')}</p>
                   </div>
                 )}
               </div>
@@ -728,13 +754,14 @@ export default function ReportsPage() {
                   size="sm"
                   onClick={() => externalUsersReport && exportExternalUsers(
                     externalUsersReport.licenses,
+                    exportTranslations,
                     selectedDepartment !== 'all' ? selectedDepartment : undefined
                   )}
                   disabled={!externalUsersReport || externalUsersReport.licenses.length === 0}
                   className="gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Export CSV
+                  {t('exportCSV')}
                 </Button>
               </div>
 
@@ -748,7 +775,7 @@ export default function ReportsPage() {
                     <p className="text-3xl font-semibold tabular-nums text-amber-600">
                       {externalUsersReport?.total_external || 0}
                     </p>
-                    <p className="text-sm text-muted-foreground">Licenses with external email addresses</p>
+                    <p className="text-sm text-muted-foreground">{t('licensesWithExternalEmails')}</p>
                   </div>
                 </div>
               </div>
@@ -756,8 +783,8 @@ export default function ReportsPage() {
               {/* Info */}
               {externalUsersReport && externalUsersReport.total_external === 0 && (
                 <div className="border rounded-lg bg-zinc-50/50 p-4 text-sm text-muted-foreground">
-                  <p>No external users found. This report shows licenses assigned to email addresses that don't match your configured company domains.</p>
-                  <p className="mt-1">Configure company domains in <Link href="/settings" className="underline hover:text-zinc-900">Settings</Link>.</p>
+                  <p>{t('noExternalUsersFoundDescription')}</p>
+                  <p className="mt-1">{t('configureDomainsInSettings')} <Link href="/settings" className="underline hover:text-zinc-900">{tCommon('settings')}</Link>.</p>
                 </div>
               )}
 
@@ -767,11 +794,11 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">External Email</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Assigned Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('externalEmail')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('assignedEmployee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('type')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -810,14 +837,14 @@ export default function ReportsPage() {
                                   {isOffboarded && (
                                     <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-xs">
                                       <Skull className="h-3 w-3 mr-1" />
-                                      Offboarded
+                                      {t('offboarded')}
                                     </Badge>
                                   )}
                                 </div>
                               ) : (
                                 <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
                                   <Package className="h-3 w-3 mr-1" />
-                                  Unassigned
+                                  {t('unassigned')}
                                 </Badge>
                               )}
                             </td>
@@ -833,7 +860,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <AlertTriangle className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No external users found</p>
+                    <p className="text-sm">{t('noExternalUsersFound')}</p>
                   </div>
                 )}
               </div>
@@ -850,13 +877,14 @@ export default function ReportsPage() {
                   onClick={() => costReport && exportCosts(
                     costReport.monthly_costs,
                     costReport.total_cost,
+                    exportTranslations,
                     selectedDepartment !== 'all' ? selectedDepartment : undefined
                   )}
                   disabled={!costReport || costReport.monthly_costs.length === 0}
                   className="gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Export CSV
+                  {t('exportCSV')}
                 </Button>
               </div>
 
@@ -870,7 +898,7 @@ export default function ReportsPage() {
                     <p className="text-3xl font-semibold tabular-nums">
                       €{Number(costReport?.total_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
                     </p>
-                    <p className="text-sm text-muted-foreground">Total monthly cost</p>
+                    <p className="text-sm text-muted-foreground">{t('totalMonthlyCost')}</p>
                   </div>
                 </div>
               </div>
@@ -880,10 +908,9 @@ export default function ReportsPage() {
                 <div className="flex items-start gap-3 p-4 border border-amber-200 rounded-lg bg-amber-50">
                   <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-amber-800">Mixed currencies detected</p>
+                    <p className="font-medium text-amber-800">{t('mixedCurrenciesDetected')}</p>
                     <p className="text-sm text-amber-700 mt-0.5">
-                      Cost data includes multiple currencies ({costReport.currencies_found.join(', ')}).
-                      Totals are shown in EUR but may not reflect accurate exchange rates.
+                      {t('mixedCurrenciesDescription', { currencies: costReport.currencies_found.join(', ') })}
                     </p>
                   </div>
                 </div>
@@ -895,9 +922,9 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Licenses</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Monthly Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('licenses')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('monthlyCost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -915,7 +942,7 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <Wallet className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No cost data available</p>
+                    <p className="text-sm">{t('noCostDataAvailable')}</p>
                   </div>
                 )}
               </div>
@@ -926,23 +953,23 @@ export default function ReportsPage() {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Departments</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('departments')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">{costsByDepartmentReport?.total_departments || 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">With assigned licenses</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('withAssignedLicenses')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Monthly Cost</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('totalMonthlyCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
                     €{Number(costsByDepartmentReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Across all departments</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('acrossAllDepartments')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg. Cost / Employee</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('avgCostPerEmployee')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
                     €{Number(costsByDepartmentReport?.average_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Company average</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('companyAverage')}</p>
                 </div>
               </div>
 
@@ -952,12 +979,12 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Department</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Employees</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Licenses</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Monthly Cost</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost / Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Top Providers</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('department')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('employees')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('licenses')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('monthlyCost')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('costPerEmployee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('topProviders')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -986,8 +1013,8 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <Building2 className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No department data available</p>
-                    <p className="text-xs mt-1">Assign licenses to employees to see department costs</p>
+                    <p className="text-sm">{t('noDepartmentDataAvailable')}</p>
+                    <p className="text-xs mt-1">{t('assignLicensesToSeeDeptCosts')}</p>
                   </div>
                 )}
               </div>
@@ -998,30 +1025,30 @@ export default function ReportsPage() {
               {/* Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Employees</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('employees')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">{costsByEmployeeReport?.total_employees || 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">With assigned licenses</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('withAssignedLicenses')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Monthly Cost</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('totalMonthlyCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
                     €{Number(costsByEmployeeReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">All employees</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('allEmployees')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Average Cost</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('averageCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
                     €{Number(costsByEmployeeReport?.average_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Per employee</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('perEmployee')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Median Cost</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('medianCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
                     €{Number(costsByEmployeeReport?.median_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Per employee</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('perEmployee')}</p>
                 </div>
               </div>
 
@@ -1029,7 +1056,7 @@ export default function ReportsPage() {
               {costsByEmployeeReport?.max_cost_employee && (
                 <div className="border rounded-lg bg-amber-50/50 border-amber-200 p-4">
                   <p className="text-sm text-amber-800">
-                    <span className="font-medium">Highest cost employee:</span> {costsByEmployeeReport.max_cost_employee}
+                    <span className="font-medium">{t('highestCostEmployee')}:</span> {costsByEmployeeReport.max_cost_employee}
                   </p>
                 </div>
               )}
@@ -1040,12 +1067,12 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Department</th>
-                        <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Licenses</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Monthly Cost</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tools</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('department')}</th>
+                        <th className="text-center px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('licenses')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('monthlyCost')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('tools')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1077,7 +1104,7 @@ export default function ReportsPage() {
                                 </Badge>
                               ) : (
                                 <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs">
-                                  Active
+                                  {tCommon('active')}
                                 </Badge>
                               )}
                             </td>
@@ -1103,8 +1130,8 @@ export default function ReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                     <User className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">No employee data available</p>
-                    <p className="text-xs mt-1">Assign licenses to employees to see individual costs</p>
+                    <p className="text-sm">{t('noEmployeeDataAvailable')}</p>
+                    <p className="text-xs mt-1">{t('assignLicensesToSeeIndividualCosts')}</p>
                   </div>
                 )}
               </div>

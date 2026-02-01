@@ -215,13 +215,13 @@ function LicensesContent() {
     try {
       const result = await api.bulkRemoveFromProvider(removableLicenses.map(l => l.id));
       setToast({
-        message: `Removed ${result.successful} of ${result.total} licenses from providers`,
+        message: t('bulkRemoved', { successful: result.successful, total: result.total }),
         type: result.failed > 0 ? 'error' : 'success',
       });
       setBulkActionDialog(null);
       loadLicenses();
     } catch (e) {
-      setToast({ message: 'Failed to remove licenses', type: 'error' });
+      setToast({ message: t('failedToRemoveLicenses'), type: 'error' });
     } finally {
       setBulkActionLoading(false);
     }
@@ -233,13 +233,13 @@ function LicensesContent() {
     try {
       const result = await api.bulkDeleteLicenses(Array.from(selectedIds));
       setToast({
-        message: `Deleted ${result.successful} of ${result.total} licenses from database`,
+        message: t('bulkDeleted', { successful: result.successful, total: result.total }),
         type: result.failed > 0 ? 'error' : 'success',
       });
       setBulkActionDialog(null);
       loadLicenses();
     } catch (e) {
-      setToast({ message: 'Failed to delete licenses', type: 'error' });
+      setToast({ message: t('failedToDeleteLicenses'), type: 'error' });
     } finally {
       setBulkActionLoading(false);
     }
@@ -251,13 +251,13 @@ function LicensesContent() {
     try {
       const result = await api.bulkUnassignLicenses(assignedLicenses.map(l => l.id));
       setToast({
-        message: `Unassigned ${result.successful} of ${result.total} licenses`,
+        message: t('bulkUnassigned', { successful: result.successful, total: result.total }),
         type: result.failed > 0 ? 'error' : 'success',
       });
       setBulkActionDialog(null);
       loadLicenses();
     } catch (e) {
-      setToast({ message: 'Failed to unassign licenses', type: 'error' });
+      setToast({ message: t('failedToUnassignLicenses'), type: 'error' });
     } finally {
       setBulkActionLoading(false);
     }
@@ -282,9 +282,9 @@ function LicensesContent() {
   const externalActiveCount = categorizedData?.external.filter(l => l.status === 'active').length || 0;
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
-    { id: 'assigned', label: 'Assigned', count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
-    { id: 'unassigned', label: 'Not in HRIS', count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
-    { id: 'external', label: 'External', count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
+    { id: 'assigned', label: t('assigned'), count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
+    { id: 'unassigned', label: t('notInHRIS'), count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
+    { id: 'external', label: t('external'), count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
   ];
 
   return (
@@ -292,8 +292,8 @@ function LicensesContent() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Licenses</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage software licenses across all providers</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{t('description')}</p>
         </div>
 
         {/* Stats - computed from arrays to show active-only counts */}
@@ -326,7 +326,7 @@ function LicensesContent() {
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 p-3 bg-zinc-900 text-white rounded-lg">
             <CheckSquare className="h-4 w-4" />
-            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <span className="text-sm font-medium">{t('selectedCount', { count: selectedIds.size })}</span>
             <div className="flex-1" />
             {assignedLicenses.length > 0 && (
               <Button
@@ -336,7 +336,7 @@ function LicensesContent() {
                 onClick={() => setBulkActionDialog('unassign')}
               >
                 <UserX className="h-4 w-4 mr-1.5" />
-                Unassign ({assignedLicenses.length})
+                {t('unassignCount', { count: assignedLicenses.length })}
               </Button>
             )}
             {removableLicenses.length > 0 && (
@@ -347,7 +347,7 @@ function LicensesContent() {
                 onClick={() => setBulkActionDialog('remove')}
               >
                 <UserMinus className="h-4 w-4 mr-1.5" />
-                Remove from Provider ({removableLicenses.length})
+                {t('removeFromProviderCount', { count: removableLicenses.length })}
               </Button>
             )}
             <Button
@@ -357,7 +357,7 @@ function LicensesContent() {
               onClick={() => setBulkActionDialog('delete')}
             >
               <Trash2 className="h-4 w-4 mr-1.5" />
-              Delete from Database
+              {t('deleteFromDatabase')}
             </Button>
             <Button
               variant="ghost"
@@ -407,7 +407,7 @@ function LicensesContent() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <Input
-              placeholder="Search by email, name, provider..."
+              placeholder={t('searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 h-9 bg-zinc-50 border-zinc-200"
@@ -416,10 +416,10 @@ function LicensesContent() {
 
           <Select value={selectedProvider} onValueChange={setSelectedProvider}>
             <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
-              <SelectValue placeholder="Provider" />
+              <SelectValue placeholder={t('provider')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Providers</SelectItem>
+              <SelectItem value="all">{t('allProviders')}</SelectItem>
               {licenseProviders.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
               ))}
@@ -429,10 +429,10 @@ function LicensesContent() {
           <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
             <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
               <Building2 className="h-4 w-4 mr-2 text-zinc-400" />
-              <SelectValue placeholder="Department" />
+              <SelectValue placeholder={t('department')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
+              <SelectItem value="all">{t('allDepartments')}</SelectItem>
               {departments.map((dept) => (
                 <SelectItem key={dept} value={dept}>{dept}</SelectItem>
               ))}
@@ -449,12 +449,12 @@ function LicensesContent() {
                 setSelectedDepartment('all');
               }}
             >
-              Clear filters
+              {t('clearFilters')}
             </Button>
           )}
 
           <span className="text-sm text-muted-foreground ml-auto">
-            {filteredLicenses.length} license{filteredLicenses.length !== 1 ? 's' : ''}
+            {t('licenseCount', { count: filteredLicenses.length })}
           </span>
         </div>
 
@@ -466,7 +466,7 @@ function LicensesContent() {
         ) : filteredLicenses.length === 0 ? (
           <div className="border rounded-lg bg-white flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Key className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">No {activeTab === 'unassigned' ? 'licenses outside HRIS' : `${activeTab} licenses`} found</p>
+            <p className="text-sm">{activeTab === 'unassigned' ? t('noLicensesOutsideHRIS') : t('noLicensesFound', { tab: activeTab })}</p>
           </div>
         ) : showSplitTables ? (
           /* Split table view for "Not in HRIS" and "External" tabs */
@@ -478,14 +478,14 @@ function LicensesContent() {
                   <>
                     <AlertTriangle className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-medium text-red-600">
-                      Active Licenses - Not in HRIS ({activeLicenses.length})
+                      {t('activeNotInHRIS', { count: activeLicenses.length })}
                     </h3>
                   </>
                 ) : (
                   <>
                     <Globe className="h-4 w-4 text-orange-500" />
                     <h3 className="text-sm font-medium">
-                      Active External Licenses ({activeLicenses.length})
+                      {t('activeExternal', { count: activeLicenses.length })}
                     </h3>
                   </>
                 )}
@@ -508,11 +508,11 @@ function LicensesContent() {
                             className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                           />
                         </th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -572,7 +572,7 @@ function LicensesContent() {
               ) : (
                 <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
                   <p className="text-sm text-emerald-600">
-                    {activeTab === 'unassigned' ? 'All active licenses are matched to HRIS' : 'No active external licenses'}
+                    {activeTab === 'unassigned' ? t('allMatchedToHRIS') : t('noActiveExternalLicenses')}
                   </p>
                 </div>
               )}
@@ -582,7 +582,7 @@ function LicensesContent() {
             {inactiveLicenses.length > 0 && (
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  Inactive Licenses {activeTab === 'unassigned' ? '- Not in HRIS' : '- External'} ({inactiveLicenses.length})
+                  {activeTab === 'unassigned' ? t('inactiveNotInHRIS', { count: inactiveLicenses.length }) : t('inactiveExternal', { count: inactiveLicenses.length })}
                 </h3>
                 <div className="border rounded-lg bg-white overflow-hidden">
                   <table className="w-full text-sm">
@@ -601,11 +601,11 @@ function LicensesContent() {
                             className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                           />
                         </th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -681,23 +681,23 @@ function LicensesContent() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('provider_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Provider <SortIcon column="provider_name" />
+                      {t('provider')} <SortIcon column="provider_name" />
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
-                      User <SortIcon column="external_user_id" />
+                      {t('user')} <SortIcon column="external_user_id" />
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('employee_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Employee <SortIcon column="employee_name" />
+                      {t('employee')} <SortIcon column="employee_name" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('monthly_cost')} className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto">
-                      Cost <SortIcon column="monthly_cost" />
+                      {t('cost')} <SortIcon column="monthly_cost" />
                     </button>
                   </th>
                 </tr>
@@ -779,14 +779,14 @@ function LicensesContent() {
         {!showSplitTables && totalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Page {page} of {totalPages}
+              {t('pageOf', { page, total: totalPages })}
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>
-                Previous
+                {t('previous')}
               </Button>
               <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
-                Next
+                {tCommon('next')}
               </Button>
             </div>
           </div>
@@ -799,23 +799,23 @@ function LicensesContent() {
           <DialogHeader>
             <DialogTitle>{t('removeFromProvider')}</DialogTitle>
             <DialogDescription>
-              This will remove {removableLicenses.length} user(s) from their provider system via API.
+              {t('removeFromProviderDescription', { count: removableLicenses.length })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">The following actions will be performed:</p>
+            <p className="text-sm text-zinc-600 mb-3">{t('actionsPerformed')}</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
                 <span className="text-emerald-600">-</span>
-                <span>Users will be removed from the external provider (e.g., Cursor team)</span>
+                <span>{t('usersRemovedFromProvider')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-emerald-600">-</span>
-                <span>Licenses will be deleted from this database</span>
+                <span>{t('licensesDeletedFromDB')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600">-</span>
-                <span>Only Cursor licenses support remote removal ({removableLicenses.length} of {selectedIds.size} selected)</span>
+                <span>{t('onlyCursorSupports', { count: removableLicenses.length, total: selectedIds.size })}</span>
               </li>
             </ul>
           </div>
@@ -825,7 +825,7 @@ function LicensesContent() {
             </Button>
             <Button onClick={handleBulkRemove} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {tCommon('remove')} {removableLicenses.length} {t('title')}
+              {t('removeLicenses', { count: removableLicenses.length })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -837,23 +837,23 @@ function LicensesContent() {
           <DialogHeader>
             <DialogTitle>{t('bulkDelete')}</DialogTitle>
             <DialogDescription>
-              This will delete {selectedIds.size} license(s) from the local database.
+              {t('bulkDeleteDescription', { count: selectedIds.size })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">Important:</p>
+            <p className="text-sm text-zinc-600 mb-3">{t('important')}</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
                 <span className="text-red-600">-</span>
-                <span>This does NOT remove users from the external provider systems</span>
+                <span>{t('doesNotRemoveFromProvider')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600">-</span>
-                <span>Licenses may reappear after the next sync if users still exist in the provider</span>
+                <span>{t('mayReappear')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-zinc-600">-</span>
-                <span>Use "Remove from Provider" to actually revoke access</span>
+                <span>{t('useRemoveInstead')}</span>
               </li>
             </ul>
           </div>
@@ -863,7 +863,7 @@ function LicensesContent() {
             </Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {tCommon('delete')} {selectedIds.size} {t('title')}
+              {t('deleteCount', { count: selectedIds.size })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -875,23 +875,23 @@ function LicensesContent() {
           <DialogHeader>
             <DialogTitle>{t('bulkUnassign')}</DialogTitle>
             <DialogDescription>
-              This will unassign {assignedLicenses.length} license(s) from their employees.
+              {t('bulkUnassignDescription', { count: assignedLicenses.length })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">This action will:</p>
+            <p className="text-sm text-zinc-600 mb-3">{t('thisActionWill')}</p>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2">
                 <span className="text-amber-600">-</span>
-                <span>Remove the employee association from the selected licenses</span>
+                <span>{t('removeEmployeeAssociation')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-zinc-600">-</span>
-                <span>Mark the licenses as "Unassigned" in the system</span>
+                <span>{t('markAsUnassignedInSystem')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-zinc-600">-</span>
-                <span>The licenses remain in the database and users remain in the provider</span>
+                <span>{t('licensesRemainInDB')}</span>
               </li>
             </ul>
           </div>
@@ -901,7 +901,7 @@ function LicensesContent() {
             </Button>
             <Button onClick={handleBulkUnassign} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {t('unassignLicense')} ({assignedLicenses.length})
+              {t('unassignCount', { count: assignedLicenses.length })}
             </Button>
           </DialogFooter>
         </DialogContent>
