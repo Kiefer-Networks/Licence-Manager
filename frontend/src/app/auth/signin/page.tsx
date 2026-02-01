@@ -9,18 +9,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/components/auth-provider';
 
+// Allowlist of safe route prefixes for callback URLs
+const SAFE_ROUTE_PREFIXES = [
+  '/dashboard',
+  '/providers',
+  '/users',
+  '/reports',
+  '/settings',
+  '/profile',
+  '/admin',
+];
+
 /**
  * Validates callback URL to prevent open redirect attacks.
- * Only allows relative paths starting with / and no protocol handlers.
+ * Uses an allowlist of known safe route prefixes instead of regex.
  */
 function isValidCallbackUrl(url: string | null): boolean {
   if (!url) return false;
+
+  // Decode URL to catch encoded attacks (e.g., %2F%2F for //)
+  let decodedUrl: string;
+  try {
+    decodedUrl = decodeURIComponent(url);
+  } catch {
+    return false; // Invalid encoding
+  }
+
   // Must start with / and not contain protocol or double slashes
-  if (!url.startsWith('/')) return false;
-  if (url.startsWith('//')) return false;
-  if (url.includes(':')) return false;
-  // Validate against allowed path pattern
-  return /^\/[a-zA-Z0-9/_\-?=&]*$/.test(url);
+  if (!decodedUrl.startsWith('/')) return false;
+  if (decodedUrl.startsWith('//')) return false;
+  if (decodedUrl.includes(':')) return false;
+
+  // Check against allowlist of safe routes
+  return SAFE_ROUTE_PREFIXES.some(prefix => decodedUrl.startsWith(prefix));
 }
 
 function SignInContent() {
