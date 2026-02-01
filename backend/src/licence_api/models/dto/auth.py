@@ -18,7 +18,7 @@ class TokenResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Refresh token request."""
 
-    refresh_token: str
+    refresh_token: str = Field(max_length=2000)
 
 
 class LocalLoginRequest(BaseModel):
@@ -126,8 +126,8 @@ class SessionInfo(BaseModel):
     """Active session info."""
 
     id: UUID
-    user_agent: str | None = None
-    ip_address: str | None = None
+    user_agent: str | None = Field(default=None, max_length=1000)
+    ip_address: str | None = Field(default=None, max_length=45)  # Max for IPv6
     created_at: datetime
     expires_at: datetime
     is_current: bool = False
