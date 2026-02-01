@@ -511,6 +511,8 @@ export interface ManagerInfo {
   avatar?: string;  // Base64 data URL or null
 }
 
+export type EmployeeSource = 'hibob' | 'personio' | 'manual';
+
 export interface Employee {
   id: string;
   hibob_id: string;
@@ -518,6 +520,7 @@ export interface Employee {
   full_name: string;
   department?: string;
   status: string;
+  source: EmployeeSource;
   start_date?: string;
   termination_date?: string;
   avatar?: string;  // Base64 data URL or null
@@ -525,6 +528,7 @@ export interface Employee {
   owned_admin_account_count?: number;  // Number of admin accounts owned by this employee
   manager?: ManagerInfo;
   synced_at: string;
+  is_manual: boolean;
 }
 
 export interface EmployeeListResponse {
@@ -532,6 +536,42 @@ export interface EmployeeListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface EmployeeCreate {
+  email: string;
+  full_name: string;
+  department?: string;
+  status?: 'active' | 'offboarded';
+  start_date?: string;
+  termination_date?: string;
+  manager_email?: string;
+}
+
+export interface EmployeeUpdate {
+  email?: string;
+  full_name?: string;
+  department?: string;
+  status?: 'active' | 'offboarded';
+  start_date?: string;
+  termination_date?: string;
+  manager_email?: string;
+}
+
+export interface EmployeeBulkImportItem {
+  email: string;
+  full_name: string;
+  department?: string;
+  status?: 'active' | 'offboarded';
+  start_date?: string;
+  manager_email?: string;
+}
+
+export interface EmployeeBulkImportResponse {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
 }
 
 export interface InactiveLicenseEntry {
@@ -1907,6 +1947,7 @@ export const api = {
     page_size?: number;
     status?: string;
     department?: string;
+    source?: EmployeeSource;
     search?: string;
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
@@ -1916,6 +1957,7 @@ export const api = {
     if (params.page_size) searchParams.set('page_size', params.page_size.toString());
     if (params.status) searchParams.set('status', params.status);
     if (params.department) searchParams.set('department', params.department);
+    if (params.source) searchParams.set('source', params.source);
     if (params.search) searchParams.set('search', params.search);
     if (params.sort_by) searchParams.set('sort_by', params.sort_by);
     if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
@@ -1925,6 +1967,31 @@ export const api = {
 
   async getEmployee(employeeId: string): Promise<Employee> {
     return fetchApi<Employee>(`/users/employees/${employeeId}`);
+  },
+
+  async createEmployee(data: EmployeeCreate): Promise<Employee> {
+    return fetchApi<Employee>('/users/employees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateEmployee(employeeId: string, data: EmployeeUpdate): Promise<Employee> {
+    return fetchApi<Employee>(`/users/employees/${employeeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteEmployee(employeeId: string): Promise<void> {
+    await fetchApi(`/users/employees/${employeeId}`, { method: 'DELETE' });
+  },
+
+  async bulkImportEmployees(employees: EmployeeBulkImportItem[]): Promise<EmployeeBulkImportResponse> {
+    return fetchApi<EmployeeBulkImportResponse>('/users/employees/import', {
+      method: 'POST',
+      body: JSON.stringify({ employees }),
+    });
   },
 
   // Reports

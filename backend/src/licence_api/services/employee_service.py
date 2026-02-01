@@ -21,6 +21,7 @@ class EmployeeService:
         self,
         status: str | None = None,
         department: str | None = None,
+        source: str | None = None,
         search: str | None = None,
         sort_by: str = "full_name",
         sort_dir: str = "asc",
@@ -32,6 +33,7 @@ class EmployeeService:
         Args:
             status: Filter by status
             department: Filter by department
+            source: Filter by source (hibob, personio, manual)
             search: Search query
             sort_by: Sort field
             sort_dir: Sort direction
@@ -44,6 +46,7 @@ class EmployeeService:
         employees, total = await self.employee_repo.get_all_with_filters(
             status=status,
             department=department,
+            source=source,
             search=search,
             sort_by=sort_by,
             sort_dir=sort_dir,

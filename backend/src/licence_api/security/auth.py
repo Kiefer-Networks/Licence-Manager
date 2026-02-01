@@ -347,7 +347,9 @@ class Permissions:
 
     # Employees
     EMPLOYEES_VIEW = "employees.view"
+    EMPLOYEES_CREATE = "employees.create"
     EMPLOYEES_EDIT = "employees.edit"
+    EMPLOYEES_DELETE = "employees.delete"
 
     # Reports
     REPORTS_VIEW = "reports.view"

@@ -14,6 +14,14 @@ class EmployeeStatus(StrEnum):
     OFFBOARDED = "offboarded"
 
 
+class EmployeeSource(StrEnum):
+    """Employee source enum - where the employee data originated."""
+
+    HIBOB = "hibob"
+    PERSONIO = "personio"
+    MANUAL = "manual"
+
+
 class Employee(BaseModel):
     """Employee domain model."""
 
@@ -23,6 +31,7 @@ class Employee(BaseModel):
     full_name: str
     department: str | None = None
     status: EmployeeStatus
+    source: EmployeeSource = EmployeeSource.HIBOB
     start_date: date | None = None
     termination_date: date | None = None
     manager_email: str | None = None

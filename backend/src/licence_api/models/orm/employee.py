@@ -24,6 +24,7 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
     termination_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="hibob")
 
     # Manager relationship - stores email from HRIS, resolved to ID after sync
     manager_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -54,6 +55,7 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
         Index("idx_employees_email", "email"),
         Index("idx_employees_status", "status"),
         Index("idx_employees_manager_id", "manager_id"),
+        Index("idx_employees_source", "source"),
     )
 
 

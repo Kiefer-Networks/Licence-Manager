@@ -10,7 +10,7 @@ from licence_api.models.orm.employee import EmployeeORM
 from licence_api.repositories.base import BaseRepository
 
 # Whitelist of valid sort columns to prevent column injection
-VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email"}
+VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email", "source"}
 
 
 class EmployeeRepository(BaseRepository[EmployeeORM]):
@@ -76,6 +76,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         self,
         status: str | None = None,
         department: str | None = None,
+        source: str | None = None,
         search: str | None = None,
         sort_by: str = "full_name",
         sort_dir: str = "asc",
@@ -87,6 +88,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         Args:
             status: Filter by status
             department: Filter by department
+            source: Filter by source (hibob, personio, manual)
             search: Search in name or email
             sort_by: Column to sort by
             sort_dir: Sort direction (asc or desc)
@@ -106,6 +108,10 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         if department:
             query = query.where(EmployeeORM.department == department)
             count_query = count_query.where(EmployeeORM.department == department)
+
+        if source:
+            query = query.where(EmployeeORM.source == source)
+            count_query = count_query.where(EmployeeORM.source == source)
 
         if search:
             search_filter = (
@@ -278,3 +284,46 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             .order_by(EmployeeORM.department)
         )
         return [r[0] for r in result.all()]
+
+    async def email_exists(self, email: str, exclude_id: UUID | None = None) -> bool:
+        """Check if an email already exists.
+
+        Args:
+            email: Email to check
+            exclude_id: Optionally exclude an employee ID from the check
+
+        Returns:
+            True if email exists, False otherwise
+        """
+        query = select(func.count()).select_from(EmployeeORM).where(
+            func.lower(EmployeeORM.email) == email.lower()
+        )
+        if exclude_id:
+            query = query.where(EmployeeORM.id != exclude_id)
+        result = await self.session.execute(query)
+        return result.scalar_one() > 0
+
+    async def is_manual_employee(self, employee_id: UUID) -> bool:
+        """Check if an employee is a manual employee.
+
+        Args:
+            employee_id: Employee UUID
+
+        Returns:
+            True if employee source is 'manual', False otherwise
+        """
+        result = await self.session.execute(
+            select(EmployeeORM.source).where(EmployeeORM.id == employee_id)
+        )
+        source = result.scalar_one_or_none()
+        return source == "manual"
+
+    async def count_by_source(self) -> dict[str, int]:
+        """Count employees by source.
+
+        Returns:
+            Dict mapping source to count
+        """
+        query = select(EmployeeORM.source, func.count()).group_by(EmployeeORM.source)
+        result = await self.session.execute(query)
+        return dict(result.all())

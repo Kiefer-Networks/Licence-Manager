@@ -66,7 +66,10 @@ class AuditAction:
     FILE_DELETE = "file_delete"
 
     # Employee
+    EMPLOYEE_CREATE = "employee_create"
     EMPLOYEE_UPDATE = "employee_update"
+    EMPLOYEE_DELETE = "employee_delete"
+    EMPLOYEE_BULK_IMPORT = "employee_bulk_import"
 
     # Service Account Patterns
     SERVICE_ACCOUNT_PATTERN_CREATE = "service_account_pattern_create"

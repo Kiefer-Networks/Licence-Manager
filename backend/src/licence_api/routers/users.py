@@ -5,15 +5,26 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import AVATAR_DIR
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse, ManagerInfo
+from licence_api.models.domain.employee import EmployeeSource
+from licence_api.models.dto.employee import (
+    EmployeeBulkImport,
+    EmployeeBulkImportResponse,
+    EmployeeCreate,
+    EmployeeListResponse,
+    EmployeeResponse,
+    EmployeeUpdate,
+    ManagerInfo,
+)
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.employee_service import EmployeeService
+from licence_api.services.manual_employee_service import ManualEmployeeService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
 
 logger = logging.getLogger(__name__)
@@ -57,9 +68,12 @@ def get_avatar_base64(hibob_id: str) -> str | None:
 # Allowed status values for employees
 ALLOWED_EMPLOYEE_STATUSES = {"active", "offboarded", "pending", "on_leave"}
 
+# Allowed source values for employees
+ALLOWED_EMPLOYEE_SOURCES = {"hibob", "personio", "manual"}
+
 # Allowed sort columns for employees (whitelist to prevent injection)
 ALLOWED_EMPLOYEE_SORT_COLUMNS = {
-    "full_name", "email", "department", "status",
+    "full_name", "email", "department", "status", "source",
     "start_date", "termination_date", "synced_at",
 }
 
@@ -69,6 +83,11 @@ def get_employee_service(db: AsyncSession = Depends(get_db)) -> EmployeeService:
     return EmployeeService(db)
 
 
+def get_manual_employee_service(db: AsyncSession = Depends(get_db)) -> ManualEmployeeService:
+    """Get ManualEmployeeService instance."""
+    return ManualEmployeeService(db)
+
+
 # Employee endpoints
 @router.get("/employees", response_model=EmployeeListResponse)
 async def list_employees(
@@ -76,6 +95,7 @@ async def list_employees(
     employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
     status: str | None = None,
     department: str | None = None,
+    source: str | None = None,
     search: str | None = Query(default=None, max_length=200),
     sort_by: str = Query(default="full_name", max_length=50),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
@@ -87,12 +107,14 @@ async def list_employees(
     sanitized_search = sanitize_search(search)
     sanitized_department = sanitize_department(department)
     sanitized_status = sanitize_status(status, ALLOWED_EMPLOYEE_STATUSES)
+    sanitized_source = sanitize_status(source, ALLOWED_EMPLOYEE_SOURCES)
     validated_sort_by = validate_sort_by(sort_by, ALLOWED_EMPLOYEE_SORT_COLUMNS, "full_name")
 
     offset = (page - 1) * page_size
     employees, total, license_counts, admin_account_counts = await employee_service.list_employees(
         status=sanitized_status,
         department=sanitized_department,
+        source=sanitized_source,
         search=sanitized_search,
         sort_by=validated_sort_by,
         sort_dir=sort_dir,
@@ -124,6 +146,7 @@ async def list_employees(
                 full_name=emp.full_name,
                 department=emp.department,
                 status=emp.status,
+                source=emp.source,
                 start_date=emp.start_date,
                 termination_date=emp.termination_date,
                 avatar=get_avatar_base64(emp.hibob_id),
@@ -131,6 +154,7 @@ async def list_employees(
                 owned_admin_account_count=admin_account_counts.get(emp.id, 0),
                 manager=manager_info,
                 synced_at=emp.synced_at,
+                is_manual=emp.source == EmployeeSource.MANUAL,
             )
         )
 
@@ -187,6 +211,7 @@ async def get_employee(
         full_name=employee.full_name,
         department=employee.department,
         status=employee.status,
+        source=employee.source,
         start_date=employee.start_date,
         termination_date=employee.termination_date,
         avatar=get_avatar_base64(employee.hibob_id),
@@ -194,4 +219,104 @@ async def get_employee(
         owned_admin_account_count=admin_account_count,
         manager=manager_info,
         synced_at=employee.synced_at,
+        is_manual=employee.source == EmployeeSource.MANUAL,
+    )
+
+
+# Manual employee management endpoints
+@router.post("/employees", response_model=EmployeeResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def create_employee(
+    request: Request,
+    body: EmployeeCreate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_CREATE))],
+    service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
+) -> EmployeeResponse:
+    """Create a new manual employee. Requires employees.create permission."""
+    try:
+        return await service.create_employee(
+            data=body,
+            user=current_user,
+            request=request,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.put("/employees/{employee_id}", response_model=EmployeeResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def update_employee(
+    request: Request,
+    employee_id: UUID,
+    body: EmployeeUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
+    service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
+) -> EmployeeResponse:
+    """Update a manual employee. Requires employees.edit permission.
+
+    Only employees with source='manual' can be updated via this endpoint.
+    Employees synced from HRIS (HiBob/Personio) must be updated in the source system.
+    """
+    try:
+        return await service.update_employee(
+            employee_id=employee_id,
+            data=body,
+            user=current_user,
+            request=request,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.delete("/employees/{employee_id}")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def delete_employee(
+    request: Request,
+    employee_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_DELETE))],
+    service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
+) -> dict:
+    """Delete a manual employee. Requires employees.delete permission.
+
+    Only employees with source='manual' can be deleted.
+    Employees synced from HRIS (HiBob/Personio) must be deleted in the source system.
+    """
+    try:
+        await service.delete_employee(
+            employee_id=employee_id,
+            user=current_user,
+            request=request,
+        )
+        return {"success": True, "message": "Employee deleted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.post("/employees/import", response_model=EmployeeBulkImportResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def bulk_import_employees(
+    request: Request,
+    body: EmployeeBulkImport,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_CREATE))],
+    service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
+) -> EmployeeBulkImportResponse:
+    """Bulk import employees. Requires employees.create permission.
+
+    Creates new employees or updates existing manual employees.
+    Employees synced from HRIS (HiBob/Personio) will be skipped.
+    Maximum 500 employees per import.
+    """
+    return await service.bulk_import_employees(
+        employees=body.employees,
+        user=current_user,
+        request=request,
     )

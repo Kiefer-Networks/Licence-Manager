@@ -14,13 +14,15 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { api, Employee, Provider } from '@/lib/api';
+import { api, Employee, EmployeeSource, Provider } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight, Bot, ShieldCheck, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight, Bot, ShieldCheck, CheckCircle, AlertCircle, Info, Plus, Upload, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ServiceAccountsTab } from '@/components/users/ServiceAccountsTab';
 import { getLocale } from '@/lib/locale';
 import { AdminAccountsTab } from '@/components/users/AdminAccountsTab';
+import { ManualEmployeeDialog } from '@/components/users/ManualEmployeeDialog';
+import { EmployeeBulkImportDialog } from '@/components/users/EmployeeBulkImportDialog';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -53,10 +55,15 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [sortColumn, setSortColumn] = useState<string>('full_name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [activeTab, setActiveTab] = useState<string>('employees');
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Manual employee dialogs
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
     setToast({ type, text });
@@ -84,25 +91,26 @@ export default function UsersPage() {
     api.getProviders().then((data) => setProviders(data.items)).catch((e) => handleSilentError('getProviders', e));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadEmployees = () => {
     setLoading(true);
     api.getEmployees({
       page,
       search: debouncedSearch || undefined,
       status: selectedStatus !== 'all' ? selectedStatus : undefined,
       department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+      source: selectedSource !== 'all' ? (selectedSource as EmployeeSource) : undefined,
       sort_by: sortColumn,
       sort_dir: sortDirection,
     }).then((data) => {
-      if (!cancelled) {
-        setEmployees(data.items);
-        setTotal(data.total);
-        setLoading(false);
-      }
-    }).catch(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [page, debouncedSearch, selectedStatus, selectedDepartment, sortColumn, sortDirection]);
+      setEmployees(data.items);
+      setTotal(data.total);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadEmployees();
+  }, [page, debouncedSearch, selectedStatus, selectedDepartment, selectedSource, sortColumn, sortDirection]);
 
   const pageSize = 50;
   const totalPages = Math.ceil(total / pageSize);
@@ -136,7 +144,7 @@ export default function UsersPage() {
           </TabsList>
 
           <TabsContent value="employees" className="space-y-6 mt-6">
-            {/* Filters */}
+            {/* Filters and Actions */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
@@ -171,9 +179,41 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
 
-              <span className="text-sm text-muted-foreground ml-auto">
+              <Select value={selectedSource} onValueChange={setSelectedSource}>
+                <SelectTrigger className="w-36 h-9 bg-zinc-50 border-zinc-200">
+                  <SelectValue placeholder={t('filterBySource')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('allSources')}</SelectItem>
+                  <SelectItem value="hibob">{t('sourceHibob')}</SelectItem>
+                  <SelectItem value="personio">{t('sourcePersonio')}</SelectItem>
+                  <SelectItem value="manual">{t('sourceManual')}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <span className="text-sm text-muted-foreground">
                 {total} {t('employee')}{total !== 1 ? 's' : ''}
               </span>
+
+              <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowImportDialog(true)}
+                  className="h-9 gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  {t('importEmployees')}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAddEmployee(true)}
+                  className="h-9 gap-2"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {t('addEmployee')}
+                </Button>
+              </div>
             </div>
 
             {/* Table */}
@@ -261,9 +301,16 @@ export default function UsersPage() {
                           ) : '-'}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                            {employee.status === 'active' ? t('active') : t('offboarded')}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
+                              {employee.status === 'active' ? t('active') : t('offboarded')}
+                            </Badge>
+                            {employee.is_manual && (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                {t('manual')}
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
@@ -325,6 +372,24 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Manual Employee Dialog */}
+      <ManualEmployeeDialog
+        open={showAddEmployee}
+        onOpenChange={setShowAddEmployee}
+        employee={null}
+        departments={departments}
+        onSuccess={loadEmployees}
+        showToast={showToast}
+      />
+
+      {/* Bulk Import Dialog */}
+      <EmployeeBulkImportDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onSuccess={loadEmployees}
+        showToast={showToast}
+      />
     </AppLayout>
   );
 }
