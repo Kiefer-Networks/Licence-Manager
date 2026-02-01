@@ -22,10 +22,10 @@
 | Re-Audit 2026-02-01 (Round 4: Final Audit) | 0 | 0 | 0 | 0 | 0 | 6 |
 | Re-Audit 2026-02-01 (Round 5: Rate Limiting) | 0 | 0 | 0 | 0 | 0 | 8 |
 | Re-Audit 2026-02-01 (Round 6: Parameter Fix) | 0 | 0 | 0 | 0 | 0 | 1 |
-| Manual HRIS Implementation (Round 8) | 0 | 0 | 0 | 0 | 0 | 6 |
-| **Total** | **0** | **0** | **0** | **0** | **0** | **104** |
+| Manual HRIS Implementation (Round 8) | 0 | 0 | 0 | 0 | 0 | 7 |
+| **Total** | **0** | **0** | **0** | **0** | **0** | **105** |
 
-**Progress: 104 of 104 findings fixed (100%)**
+**Progress: 105 of 105 findings fixed (100%)**
 
 ### All Security Findings Resolved
 All critical, high, medium, and low severity findings have been addressed.
@@ -984,6 +984,18 @@ All security controls verified operational. The codebase achieves the highest le
   - Added `refresh()` method to BaseRepository
   - Changed session.refresh() calls to employee_repo.refresh()
   - Removed redundant session.commit() calls (handled by get_db() dependency)
+
+### SEC-V15-007 [MEDIUM] - Duplicate Accounts Savings Calculation Bug
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/services/report_service.py:852-856
+- **Description:** Duplicate account savings used average cost formula which is inaccurate when license costs vary
+- **Example:** 3 licenses (100+100+50=250 EUR): old formula gave 166.67 EUR, actual savings is 150 EUR
+- **Fix:** Changed to keep most expensive license, sum remaining costs for accurate savings calculation:
+  ```python
+  costs_sorted = sorted(costs, reverse=True)
+  savings = sum(costs_sorted[1:], Decimal("0"))
+  ```
 
 ---
 

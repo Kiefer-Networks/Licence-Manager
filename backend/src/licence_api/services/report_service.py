@@ -846,14 +846,17 @@ class ReportService:
                     license_ids = [str(lic.id) for lic, _, _ in entries]
 
                     total_cost = Decimal("0")
+                    costs: list[Decimal] = []
                     for lic, _, _ in entries:
                         if lic.monthly_cost:
                             total_cost += lic.monthly_cost
+                            costs.append(lic.monthly_cost)
 
-                    # Savings = cost of duplicate licenses (all but one)
-                    if total_cost > 0 and len(entries) > 1:
-                        avg_cost = total_cost / len(entries)
-                        savings = avg_cost * (len(entries) - 1)
+                    # Savings = cost of removing duplicates (keep most expensive)
+                    # Sort descending and sum all but the highest cost license
+                    if len(costs) > 1:
+                        costs_sorted = sorted(costs, reverse=True)
+                        savings = sum(costs_sorted[1:], Decimal("0"))
                         total_savings += savings
 
                     duplicates.append(
