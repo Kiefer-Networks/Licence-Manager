@@ -5,6 +5,15 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.exceptions import (
+    CannotDeleteSelfError,
+    CannotModifySystemRoleError,
+    RoleAlreadyExistsError,
+    RoleNotFoundError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+    ValidationError,
+)
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     PasswordResetRequest,
@@ -80,17 +89,18 @@ class RbacService:
             Created user info
 
         Raises:
-            ValueError: If email exists or password invalid
+            UserAlreadyExistsError: If email exists
+            ValidationError: If password invalid
         """
         # Check if email already exists
         existing = await self.user_repo.get_by_email(request.email.lower())
         if existing:
-            raise ValueError("Email already registered")
+            raise UserAlreadyExistsError(request.email)
 
         # Validate password
         is_valid, errors = self.password_service.validate_password_strength(request.password)
         if not is_valid:
-            raise ValueError(errors[0])
+            raise ValidationError(errors[0])
 
         # Hash password
         password_hash = self.password_service.hash_password(request.password)
@@ -152,16 +162,16 @@ class RbacService:
             Updated user info
 
         Raises:
-            ValueError: If user not found or validation fails
-            PermissionError: If insufficient permissions
+            UserNotFoundError: If user not found
+            ValidationError: If validation fails
         """
         user = await self.user_repo.get_with_roles(user_id)
         if user is None:
-            raise ValueError("User not found")
+            raise UserNotFoundError(str(user_id))
 
         # Prevent deactivating yourself
         if request.is_active is False and user_id == current_user.id:
-            raise ValueError("Cannot deactivate your own account")
+            raise ValidationError("Cannot deactivate your own account")
 
         # Update fields
         if request.name is not None:
@@ -175,7 +185,7 @@ class RbacService:
             # Prevent removing superadmin role from yourself
             if user_id == current_user.id and "superadmin" in current_user.roles:
                 if "superadmin" not in request.role_codes:
-                    raise ValueError("Cannot remove superadmin role from yourself")
+                    raise ValidationError("Cannot remove superadmin role from yourself")
 
             roles = await self.role_repo.get_by_codes(request.role_codes)
             role_ids = [r.id for r in roles]
@@ -203,15 +213,16 @@ class RbacService:
             user_agent: User agent string
 
         Raises:
-            ValueError: If user not found or trying to delete self
+            CannotDeleteSelfError: If trying to delete self
+            UserNotFoundError: If user not found
         """
         # Prevent deleting yourself
         if user_id == current_user.id:
-            raise ValueError("Cannot delete your own account")
+            raise CannotDeleteSelfError()
 
         user = await self.user_repo.get_by_id(user_id)
         if user is None:
-            raise ValueError("User not found")
+            raise UserNotFoundError(str(user_id))
 
         # Audit log before deletion
         ip_address = http_request.client.host if http_request and http_request.client else None
@@ -247,16 +258,17 @@ class RbacService:
             user_agent: User agent string
 
         Raises:
-            ValueError: If user not found or password invalid
+            UserNotFoundError: If user not found
+            ValidationError: If password invalid
         """
         user = await self.user_repo.get_by_id(user_id)
         if user is None:
-            raise ValueError("User not found")
+            raise UserNotFoundError(str(user_id))
 
         # Validate password
         is_valid, errors = self.password_service.validate_password_strength(body.new_password)
         if not is_valid:
-            raise ValueError(errors[0])
+            raise ValidationError(errors[0])
 
         # Hash and update password
         password_hash = self.password_service.hash_password(body.new_password)
@@ -293,11 +305,11 @@ class RbacService:
             True if user was unlocked
 
         Raises:
-            ValueError: If user not found
+            UserNotFoundError: If user not found
         """
         user = await self.user_repo.unlock_user(user_id)
         if user is None:
-            raise ValueError("User not found")
+            raise UserNotFoundError(str(user_id))
 
         await self.session.commit()
         return True
@@ -332,12 +344,12 @@ class RbacService:
             Created role
 
         Raises:
-            ValueError: If role code already exists
+            RoleAlreadyExistsError: If role code already exists
         """
         # Check if role code already exists
         existing = await self.role_repo.get_by_code(request.code)
         if existing:
-            raise ValueError("Role code already exists")
+            raise RoleAlreadyExistsError(request.code)
 
         # Create role
         role = await self.role_repo.create_role(
@@ -402,16 +414,16 @@ class RbacService:
             Updated role
 
         Raises:
-            ValueError: If role not found
-            PermissionError: If insufficient permissions for system roles
+            RoleNotFoundError: If role not found
+            CannotModifySystemRoleError: If trying to modify system role without permission
         """
         role = await self.role_repo.get_with_permissions(role_id)
         if role is None:
-            raise ValueError("Role not found")
+            raise RoleNotFoundError(str(role_id))
 
         # System roles can only have permissions changed by superadmin
         if role.is_system and not current_user.is_superadmin():
-            raise PermissionError("Only superadmin can modify system roles")
+            raise CannotModifySystemRoleError(role.code)
 
         # Update fields
         if request.name is not None:
@@ -448,14 +460,15 @@ class RbacService:
             role_id: Role ID to delete
 
         Raises:
-            ValueError: If role not found or is a system role
+            RoleNotFoundError: If role not found
+            CannotModifySystemRoleError: If role is a system role
         """
         role = await self.role_repo.get_by_id(role_id)
         if role is None:
-            raise ValueError("Role not found")
+            raise RoleNotFoundError(str(role_id))
 
         if role.is_system:
-            raise ValueError("Cannot delete system roles")
+            raise CannotModifySystemRoleError(role.code)
 
         await self.role_repo.delete_role(role_id)
         await self.session.commit()

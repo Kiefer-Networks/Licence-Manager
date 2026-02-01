@@ -8,6 +8,15 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
+from licence_api.exceptions import (
+    CannotDeleteSelfError,
+    CannotModifySystemRoleError,
+    RoleAlreadyExistsError,
+    RoleNotFoundError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+    ValidationError,
+)
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     PasswordResetRequest,
@@ -80,10 +89,9 @@ async def create_user(
             http_request=request,
             user_agent=user_agent,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "already registered" in error_msg:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    except UserAlreadyExistsError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    except ValidationError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user data")
 
 
@@ -122,10 +130,9 @@ async def update_user(
             request=request,
             current_user=current_user,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except UserNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except ValidationError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid update data")
 
 
@@ -145,11 +152,10 @@ async def delete_user(
             http_request=http_request,
             user_agent=user_agent,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user")
+    except UserNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except CannotDeleteSelfError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own account")
 
 
 @router.post("/users/{user_id}/reset-password")
@@ -172,10 +178,9 @@ async def reset_user_password(
             user_agent=user_agent,
         )
         return {"message": "Password reset successfully"}
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except UserNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except ValidationError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password reset failed")
 
 
@@ -191,7 +196,7 @@ async def unlock_user(
     try:
         await service.unlock_user(user_id)
         return {"message": "User unlocked successfully"}
-    except ValueError:
+    except UserNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
@@ -256,8 +261,10 @@ async def create_role(
     """Create a custom role."""
     try:
         return await service.create_role(request)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role already exists or invalid data")
+    except RoleAlreadyExistsError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role already exists")
+    except ValidationError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role data")
 
 
 @router.get("/roles/{role_id}", response_model=RoleResponse)
@@ -287,9 +294,9 @@ async def update_role(
             request=request,
             current_user=current_user,
         )
-    except ValueError:
+    except RoleNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    except PermissionError:
+    except CannotModifySystemRoleError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system role")
 
 
@@ -302,11 +309,10 @@ async def delete_role(
     """Delete a custom role."""
     try:
         await service.delete_role(role_id)
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete role")
+    except RoleNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    except CannotModifySystemRoleError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system role")
 
 
 # ============================================================================
