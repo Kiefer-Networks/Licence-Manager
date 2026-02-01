@@ -114,11 +114,11 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
 
   // Employees for owner selection
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   // Load patterns
   useEffect(() => {
     loadPatterns();
-    loadEmployees();
   }, []);
 
   // Load admin account licenses
@@ -158,14 +158,32 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
     }
   };
 
-  const loadEmployees = async () => {
+  const loadEmployees = async (search?: string) => {
+    setLoadingEmployees(true);
     try {
-      const response = await api.getEmployees({ page_size: 200, status: 'active' });
+      const response = await api.getEmployees({
+        page_size: 50,
+        status: 'active',
+        search: search || undefined,
+      });
       setEmployees(response.items);
     } catch (error) {
       // Silent fail for employee loading
+    } finally {
+      setLoadingEmployees(false);
     }
   };
+
+  // Debounce employee search
+  useEffect(() => {
+    if (!editOwnerAccount) return;
+
+    const timer = setTimeout(() => {
+      loadEmployees(ownerSearchQuery.trim() || undefined);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [ownerSearchQuery, editOwnerAccount]);
 
   const handleShowMatches = async (pattern: AdminAccountPattern) => {
     setMatchesDialog(pattern);
@@ -294,6 +312,8 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
     setSelectedOwnerId(account.owner_id || '');
     setOwnerSearchQuery(account.owner_name || '');
     setShowOwnerResults(false);
+    // Load initial employees
+    loadEmployees(account.owner_name || undefined);
   };
 
   const handleSelectOwner = (emp: Employee) => {
@@ -308,14 +328,8 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
     setShowOwnerResults(false);
   };
 
-  // Filter employees based on search query
-  const filteredEmployees = ownerSearchQuery.trim()
-    ? employees.filter(emp =>
-        emp.full_name.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
-        emp.email.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
-        (emp.department && emp.department.toLowerCase().includes(ownerSearchQuery.toLowerCase()))
-      )
-    : employees;
+  // Employees are now fetched from server based on search query
+  // No need for client-side filtering
 
   const handleSaveOwner = async () => {
     if (!editOwnerAccount) return;
@@ -1021,31 +1035,37 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       >
                         <span className="text-muted-foreground">{tCommon('none')}</span>
                       </button>
-                      {filteredEmployees.slice(0, 50).map((emp) => (
-                        <button
-                          key={emp.id}
-                          type="button"
-                          onClick={() => handleSelectOwner(emp)}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
-                            selectedOwnerId === emp.id ? 'bg-purple-50' : ''
-                          }`}
-                        >
-                          <User className="h-4 w-4 text-zinc-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{emp.full_name}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {emp.department || '-'} · {emp.email}
-                            </div>
-                          </div>
-                          {selectedOwnerId === emp.id && (
-                            <Check className="h-4 w-4 text-purple-600 flex-shrink-0" />
-                          )}
-                        </button>
-                      ))}
-                      {filteredEmployees.length === 0 && (
+                      {loadingEmployees ? (
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {tCommon('loading')}
+                        </div>
+                      ) : employees.length === 0 ? (
                         <div className="px-3 py-4 text-sm text-muted-foreground text-center">
                           {t('noEmployeesFound')}
                         </div>
+                      ) : (
+                        employees.map((emp) => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => handleSelectOwner(emp)}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
+                              selectedOwnerId === emp.id ? 'bg-purple-50' : ''
+                            }`}
+                          >
+                            <User className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{emp.full_name}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {emp.department || '-'} · {emp.email}
+                              </div>
+                            </div>
+                            {selectedOwnerId === emp.id && (
+                              <Check className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                            )}
+                          </button>
+                        ))
                       )}
                     </div>
                   )}
