@@ -46,6 +46,7 @@ import {
   AlertTriangle,
   Users,
   AlertCircle,
+  X,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -97,6 +98,8 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
   // Edit owner dialog state
   const [editOwnerAccount, setEditOwnerAccount] = useState<GroupedAdminAccount | null>(null);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState<string>('');
+  const [showOwnerResults, setShowOwnerResults] = useState(false);
   const [savingOwner, setSavingOwner] = useState(false);
 
   // Admin Account Licenses state
@@ -289,7 +292,30 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
   const handleOpenEditOwner = (account: GroupedAdminAccount) => {
     setEditOwnerAccount(account);
     setSelectedOwnerId(account.owner_id || '');
+    setOwnerSearchQuery(account.owner_name || '');
+    setShowOwnerResults(false);
   };
+
+  const handleSelectOwner = (emp: Employee) => {
+    setSelectedOwnerId(emp.id);
+    setOwnerSearchQuery(emp.full_name);
+    setShowOwnerResults(false);
+  };
+
+  const handleClearOwner = () => {
+    setSelectedOwnerId('');
+    setOwnerSearchQuery('');
+    setShowOwnerResults(false);
+  };
+
+  // Filter employees based on search query
+  const filteredEmployees = ownerSearchQuery.trim()
+    ? employees.filter(emp =>
+        emp.full_name.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
+        emp.email.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
+        (emp.department && emp.department.toLowerCase().includes(ownerSearchQuery.toLowerCase()))
+      )
+    : employees;
 
   const handleSaveOwner = async () => {
     if (!editOwnerAccount) return;
@@ -958,19 +984,72 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
 
               <div className="space-y-2">
                 <Label>{t('owner')}</Label>
-                <Select value={selectedOwnerId || '__none__'} onValueChange={(v) => setSelectedOwnerId(v === '__none__' ? '' : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={tCommon('selectOption')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{tCommon('none')}</SelectItem>
-                    {employees.map((emp) => (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.department || '-'})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                    <Input
+                      placeholder={t('searchEmployee')}
+                      value={ownerSearchQuery}
+                      onChange={(e) => {
+                        setOwnerSearchQuery(e.target.value);
+                        setShowOwnerResults(true);
+                        if (!e.target.value) {
+                          setSelectedOwnerId('');
+                        }
+                      }}
+                      onFocus={() => setShowOwnerResults(true)}
+                      className="pl-9 pr-9"
+                    />
+                    {ownerSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearOwner}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {showOwnerResults && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                      <button
+                        type="button"
+                        onClick={handleClearOwner}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
+                          !selectedOwnerId ? 'bg-zinc-50' : ''
+                        }`}
+                      >
+                        <span className="text-muted-foreground">{tCommon('none')}</span>
+                      </button>
+                      {filteredEmployees.slice(0, 50).map((emp) => (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() => handleSelectOwner(emp)}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
+                            selectedOwnerId === emp.id ? 'bg-purple-50' : ''
+                          }`}
+                        >
+                          <User className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{emp.full_name}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {emp.department || '-'} · {emp.email}
+                            </div>
+                          </div>
+                          {selectedOwnerId === emp.id && (
+                            <Check className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                      {filteredEmployees.length === 0 && (
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                          {t('noEmployeesFound')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

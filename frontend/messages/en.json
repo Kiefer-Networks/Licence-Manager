@@ -824,7 +824,9 @@
     "assignOwner": "Assign Owner",
     "assignOwnerDescription": "Select an employee who is responsible for this admin account",
     "ownerUpdated": "Owner updated successfully",
-    "failedToUpdateOwner": "Failed to update owner"
+    "failedToUpdateOwner": "Failed to update owner",
+    "searchEmployee": "Search employee...",
+    "noEmployeesFound": "No employees found"
   },
   "lifecycle": {
     "title": "License Lifecycle",
