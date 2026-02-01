@@ -62,6 +62,22 @@ async def verify_google_token(token: str) -> GoogleTokenInfo:
             detail="Token was not issued for this application",
         )
 
+    # Verify token expiration (defense in depth - Google's API validates this too)
+    exp = data.get("exp")
+    if exp:
+        try:
+            exp_time = int(exp)
+            if exp_time < datetime.now(timezone.utc).timestamp():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has expired",
+                )
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token expiration",
+            )
+
     # Verify email domain if configured
     email = data.get("email")
     if settings.allowed_email_domain:
