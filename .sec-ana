@@ -934,3 +934,147 @@ All security controls verified operational. The codebase achieves the highest le
 - Defense-in-depth security architecture
 - Comprehensive audit logging
 - Secure cryptographic implementations
+
+---
+
+## 18. Application Flow Analysis (2026-02-01 - Comprehensive Review)
+
+### Complete Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    EXTERNAL PROVIDERS (HiBob, Personio, SaaS)          │
+└──────────────────────────────────────────────┬──────────────────────────┘
+                                                │
+                                                ▼
+                    ┌───────────────────────────────────────────┐
+                    │   SyncService.sync_provider()             │
+                    │   - Fetches licenses/employees from API   │
+                    │   - Decrypts credentials                  │
+                    │   - Routes to provider-specific handler   │
+                    └───────────────────┬───────────────────────┘
+                                        │
+                    ┌───────────────────┴──────────────────────┐
+                    │                                          │
+        ┌───────────▼────────────────┐          ┌────────────▼──────────────┐
+        │  _sync_hibob/_personio()   │          │ _sync_license_provider()  │
+        │ (Employee Sync)            │          │ (License Sync)            │
+        │ Updates EmployeeORM        │          │ Gets license pricing      │
+        │ Resolves manager links     │          │ Applies package pricing   │
+        └──────────────┬─────────────┘          └────────────┬─────────────┘
+                       │                                     │
+                       └──────────────────┬──────────────────┘
+                                          │
+                    ┌─────────────────────▼──────────────────────┐
+                    │ MatchingService.match_license()            │
+                    │ Multi-level matching algorithm:            │
+                    │ 1. Exact email match (company domains)     │
+                    │ 2. Local part match (john.doe@*)           │
+                    │ 3. Fuzzy name matching (85% max)           │
+                    └─────────────────────┬──────────────────────┘
+                                          │
+                    ┌─────────────────────▼──────────────────────┐
+                    │ Service/Admin Account Detection             │
+                    │ - Check ServiceAccountPatternRepo          │
+                    │ - Check ServiceAccountLicenseTypeRepo      │
+                    │ - Check AdminAccountPatternRepo            │
+                    └─────────────────────┬──────────────────────┘
+                                          │
+                    ┌─────────────────────▼──────────────────────┐
+                    │ LicenseORM.upsert()                         │
+                    │ - monthly_cost (from pricing config)       │
+                    │ - employee_id (if auto-matched >= 95%)     │
+                    │ - suggested_employee_id (50-94%)           │
+                    └─────────────────────┬──────────────────────┘
+                                          │
+                    ┌─────────────────────▼──────────────────────┐
+                    │ ReportService (Dashboard & Reports)        │
+                    │ - Cost calculations by provider/type       │
+                    │ - Utilization metrics                      │
+                    │ - Waste identification                     │
+                    └────────────────────────────────────────────┘
+```
+
+### Matching Confidence Thresholds
+
+| Method | Confidence | Auto-Assign | Action |
+|--------|-----------|-------------|--------|
+| Exact email (company) | 1.0 | YES | Assigned |
+| Local part (internal) | 0.90 | NO | Suggested |
+| Local part (external) | 0.85 | NO | Suggested |
+| Fuzzy name match | max 0.85 | NO | Suggested |
+| No match | 0.0 | NO | External Review |
+
+### Detection Mechanisms
+
+**External User Detection:**
+- Extract domain from email
+- Compare against company_domains settings
+- Subdomain matching supported (sub.company.com matches company.com)
+
+**Service Account Detection (Two Mechanisms):**
+1. Email pattern matching (ServiceAccountPatternRepo)
+2. License type matching (ServiceAccountLicenseTypeRepo)
+- Service accounts clear employee_id and match fields
+
+**Admin Account Detection:**
+- Email pattern matching (AdminAccountPatternRepo)
+- Admin accounts remain linked to employees
+- Orphaned admin accounts tracked for offboarded owners
+
+### Cost Calculation Priority
+
+1. **Package Pricing** (highest priority)
+   - Total cost / 12 (if yearly) / package_size
+   - Requires `config.package_pricing` and `provider_license_info.max_users`
+
+2. **Per-License-Type Pricing** (fallback)
+   - From `config.license_pricing[license_type]`
+   - Monthly = cost / 12 (yearly) or cost (monthly)
+
+3. **Provider Fetch** (direct)
+   - Some providers return monthly_cost directly
+
+### Design Decisions Verified
+
+| Decision | Rationale | Status |
+|----------|-----------|--------|
+| hibob_id as generic HRIS ID | Single field for HiBob, Personio, future providers | ✓ CORRECT |
+| Service account clears match fields | Prevents confusion about ownership | ✓ INTENTIONAL |
+| Fuzzy match capped at 85% | Prevents false positives in name matching | ✓ CORRECT |
+| Local part 90% < 95% threshold | Requires admin review even for high confidence | ✓ INTENTIONAL |
+
+### Identified Design Considerations
+
+| Item | Severity | Description | Status |
+|------|----------|-------------|--------|
+| Multi-currency totaling | LOW | Sums different currencies without conversion | has_currency_mix flag warns users |
+| Package pricing needs max_users | LOW | Silent failure if missing | Warning logged |
+| Manager resolution validation | LOW | No check if all managers found | Could add validation |
+| N+1 query potential | LOW | Some services could use selectinload() | Performance optimization |
+
+### MVC Architecture Assessment
+
+**Repository Layer:** ✓ GOOD
+- All database access through Repository classes
+- No raw SQL (all parameterized via SQLAlchemy ORM)
+
+**Service Layer:** ✓ GOOD
+- Business logic encapsulated
+- Transaction management in service layer
+- Documented exception for ReportService analytics queries
+
+**Router Layer:** ✓ GOOD
+- Request handling and response formatting
+- Authentication/authorization via decorators
+- Input validation via Pydantic DTOs
+
+### Final Assessment
+
+The application logic is **CORRECT** and follows best practices:
+- Multi-level matching with appropriate confidence thresholds
+- Service/admin account detection works correctly
+- Cost calculations handle package and per-license pricing
+- MVC architecture cleanly separated
+- RBAC properly enforced across all layers
+- No critical logic errors found
