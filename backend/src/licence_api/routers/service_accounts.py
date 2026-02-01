@@ -106,6 +106,7 @@ async def create_pattern(
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_pattern(
     http_request: Request,
     pattern_id: UUID,
@@ -228,6 +229,7 @@ async def get_license_type(
 
 
 @router.post("/license-types", response_model=ServiceAccountLicenseTypeResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_license_type(
     http_request: Request,
     data: ServiceAccountLicenseTypeCreate,
@@ -254,6 +256,7 @@ async def create_license_type(
 
 
 @router.delete("/license-types/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_license_type(
     http_request: Request,
     entry_id: UUID,

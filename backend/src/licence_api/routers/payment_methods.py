@@ -15,6 +15,7 @@ from licence_api.models.dto.payment_method import (
     PaymentMethodUpdate,
 )
 from licence_api.security.auth import require_permission, require_admin, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.payment_method_service import PaymentMethodService
 
 router = APIRouter()
@@ -37,6 +38,7 @@ async def list_payment_methods(
 
 
 @router.post("", response_model=PaymentMethodResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_payment_method(
     http_request: Request,
     data: PaymentMethodCreate,
@@ -74,6 +76,7 @@ async def get_payment_method(
 
 
 @router.put("/{payment_method_id}", response_model=PaymentMethodResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_payment_method(
     http_request: Request,
     payment_method_id: UUID,
@@ -97,6 +100,7 @@ async def update_payment_method(
 
 
 @router.delete("/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_payment_method(
     http_request: Request,
     payment_method_id: UUID,
