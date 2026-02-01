@@ -13,6 +13,23 @@ from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
 
 
+def _escape_csv_formula(value: str) -> str:
+    """Escape values that could be interpreted as formulas in Excel.
+
+    Prevents CSV formula injection attacks when opening in spreadsheet software.
+    Values starting with =, +, -, @, or tab could be executed as formulas.
+
+    Args:
+        value: The cell value to escape
+
+    Returns:
+        Escaped value safe for CSV export
+    """
+    if value and len(value) > 0 and value[0] in ("=", "+", "-", "@", "\t"):
+        return f"'{value}"
+    return value
+
+
 class ExportService:
     """Service for exporting data to CSV and Excel formats."""
 
@@ -65,17 +82,17 @@ class ExportService:
             "Synced At",
         ])
 
-        # Data rows
+        # Data rows (escape string fields to prevent CSV formula injection)
         for lic, provider, employee in results:
             writer.writerow([
                 str(lic.id),
-                provider.display_name,
-                lic.external_user_id,
-                lic.license_type or "",
+                _escape_csv_formula(provider.display_name),
+                _escape_csv_formula(lic.external_user_id),
+                _escape_csv_formula(lic.license_type or ""),
                 lic.status,
-                employee.full_name if employee else "",
-                employee.email if employee else "",
-                employee.department if employee else "",
+                _escape_csv_formula(employee.full_name) if employee else "",
+                _escape_csv_formula(employee.email) if employee else "",
+                _escape_csv_formula(employee.department) if employee else "",
                 str(lic.monthly_cost) if lic.monthly_cost else "",
                 lic.currency or "EUR",
                 lic.last_activity_at.isoformat() if lic.last_activity_at else "",
