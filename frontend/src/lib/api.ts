@@ -189,6 +189,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
       return undefined as T;
     }
 
+    // Validate Content-Type header before parsing JSON
+    const contentType = response.headers.get('Content-Type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('Unexpected response format');
+    }
+
     return response.json();
   } catch (error) {
     clearTimeout(timeoutId);
