@@ -26,6 +26,7 @@ from licence_api.models.dto.provider import (
 from licence_api.services.payment_method_service import PaymentMethodService
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.encryption import get_encryption_service
 from licence_api.security.rate_limit import limiter, PROVIDER_TEST_CONNECTION_LIMIT, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
@@ -224,9 +225,14 @@ async def upload_provider_logo(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> LogoUploadResponse:
-    """Upload a logo for a provider. Requires providers.edit permission."""
+    """Upload a logo for a provider. Requires providers.edit permission.
+
+    Note: CSRF protection is explicitly applied via CSRFProtected dependency
+    for file upload endpoints, providing consistent validation pattern.
+    """
     if file.filename is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

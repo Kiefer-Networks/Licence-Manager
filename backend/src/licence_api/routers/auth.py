@@ -25,7 +25,7 @@ from licence_api.models.dto.auth import (
     UserNotificationPreferenceUpdate,
 )
 from licence_api.security.auth import get_current_user
-from licence_api.security.csrf import generate_csrf_token
+from licence_api.security.csrf import generate_csrf_token, CSRFProtected
 from licence_api.security.rate_limit import (
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
@@ -377,9 +377,13 @@ async def update_profile(
 async def upload_avatar(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> AvatarUploadResponse:
-    """Upload avatar image for current user."""
+    """Upload avatar image for current user.
+
+    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
+    """
     content = await file.read()
 
     try:

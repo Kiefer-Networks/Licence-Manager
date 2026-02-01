@@ -14,6 +14,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.services.provider_file_service import (
     ProviderFileService,
     VIEWABLE_EXTENSIONS,
@@ -103,11 +104,15 @@ async def upload_provider_file(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
     category: str | None = Form(default=None),
 ) -> ProviderFileResponse:
-    """Upload a file for a provider. Admin only."""
+    """Upload a file for a provider. Admin only.
+
+    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
+    """
     if file.filename is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

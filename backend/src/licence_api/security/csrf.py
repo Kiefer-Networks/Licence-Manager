@@ -79,6 +79,34 @@ def verify_csrf_token(signed_token: str) -> bool:
         return False
 
 
+class CSRFProtected:
+    """Dependency class for CSRF protection on file upload endpoints.
+
+    Use as a dependency on file upload endpoints to ensure consistent
+    CSRF validation pattern:
+
+        @router.post("/upload")
+        async def upload_file(
+            csrf: Annotated[None, Depends(CSRFProtected())],
+            file: UploadFile = File(...),
+        ):
+            ...
+
+    This is preferred over the middleware for file endpoints because
+    it makes the CSRF protection explicit and visible in the endpoint
+    signature.
+    """
+
+    async def __call__(
+        self,
+        request: Request,
+        x_csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+        csrf_cookie: Annotated[str | None, Cookie(alias="csrf_token")] = None,
+    ) -> None:
+        """Validate CSRF token."""
+        await validate_csrf(request, x_csrf_token, csrf_cookie)
+
+
 async def validate_csrf(
     request: Request,
     x_csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
@@ -87,6 +115,8 @@ async def validate_csrf(
     """Validate CSRF token for state-changing requests.
 
     This dependency should be added to POST, PUT, DELETE endpoints.
+    For file uploads, consider using CSRFProtected class instead
+    for a more explicit pattern.
 
     Args:
         request: The FastAPI request

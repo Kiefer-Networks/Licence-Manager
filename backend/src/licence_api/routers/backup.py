@@ -15,6 +15,7 @@ from licence_api.models.dto.backup import (
     RestoreResponse,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
     limiter,
     BACKUP_EXPORT_LIMIT,
@@ -135,6 +136,7 @@ async def restore_backup(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
     password: str = Form(..., min_length=8),
 ) -> RestoreResponse:
@@ -147,6 +149,8 @@ async def restore_backup(
     Args:
         file: Encrypted backup file (.lcbak)
         password: Password for decryption
+
+    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
     """
     # Validate file
     if file.filename is None:
@@ -183,6 +187,7 @@ async def restore_backup(
 async def get_backup_info(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> BackupInfoResponse:
     """Get information about a backup file without decrypting.
@@ -191,6 +196,8 @@ async def get_backup_info(
     Does not require the password.
 
     Requires system.admin permission.
+
+    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
     """
     # Validate file
     if file.filename is None:
