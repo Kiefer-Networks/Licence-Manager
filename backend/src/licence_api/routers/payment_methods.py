@@ -14,7 +14,7 @@ from licence_api.models.dto.payment_method import (
     PaymentMethodResponse,
     PaymentMethodUpdate,
 )
-from licence_api.security.auth import get_current_user, require_admin
+from licence_api.security.auth import require_permission, require_admin, Permissions
 from licence_api.services.payment_method_service import PaymentMethodService
 
 router = APIRouter()
@@ -29,7 +29,7 @@ def get_payment_method_service(
 
 @router.get("", response_model=PaymentMethodListResponse)
 async def list_payment_methods(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodListResponse:
     """List all payment methods."""
@@ -60,7 +60,7 @@ async def create_payment_method(
 @router.get("/{payment_method_id}", response_model=PaymentMethodResponse)
 async def get_payment_method(
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodResponse:
     """Get a payment method by ID."""
