@@ -15,6 +15,7 @@ from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.service_account_pattern_repository import ServiceAccountPatternRepository
+from licence_api.repositories.service_account_license_type_repository import ServiceAccountLicenseTypeRepository
 from licence_api.repositories.admin_account_pattern_repository import AdminAccountPatternRepository
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
@@ -34,6 +35,7 @@ class SyncService:
         self.employee_repo = EmployeeRepository(session)
         self.license_repo = LicenseRepository(session)
         self.svc_account_pattern_repo = ServiceAccountPatternRepository(session)
+        self.svc_account_license_type_repo = ServiceAccountLicenseTypeRepository(session)
         self.admin_account_pattern_repo = AdminAccountPatternRepository(session)
         self.encryption = get_encryption_service()
 
@@ -516,13 +518,23 @@ class SyncService:
             elif match_result.should_suggest:
                 suggested_employee_id = match_result.employee_id
 
-            # Check for global service account patterns
+            # Check for global service account patterns (email-based)
             svc_pattern = await self.svc_account_pattern_repo.matches_email(
                 lic_data["external_user_id"]
             )
             is_service_account = svc_pattern is not None
             service_account_name = svc_pattern.name if svc_pattern else None
             service_account_owner_id = svc_pattern.owner_id if svc_pattern else None
+
+            # Check for license type-based service account rules if not already matched
+            if not is_service_account and license_type:
+                svc_license_type = await self.svc_account_license_type_repo.matches_license_type(
+                    license_type
+                )
+                if svc_license_type:
+                    is_service_account = True
+                    service_account_name = svc_license_type.name
+                    service_account_owner_id = svc_license_type.owner_id
 
             # Check for global admin account patterns (only if not a service account)
             admin_pattern = None

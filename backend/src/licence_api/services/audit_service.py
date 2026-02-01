@@ -78,6 +78,11 @@ class AuditAction:
     ADMIN_ACCOUNT_PATTERN_DELETE = "admin_account_pattern_delete"
     ADMIN_ACCOUNT_PATTERNS_APPLY = "admin_account_patterns_apply"
 
+    # Service Account License Types
+    SERVICE_ACCOUNT_LICENSE_TYPE_CREATE = "service_account_license_type_create"
+    SERVICE_ACCOUNT_LICENSE_TYPE_DELETE = "service_account_license_type_delete"
+    SERVICE_ACCOUNT_LICENSE_TYPES_APPLY = "service_account_license_types_apply"
+
     # Backup
     EXPORT = "export"
     IMPORT = "import"
@@ -100,6 +105,7 @@ class ResourceType:
     SESSION = "session"
     SERVICE_ACCOUNT_PATTERN = "service_account_pattern"
     ADMIN_ACCOUNT_PATTERN = "admin_account_pattern"
+    SERVICE_ACCOUNT_LICENSE_TYPE = "service_account_license_type"
 
 
 class AuditService:

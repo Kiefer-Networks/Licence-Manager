@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   api,
   ServiceAccountPattern,
+  ServiceAccountLicenseType,
   License,
   Provider,
   Employee,
@@ -43,6 +44,7 @@ import {
   Building2,
   Globe,
   Check,
+  Tag,
 } from 'lucide-react';
 
 interface ServiceAccountsTabProps {
@@ -89,9 +91,24 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
   // Employees for owner selection
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Load patterns
+  // License Types state
+  const [licenseTypes, setLicenseTypes] = useState<ServiceAccountLicenseType[]>([]);
+  const [loadingLicenseTypes, setLoadingLicenseTypes] = useState(true);
+  const [showAddLicenseType, setShowAddLicenseType] = useState(false);
+  const [newLicenseType, setNewLicenseType] = useState({
+    license_type: '',
+    name: '',
+    owner_id: '',
+    notes: '',
+  });
+  const [creatingLicenseType, setCreatingLicenseType] = useState(false);
+  const [deletingLicenseTypeId, setDeletingLicenseTypeId] = useState<string | null>(null);
+  const [applyingLicenseTypes, setApplyingLicenseTypes] = useState(false);
+
+  // Load patterns and license types
   useEffect(() => {
     loadPatterns();
+    loadLicenseTypes();
     loadEmployees();
   }, []);
 
@@ -138,6 +155,74 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       setEmployees(response.items);
     } catch (error) {
       // Silent fail for employee loading
+    }
+  };
+
+  const loadLicenseTypes = async () => {
+    setLoadingLicenseTypes(true);
+    try {
+      const response = await api.getServiceAccountLicenseTypes();
+      setLicenseTypes(response.items);
+    } catch (error) {
+      showToast('error', t('failedToLoadLicenseTypes'));
+    } finally {
+      setLoadingLicenseTypes(false);
+    }
+  };
+
+  const handleCreateLicenseType = async () => {
+    if (!newLicenseType.license_type.trim()) {
+      showToast('error', t('licenseTypeRequired'));
+      return;
+    }
+
+    setCreatingLicenseType(true);
+    try {
+      await api.createServiceAccountLicenseType({
+        license_type: newLicenseType.license_type.trim(),
+        name: newLicenseType.name.trim() || undefined,
+        owner_id: newLicenseType.owner_id || undefined,
+        notes: newLicenseType.notes.trim() || undefined,
+      });
+      showToast('success', t('licenseTypeCreated'));
+      setShowAddLicenseType(false);
+      setNewLicenseType({ license_type: '', name: '', owner_id: '', notes: '' });
+      loadLicenseTypes();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToCreateLicenseType'));
+    } finally {
+      setCreatingLicenseType(false);
+    }
+  };
+
+  const handleDeleteLicenseType = async (entryId: string) => {
+    setDeletingLicenseTypeId(entryId);
+    try {
+      await api.deleteServiceAccountLicenseType(entryId);
+      showToast('success', t('licenseTypeDeleted'));
+      loadLicenseTypes();
+    } catch (error) {
+      showToast('error', t('failedToDeleteLicenseType'));
+    } finally {
+      setDeletingLicenseTypeId(null);
+    }
+  };
+
+  const handleApplyLicenseTypes = async () => {
+    setApplyingLicenseTypes(true);
+    try {
+      const result = await api.applyServiceAccountLicenseTypes();
+      if (result.updated_count > 0) {
+        showToast('success', t('licenseTypesApplied', { count: result.updated_count }));
+        loadLicenses();
+        loadLicenseTypes();
+      } else {
+        showToast('info', t('noLicenseTypeMatches'));
+      }
+    } catch (error) {
+      showToast('error', t('failedToApplyLicenseTypes'));
+    } finally {
+      setApplyingLicenseTypes(false);
     }
   };
 
@@ -367,6 +452,108 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                         className="text-destructive hover:text-destructive"
                       >
                         {deletingPatternId === pattern.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* License Type Rules Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-medium">{t('licenseTypes')}</h2>
+            <p className="text-sm text-muted-foreground">
+              {t('licenseTypesHelp')}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleApplyLicenseTypes}
+              disabled={applyingLicenseTypes || licenseTypes.length === 0}
+            >
+              {applyingLicenseTypes ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-2" />
+              )}
+              {t('applyLicenseTypes')}
+            </Button>
+            <Button size="sm" onClick={() => setShowAddLicenseType(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              {t('addLicenseType')}
+            </Button>
+          </div>
+        </div>
+
+        {/* License Types Table */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          {loadingLicenseTypes ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+            </div>
+          ) : licenseTypes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+              <Tag className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-sm">{tCommon('noData')}</p>
+              <p className="text-xs">{t('licenseTypesHelp')}</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-zinc-50/50">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('licenseType')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('matchingLicenses')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {licenseTypes.map((entry) => (
+                  <tr key={entry.id} className="border-b last:border-0 hover:bg-zinc-50/50">
+                    <td className="px-4 py-3">
+                      <code className="text-sm bg-zinc-100 px-2 py-0.5 rounded">
+                        {entry.license_type}
+                      </code>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {entry.name || '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {entry.owner_name ? (
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-muted-foreground">{entry.owner_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="tabular-nums">
+                        {entry.match_count}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteLicenseType(entry.id)}
+                        disabled={deletingLicenseTypeId === entry.id}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingLicenseTypeId === entry.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Trash2 className="h-4 w-4" />
@@ -746,6 +933,80 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               {t('addPattern')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add License Type Dialog */}
+      <Dialog open={showAddLicenseType} onOpenChange={setShowAddLicenseType}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('addLicenseType')}</DialogTitle>
+            <DialogDescription>
+              {t('licenseTypesHelp')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="license_type">{t('licenseType')} *</Label>
+              <Input
+                id="license_type"
+                placeholder={t('licenseTypePlaceholder')}
+                value={newLicenseType.license_type}
+                onChange={(e) => setNewLicenseType({ ...newLicenseType, license_type: e.target.value })}
+                maxLength={500}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('licenseTypeDescription')}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="license_type_name">{tCommon('name')}</Label>
+              <Input
+                id="license_type_name"
+                placeholder={t('serviceNamePlaceholder')}
+                value={newLicenseType.name}
+                onChange={(e) => setNewLicenseType({ ...newLicenseType, name: e.target.value })}
+                maxLength={255}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="license_type_owner">{t('owner')} ({tCommon('optional')})</Label>
+              <Select value={newLicenseType.owner_id || '__none__'} onValueChange={(v) => setNewLicenseType({ ...newLicenseType, owner_id: v === '__none__' ? '' : v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder={tCommon('selectOption')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="license_type_notes">{t('notes')}</Label>
+              <Textarea
+                id="license_type_notes"
+                placeholder={t('notes')}
+                value={newLicenseType.notes}
+                onChange={(e) => setNewLicenseType({ ...newLicenseType, notes: e.target.value })}
+                maxLength={2000}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddLicenseType(false)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button onClick={handleCreateLicenseType} disabled={creatingLicenseType}>
+              {creatingLicenseType ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              {t('addLicenseType')}
             </Button>
           </DialogFooter>
         </DialogContent>

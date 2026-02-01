@@ -11,12 +11,17 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.models.dto.service_account import (
+    ApplyLicenseTypesResponse,
     ApplyPatternsResponse,
+    ServiceAccountLicenseTypeCreate,
+    ServiceAccountLicenseTypeListResponse,
+    ServiceAccountLicenseTypeResponse,
     ServiceAccountPatternCreate,
     ServiceAccountPatternListResponse,
     ServiceAccountPatternResponse,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
 from licence_api.utils.validation import validate_sort_by
@@ -90,7 +95,7 @@ async def create_pattern(
     if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Pattern '{data.email_pattern}' already exists",
+            detail="An email pattern with this value already exists",
         )
 
     return await service.create_pattern(
@@ -132,6 +137,7 @@ async def delete_pattern(
 
 
 @router.post("/apply", response_model=ApplyPatternsResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def apply_patterns(
     http_request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -187,3 +193,118 @@ async def list_service_account_licenses(
         page=page,
         page_size=page_size,
     )
+
+
+# License Type endpoints
+@router.get("/license-types", response_model=ServiceAccountLicenseTypeListResponse)
+async def list_license_types(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
+) -> ServiceAccountLicenseTypeListResponse:
+    """List all service account license types.
+
+    Requires licenses.view permission.
+    """
+    return await service.get_all_license_types()
+
+
+@router.get("/license-types/{entry_id}", response_model=ServiceAccountLicenseTypeResponse)
+async def get_license_type(
+    entry_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
+) -> ServiceAccountLicenseTypeResponse:
+    """Get a single service account license type by ID.
+
+    Requires licenses.view permission.
+    """
+    entry = await service.get_license_type_by_id(entry_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License type entry not found",
+        )
+    return entry
+
+
+@router.post("/license-types", response_model=ServiceAccountLicenseTypeResponse, status_code=status.HTTP_201_CREATED)
+async def create_license_type(
+    http_request: Request,
+    data: ServiceAccountLicenseTypeCreate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
+) -> ServiceAccountLicenseTypeResponse:
+    """Create a new service account license type.
+
+    Requires licenses.edit permission.
+    """
+    # Check if license type already exists
+    existing_entries = await service.get_all_license_types()
+    if any(e.license_type.lower() == data.license_type.lower() for e in existing_entries.items):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A license type rule with this value already exists",
+        )
+
+    return await service.create_license_type(
+        data=data,
+        created_by=current_user.id,
+        request=http_request,
+    )
+
+
+@router.delete("/license-types/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_license_type(
+    http_request: Request,
+    entry_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
+) -> None:
+    """Delete a service account license type.
+
+    Requires licenses.edit permission.
+    Note: This does not unmark existing licenses that were marked by this license type.
+    """
+    # Get entry before deletion for audit
+    entry = await service.get_license_type_by_id(entry_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License type entry not found",
+        )
+
+    await service.delete_license_type(
+        entry_id=entry_id,
+        admin_user_id=current_user.id,
+        request=http_request,
+        entry_info={
+            "license_type": entry.license_type,
+            "name": entry.name,
+        },
+    )
+
+
+@router.post("/apply-license-types", response_model=ApplyLicenseTypesResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def apply_license_types(
+    http_request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
+) -> ApplyLicenseTypesResponse:
+    """Apply all license type rules to all licenses.
+
+    This will mark any licenses with matching license types as service accounts.
+    Only updates licenses not already marked as service accounts.
+
+    Requires licenses.edit permission.
+    """
+    result = await service.apply_license_types_to_all_licenses(
+        admin_user_id=current_user.id,
+        request=http_request,
+    )
+
+    # Invalidate dashboard cache
+    cache = await get_cache_service()
+    await cache.invalidate_dashboard()
+
+    return result

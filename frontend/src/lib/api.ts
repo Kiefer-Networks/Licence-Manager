@@ -1039,6 +1039,37 @@ export interface ServiceAccountLicenseListResponse {
   page_size: number;
 }
 
+// Service Account License Types
+export interface ServiceAccountLicenseType {
+  id: string;
+  license_type: string;
+  name?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  match_count: number;
+}
+
+export interface ServiceAccountLicenseTypeCreate {
+  license_type: string;
+  name?: string;
+  owner_id?: string;
+  notes?: string;
+}
+
+export interface ServiceAccountLicenseTypeListResponse {
+  items: ServiceAccountLicenseType[];
+  total: number;
+}
+
+export interface ApplyLicenseTypesResponse {
+  updated_count: number;
+  license_types_applied: number;
+}
+
 // Admin Account Update
 export interface AdminAccountUpdate {
   is_admin_account: boolean;
@@ -1639,6 +1670,28 @@ export const api = {
 
     const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
     return fetchApi<ServiceAccountLicenseListResponse>(`/service-accounts/licenses${query}`);
+  },
+
+  // Service Account License Types
+  async getServiceAccountLicenseTypes(): Promise<ServiceAccountLicenseTypeListResponse> {
+    return fetchApi<ServiceAccountLicenseTypeListResponse>('/service-accounts/license-types');
+  },
+
+  async createServiceAccountLicenseType(data: ServiceAccountLicenseTypeCreate): Promise<ServiceAccountLicenseType> {
+    return fetchApi<ServiceAccountLicenseType>('/service-accounts/license-types', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteServiceAccountLicenseType(entryId: string): Promise<void> {
+    await fetchApi(`/service-accounts/license-types/${entryId}`, { method: 'DELETE' });
+  },
+
+  async applyServiceAccountLicenseTypes(): Promise<ApplyLicenseTypesResponse> {
+    return fetchApi<ApplyLicenseTypesResponse>('/service-accounts/apply-license-types', {
+      method: 'POST',
+    });
   },
 
   // Admin Account Management

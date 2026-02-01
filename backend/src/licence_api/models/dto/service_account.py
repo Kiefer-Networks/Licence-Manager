@@ -10,18 +10,18 @@ class ServiceAccountPatternCreate(BaseModel):
     """DTO for creating a new service account pattern."""
 
     email_pattern: str = Field(max_length=255)
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class ServiceAccountPatternUpdate(BaseModel):
     """DTO for updating a service account pattern."""
 
     email_pattern: str | None = Field(default=None, max_length=255)
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class ServiceAccountPatternResponse(BaseModel):
@@ -56,3 +56,47 @@ class ApplyPatternsResponse(BaseModel):
 
     updated_count: int
     patterns_applied: int
+
+
+# License Type DTOs
+class ServiceAccountLicenseTypeCreate(BaseModel):
+    """DTO for creating a new service account license type."""
+
+    license_type: str = Field(max_length=500)
+    name: str | None = Field(default=None, max_length=255)
+    owner_id: UUID | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ServiceAccountLicenseTypeResponse(BaseModel):
+    """DTO for service account license type response."""
+
+    id: UUID
+    license_type: str
+    name: str | None
+    owner_id: UUID | None
+    owner_name: str | None = None
+    notes: str | None
+    created_at: datetime
+    created_by: UUID | None
+    created_by_name: str | None = None
+    match_count: int = 0  # Number of licenses matching this license type
+
+    class Config:
+        """Pydantic config."""
+
+        from_attributes = True
+
+
+class ServiceAccountLicenseTypeListResponse(BaseModel):
+    """DTO for list of service account license types."""
+
+    items: list[ServiceAccountLicenseTypeResponse]
+    total: int
+
+
+class ApplyLicenseTypesResponse(BaseModel):
+    """Response after applying license types to all licenses."""
+
+    updated_count: int
+    license_types_applied: int
