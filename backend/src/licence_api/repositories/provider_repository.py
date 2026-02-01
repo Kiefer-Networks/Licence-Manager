@@ -47,11 +47,13 @@ class ProviderRepository(BaseRepository[ProviderORM]):
         Returns:
             List of (provider, license_count) tuples
         """
+        from sqlalchemy.orm import noload
         from licence_api.models.orm.license import LicenseORM
 
         result = await self.session.execute(
             select(ProviderORM, func.count(LicenseORM.id))
             .outerjoin(LicenseORM, ProviderORM.id == LicenseORM.provider_id)
+            .options(noload(ProviderORM.payment_method))  # Prevent joined load that breaks GROUP BY
             .group_by(ProviderORM.id)
             .order_by(ProviderORM.display_name)
         )
