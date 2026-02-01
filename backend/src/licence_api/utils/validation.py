@@ -154,3 +154,27 @@ def validate_against_whitelist(
         return None
 
     return value
+
+
+def escape_like_wildcards(value: str) -> str:
+    """Escape SQL LIKE wildcards to prevent injection.
+
+    The % and _ characters have special meaning in SQL LIKE patterns:
+    - % matches any sequence of characters
+    - _ matches any single character
+
+    This function escapes them with backslash to match literally.
+
+    Args:
+        value: Raw string value to escape
+
+    Returns:
+        Escaped string safe for use in LIKE patterns
+
+    Example:
+        >>> escape_like_wildcards("test%value")
+        'test\\%value'
+        >>> escape_like_wildcards("test_value")
+        'test\\_value'
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
