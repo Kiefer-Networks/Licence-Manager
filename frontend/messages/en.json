@@ -69,7 +69,11 @@
     "dashboard": "Dashboard",
     "user": "User",
     "invoice": "Invoice",
-    "password": "Password"
+    "password": "Password",
+    "errorTitle": "Something went wrong",
+    "errorDescription": "An unexpected error occurred. Please try again or contact support if the problem persists.",
+    "backToDashboard": "Back to Dashboard",
+    "errorReference": "Error reference"
   },
   "auth": {
     "signIn": "Sign In",

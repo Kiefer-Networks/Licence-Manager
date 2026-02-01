@@ -69,7 +69,11 @@
     "dashboard": "Dashboard",
     "user": "Benutzer",
     "invoice": "Rechnung",
-    "password": "Passwort"
+    "password": "Passwort",
+    "errorTitle": "Ein Fehler ist aufgetreten",
+    "errorDescription": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support, wenn das Problem weiterhin besteht.",
+    "backToDashboard": "Zurück zum Dashboard",
+    "errorReference": "Fehlerreferenz"
   },
   "auth": {
     "signIn": "Anmelden",
