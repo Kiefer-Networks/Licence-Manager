@@ -21,6 +21,9 @@ IMAGE_SIGNATURES = {
     ".jpeg": [b"\xff\xd8\xff"],
     ".webp": [b"RIFF"],
 }
+
+# HRIS providers - only one can be active at a time
+HRIS_PROVIDER_NAMES = {"hibob", "personio"}
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.provider import (
     PaymentMethodSummary,
@@ -175,6 +178,15 @@ class ProviderService:
         existing = await self.provider_repo.get_by_name(name)
         if existing:
             raise ValueError(f"Provider {name} already configured")
+
+        # Check if trying to add an HRIS provider when one already exists
+        if name in HRIS_PROVIDER_NAMES:
+            for hris_name in HRIS_PROVIDER_NAMES:
+                existing_hris = await self.provider_repo.get_by_name(hris_name)
+                if existing_hris:
+                    raise ValueError(
+                        f"Only one HRIS provider allowed. {existing_hris.display_name} is already configured."
+                    )
 
         encryption = get_encryption_service()
         encrypted_creds = encryption.encrypt(credentials)

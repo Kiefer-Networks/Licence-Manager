@@ -106,6 +106,8 @@ class SyncService:
             # Sync based on provider type
             if provider.name == ProviderName.HIBOB:
                 result = await self._sync_hibob(provider_impl, provider_id)
+            elif provider.name == ProviderName.PERSONIO:
+                result = await self._sync_personio(provider_impl, provider_id)
             else:
                 result = await self._sync_license_provider(provider_impl, provider_id)
 
@@ -158,6 +160,7 @@ class SyncService:
             MiroProvider,
             OnePasswordProvider,
             OpenAIProvider,
+            PersonioProvider,
             SlackProvider,
         )
 
@@ -179,6 +182,7 @@ class SyncService:
             ProviderName.MIRO: MiroProvider,
             ProviderName.ONEPASSWORD: OnePasswordProvider,
             ProviderName.OPENAI: OpenAIProvider,
+            ProviderName.PERSONIO: PersonioProvider,
             ProviderName.SLACK: SlackProvider,
         }
 
@@ -218,11 +222,16 @@ class SyncService:
                 start_date=emp_data.get("start_date"),
                 termination_date=emp_data.get("termination_date"),
                 synced_at=synced_at,
+                manager_email=emp_data.get("manager_email"),
             )
             if existing:
                 updated += 1
             else:
                 created += 1
+
+        # Resolve manager relationships after all employees are synced
+        managers_resolved = await self.employee_repo.resolve_manager_ids()
+        logger.info(f"Resolved {managers_resolved} manager relationships")
 
         # Sync avatars after employee data
         avatar_result = await self._sync_avatars(provider, employees)
@@ -232,7 +241,57 @@ class SyncService:
             "employees_created": created,
             "employees_updated": updated,
             "total": len(employees),
+            "managers_resolved": managers_resolved,
             "avatars": avatar_result,
+        }
+
+    async def _sync_personio(
+        self,
+        provider,
+        provider_id: UUID,
+    ) -> dict[str, Any]:
+        """Sync employees from Personio.
+
+        Args:
+            provider: Personio provider instance
+            provider_id: Provider UUID
+
+        Returns:
+            Dict with sync results
+        """
+        employees = await provider.fetch_employees()
+        synced_at = datetime.now(timezone.utc)
+        created = 0
+        updated = 0
+
+        for emp_data in employees:
+            existing = await self.employee_repo.get_by_hibob_id(emp_data["hibob_id"])
+            await self.employee_repo.upsert(
+                hibob_id=emp_data["hibob_id"],
+                email=emp_data["email"],
+                full_name=emp_data["full_name"],
+                department=emp_data.get("department"),
+                status=emp_data["status"],
+                start_date=emp_data.get("start_date"),
+                termination_date=emp_data.get("termination_date"),
+                synced_at=synced_at,
+                manager_email=emp_data.get("manager_email"),
+            )
+            if existing:
+                updated += 1
+            else:
+                created += 1
+
+        # Resolve manager relationships after all employees are synced
+        managers_resolved = await self.employee_repo.resolve_manager_ids()
+        logger.info(f"Resolved {managers_resolved} manager relationships")
+
+        return {
+            "provider": "personio",
+            "employees_created": created,
+            "employees_updated": updated,
+            "total": len(employees),
+            "managers_resolved": managers_resolved,
         }
 
     async def _sync_avatars(

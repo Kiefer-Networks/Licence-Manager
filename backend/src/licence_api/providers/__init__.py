@@ -18,6 +18,7 @@ from licence_api.providers.microsoft import MicrosoftProvider
 from licence_api.providers.miro import MiroProvider
 from licence_api.providers.onepassword import OnePasswordProvider
 from licence_api.providers.openai import OpenAIProvider
+from licence_api.providers.personio import PersonioProvider
 from licence_api.providers.slack import SlackProvider
 
 __all__ = [
@@ -39,5 +40,6 @@ __all__ = [
     "MiroProvider",
     "OnePasswordProvider",
     "OpenAIProvider",
+    "PersonioProvider",
     "SlackProvider",
 ]

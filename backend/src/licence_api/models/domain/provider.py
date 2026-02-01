@@ -29,6 +29,7 @@ class ProviderName(StrEnum):
     MIRO = "miro"
     ONEPASSWORD = "1password"
     OPENAI = "openai"
+    PERSONIO = "personio"
     SLACK = "slack"
 
 
