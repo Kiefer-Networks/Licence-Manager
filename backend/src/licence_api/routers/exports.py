@@ -40,8 +40,8 @@ async def export_licenses_csv(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     export_service: Annotated[ExportService, Depends(get_export_service)],
     provider_id: UUID | None = Query(default=None, description="Filter by provider"),
-    department: str | None = Query(default=None, description="Filter by department"),
-    status: str | None = Query(default=None, description="Filter by status"),
+    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    status: str | None = Query(default=None, max_length=50, description="Filter by status"),
 ) -> Response:
     """Export licenses to CSV format.
 

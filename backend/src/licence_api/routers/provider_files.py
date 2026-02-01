@@ -15,6 +15,7 @@ from licence_api.repositories.provider_file_repository import ProviderFileReposi
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.provider_file_service import (
     ProviderFileService,
     VIEWABLE_EXTENSIONS,
@@ -99,6 +100,7 @@ async def list_provider_files(
 
 
 @router.post("/{provider_id}/files", response_model=ProviderFileResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def upload_provider_file(
     http_request: Request,
     provider_id: UUID,
@@ -106,8 +108,8 @@ async def upload_provider_file(
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
-    description: str | None = Form(default=None),
-    category: str | None = Form(default=None),
+    description: str | None = Form(default=None, max_length=2000),
+    category: str | None = Form(default=None, max_length=100),
 ) -> ProviderFileResponse:
     """Upload a file for a provider. Admin only.
 
@@ -218,6 +220,7 @@ async def view_provider_file(
 
 
 @router.delete("/{provider_id}/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_provider_file(
     http_request: Request,
     provider_id: UUID,
