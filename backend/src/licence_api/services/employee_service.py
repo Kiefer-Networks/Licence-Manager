@@ -82,3 +82,14 @@ class EmployeeService:
         license_count = license_counts.get(employee_id, 0)
 
         return employee, license_count
+
+    async def get_employees_by_ids(self, employee_ids: list[UUID]) -> dict:
+        """Get multiple employees by IDs.
+
+        Args:
+            employee_ids: List of employee UUIDs
+
+        Returns:
+            Dict mapping employee ID to EmployeeORM
+        """
+        return await self.employee_repo.get_by_ids(employee_ids)

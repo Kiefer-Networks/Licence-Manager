@@ -207,6 +207,9 @@ export default function UsersPage() {
                         </button>
                       </th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                        {tCommon('manager')}
+                      </th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 hover:text-foreground">
                           {tCommon('status')} <SortIcon column="status" />
                         </button>
@@ -244,6 +247,19 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{employee.email}</td>
                         <td className="px-4 py-3 text-muted-foreground">{employee.department || '-'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {employee.manager ? (
+                            <span
+                              className="hover:text-foreground cursor-pointer hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/users/${employee.manager!.id}`);
+                              }}
+                            >
+                              {employee.manager.full_name}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td className="px-4 py-3">
                           <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
                             {employee.status === 'active' ? t('active') : t('offboarded')}

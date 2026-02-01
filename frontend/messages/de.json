@@ -68,6 +68,7 @@
     "login": "Anmelden",
     "dashboard": "Dashboard",
     "user": "Benutzer",
+    "manager": "Vorgesetzte/r",
     "invoice": "Rechnung",
     "password": "Passwort",
     "errorTitle": "Ein Fehler ist aufgetreten",
@@ -353,6 +354,8 @@
     "hibob": "HiBob",
     "auth0": "Auth0",
     "onepassword": "1Password",
+    "1password": "1Password",
+    "personio": "Personio",
     "mailjet": "Mailjet",
     "mattermost": "Mattermost",
     "gitlab": "GitLab",
@@ -561,6 +564,7 @@
     "connectHiBob": "HiBob verbinden",
     "connected": "Verbunden",
     "connectHiBobDescription": "HiBob verbinden, um Mitarbeiterdaten zu synchronisieren",
+    "connectHrisDescription": "HRIS verbinden, um Mitarbeiterdaten zu synchronisieren",
     "connectHris": "HRIS verbinden",
     "addNewLicenseProvider": "Neuen Lizenzanbieter hinzufügen",
     "providerType": "Anbietertyp",
@@ -1415,6 +1419,21 @@
         "4. Gewähren Sie \"Personen\" Leseberechtigungen",
         "5. API-Token generieren",
         "6. Kopieren Sie den Token - er kann später nicht abgerufen werden"
+      ]
+    },
+    "personio": {
+      "permissions": [
+        "API-Zugangsdaten mit Mitarbeiter-Lesezugriff",
+        "OAuth 2.0 Client Credentials"
+      ],
+      "steps": [
+        "1. Melden Sie sich bei Personio als Admin an",
+        "2. Gehen Sie zu Einstellungen → Integrationen → API-Zugangsdaten",
+        "3. Erstellen Sie neue API-Zugangsdaten",
+        "4. Wählen Sie den Bereich 'Mitarbeiter' mit Leseberechtigung",
+        "5. Kopieren Sie die Client-ID",
+        "6. Kopieren Sie das Client-Secret - es kann später nicht eingesehen werden",
+        "7. Die Zugangsdaten sind sofort gültig"
       ]
     },
     "jetbrains": {

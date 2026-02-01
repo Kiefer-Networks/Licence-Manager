@@ -68,6 +68,7 @@
     "login": "Login",
     "dashboard": "Dashboard",
     "user": "User",
+    "manager": "Manager",
     "invoice": "Invoice",
     "password": "Password",
     "errorTitle": "Something went wrong",
@@ -353,6 +354,8 @@
     "hibob": "HiBob",
     "auth0": "Auth0",
     "onepassword": "1Password",
+    "1password": "1Password",
+    "personio": "Personio",
     "mailjet": "Mailjet",
     "mattermost": "Mattermost",
     "gitlab": "GitLab",
@@ -561,6 +564,7 @@
     "connectHiBob": "Connect HiBob",
     "connected": "Connected",
     "connectHiBobDescription": "Connect HiBob to sync employee data",
+    "connectHrisDescription": "Connect your HRIS to sync employee data",
     "connectHris": "Connect HRIS",
     "addNewLicenseProvider": "Add a new license provider",
     "providerType": "Provider Type",
@@ -1415,6 +1419,21 @@
         "4. Grant \"People\" read permissions",
         "5. Generate API token",
         "6. Copy the token - it cannot be retrieved later"
+      ]
+    },
+    "personio": {
+      "permissions": [
+        "API credentials with employee read access",
+        "OAuth 2.0 Client Credentials"
+      ],
+      "steps": [
+        "1. Log in to Personio as Admin",
+        "2. Go to Settings → Integrations → API credentials",
+        "3. Create new API credentials",
+        "4. Select 'Employees' scope with read permission",
+        "5. Copy the Client ID",
+        "6. Copy the Client Secret - it cannot be viewed again",
+        "7. Credentials are valid immediately"
       ]
     },
     "jetbrains": {
