@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   AreaChart,
   Area,
@@ -27,6 +28,7 @@ export function CostTrendChart({
   percentChange,
   className = '',
 }: CostTrendChartProps) {
+  const t = useTranslations('dashboard');
   const chartData = useMemo(() => {
     return data.map((entry) => ({
       month: new Date(entry.month).toLocaleDateString(getLocale(), {
@@ -51,7 +53,7 @@ export function CostTrendChart({
   if (data.length === 0) {
     return (
       <div className={`flex items-center justify-center h-64 text-muted-foreground ${className}`}>
-        <p className="text-sm">No cost trend data available</p>
+        <p className="text-sm">{t('noCostTrendData')}</p>
       </div>
     );
   }
@@ -60,14 +62,14 @@ export function CostTrendChart({
     <div className={className}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">Cost Trend</p>
+          <p className="text-sm font-medium text-muted-foreground">{t('costTrend')}</p>
           <div className="flex items-center gap-2 mt-1">
             <TrendIcon className={`h-4 w-4 ${trendColor}`} />
             <span className={`text-sm font-medium ${trendTextColor}`}>
               {percentChange > 0 ? '+' : ''}{percentChange}%
             </span>
             <span className="text-xs text-muted-foreground">
-              vs. {data.length} months ago
+              {t('vsMonthsAgo', { months: data.length })}
             </span>
           </div>
         </div>
@@ -75,7 +77,7 @@ export function CostTrendChart({
           <p className="text-2xl font-semibold tabular-nums">
             {formatCost(currentCost)}
           </p>
-          <p className="text-xs text-muted-foreground">Current monthly</p>
+          <p className="text-xs text-muted-foreground">{t('currentMonthly')}</p>
         </div>
       </div>
 
@@ -114,7 +116,7 @@ export function CostTrendChart({
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 fontSize: '12px',
               }}
-              formatter={(value: number) => [formatCost(value), 'Cost']}
+              formatter={(value: number) => [formatCost(value), t('costLabel')]}
               labelStyle={{ fontWeight: 500, marginBottom: 4 }}
             />
             <Area
