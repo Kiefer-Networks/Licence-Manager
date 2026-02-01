@@ -108,15 +108,18 @@ NOTIFICATION_EVENT_TYPES = [
 EVENT_TYPE_MAP = {e.code: e for e in NOTIFICATION_EVENT_TYPES}
 
 
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
     """Set authentication cookies on response.
 
     Uses cookie security settings from configuration.
 
     Args:
-        response: FastAPI response
-        access_token: JWT access token
-        refresh_token: Refresh token (optional)
+        response: FastAPI response to set cookies on
+        access_token: JWT access token to store
+        refresh_token: Refresh token to store (optional)
+
+    Returns:
+        None
     """
     settings = get_settings()
 
@@ -154,7 +157,10 @@ def _clear_auth_cookies(response: Response) -> None:
     """Clear authentication cookies.
 
     Args:
-        response: FastAPI response
+        response: FastAPI response to clear cookies from
+
+    Returns:
+        None
     """
     response.delete_cookie(key="access_token", path="/")
     response.delete_cookie(key="refresh_token", path="/")
@@ -235,8 +241,8 @@ async def login_local(
 async def refresh_token(
     request: Request,
     response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     body: RefreshTokenRequest | None = None,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     user_agent: str | None = Header(default=None),
 ) -> TokenResponse:
