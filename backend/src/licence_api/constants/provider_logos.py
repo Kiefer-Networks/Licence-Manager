@@ -27,7 +27,7 @@ BUILT_IN_LOGOS: dict[str, str] = {
     "confluence": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Confluence-blue-logo-gradient-rgb%402x.png",
     "atlassian": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Atlassian-logo-blue-large.svg",
     "jetbrains": "https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.svg",
-    "cursor": "https://www.cursor.com/favicon.ico",
+    "cursor": "https://cursor.com/favicon.ico",
 
     # Cloud / Infrastructure
     "aws": "https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg",
