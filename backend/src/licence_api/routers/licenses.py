@@ -17,6 +17,7 @@ from licence_api.models.dto.license import (
     AdminAccountUpdate,
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
@@ -204,6 +205,7 @@ async def get_license(
 
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def assign_license(
     http_request: Request,
     license_id: UUID,
@@ -227,6 +229,7 @@ async def assign_license(
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def unassign_license(
     http_request: Request,
     license_id: UUID,
@@ -248,6 +251,7 @@ async def unassign_license(
 
 
 @router.post("/{license_id}/remove-from-provider", response_model=RemoveMemberResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def remove_license_from_provider(
     http_request: Request,
     license_id: UUID,
@@ -277,6 +281,7 @@ async def remove_license_from_provider(
 
 
 @router.post("/bulk/remove-from-provider", response_model=BulkActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_remove_from_provider(
     http_request: Request,
     request: BulkActionRequest,
@@ -317,6 +322,7 @@ async def bulk_remove_from_provider(
 
 
 @router.post("/bulk/delete", response_model=BulkActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_delete_licenses(
     http_request: Request,
     request: BulkActionRequest,
@@ -359,6 +365,7 @@ async def bulk_delete_licenses(
 
 
 @router.post("/bulk/unassign", response_model=BulkActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_unassign_licenses(
     http_request: Request,
     request: BulkActionRequest,
@@ -401,6 +408,7 @@ async def bulk_unassign_licenses(
 
 
 @router.put("/{license_id}/service-account", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_service_account_status(
     http_request: Request,
     license_id: UUID,
@@ -437,6 +445,7 @@ async def update_service_account_status(
 
 
 @router.put("/{license_id}/admin-account", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_admin_account_status(
     http_request: Request,
     license_id: UUID,
@@ -478,6 +487,7 @@ async def update_admin_account_status(
 # Match management endpoints
 
 @router.post("/{license_id}/match/confirm", response_model=MatchActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def confirm_match(
     http_request: Request,
     license_id: UUID,
@@ -512,6 +522,7 @@ async def confirm_match(
 
 
 @router.post("/{license_id}/match/reject", response_model=MatchActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def reject_match(
     http_request: Request,
     license_id: UUID,
@@ -545,6 +556,7 @@ async def reject_match(
 
 
 @router.post("/{license_id}/match/external-guest", response_model=MatchActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def mark_as_external_guest(
     http_request: Request,
     license_id: UUID,
@@ -578,6 +590,7 @@ async def mark_as_external_guest(
 
 
 @router.post("/{license_id}/match/assign", response_model=MatchActionResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def manual_assign_match(
     http_request: Request,
     license_id: UUID,

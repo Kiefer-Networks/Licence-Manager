@@ -10,18 +10,18 @@ from pydantic import BaseModel, Field
 class CreditCardDetails(BaseModel):
     """Credit card details."""
 
-    holder: str
-    last_four: str
-    expiry_month: int
-    expiry_year: int
+    holder: str = Field(max_length=255)
+    last_four: str = Field(max_length=4)
+    expiry_month: int = Field(ge=1, le=12)
+    expiry_year: int = Field(ge=2000, le=2100)
 
 
 class BankAccountDetails(BaseModel):
     """Bank account details."""
 
-    bank_name: str
-    iban_last_four: str | None = None
-    bic: str | None = None
+    bank_name: str = Field(max_length=255)
+    iban_last_four: str | None = Field(default=None, max_length=4)
+    bic: str | None = Field(default=None, max_length=11)
 
 
 class PaymentMethodCreate(BaseModel):
