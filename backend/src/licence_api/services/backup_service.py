@@ -534,9 +534,12 @@ class BackupService:
                 full_name=e["full_name"],
                 department=e.get("department"),
                 status=e["status"],
+                source=e.get("source", "hibob"),  # Default to hibob for backwards compatibility
                 start_date=self._parse_date(e.get("start_date")),
                 termination_date=self._parse_date(e.get("termination_date")),
                 avatar_url=e.get("avatar_url"),
+                manager_email=e.get("manager_email"),
+                manager_id=UUID(e["manager_id"]) if e.get("manager_id") else None,
                 synced_at=self._parse_datetime(e["synced_at"]),
                 created_at=self._parse_datetime(e.get("created_at")),
                 updated_at=self._parse_datetime(e.get("updated_at")),

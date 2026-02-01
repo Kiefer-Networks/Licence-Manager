@@ -325,9 +325,10 @@ class ManualEmployeeService:
                     )
                     created += 1
 
-            except Exception as e:
+            except Exception:
                 skipped += 1
-                errors.append(f"Error processing {item.email}: {str(e)}")
+                # Sanitize error message - don't expose internal details
+                errors.append(f"Failed to process employee: {item.email}")
 
         # Resolve manager IDs for all newly created/updated employees
         await self.employee_repo.resolve_manager_ids()
