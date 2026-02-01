@@ -818,7 +818,13 @@
     "makeGlobalPattern": "Globales Muster erstellen",
     "ownerOffboarded": "Besitzer ausgeschieden",
     "adminNamePlaceholder": "IT-Admin",
-    "emailPatternPlaceholder": "*-admin@firma.de"
+    "emailPatternPlaceholder": "*-admin@firma.de",
+    "clickToEditOwner": "Klicken um Besitzer zu bearbeiten",
+    "clickToAssign": "Klicken zum Zuweisen",
+    "assignOwner": "Besitzer zuweisen",
+    "assignOwnerDescription": "Wählen Sie einen Mitarbeiter, der für diesen Admin-Account verantwortlich ist",
+    "ownerUpdated": "Besitzer erfolgreich aktualisiert",
+    "failedToUpdateOwner": "Besitzer konnte nicht aktualisiert werden"
   },
   "lifecycle": {
     "title": "Lizenz-Lebenszyklus",

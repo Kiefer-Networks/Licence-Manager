@@ -95,6 +95,11 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
   const [matchesLicenses, setMatchesLicenses] = useState<License[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
+  // Edit owner dialog state
+  const [editOwnerAccount, setEditOwnerAccount] = useState<GroupedAdminAccount | null>(null);
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
+  const [savingOwner, setSavingOwner] = useState(false);
+
   // Admin Account Licenses state
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loadingLicenses, setLoadingLicenses] = useState(true);
@@ -281,6 +286,34 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
     } finally {
       setMakingGlobal(false);
+    }
+  };
+
+  const handleOpenEditOwner = (account: GroupedAdminAccount) => {
+    setEditOwnerAccount(account);
+    setSelectedOwnerId(account.owner_id || '');
+  };
+
+  const handleSaveOwner = async () => {
+    if (!editOwnerAccount) return;
+
+    setSavingOwner(true);
+    try {
+      // Update all licenses for this admin account
+      for (const license of editOwnerAccount.licenses) {
+        await api.updateLicenseAdminAccount(license.id, {
+          is_admin_account: true,
+          admin_account_name: editOwnerAccount.name || undefined,
+          admin_account_owner_id: selectedOwnerId || undefined,
+        });
+      }
+      showToast('success', t('ownerUpdated'));
+      setEditOwnerAccount(null);
+      loadLicenses();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdateOwner'));
+    } finally {
+      setSavingOwner(false);
     }
   };
 
@@ -633,19 +666,25 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       {account.name || '-'}
                     </td>
                     <td className="px-4 py-3">
-                      {account.owner_name ? (
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className={account.owner_status === 'offboarded' ? 'text-red-600' : 'text-muted-foreground'}>
-                            {account.owner_name}
-                          </span>
-                          {account.owner_status === 'offboarded' && (
-                            <span title={t('ownerOffboarded')}><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                      <button
+                        onClick={() => handleOpenEditOwner(account)}
+                        className="flex items-center gap-1.5 hover:bg-zinc-100 rounded px-2 py-1 -mx-2 -my-1 transition-colors"
+                        title={t('clickToEditOwner')}
+                      >
+                        {account.owner_name ? (
+                          <>
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className={account.owner_status === 'offboarded' ? 'text-red-600' : 'text-muted-foreground'}>
+                              {account.owner_name}
+                            </span>
+                            {account.owner_status === 'offboarded' && (
+                              <span title={t('ownerOffboarded')}><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">{t('clickToAssign')}</span>
+                        )}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
@@ -915,6 +954,73 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               {t('addPattern')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Owner Dialog */}
+      <Dialog open={!!editOwnerAccount} onOpenChange={(open) => !open && setEditOwnerAccount(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5 text-purple-500" />
+              {t('assignOwner')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('assignOwnerDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          {editOwnerAccount && (
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-zinc-50 rounded-lg space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{tCommon('email')}:</span>
+                  <code className="text-sm bg-white px-2 py-0.5 rounded border">
+                    {editOwnerAccount.email}
+                  </code>
+                </div>
+                {editOwnerAccount.name && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{tCommon('name')}:</span>
+                    <span className="text-sm">{editOwnerAccount.name}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{tLicenses('title')}:</span>
+                  <span className="text-sm">{editOwnerAccount.licenses.length}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t('owner')}</Label>
+                <Select value={selectedOwnerId || '__none__'} onValueChange={(v) => setSelectedOwnerId(v === '__none__' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={tCommon('selectOption')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{tCommon('none')}</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.full_name} ({emp.department || '-'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOwnerAccount(null)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button onClick={handleSaveOwner} disabled={savingOwner}>
+              {savingOwner ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              {tCommon('save')}
             </Button>
           </DialogFooter>
         </DialogContent>

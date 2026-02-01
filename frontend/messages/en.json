@@ -818,7 +818,13 @@
     "makeGlobalPattern": "Make global pattern",
     "ownerOffboarded": "Owner offboarded",
     "adminNamePlaceholder": "IT Admin",
-    "emailPatternPlaceholder": "*-admin@company.com"
+    "emailPatternPlaceholder": "*-admin@company.com",
+    "clickToEditOwner": "Click to edit owner",
+    "clickToAssign": "Click to assign",
+    "assignOwner": "Assign Owner",
+    "assignOwnerDescription": "Select an employee who is responsible for this admin account",
+    "ownerUpdated": "Owner updated successfully",
+    "failedToUpdateOwner": "Failed to update owner"
   },
   "lifecycle": {
     "title": "License Lifecycle",
