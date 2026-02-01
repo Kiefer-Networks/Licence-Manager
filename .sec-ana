@@ -1,4 +1,4 @@
-# Security Audit Findings v11
+# Security Audit Findings v13
 # Generated: 2026-02-01
 # Status: Complete Re-Audit - All Security Issues Resolved
 
@@ -20,9 +20,10 @@
 | Re-Audit 2026-02-01 (Round 2) | 0 | 0 | 0 | 0 | 0 | 7 |
 | Re-Audit 2026-02-01 (Round 3: Backup/RBAC) | 0 | 0 | 0 | 0 | 0 | 7 |
 | Re-Audit 2026-02-01 (Round 4: Final Audit) | 0 | 0 | 0 | 0 | 0 | 6 |
-| **Total** | **0** | **0** | **0** | **1** | **1** | **88** |
+| Re-Audit 2026-02-01 (Round 5: Rate Limiting) | 0 | 0 | 0 | 0 | 0 | 8 |
+| **Total** | **0** | **0** | **0** | **1** | **1** | **96** |
 
-**Progress: 88 of 89 findings fixed (99%)**
+**Progress: 96 of 97 findings fixed (99%)**
 
 ### Remaining Open Findings Summary
 - 1 LOW: SEC-25 (No SQL injection test coverage - testing improvement, not vulnerability)
@@ -708,6 +709,66 @@ All critical, high, and medium severity security issues have been resolved. The 
 - **File:** backend/src/licence_api/routers/provider_files.py:68,156,187
 - **Description:** Uses get_current_user instead of require_permission for list, download, view endpoints
 - **Fix:** Changed to require_permission(Permissions.PROVIDERS_VIEW) for all read endpoints
+
+---
+
+## 15. Re-Audit Findings (2026-02-01 - Round 5: Rate Limiting & Input Validation)
+
+### SEC-V13-001 [MEDIUM] - Payment Method DTOs Missing Input Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/payment_method.py:13-24
+- **Description:** CreditCardDetails and BankAccountDetails had unvalidated string fields
+- **Fix:** Added Field(max_length) to holder, last_four, bank_name, iban_last_four, bic; added ge/le to expiry fields
+
+### SEC-V13-002 [MEDIUM] - Licenses Router Missing Rate Limiting
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/licenses.py:207-599
+- **Description:** 12 POST/PUT endpoints missing rate limiting (assign, unassign, remove-from-provider, bulk operations, service-account, admin-account, match operations)
+- **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) to all state-changing endpoints
+
+### SEC-V13-003 [MEDIUM] - Manual Licenses Router Missing Rate Limiting and Input Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/manual_licenses.py:21-56, 70-188
+- **Description:** DTOs missing max_length, endpoints missing rate limiting
+- **Fix:** Added Field(max_length) to all string fields, Field(ge/le) to numeric fields, rate limiting to all endpoints
+
+### SEC-V13-004 [MEDIUM] - License Packages/Organization Licenses Routers Missing Rate Limiting
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **Files:** backend/src/licence_api/routers/license_packages.py, organization_licenses.py
+- **Description:** POST, PUT, DELETE endpoints missing rate limiting
+- **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) to all state-changing endpoints
+
+### SEC-V13-005 [MEDIUM] - Cancellation Router Missing Rate Limiting
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/cancellation.py:31-220
+- **Description:** All 7 POST/PATCH endpoints missing rate limiting
+- **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) and Request parameter to all endpoints
+
+### SEC-V13-006 [MEDIUM] - Settings Router Missing Rate Limiting
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/settings.py:177-389
+- **Description:** 9 PUT/POST/DELETE endpoints missing rate limiting
+- **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) to all state-changing endpoints
+
+### SEC-V13-007 [LOW] - Provider Files and Exports Missing Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **Files:** backend/src/licence_api/routers/provider_files.py, exports.py
+- **Description:** Form fields and query parameters missing max_length validation
+- **Fix:** Added max_length to description, category Form fields; max_length to department, status Query parameters
+
+### SEC-V13-008 [LOW] - Service Accounts Router Missing Rate Limiting on Some Endpoints
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/service_accounts.py:108,230,256
+- **Description:** delete_pattern, create_license_type, delete_license_type missing rate limiting
+- **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) to all three endpoints
 
 ---
 
