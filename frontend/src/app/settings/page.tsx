@@ -155,9 +155,9 @@ export default function SettingsPage() {
     setSavingThresholds(true);
     try {
       await api.updateThresholdSettings(thresholds);
-      showToast('success', 'Threshold settings saved');
+      showToast('success', t('thresholdsUpdated'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save threshold settings';
+      const message = error instanceof Error ? error.message : t('failedToSave');
       showToast('error', message);
     } finally {
       setSavingThresholds(false);
@@ -174,7 +174,7 @@ export default function SettingsPage() {
     const domain = newDomain.trim().toLowerCase();
     if (!domain) return;
     if (companyDomains.includes(domain)) {
-      showToast('error', 'Domain already exists');
+      showToast('error', t('domainAlreadyExists'));
       return;
     }
     setCompanyDomains([...companyDomains, domain]);
@@ -189,9 +189,9 @@ export default function SettingsPage() {
     setSavingDomains(true);
     try {
       await api.setCompanyDomains(companyDomains);
-      showToast('success', 'Company domains saved');
+      showToast('success', t('companyDomainsSaved'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save domains';
+      const message = error instanceof Error ? error.message : t('failedToSaveDomains');
       showToast('error', message);
     } finally {
       setSavingDomains(false);
@@ -268,10 +268,10 @@ export default function SettingsPage() {
 
       if (editingPaymentMethod) {
         await api.updatePaymentMethod(editingPaymentMethod.id, data);
-        showToast('success', 'Payment method updated');
+        showToast('success', t('paymentMethodUpdated'));
       } else {
         await api.createPaymentMethod(data);
-        showToast('success', 'Payment method added');
+        showToast('success', t('paymentMethodAdded'));
       }
 
       await fetchPaymentMethods();
@@ -279,7 +279,7 @@ export default function SettingsPage() {
       resetPaymentMethodForm();
       setEditingPaymentMethod(null);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save payment method';
+      const message = error instanceof Error ? error.message : t('failedToSavePaymentMethod');
       showToast('error', message);
     } finally {
       setSavingPaymentMethod(false);
@@ -290,9 +290,9 @@ export default function SettingsPage() {
     try {
       await api.deletePaymentMethod(id);
       await fetchPaymentMethods();
-      showToast('success', 'Payment method deleted');
+      showToast('success', t('paymentMethodDeleted'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to delete payment method';
+      const message = error instanceof Error ? error.message : t('failedToDeletePaymentMethod');
       showToast('error', message);
     }
   };
@@ -300,7 +300,7 @@ export default function SettingsPage() {
   // Slack handlers
   const handleSaveSlackConfig = async () => {
     if (!slackBotToken.trim()) {
-      showToast('error', 'Please enter a Slack bot token');
+      showToast('error', t('enterSlackToken'));
       return;
     }
     setSavingSlack(true);
@@ -308,9 +308,9 @@ export default function SettingsPage() {
       await api.setSlackConfig({ bot_token: slackBotToken });
       setSlackConfigured(true);
       setSlackBotToken('');
-      showToast('success', 'Slack configuration saved');
+      showToast('success', t('slackConfigSaved'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save Slack configuration';
+      const message = error instanceof Error ? error.message : t('failedToSaveSlackConfig');
       showToast('error', message);
     } finally {
       setSavingSlack(false);
@@ -319,7 +319,7 @@ export default function SettingsPage() {
 
   const handleTestSlack = async () => {
     if (!testChannel.trim()) {
-      showToast('error', 'Please enter a channel name');
+      showToast('error', t('enterChannelName'));
       return;
     }
     setTestingSlack(true);
@@ -331,7 +331,7 @@ export default function SettingsPage() {
         showToast('error', result.message);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to send test notification';
+      const message = error instanceof Error ? error.message : t('failedToSendTest');
       showToast('error', message);
     } finally {
       setTestingSlack(false);
@@ -356,7 +356,7 @@ export default function SettingsPage() {
 
   const handleSaveRule = async () => {
     if (!ruleForm.event_type || !ruleForm.slack_channel) {
-      showToast('error', 'Please fill in all required fields');
+      showToast('error', t('fillRequiredFields'));
       return;
     }
     try {
@@ -366,19 +366,19 @@ export default function SettingsPage() {
           slack_channel: channel,
           template: ruleForm.template || undefined,
         });
-        showToast('success', 'Notification rule updated');
+        showToast('success', t('ruleUpdated'));
       } else {
         await api.createNotificationRule({
           event_type: ruleForm.event_type,
           slack_channel: channel,
           template: ruleForm.template || undefined,
         });
-        showToast('success', 'Notification rule created');
+        showToast('success', t('ruleCreatedSuccess'));
       }
       await fetchNotificationRules();
       setRuleDialogOpen(false);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save notification rule';
+      const message = error instanceof Error ? error.message : t('failedToSaveRule');
       showToast('error', message);
     }
   };
@@ -387,9 +387,9 @@ export default function SettingsPage() {
     try {
       await api.updateNotificationRule(rule.id, { enabled: !rule.enabled });
       await fetchNotificationRules();
-      showToast('success', `Rule ${rule.enabled ? 'disabled' : 'enabled'}`);
+      showToast('success', rule.enabled ? t('ruleDisabled') : t('ruleEnabled'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to update rule';
+      const message = error instanceof Error ? error.message : t('failedToUpdateRule');
       showToast('error', message);
     }
   };
@@ -398,9 +398,9 @@ export default function SettingsPage() {
     try {
       await api.deleteNotificationRule(id);
       await fetchNotificationRules();
-      showToast('success', 'Notification rule deleted');
+      showToast('success', t('ruleDeleted'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to delete rule';
+      const message = error instanceof Error ? error.message : t('failedToDeleteRule');
       showToast('error', message);
     }
   };
@@ -456,14 +456,14 @@ export default function SettingsPage() {
 
           <div className="border rounded-lg bg-white p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
-              Configure your company email domains. Licenses assigned to users with external email addresses will be highlighted with a warning.
+              {t('companyDomainsDescription')}
             </p>
 
             <div className="flex gap-2">
               <Input
                 value={newDomain}
                 onChange={(e) => setNewDomain(e.target.value)}
-                placeholder="e.g., company.com"
+                placeholder={t('domainPlaceholder')}
                 className="flex-1"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -474,7 +474,7 @@ export default function SettingsPage() {
               />
               <Button variant="outline" size="sm" onClick={handleAddDomain}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Add
+                {tCommon('add')}
               </Button>
             </div>
 
@@ -497,13 +497,13 @@ export default function SettingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No domains configured</p>
+              <p className="text-xs text-muted-foreground italic">{t('noDomainsConfigured')}</p>
             )}
 
             <div className="pt-2 border-t">
               <Button size="sm" onClick={handleSaveDomains} disabled={savingDomains}>
                 {savingDomains ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Save Domains
+                {tCommon('save')}
               </Button>
             </div>
           </div>
@@ -514,11 +514,11 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Payment Methods</h2>
+              <h2 className="text-sm font-medium">{t('paymentMethods')}</h2>
             </div>
             <Button size="sm" variant="outline" onClick={() => handleOpenPaymentMethodDialog()}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Add Payment Method
+              {t('addPaymentMethod')}
             </Button>
           </div>
 
@@ -536,14 +536,14 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm">{method.name}</p>
                         {method.is_default && (
-                          <Badge variant="secondary" className="text-xs">Default</Badge>
+                          <Badge variant="secondary" className="text-xs">{t('default')}</Badge>
                         )}
                         {method.is_expiring && (
                           <Badge variant="outline" className="text-xs text-amber-600 border-amber-200 bg-amber-50">
                             <AlertTriangle className="h-3 w-3 mr-1" />
-                            Expires {method.days_until_expiry !== null && method.days_until_expiry !== undefined
-                              ? (method.days_until_expiry <= 0 ? 'soon' : `in ${method.days_until_expiry} days`)
-                              : 'soon'}
+                            {method.days_until_expiry !== null && method.days_until_expiry !== undefined && method.days_until_expiry > 0
+                              ? t('expiresInDays', { days: method.days_until_expiry })
+                              : t('expiresSoon')}
                           </Badge>
                         )}
                       </div>
@@ -577,8 +577,8 @@ export default function SettingsPage() {
           ) : (
             <div className="border rounded-lg bg-white p-6 text-center">
               <CreditCard className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
-              <p className="text-sm text-muted-foreground">No payment methods configured</p>
-              <p className="text-xs text-muted-foreground mt-1">Add credit cards, bank accounts, or other payment methods</p>
+              <p className="text-sm text-muted-foreground">{t('noPaymentMethods')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('addPaymentMethodsNote')}</p>
             </div>
           )}
         </section>
@@ -588,20 +588,20 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Slack Notifications</h2>
+              <h2 className="text-sm font-medium">{t('slackNotifications')}</h2>
             </div>
           </div>
 
           <div className="border rounded-lg bg-white p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
-              Configure Slack integration to receive notifications about license changes, offboarded employees, and sync errors.
+              {t('slackDescription')}
             </p>
 
             {/* Slack Configuration */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className={`h-2 w-2 rounded-full ${slackConfigured ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
-                <span className="text-sm font-medium">{slackConfigured ? 'Slack Connected' : 'Slack Not Connected'}</span>
+                <span className="text-sm font-medium">{slackConfigured ? t('slackConnected') : t('slackNotConnected')}</span>
               </div>
 
               <div className="flex gap-2">
@@ -609,11 +609,11 @@ export default function SettingsPage() {
                   type="password"
                   value={slackBotToken}
                   onChange={(e) => setSlackBotToken(e.target.value)}
-                  placeholder={slackConfigured ? 'Enter new token to update' : 'xoxb-your-bot-token'}
+                  placeholder={slackConfigured ? t('newTokenPlaceholder') : t('slackTokenPlaceholder')}
                   className="flex-1"
                 />
                 <Button variant="outline" size="sm" onClick={handleSaveSlackConfig} disabled={savingSlack || !slackBotToken.trim()}>
-                  {savingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Token'}
+                  {savingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : t('saveToken')}
                 </Button>
               </div>
 
@@ -624,12 +624,12 @@ export default function SettingsPage() {
                     <Input
                       value={testChannel}
                       onChange={(e) => setTestChannel(e.target.value)}
-                      placeholder="channel-name"
+                      placeholder={t('channelPlaceholder')}
                       className="flex-1"
                     />
                   </div>
                   <Button variant="outline" size="sm" onClick={handleTestSlack} disabled={testingSlack || !testChannel.trim()}>
-                    {testingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> Test</>}
+                    {testingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> {t('test')}</>}
                   </Button>
                 </div>
               )}
@@ -642,18 +642,18 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Notification Rules</h2>
+              <h2 className="text-sm font-medium">{t('notificationRules')}</h2>
             </div>
             <Button size="sm" variant="outline" onClick={() => handleOpenRuleDialog()} disabled={!slackConfigured}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Add Rule
+              {t('addRule')}
             </Button>
           </div>
 
           {!slackConfigured ? (
             <div className="border rounded-lg bg-zinc-50 p-4 text-center">
               <MessageSquare className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
-              <p className="text-sm text-muted-foreground">Configure Slack above to create notification rules</p>
+              <p className="text-sm text-muted-foreground">{t('configureSlackFirst')}</p>
             </div>
           ) : notificationRules.length > 0 ? (
             <div className="border rounded-lg bg-white divide-y">
@@ -669,7 +669,7 @@ export default function SettingsPage() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm">{eventType?.label || rule.event_type}</p>
                           {!rule.enabled && (
-                            <Badge variant="secondary" className="text-xs">Disabled</Badge>
+                            <Badge variant="secondary" className="text-xs">{tCommon('disabled')}</Badge>
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -683,7 +683,7 @@ export default function SettingsPage() {
                         size="icon"
                         className={`h-8 w-8 ${rule.enabled ? 'text-emerald-600' : 'text-zinc-400'}`}
                         onClick={() => handleToggleRule(rule)}
-                        title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                        title={rule.enabled ? t('disableRule') : t('enableRule')}
                       >
                         <Power className="h-4 w-4" />
                       </Button>
@@ -701,8 +701,7 @@ export default function SettingsPage() {
           ) : (
             <div className="border rounded-lg bg-white p-6 text-center">
               <Bell className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
-              <p className="text-sm text-muted-foreground">No notification rules configured</p>
-              <p className="text-xs text-muted-foreground mt-1">Add rules to receive Slack notifications for events</p>
+              <p className="text-sm text-muted-foreground">{t('noRulesConfigured')}</p>
             </div>
           )}
         </section>
@@ -712,18 +711,18 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Warning Thresholds</h2>
+              <h2 className="text-sm font-medium">{t('warningThresholds')}</h2>
             </div>
           </div>
 
           <div className="border rounded-lg bg-white p-4 space-y-6">
             <p className="text-xs text-muted-foreground">
-              Configure thresholds for warnings and notifications. These values determine when alerts are triggered.
+              {t('thresholdsDescription')}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Inactive License Threshold (days)</Label>
+                <Label className="text-xs font-medium">{t('inactiveLicenseThreshold')}</Label>
                 <Input
                   type="number"
                   value={thresholds.inactive_days}
@@ -732,12 +731,12 @@ export default function SettingsPage() {
                   max={365}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Licenses inactive for more than this many days will be flagged
+                  {t('inactiveLicenseThresholdHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Contract Expiring Soon (days)</Label>
+                <Label className="text-xs font-medium">{t('contractExpiringSoon')}</Label>
                 <Input
                   type="number"
                   value={thresholds.expiring_days}
@@ -746,12 +745,12 @@ export default function SettingsPage() {
                   max={365}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Contracts expiring within this many days will trigger alerts
+                  {t('contractExpiringSoonHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Low Utilization Threshold (%)</Label>
+                <Label className="text-xs font-medium">{t('lowUtilizationThreshold')}</Label>
                 <Input
                   type="number"
                   value={thresholds.low_utilization_percent}
@@ -760,12 +759,12 @@ export default function SettingsPage() {
                   max={100}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Providers with utilization below this percentage will be flagged
+                  {t('lowUtilizationThresholdHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Cost Increase Alert (%)</Label>
+                <Label className="text-xs font-medium">{t('costIncreaseAlert')}</Label>
                 <Input
                   type="number"
                   value={thresholds.cost_increase_percent}
@@ -774,12 +773,12 @@ export default function SettingsPage() {
                   max={100}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Alert when monthly costs increase by this percentage
+                  {t('costIncreaseAlertHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Max Unassigned Licenses</Label>
+                <Label className="text-xs font-medium">{t('maxUnassignedLicenses')}</Label>
                 <Input
                   type="number"
                   value={thresholds.max_unassigned_licenses}
@@ -788,7 +787,7 @@ export default function SettingsPage() {
                   max={1000}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Alert when unassigned licenses exceed this count per provider
+                  {t('maxUnassignedLicensesHelp')}
                 </p>
               </div>
             </div>
@@ -796,7 +795,7 @@ export default function SettingsPage() {
             <div className="pt-4 border-t">
               <Button size="sm" onClick={handleSaveThresholds} disabled={savingThresholds}>
                 {savingThresholds ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Save Thresholds
+                {t('saveThresholds')}
               </Button>
             </div>
           </div>
@@ -807,7 +806,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <HardDrive className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">System Backup</h2>
+              <h2 className="text-sm font-medium">{t('systemBackup')}</h2>
             </div>
           </div>
 
@@ -816,7 +815,7 @@ export default function SettingsPage() {
               <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
                 <p>
-                  Exportiert alle Provider, Lizenzen, Mitarbeiter und Einstellungen als verschlüsselte Datei.
+                  {t('backupInfoDescription')}
                 </p>
               </div>
             </div>
@@ -824,9 +823,9 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 text-amber-700">
               <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
-                <p className="font-medium">Achtung beim Import</p>
+                <p className="font-medium">{t('importWarningTitle')}</p>
                 <p className="text-xs mt-1">
-                  Der Import löscht ALLE bestehenden Daten und ersetzt sie mit dem Backup!
+                  {t('importWarningDescription')}
                 </p>
               </div>
             </div>
@@ -838,7 +837,7 @@ export default function SettingsPage() {
                 onClick={() => setBackupExportDialogOpen(true)}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Backup erstellen
+                {t('createBackupButton')}
               </Button>
               <Button
                 variant="outline"
@@ -846,7 +845,7 @@ export default function SettingsPage() {
                 onClick={() => setBackupRestoreDialogOpen(true)}
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Backup importieren
+                {t('importBackupButton')}
               </Button>
             </div>
           </div>
@@ -857,14 +856,14 @@ export default function SettingsPage() {
       <BackupExportDialog
         open={backupExportDialogOpen}
         onOpenChange={setBackupExportDialogOpen}
-        onSuccess={() => showToast('success', 'Backup erfolgreich erstellt')}
+        onSuccess={() => showToast('success', t('backupCreatedSuccess'))}
         onError={(error) => showToast('error', error)}
       />
       <BackupRestoreDialog
         open={backupRestoreDialogOpen}
         onOpenChange={setBackupRestoreDialogOpen}
         onSuccess={() => {
-          showToast('success', 'Backup erfolgreich importiert');
+          showToast('success', t('backupImportedSuccess'));
           // Refresh data after restore
           Promise.all([
             fetchCompanyDomains(),
@@ -881,21 +880,21 @@ export default function SettingsPage() {
       <Dialog open={ruleDialogOpen} onOpenChange={setRuleDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingRule ? 'Edit Notification Rule' : 'Add Notification Rule'}</DialogTitle>
+            <DialogTitle>{editingRule ? t('editNotificationRule') : t('addNotificationRule')}</DialogTitle>
             <DialogDescription>
-              {editingRule ? 'Update the notification rule settings.' : 'Create a rule to receive Slack notifications for specific events.'}
+              {editingRule ? t('editRuleDescription') : t('createRuleDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Event Type</Label>
+              <Label className="text-xs font-medium">{t('eventType')}</Label>
               <Select
                 value={ruleForm.event_type}
                 onValueChange={(v) => setRuleForm({ ...ruleForm, event_type: v })}
                 disabled={!!editingRule}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select event type" />
+                  <SelectValue placeholder={t('selectEventType')} />
                 </SelectTrigger>
                 <SelectContent>
                   {NOTIFICATION_EVENT_TYPES.map((type) => (
@@ -915,28 +914,28 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Slack Channel</Label>
+              <Label className="text-xs font-medium">{t('slackChannel')}</Label>
               <div className="flex items-center gap-1">
                 <Hash className="h-4 w-4 text-muted-foreground" />
                 <Input
                   value={ruleForm.slack_channel.replace(/^#/, '')}
                   onChange={(e) => setRuleForm({ ...ruleForm, slack_channel: e.target.value })}
-                  placeholder="channel-name"
+                  placeholder={t('channelPlaceholder')}
                   className="flex-1"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Custom Template (optional)</Label>
+              <Label className="text-xs font-medium">{t('customTemplate')}</Label>
               <Textarea
                 value={ruleForm.template}
                 onChange={(e) => setRuleForm({ ...ruleForm, template: e.target.value })}
-                placeholder="Leave empty for default message template"
+                placeholder={t('leaveEmptyForDefault')}
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Available variables: {'{{employee_name}}'}, {'{{employee_email}}'}, {'{{provider_name}}'}, {'{{license_count}}'}
+                {t('availableVariables')}: {'{{employee_name}}'}, {'{{employee_email}}'}, {'{{provider_name}}'}, {'{{license_count}}'}
               </p>
             </div>
           </div>
@@ -953,35 +952,35 @@ export default function SettingsPage() {
       <Dialog open={paymentMethodDialogOpen} onOpenChange={setPaymentMethodDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPaymentMethod ? 'Edit Payment Method' : 'Add Payment Method'}</DialogTitle>
+            <DialogTitle>{editingPaymentMethod ? t('editPaymentMethod') : t('addPaymentMethod')}</DialogTitle>
             <DialogDescription>
-              {editingPaymentMethod ? 'Update the payment method details.' : 'Add a new payment method for tracking.'}
+              {editingPaymentMethod ? t('editPaymentMethodDescription') : t('createPaymentMethodDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Name</Label>
+              <Label className="text-xs font-medium">{tCommon('name')}</Label>
               <Input
                 value={paymentMethodForm.name}
                 onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, name: e.target.value })}
-                placeholder="e.g., Company Visa"
+                placeholder={t('paymentNamePlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Type</Label>
+              <Label className="text-xs font-medium">{tCommon('type')}</Label>
               <Select
                 value={paymentMethodForm.type}
                 onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, type: v })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bank_account">Bank Account</SelectItem>
-                  <SelectItem value="credit_card">Credit Card</SelectItem>
-                  <SelectItem value="invoice">Invoice</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                  <SelectItem value="paypal">PayPal</SelectItem>
-                  <SelectItem value="stripe">Stripe</SelectItem>
+                  <SelectItem value="bank_account">{t('bankAccount')}</SelectItem>
+                  <SelectItem value="credit_card">{t('creditCard')}</SelectItem>
+                  <SelectItem value="invoice">{tCommon('invoice')}</SelectItem>
+                  <SelectItem value="other">{t('otherPayment')}</SelectItem>
+                  <SelectItem value="paypal">{t('paypal')}</SelectItem>
+                  <SelectItem value="stripe">{t('stripe')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -989,16 +988,16 @@ export default function SettingsPage() {
             {paymentMethodForm.type === 'credit_card' && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">Card Holder</Label>
+                  <Label className="text-xs font-medium">{t('cardHolder')}</Label>
                   <Input
                     value={paymentMethodForm.card_holder}
                     onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, card_holder: e.target.value })}
-                    placeholder="Name on card"
+                    placeholder={t('nameOnCard')}
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">Last 4 Digits</Label>
+                    <Label className="text-xs font-medium">{t('lastFourDigits')}</Label>
                     <Input
                       value={paymentMethodForm.card_last_four}
                       onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, card_last_four: e.target.value.slice(0, 4) })}
@@ -1007,7 +1006,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">Expiry Month</Label>
+                    <Label className="text-xs font-medium">{t('expiryMonth')}</Label>
                     <Select
                       value={paymentMethodForm.expiry_month}
                       onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, expiry_month: v })}
@@ -1022,7 +1021,7 @@ export default function SettingsPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">Expiry Year</Label>
+                    <Label className="text-xs font-medium">{t('expiryYear')}</Label>
                     <Select
                       value={paymentMethodForm.expiry_year}
                       onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, expiry_year: v })}
@@ -1043,24 +1042,24 @@ export default function SettingsPage() {
             {paymentMethodForm.type === 'bank_account' && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">Bank Name</Label>
+                  <Label className="text-xs font-medium">{t('bankName')}</Label>
                   <Input
                     value={paymentMethodForm.bank_name}
                     onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, bank_name: e.target.value })}
-                    placeholder="e.g., Deutsche Bank"
+                    placeholder={t('bankNamePlaceholder')}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">Account Holder</Label>
+                    <Label className="text-xs font-medium">{t('accountHolder')}</Label>
                     <Input
                       value={paymentMethodForm.account_holder}
                       onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, account_holder: e.target.value })}
-                      placeholder="Account holder name"
+                      placeholder={t('accountHolderName')}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">IBAN Last 4</Label>
+                    <Label className="text-xs font-medium">{t('ibanLastFour')}</Label>
                     <Input
                       value={paymentMethodForm.iban_last_four}
                       onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, iban_last_four: e.target.value.slice(0, 4) })}
@@ -1074,21 +1073,21 @@ export default function SettingsPage() {
 
             {paymentMethodForm.type !== 'credit_card' && paymentMethodForm.type !== 'bank_account' && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Provider / Account</Label>
+                <Label className="text-xs font-medium">{t('providerAccount')}</Label>
                 <Input
                   value={paymentMethodForm.provider_name}
                   onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, provider_name: e.target.value })}
-                  placeholder="e.g., account@company.com"
+                  placeholder={t('accountEmailPlaceholder')}
                 />
               </div>
             )}
 
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Notes (optional)</Label>
+              <Label className="text-xs font-medium">{t('notesOptional')}</Label>
               <Input
                 value={paymentMethodForm.notes}
                 onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, notes: e.target.value })}
-                placeholder="Any additional notes"
+                placeholder={t('anyAdditionalNotes')}
               />
             </div>
 
@@ -1100,7 +1099,7 @@ export default function SettingsPage() {
                 onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, is_default: e.target.checked })}
                 className="rounded border-zinc-300"
               />
-              <Label htmlFor="is_default" className="text-xs font-medium cursor-pointer">Set as default payment method</Label>
+              <Label htmlFor="is_default" className="text-xs font-medium cursor-pointer">{t('setAsDefaultPayment')}</Label>
             </div>
           </div>
           <DialogFooter>
