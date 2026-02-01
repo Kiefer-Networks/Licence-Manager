@@ -15,6 +15,7 @@ from licence_api.models.dto.organization_license import (
     OrganizationLicenseUpdate,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.organization_license_service import OrganizationLicenseService
 
 router = APIRouter()
@@ -44,10 +45,11 @@ async def list_organization_licenses(
 
 
 @router.post("/{provider_id}/org-licenses", response_model=OrganizationLicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_organization_license(
+    request: Request,
     provider_id: UUID,
     data: OrganizationLicenseCreate,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
 ) -> OrganizationLicenseResponse:
@@ -67,11 +69,12 @@ async def create_organization_license(
 
 
 @router.put("/{provider_id}/org-licenses/{license_id}", response_model=OrganizationLicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_organization_license(
+    request: Request,
     provider_id: UUID,
     license_id: UUID,
     data: OrganizationLicenseUpdate,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
 ) -> OrganizationLicenseResponse:
@@ -92,10 +95,11 @@ async def update_organization_license(
 
 
 @router.delete("/{provider_id}/org-licenses/{license_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_organization_license(
+    request: Request,
     provider_id: UUID,
     license_id: UUID,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
 ) -> None:

@@ -15,6 +15,7 @@ from licence_api.models.dto.license_package import (
     LicensePackageUpdate,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.license_package_service import LicensePackageService
 
 router = APIRouter()
@@ -44,10 +45,11 @@ async def list_license_packages(
 
 
 @router.post("/{provider_id}/packages", response_model=LicensePackageResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_license_package(
+    request: Request,
     provider_id: UUID,
     data: LicensePackageCreate,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
 ) -> LicensePackageResponse:
@@ -67,11 +69,12 @@ async def create_license_package(
 
 
 @router.put("/{provider_id}/packages/{package_id}", response_model=LicensePackageResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_license_package(
+    request: Request,
     provider_id: UUID,
     package_id: UUID,
     data: LicensePackageUpdate,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
 ) -> LicensePackageResponse:
@@ -92,10 +95,11 @@ async def update_license_package(
 
 
 @router.delete("/{provider_id}/packages/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_license_package(
+    request: Request,
     provider_id: UUID,
     package_id: UUID,
-    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
 ) -> None:

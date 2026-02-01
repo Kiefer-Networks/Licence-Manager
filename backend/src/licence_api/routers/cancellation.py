@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -14,7 +14,8 @@ from licence_api.models.dto.cancellation import (
     NeedsReorderUpdate,
     RenewRequest,
 )
-from licence_api.security.auth import get_current_user, Permissions, require_permission
+from licence_api.security.auth import Permissions, require_permission
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.cancellation_service import CancellationService
 
 router = APIRouter()
@@ -29,7 +30,9 @@ def get_cancellation_service(db: AsyncSession = Depends(get_db)) -> Cancellation
 
 
 @router.post("/licenses/{license_id}/cancel", response_model=CancellationResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_license(
+    http_request: Request,
     license_id: UUID,
     request: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -59,7 +62,9 @@ async def cancel_license(
 
 
 @router.post("/licenses/{license_id}/renew")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def renew_license(
+    http_request: Request,
     license_id: UUID,
     request: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -86,7 +91,9 @@ async def renew_license(
 
 
 @router.patch("/licenses/{license_id}/needs-reorder")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_license_needs_reorder(
+    http_request: Request,
     license_id: UUID,
     request: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -110,7 +117,9 @@ async def set_license_needs_reorder(
 
 
 @router.post("/packages/{package_id}/cancel", response_model=CancellationResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_package(
+    http_request: Request,
     package_id: UUID,
     request: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -140,7 +149,9 @@ async def cancel_package(
 
 
 @router.post("/packages/{package_id}/renew")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def renew_package(
+    http_request: Request,
     package_id: UUID,
     request: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -167,7 +178,9 @@ async def renew_package(
 
 
 @router.patch("/packages/{package_id}/needs-reorder")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_package_needs_reorder(
+    http_request: Request,
     package_id: UUID,
     request: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -191,7 +204,9 @@ async def set_package_needs_reorder(
 
 
 @router.post("/org-licenses/{org_license_id}/cancel", response_model=CancellationResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_org_license(
+    http_request: Request,
     org_license_id: UUID,
     request: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
