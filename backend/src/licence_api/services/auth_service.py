@@ -27,6 +27,7 @@ from licence_api.utils.file_validation import (
     get_extension_from_content_type,
 )
 from licence_api.utils.secure_logging import log_error, log_warning
+from licence_api.utils.security_events import log_security_event, SecurityEventType
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,15 @@ class AuthService:
         if not self.password_service.verify_password(password, user.password_hash):
             await self.user_repo.record_failed_login(user.id)
             await self.session.commit()
+            # Log failed login attempt
+            log_security_event(
+                SecurityEventType.LOGIN_FAILED,
+                user_id=user.id,
+                user_email=email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                success=False,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
@@ -112,6 +122,14 @@ class AuthService:
 
         # Successful login
         await self.user_repo.record_successful_login(user.id)
+        # Log successful login
+        log_security_event(
+            SecurityEventType.LOGIN_SUCCESS,
+            user_id=user.id,
+            user_email=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
         # Get user permissions
         roles, permissions = self._aggregate_permissions(user)
@@ -203,6 +221,20 @@ class AuthService:
 
             # Refresh user to get roles
             user = await self.user_repo.get_with_roles(user.id)
+
+            # Log user creation
+            log_security_event(
+                SecurityEventType.USER_CREATED,
+                user_id=user.id,
+                user_email=user.email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details={
+                    "auth_provider": "google",
+                    "role_assigned": role.code if role else None,
+                    "is_first_user": is_first_user,
+                },
+            )
         else:
             # Update user info from Google
             user.name = google_info.name
@@ -485,6 +517,15 @@ class AuthService:
             resource_type="admin_user",
             resource_id=user_id,
             admin_user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Security event log
+        log_security_event(
+            SecurityEventType.PASSWORD_CHANGED,
+            user_id=user_id,
+            user_email=user.email,
             ip_address=ip_address,
             user_agent=user_agent,
         )
