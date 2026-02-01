@@ -4,11 +4,25 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_, func, distinct, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
+from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.models.orm.audit_log import AuditLogORM
 from licence_api.repositories.base import BaseRepository
+
+
+def escape_like_wildcards(value: str) -> str:
+    """Escape SQL LIKE wildcards to prevent injection.
+
+    The % and _ characters have special meaning in SQL LIKE patterns:
+    - % matches any sequence of characters
+    - _ matches any single character
+
+    This function escapes them with backslash to match literally.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class AuditRepository(BaseRepository[AuditLogORM]):
@@ -111,6 +125,10 @@ class AuditRepository(BaseRepository[AuditLogORM]):
         offset: int = 0,
         action: str | None = None,
         resource_type: str | None = None,
+        admin_user_id: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        search: str | None = None,
     ) -> tuple[list[AuditLogORM], int]:
         """Get recent audit logs with optional filters.
 
@@ -119,22 +137,60 @@ class AuditRepository(BaseRepository[AuditLogORM]):
             offset: Pagination offset
             action: Filter by action
             resource_type: Filter by resource type
+            admin_user_id: Filter by admin user ID
+            date_from: Filter by minimum date
+            date_to: Filter by maximum date
+            search: Full-text search over email, resource_id, and changes
 
         Returns:
             Tuple of (logs, total_count)
         """
-        from sqlalchemy import func
-
+        # Base query with join to admin_users for search
         query = select(AuditLogORM)
         count_query = select(func.count()).select_from(AuditLogORM)
 
+        # For search, we need to join with admin_users
+        if search:
+            query = query.outerjoin(
+                AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
+            )
+            count_query = count_query.outerjoin(
+                AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
+            )
+
+        conditions = []
+
         if action:
-            query = query.where(AuditLogORM.action == action)
-            count_query = count_query.where(AuditLogORM.action == action)
+            conditions.append(AuditLogORM.action == action)
 
         if resource_type:
-            query = query.where(AuditLogORM.resource_type == resource_type)
-            count_query = count_query.where(AuditLogORM.resource_type == resource_type)
+            conditions.append(AuditLogORM.resource_type == resource_type)
+
+        if admin_user_id:
+            conditions.append(AuditLogORM.admin_user_id == admin_user_id)
+
+        if date_from:
+            conditions.append(AuditLogORM.created_at >= date_from)
+
+        if date_to:
+            conditions.append(AuditLogORM.created_at <= date_to)
+
+        if search:
+            # Escape SQL wildcards to prevent LIKE injection
+            escaped_search = escape_like_wildcards(search.lower())
+            search_term = f"%{escaped_search}%"
+            search_conditions = [
+                func.lower(AdminUserORM.email).like(search_term, escape="\\"),
+                cast(AuditLogORM.resource_id, String).like(search_term, escape="\\"),
+                cast(AuditLogORM.changes, String).ilike(search_term, escape="\\"),
+                func.lower(AuditLogORM.action).like(search_term, escape="\\"),
+                func.lower(AuditLogORM.resource_type).like(search_term, escape="\\"),
+            ]
+            conditions.append(or_(*search_conditions))
+
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
 
         query = query.order_by(AuditLogORM.created_at.desc()).offset(offset).limit(limit)
 
@@ -167,11 +223,90 @@ class AuditRepository(BaseRepository[AuditLogORM]):
         Returns:
             List of unique actions, ordered alphabetically.
         """
-        from sqlalchemy import distinct
-
         result = await self.session.execute(
             select(distinct(AuditLogORM.action))
             .where(AuditLogORM.action.isnot(None))
             .order_by(AuditLogORM.action)
         )
         return [row[0] for row in result.all()]
+
+    async def get_distinct_users(self) -> list[tuple[UUID, str]]:
+        """Get all distinct admin users who have audit log entries.
+
+        Returns:
+            List of tuples (user_id, email) for users with audit entries.
+        """
+        result = await self.session.execute(
+            select(distinct(AuditLogORM.admin_user_id), AdminUserORM.email)
+            .join(AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id)
+            .where(AuditLogORM.admin_user_id.isnot(None))
+            .order_by(AdminUserORM.email)
+        )
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def get_all(
+        self,
+        action: str | None = None,
+        resource_type: str | None = None,
+        admin_user_id: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        search: str | None = None,
+    ) -> list[AuditLogORM]:
+        """Get all audit logs matching filters (for export).
+
+        Args:
+            action: Filter by action
+            resource_type: Filter by resource type
+            admin_user_id: Filter by admin user ID
+            date_from: Filter by minimum date
+            date_to: Filter by maximum date
+            search: Full-text search
+
+        Returns:
+            List of all matching audit logs
+        """
+        query = select(AuditLogORM)
+
+        if search:
+            query = query.outerjoin(
+                AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
+            )
+
+        conditions = []
+
+        if action:
+            conditions.append(AuditLogORM.action == action)
+
+        if resource_type:
+            conditions.append(AuditLogORM.resource_type == resource_type)
+
+        if admin_user_id:
+            conditions.append(AuditLogORM.admin_user_id == admin_user_id)
+
+        if date_from:
+            conditions.append(AuditLogORM.created_at >= date_from)
+
+        if date_to:
+            conditions.append(AuditLogORM.created_at <= date_to)
+
+        if search:
+            # Escape SQL wildcards to prevent LIKE injection
+            escaped_search = escape_like_wildcards(search.lower())
+            search_term = f"%{escaped_search}%"
+            search_conditions = [
+                func.lower(AdminUserORM.email).like(search_term, escape="\\"),
+                cast(AuditLogORM.resource_id, String).like(search_term, escape="\\"),
+                cast(AuditLogORM.changes, String).ilike(search_term, escape="\\"),
+                func.lower(AuditLogORM.action).like(search_term, escape="\\"),
+                func.lower(AuditLogORM.resource_type).like(search_term, escape="\\"),
+            ]
+            conditions.append(or_(*search_conditions))
+
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        query = query.order_by(AuditLogORM.created_at.desc())
+
+        result = await self.session.execute(query)
+        return list(result.scalars().all())

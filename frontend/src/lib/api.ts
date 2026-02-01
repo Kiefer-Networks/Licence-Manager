@@ -2394,6 +2394,9 @@ export const api = {
     action?: string;
     resource_type?: string;
     admin_user_id?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
   } = {}): Promise<AuditLogListResponse> {
     const searchParams = new URLSearchParams();
     if (params.page) searchParams.set('page', params.page.toString());
@@ -2401,6 +2404,9 @@ export const api = {
     if (params.action) searchParams.set('action', params.action);
     if (params.resource_type) searchParams.set('resource_type', params.resource_type);
     if (params.admin_user_id) searchParams.set('admin_user_id', params.admin_user_id);
+    if (params.date_from) searchParams.set('date_from', params.date_from);
+    if (params.date_to) searchParams.set('date_to', params.date_to);
+    if (params.search) searchParams.set('search', params.search);
 
     const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
     return fetchApi<AuditLogListResponse>(`/audit${query}`);
@@ -2418,6 +2424,41 @@ export const api = {
   async getAuditActions(): Promise<string[]> {
     const response = await fetchApi<{ actions: string[] }>('/audit/actions');
     return response.actions;
+  },
+
+  async getAuditUsers(): Promise<Array<{ id: string; email: string }>> {
+    const response = await fetchApi<{ items: Array<{ id: string; email: string }> }>('/audit/users');
+    return response.items;
+  },
+
+  async exportAuditLogs(params: {
+    format?: 'csv' | 'json';
+    action?: string;
+    resource_type?: string;
+    admin_user_id?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+  } = {}): Promise<Blob> {
+    const searchParams = new URLSearchParams();
+    searchParams.set('format', params.format || 'csv');
+    if (params.action) searchParams.set('action', params.action);
+    if (params.resource_type) searchParams.set('resource_type', params.resource_type);
+    if (params.admin_user_id) searchParams.set('admin_user_id', params.admin_user_id);
+    if (params.date_from) searchParams.set('date_from', params.date_from);
+    if (params.date_to) searchParams.set('date_to', params.date_to);
+    if (params.search) searchParams.set('search', params.search);
+
+    const response = await fetch(`${API_BASE}/api/v1/audit/export?${searchParams.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+
+    return response.blob();
   },
 
   // ============================================================================

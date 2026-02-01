@@ -1,75 +1,56 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
 import { api, AuditLogEntry } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/app-layout';
-import { Loader2, ChevronLeft, ChevronRight, FileText, RefreshCw, Filter, Eye } from 'lucide-react';
-import { getLocale } from '@/lib/locale';
+import { Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { AuditFilters } from './components/AuditFilters';
+import { AuditTable } from './components/AuditTable';
+import { AuditDetails } from './components/AuditDetails';
+import { DatePreset } from './components/DateRangePicker';
 
-function formatRelativeTime(dateString: string, t: (key: string, params?: Record<string, number>) => string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
+// Debounce helper
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
-  if (diffSec < 60) return t('justNow');
-  if (diffMin < 60) return t('minutesAgo', { min: diffMin });
-  if (diffHour < 24) return t('hoursAgo', { hours: diffHour });
-  if (diffDay < 7) return t('daysAgo', { days: diffDay });
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
 
-  return date.toLocaleDateString(getLocale(), {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
 }
 
-function getActionBadgeColor(action: string): string {
-  switch (action.toLowerCase()) {
-    case 'create':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    case 'update':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'delete':
-      return 'bg-red-100 text-red-700 border-red-200';
-    case 'login':
-    case 'logout':
-      return 'bg-purple-100 text-purple-700 border-purple-200';
-    case 'sync':
-      return 'bg-amber-100 text-amber-700 border-amber-200';
+// Date helper functions
+function getDateFromPreset(preset: DatePreset): { from: string; to: string } {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  switch (preset) {
+    case 'today': {
+      return { from: today, to: today };
+    }
+    case 'last7Days': {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 7);
+      return { from: from.toISOString().split('T')[0], to: today };
+    }
+    case 'last30Days': {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 30);
+      return { from: from.toISOString().split('T')[0], to: today };
+    }
     default:
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200';
+      return { from: '', to: '' };
   }
 }
 
@@ -79,6 +60,7 @@ export default function AuditLogPage() {
   const router = useRouter();
   const { hasPermission, isLoading: authLoading } = useAuth();
 
+  // Data state
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -87,39 +69,69 @@ export default function AuditLogPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 25;
 
-  // Filters
-  const [actionFilter, setActionFilter] = useState<string>('');
-  const [resourceTypeFilter, setResourceTypeFilter] = useState<string>('');
+  // Search state
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  // Date filter state
+  const [datePreset, setDatePreset] = useState<DatePreset>('custom');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // Filter state
+  const [actionFilter, setActionFilter] = useState('');
+  const [resourceTypeFilter, setResourceTypeFilter] = useState('');
+  const [userFilter, setUserFilter] = useState('');
+
+  // Filter options
   const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [availableResourceTypes, setAvailableResourceTypes] = useState<string[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; email: string }>>([]);
 
-  // Detail dialog
+  // Detail dialog state
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
+  // Export state
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Auth check
   useEffect(() => {
     if (!authLoading && !hasPermission(Permissions.AUDIT_VIEW)) {
       router.push('/unauthorized');
-      return;
     }
   }, [authLoading, hasPermission, router]);
 
+  // Load filter options
   useEffect(() => {
     loadFilterOptions();
   }, []);
 
+  // Handle date preset changes
+  useEffect(() => {
+    if (datePreset !== 'custom') {
+      const { from, to } = getDateFromPreset(datePreset);
+      setDateFrom(from);
+      setDateTo(to);
+    }
+  }, [datePreset]);
+
+  // Load logs when filters change
   useEffect(() => {
     loadLogs();
-  }, [page, actionFilter, resourceTypeFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, actionFilter, resourceTypeFilter, userFilter, debouncedSearch, dateFrom, dateTo]);
 
   const loadFilterOptions = async () => {
     try {
-      const [actions, resourceTypes] = await Promise.all([
+      const [actions, resourceTypes, users] = await Promise.all([
         api.getAuditActions(),
         api.getAuditResourceTypes(),
+        api.getAuditUsers(),
       ]);
       setAvailableActions(actions);
       setAvailableResourceTypes(resourceTypes);
+      setAvailableUsers(users);
     } catch {
       // Silent fail for filter options
     }
@@ -129,11 +141,29 @@ export default function AuditLogPage() {
     setIsLoading(true);
     setError('');
     try {
+      // Build date params
+      let dateFromParam: string | undefined;
+      let dateToParam: string | undefined;
+
+      if (dateFrom) {
+        dateFromParam = new Date(dateFrom).toISOString();
+      }
+      if (dateTo) {
+        // Set to end of day
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        dateToParam = toDate.toISOString();
+      }
+
       const response = await api.getAuditLogs({
         page,
         page_size: pageSize,
         action: actionFilter || undefined,
         resource_type: resourceTypeFilter || undefined,
+        admin_user_id: userFilter || undefined,
+        date_from: dateFromParam,
+        date_to: dateToParam,
+        search: debouncedSearch || undefined,
       });
       setLogs(response.items);
       setTotalPages(response.total_pages);
@@ -152,12 +182,62 @@ export default function AuditLogPage() {
   };
 
   const handleClearFilters = () => {
+    setSearchInput('');
+    setDatePreset('custom');
+    setDateFrom('');
+    setDateTo('');
     setActionFilter('');
     setResourceTypeFilter('');
+    setUserFilter('');
     setPage(1);
   };
 
-  const hasFilters = actionFilter || resourceTypeFilter;
+  const handleDatePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    setPage(1);
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      // Build date params
+      let dateFromParam: string | undefined;
+      let dateToParam: string | undefined;
+
+      if (dateFrom) {
+        dateFromParam = new Date(dateFrom).toISOString();
+      }
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        dateToParam = toDate.toISOString();
+      }
+
+      const blob = await api.exportAuditLogs({
+        format: 'csv',
+        action: actionFilter || undefined,
+        resource_type: resourceTypeFilter || undefined,
+        admin_user_id: userFilter || undefined,
+        date_from: dateFromParam,
+        date_to: dateToParam,
+        search: debouncedSearch || undefined,
+      });
+
+      // Download the blob
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit_log_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (authLoading || (isLoading && logs.length === 0)) {
     return (
@@ -187,48 +267,29 @@ export default function AuditLogPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={actionFilter || "__all__"} onValueChange={(v) => { setActionFilter(v === "__all__" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder={t('allActions')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">{t('allActions')}</SelectItem>
-              {availableActions.map((action) => (
-                <SelectItem key={action} value={action}>
-                  {action}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={resourceTypeFilter || "__all__"} onValueChange={(v) => { setResourceTypeFilter(v === "__all__" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t('allResources')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">{t('allResources')}</SelectItem>
-              {availableResourceTypes.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
-              {tCommon('clear')}
-            </Button>
-          )}
-
-          <div className="flex-1" />
-
-          <span className="text-sm text-muted-foreground">
-            {t('entries', { count: total })}
-          </span>
-        </div>
+        <AuditFilters
+          search={searchInput}
+          onSearchChange={(v) => { setSearchInput(v); setPage(1); }}
+          datePreset={datePreset}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDatePresetChange={handleDatePresetChange}
+          onDateFromChange={(v) => { setDateFrom(v); setPage(1); }}
+          onDateToChange={(v) => { setDateTo(v); setPage(1); }}
+          actionFilter={actionFilter}
+          resourceTypeFilter={resourceTypeFilter}
+          userFilter={userFilter}
+          onActionFilterChange={(v) => { setActionFilter(v); setPage(1); }}
+          onResourceTypeFilterChange={(v) => { setResourceTypeFilter(v); setPage(1); }}
+          onUserFilterChange={(v) => { setUserFilter(v); setPage(1); }}
+          availableActions={availableActions}
+          availableResourceTypes={availableResourceTypes}
+          availableUsers={availableUsers}
+          onClearFilters={handleClearFilters}
+          onExport={handleExport}
+          isExporting={isExporting}
+          totalEntries={total}
+        />
 
         {/* Error */}
         {error && (
@@ -238,76 +299,7 @@ export default function AuditLogPage() {
         )}
 
         {/* Table */}
-        <div className="border rounded-lg bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px]">{t('timestamp')}</TableHead>
-                <TableHead className="w-[200px]">{t('user')}</TableHead>
-                <TableHead className="w-[100px]">{t('action')}</TableHead>
-                <TableHead className="w-[150px]">{t('resource')}</TableHead>
-                <TableHead>{t('resourceType')}</TableHead>
-                <TableHead className="w-[100px]">{t('ipAddress')}</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                    <FileText className="h-8 w-8 mx-auto mb-2 text-zinc-300" />
-                    {t('noAuditLogs')}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-zinc-50">
-                    <TableCell className="text-sm">
-                      <span title={new Date(log.created_at).toLocaleString(getLocale())}>
-                        {formatRelativeTime(log.created_at, t)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {log.admin_user_email || (
-                        <span className="text-muted-foreground italic">{t('systemUser')}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getActionBadgeColor(log.action)}>
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm font-medium">
-                      {log.resource_type}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground font-mono text-xs">
-                      {log.resource_id ? (
-                        <span title={log.resource_id}>
-                          {log.resource_id.slice(0, 8)}...
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground font-mono text-xs">
-                      {log.ip_address || <span className="text-zinc-400">-</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleViewDetails(log)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <AuditTable logs={logs} onViewDetails={handleViewDetails} />
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -340,61 +332,11 @@ export default function AuditLogPage() {
       </div>
 
       {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('auditLogDetails')}</DialogTitle>
-          </DialogHeader>
-          {selectedLog && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('timestamp')}</p>
-                  <p className="text-sm">
-                    {new Date(selectedLog.created_at).toLocaleString(getLocale(), {
-                      dateStyle: 'full',
-                      timeStyle: 'medium',
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('user')}</p>
-                  <p className="text-sm">{selectedLog.admin_user_email || t('systemUser')}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('action')}</p>
-                  <Badge variant="outline" className={getActionBadgeColor(selectedLog.action)}>
-                    {selectedLog.action}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('resourceType')}</p>
-                  <p className="text-sm font-medium">{selectedLog.resource_type}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('resource')}</p>
-                  <p className="text-sm font-mono">{selectedLog.resource_id || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('ipAddress')}</p>
-                  <p className="text-sm font-mono">{selectedLog.ip_address || '-'}</p>
-                </div>
-              </div>
-
-              {selectedLog.changes && Object.keys(selectedLog.changes).length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">{t('changes')}</p>
-                  <div className="bg-zinc-50 rounded-lg p-3 overflow-auto max-h-64">
-                    <pre className="text-xs font-mono whitespace-pre-wrap">
-                      {JSON.stringify(selectedLog.changes, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <AuditDetails
+        log={selectedLog}
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+      />
     </AppLayout>
   );
 }
