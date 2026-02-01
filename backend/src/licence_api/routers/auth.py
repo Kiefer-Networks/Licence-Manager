@@ -1,7 +1,7 @@
 """Authentication router."""
 
-import uuid
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel
@@ -392,19 +392,11 @@ async def upload_avatar(
 
 @router.get("/avatar/{user_id}")
 async def get_avatar(
-    user_id: str,
+    user_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
 ) -> Response:
     """Get avatar image for a user. Requires authentication."""
-    # Validate user_id to prevent path traversal
-    try:
-        uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid user ID",
-        )
-
+    # FastAPI validates UUID format automatically via type annotation
     # Try to find avatar with any extension
     for ext in [".jpg", ".png", ".gif", ".webp"]:
         file_path = ADMIN_AVATAR_DIR / f"{user_id}{ext}"
