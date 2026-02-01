@@ -48,6 +48,10 @@ const nextConfig = {
             value: 'camera=(), microphone=(), geolocation=()',
           },
           {
+            // NOTE: 'unsafe-inline' is required for Next.js hydration scripts.
+            // Next.js injects inline scripts during SSR which cannot use nonces yet.
+            // See: https://github.com/vercel/next.js/discussions/42170
+            // TODO: Switch to nonce-based CSP when Next.js adds native support.
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
