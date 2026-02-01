@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.constants.paths import AVATAR_DIR
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse
+from licence_api.models.dto.employee import EmployeeResponse, EmployeeListResponse, ManagerInfo
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.employee_service import EmployeeService
 from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
@@ -100,8 +100,22 @@ async def list_employees(
         limit=page_size,
     )
 
+    # Collect manager IDs and load managers in batch
+    manager_ids = [emp.manager_id for emp in employees if emp.manager_id]
+    managers_by_id = await employee_service.get_employees_by_ids(manager_ids) if manager_ids else {}
+
     items = []
     for emp in employees:
+        manager_info = None
+        if emp.manager_id and emp.manager_id in managers_by_id:
+            mgr = managers_by_id[emp.manager_id]
+            manager_info = ManagerInfo(
+                id=mgr.id,
+                email=mgr.email,
+                full_name=mgr.full_name,
+                avatar=get_avatar_base64(mgr.hibob_id),
+            )
+
         items.append(
             EmployeeResponse(
                 id=emp.id,
@@ -114,6 +128,7 @@ async def list_employees(
                 termination_date=emp.termination_date,
                 avatar=get_avatar_base64(emp.hibob_id),
                 license_count=license_counts.get(emp.id, 0),
+                manager=manager_info,
                 synced_at=emp.synced_at,
             )
         )
@@ -151,6 +166,19 @@ async def get_employee(
 
     employee, license_count = result
 
+    # Load manager if present
+    manager_info = None
+    if employee.manager_id:
+        managers = await employee_service.get_employees_by_ids([employee.manager_id])
+        if employee.manager_id in managers:
+            mgr = managers[employee.manager_id]
+            manager_info = ManagerInfo(
+                id=mgr.id,
+                email=mgr.email,
+                full_name=mgr.full_name,
+                avatar=get_avatar_base64(mgr.hibob_id),
+            )
+
     return EmployeeResponse(
         id=employee.id,
         hibob_id=employee.hibob_id,
@@ -162,5 +190,6 @@ async def get_employee(
         termination_date=employee.termination_date,
         avatar=get_avatar_base64(employee.hibob_id),
         license_count=license_count,
+        manager=manager_info,
         synced_at=employee.synced_at,
     )

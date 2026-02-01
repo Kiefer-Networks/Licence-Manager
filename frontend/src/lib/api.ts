@@ -504,6 +504,13 @@ export interface MatchActionResponse {
   license?: License;
 }
 
+export interface ManagerInfo {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar?: string;  // Base64 data URL or null
+}
+
 export interface Employee {
   id: string;
   hibob_id: string;
@@ -515,6 +522,7 @@ export interface Employee {
   termination_date?: string;
   avatar?: string;  // Base64 data URL or null
   license_count: number;
+  manager?: ManagerInfo;
   synced_at: string;
 }
 

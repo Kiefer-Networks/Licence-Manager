@@ -255,12 +255,38 @@ export default function UserDetailPage() {
               )}
               <div>
                 <h1 className="text-xl font-semibold">{employee.full_name}</h1>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-1">
                   <Badge variant="secondary" className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : 'bg-red-50 text-red-700 border-0'}>
                     {employee.status === 'active' ? tEmployees('active') : tEmployees('offboarded')}
                   </Badge>
                   {employee.department && (
-                    <span className="text-xs text-muted-foreground">{employee.department}</span>
+                    <>
+                      <span className="text-zinc-300">•</span>
+                      <span className="text-sm text-muted-foreground">{employee.department}</span>
+                    </>
+                  )}
+                  {employee.manager && (
+                    <>
+                      <span className="text-zinc-300">•</span>
+                      <Link
+                        href={`/users/${employee.manager.id}`}
+                        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {employee.manager.avatar ? (
+                          <img
+                            src={employee.manager.avatar}
+                            alt=""
+                            className="h-5 w-5 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="h-5 w-5 rounded-full bg-zinc-200 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-medium text-zinc-600">{employee.manager.full_name.charAt(0)}</span>
+                          </div>
+                        )}
+                        <span className="hover:underline">{employee.manager.full_name}</span>
+                        <span className="text-xs text-zinc-400">({employee.manager.email})</span>
+                      </Link>
+                    </>
                   )}
                 </div>
               </div>
