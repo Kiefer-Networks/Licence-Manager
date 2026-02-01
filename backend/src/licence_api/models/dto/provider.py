@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from licence_api.models.domain.provider import ProviderName, SyncStatus
 
@@ -12,8 +12,8 @@ from licence_api.models.domain.provider import ProviderName, SyncStatus
 class ProviderCreate(BaseModel):
     """Provider create DTO."""
 
-    name: str  # Allow any provider name including 'manual'
-    display_name: str
+    name: str = Field(max_length=100)  # Allow any provider name including 'manual'
+    display_name: str = Field(max_length=255)
     credentials: dict[str, Any] = {}  # Optional for manual providers
     config: dict[str, Any] | None = None
 
@@ -21,8 +21,8 @@ class ProviderCreate(BaseModel):
 class ProviderUpdate(BaseModel):
     """Provider update DTO."""
 
-    display_name: str | None = None
-    logo_url: str | None = None
+    display_name: str | None = Field(default=None, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
     credentials: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
