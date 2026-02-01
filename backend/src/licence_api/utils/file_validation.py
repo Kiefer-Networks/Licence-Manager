@@ -93,6 +93,7 @@ def validate_svg_content(content: bytes) -> bool:
 
     Checks for script tags, event handlers, and other XSS vectors.
     Also checks for encoding bypass attempts (hex entities, unicode entities).
+    Protects against XXE (XML External Entity) and billion laughs attacks.
 
     Args:
         content: The raw SVG file content
@@ -100,11 +101,36 @@ def validate_svg_content(content: bytes) -> bool:
     Returns:
         True if SVG is safe, False if it contains dangerous content.
     """
+    content_lower = content.lower()
+
+    # Check for XXE (XML External Entity) attacks
+    # Block DOCTYPE declarations which can define external entities
+    if b"<!doctype" in content_lower:
+        return False
+
+    # Block ENTITY declarations (both internal and external)
+    if b"<!entity" in content_lower:
+        return False
+
+    # Block SYSTEM and PUBLIC keywords used in external entity references
+    if b"system" in content_lower and b"<!entity" in content_lower:
+        return False
+    if b"public" in content_lower and b"<!entity" in content_lower:
+        return False
+
+    # Block parameter entities (used in billion laughs attack)
+    if b"%" in content and b"<!entity" in content_lower:
+        return False
+
+    # Block external DTD references
+    if b"[" in content and b"<!doctype" in content_lower:
+        return False
+
     # Check for encoding declarations that could be used to bypass checks
     # Reject non-UTF-8 encodings that might render differently
-    if b"encoding=" in content.lower():
+    if b"encoding=" in content_lower:
         # Only allow UTF-8 encoding
-        if not re.search(rb'encoding\s*=\s*["\']utf-8["\']', content.lower()):
+        if not re.search(rb'encoding\s*=\s*["\']utf-8["\']', content_lower):
             return False
 
     # Check for HTML/XML entities that could encode dangerous content
