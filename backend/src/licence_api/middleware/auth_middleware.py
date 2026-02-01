@@ -5,6 +5,8 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from licence_api.utils.request_id import generate_request_id
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware for authentication handling.
@@ -38,8 +40,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             Response from downstream handler
         """
         # Add request ID for tracing
-        import uuid
-        request.state.request_id = str(uuid.uuid4())
+        request.state.request_id = generate_request_id()
 
         response = await call_next(request)
 
