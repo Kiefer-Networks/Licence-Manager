@@ -109,6 +109,9 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         if unassigned_only:
             query = query.where(LicenseORM.employee_id.is_(None))
             count_query = count_query.where(LicenseORM.employee_id.is_(None))
+            # Exclude service accounts from unassigned list - they are intentionally unassigned
+            query = query.where(LicenseORM.is_service_account == False)
+            count_query = count_query.where(LicenseORM.is_service_account == False)
 
         if service_accounts_only:
             query = query.where(LicenseORM.is_service_account == True)
@@ -777,13 +780,15 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         # For external/not_in_hris detection, we need to check each license's email
         # This is a bit expensive but necessary for accurate stats
-        # Only fetch active licenses without employee_id
+        # Only fetch active licenses without employee_id, excluding service accounts
+        # (service accounts are intentionally unassigned and should not count as problems)
         unassigned_results = await self.session.execute(
             select(LicenseORM.provider_id, LicenseORM.external_user_id)
             .where(
                 and_(
                     LicenseORM.status == "active",
                     LicenseORM.employee_id.is_(None),
+                    LicenseORM.is_service_account == False,
                 )
             )
         )
