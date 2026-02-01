@@ -67,8 +67,24 @@ class EncryptionService:
         self._key_chain.append(self._current_key)
 
     def _decode_key(self, key: str) -> bytes:
-        """Decode and validate a base64-encoded encryption key."""
-        decoded = base64.urlsafe_b64decode(key)
+        """Decode and validate a base64-encoded encryption key.
+
+        Args:
+            key: Base64 URL-safe encoded encryption key
+
+        Returns:
+            Decoded 32-byte key
+
+        Raises:
+            ValueError: If key is not valid base64 or not 32 bytes
+        """
+        try:
+            # Add padding if missing (base64 requires multiple of 4)
+            padded_key = key + "=" * (4 - len(key) % 4) if len(key) % 4 else key
+            decoded = base64.urlsafe_b64decode(padded_key)
+        except Exception as e:
+            raise ValueError(f"Invalid base64-encoded encryption key: {type(e).__name__}")
+
         if len(decoded) != 32:
             raise ValueError("Encryption key must be 32 bytes (256 bits)")
         return decoded
