@@ -1,4 +1,7 @@
+'use client';
+
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import { LucideIcon, FileQuestion } from 'lucide-react';
 import { Button } from './button';
 
@@ -51,21 +54,24 @@ export function EmptyState({
 // Pre-built empty states for common scenarios
 
 export function NoDataEmptyState({ onRefresh }: { onRefresh?: () => void }) {
+  const t = useTranslations('common');
   return (
     <EmptyState
-      title="No data available"
-      description="There's nothing to show here yet."
-      action={onRefresh ? { label: 'Refresh', onClick: onRefresh } : undefined}
+      title={t('noData')}
+      description=""
+      action={onRefresh ? { label: t('refresh'), onClick: onRefresh } : undefined}
     />
   );
 }
 
 export function NoResultsEmptyState({ onClear }: { onClear?: () => void }) {
+  const t = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
   return (
     <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filter criteria."
-      action={onClear ? { label: 'Clear Filters', onClick: onClear } : undefined}
+      title={t('noResults')}
+      description=""
+      action={onClear ? { label: tLicenses('clearFilters'), onClick: onClear } : undefined}
     />
   );
 }
@@ -77,11 +83,13 @@ export function ErrorEmptyState({
   message?: string;
   onRetry?: () => void;
 }) {
+  const t = useTranslations('common');
+  const tErrors = useTranslations('errors');
   return (
     <EmptyState
-      title="Something went wrong"
-      description={message || 'An error occurred while loading data.'}
-      action={onRetry ? { label: 'Try Again', onClick: onRetry } : undefined}
+      title={tErrors('generic')}
+      description={message || ''}
+      action={onRetry ? { label: t('tryAgain'), onClick: onRetry } : undefined}
     />
   );
 }
