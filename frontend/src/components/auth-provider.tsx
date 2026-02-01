@@ -52,6 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
+    // Clear any existing session state before logging in
+    // This ensures old tokens/state don't persist across logins
+    api.clearAuth();
+
     // Get CSRF token first for the login request
     await api.refreshCsrfToken();
     await api.login(email, password);
