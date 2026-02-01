@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from licence_api.config import get_settings
 from licence_api.middleware.audit_middleware import AuditMiddleware
 from licence_api.middleware.csrf_middleware import CSRFMiddleware
+from licence_api.middleware.cors_logging_middleware import CORSLoggingMiddleware
 from licence_api.middleware.error_handler import (
     generic_exception_handler,
     http_exception_handler,
@@ -139,6 +140,10 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-CSRF-Token"],
     )
+
+    # CORS logging middleware - logs rejected origins for security monitoring
+    # Added after CORSMiddleware so it runs BEFORE it on incoming requests
+    app.add_middleware(CORSLoggingMiddleware, allowed_origins=allowed_origins)
 
     # Include routers
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
