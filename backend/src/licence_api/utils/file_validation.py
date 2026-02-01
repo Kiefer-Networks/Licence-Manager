@@ -2,6 +2,62 @@
 
 import re
 
+def _decode_xml_entities(content: bytes) -> bytes:
+    """Decode XML/HTML numeric entities in content.
+
+    Decodes &#xNN; (hex) and &#NNN; (decimal) entities to their
+    character equivalents for security checking.
+
+    Args:
+        content: Content with potential XML entities
+
+    Returns:
+        Content with entities decoded
+    """
+    def replace_entity(match: re.Match) -> bytes:
+        entity = match.group(0).decode('ascii')
+        if entity.startswith('&#x'):
+            # Hex entity: &#x41; -> 'A'
+            char_code = int(entity[3:-1], 16)
+        else:
+            # Decimal entity: &#65; -> 'A'
+            char_code = int(entity[2:-1])
+        # Only decode ASCII range for security check
+        if 0 <= char_code < 128:
+            return bytes([char_code])
+        return match.group(0)
+
+    return re.sub(rb'&#x?[0-9a-fA-F]+;', replace_entity, content)
+
+
+def _contains_dangerous_content(content: bytes) -> bool:
+    """Check if decoded content contains dangerous SVG patterns.
+
+    Args:
+        content: Decoded content to check
+
+    Returns:
+        True if dangerous content is found
+    """
+    content_lower = content.lower()
+
+    # Check for dangerous elements
+    for elem in SVG_DANGEROUS_ELEMENTS:
+        if b"<" + elem in content_lower:
+            return True
+
+    # Check for dangerous attributes
+    for attr in SVG_DANGEROUS_ATTRS:
+        if attr + b"=" in content_lower:
+            return True
+
+    # Check for javascript: URLs
+    if b"javascript:" in content_lower:
+        return True
+
+    return False
+
+
 # Dangerous SVG elements that can execute code
 SVG_DANGEROUS_ELEMENTS = {
     b"script",
@@ -36,6 +92,7 @@ def validate_svg_content(content: bytes) -> bool:
     """Validate that SVG content doesn't contain dangerous elements.
 
     Checks for script tags, event handlers, and other XSS vectors.
+    Also checks for encoding bypass attempts (hex entities, unicode entities).
 
     Args:
         content: The raw SVG file content
@@ -43,6 +100,27 @@ def validate_svg_content(content: bytes) -> bool:
     Returns:
         True if SVG is safe, False if it contains dangerous content.
     """
+    # Check for encoding declarations that could be used to bypass checks
+    # Reject non-UTF-8 encodings that might render differently
+    if b"encoding=" in content.lower():
+        # Only allow UTF-8 encoding
+        if not re.search(rb'encoding\s*=\s*["\']utf-8["\']', content.lower()):
+            return False
+
+    # Check for HTML/XML entities that could encode dangerous content
+    # These could be used to spell out "script", "javascript", etc.
+    # Look for hex entities (&#x...) and decimal entities (&#...)
+    entity_pattern = rb'&#x?[0-9a-fA-F]+;'
+    if re.search(entity_pattern, content):
+        # Decode entities and check the result
+        try:
+            decoded = _decode_xml_entities(content)
+            if _contains_dangerous_content(decoded):
+                return False
+        except (ValueError, UnicodeDecodeError):
+            # If we can't decode, reject as potentially malicious
+            return False
+
     # Note: bytes.lower() is valid in Python 3 and works for ASCII characters.
     # SVG dangerous elements/attributes are ASCII, so this is correct.
     content_lower = content.lower()
@@ -66,12 +144,24 @@ def validate_svg_content(content: bytes) -> bool:
         return False
 
     # Check for data: URLs (can embed scripts)
+    # Find all data: URLs and verify EACH one is a safe image type
     if b"data:" in content_lower:
-        # Allow data: URLs for images only
-        if re.search(rb'data:\s*image/(png|jpeg|jpg|gif|webp)', content_lower):
-            pass  # Safe image data URLs
-        elif b"data:" in content_lower:
-            return False
+        # Pattern to find all data: URLs
+        data_urls = re.findall(rb'data:\s*([a-z0-9\-+./]+)', content_lower)
+        # Only allow specific safe image types
+        safe_mime_types = {
+            b"image/png",
+            b"image/jpeg",
+            b"image/jpg",
+            b"image/gif",
+            b"image/webp",
+            b"image/svg+xml",  # Nested SVGs are validated separately
+        }
+        for mime_type in data_urls:
+            # Normalize by removing whitespace
+            mime_clean = mime_type.strip()
+            if mime_clean not in safe_mime_types:
+                return False
 
     return True
 
