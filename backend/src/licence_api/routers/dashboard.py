@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.dashboard import DashboardResponse
-from licence_api.security.auth import get_current_user
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.report_service import ReportService
 from licence_api.utils.validation import sanitize_department
@@ -23,7 +23,7 @@ def get_report_service(db: AsyncSession = Depends(get_db)) -> ReportService:
 
 @router.get("", response_model=DashboardResponse)
 async def get_dashboard(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.DASHBOARD_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(default=None, description="Filter by department"),
 ) -> DashboardResponse:
