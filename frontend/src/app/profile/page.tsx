@@ -317,7 +317,7 @@ export default function ProfilePage() {
                       {user?.picture_url ? (
                         <img
                           src={user.picture_url}
-                          alt="Avatar"
+                          alt={t('avatar')}
                           className="h-full w-full object-cover"
                         />
                       ) : (

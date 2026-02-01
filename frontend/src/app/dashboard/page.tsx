@@ -162,8 +162,8 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-sm text-amber-700 mt-0.5">
                   {expiringPaymentMethods.length === 1
-                    ? `${expiringPaymentMethods[0].name}`
-                    : `${expiringPaymentMethods.length} payment methods`}
+                    ? expiringPaymentMethods[0].name
+                    : t('paymentMethodsExpiring', { count: expiringPaymentMethods.length })}
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 text-amber-400 flex-shrink-0" />
@@ -267,7 +267,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {hrisProviders.length > 0 ? 'HiBob' : 'HRIS'}
+                      {hrisProviders.length > 0 ? t('hibob') : t('hris')}
                     </p>
                     {hrisProviders.length > 0 ? (
                       <>

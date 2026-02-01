@@ -55,6 +55,7 @@ export default function UserDetailPage() {
   const employeeId = params.id as string;
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
+  const tEmployees = useTranslations('employees');
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -132,13 +133,13 @@ export default function UserDetailPage() {
     setActionLoading(true);
     try {
       await api.assignManualLicense(selectedLicenseId, employeeId);
-      showToast('success', 'License assigned');
+      showToast('success', t('licenseAssigned'));
       setAssignDialogOpen(false);
       setSelectedLicenseId('');
       await fetchLicenses();
       await fetchEmployee();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to assign');
+      showToast('error', error instanceof Error ? error.message : t('failedToAssign'));
     } finally {
       setActionLoading(false);
     }
@@ -158,12 +159,12 @@ export default function UserDetailPage() {
       } else {
         await api.bulkUnassignLicenses([license.id]);
       }
-      showToast('success', 'License unassigned');
+      showToast('success', t('licenseUnassigned'));
       setUnassignDialog(null);
       await fetchLicenses();
       await fetchEmployee();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to unassign');
+      showToast('error', error instanceof Error ? error.message : t('failedToUnassign'));
     } finally {
       setActionLoading(false);
     }
@@ -175,7 +176,7 @@ export default function UserDetailPage() {
     try {
       const result = await api.removeLicenseFromProvider(removeDialog.id);
       if (result.success) {
-        showToast('success', 'Removed from provider');
+        showToast('success', t('removedFromProvider'));
         setRemoveDialog(null);
         await fetchLicenses();
         await fetchEmployee();
@@ -183,7 +184,7 @@ export default function UserDetailPage() {
         showToast('error', result.message);
       }
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to remove');
+      showToast('error', error instanceof Error ? error.message : t('failedToRemove'));
     } finally {
       setActionLoading(false);
     }
@@ -207,9 +208,9 @@ export default function UserDetailPage() {
     return (
       <AppLayout>
         <div className="max-w-4xl mx-auto py-12 text-center">
-          <p className="text-muted-foreground">Employee not found</p>
+          <p className="text-muted-foreground">{tEmployees('employeeNotFound')}</p>
           <Link href="/users">
-            <Button variant="outline" className="mt-4">Back to Employees</Button>
+            <Button variant="outline" className="mt-4">{tEmployees('backToEmployees')}</Button>
           </Link>
         </div>
       </AppLayout>
@@ -232,7 +233,7 @@ export default function UserDetailPage() {
         {/* Breadcrumbs */}
         <Breadcrumbs
           items={[
-            { label: 'Employees', href: '/users' },
+            { label: tEmployees('title'), href: '/users' },
             { label: employee.full_name },
           ]}
           className="pt-2"
@@ -256,7 +257,7 @@ export default function UserDetailPage() {
                 <h1 className="text-xl font-semibold">{employee.full_name}</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge variant="secondary" className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : 'bg-red-50 text-red-700 border-0'}>
-                    {employee.status === 'active' ? 'Active' : 'Offboarded'}
+                    {employee.status === 'active' ? tEmployees('active') : tEmployees('offboarded')}
                   </Badge>
                   {employee.department && (
                     <span className="text-xs text-muted-foreground">{employee.department}</span>
@@ -266,7 +267,7 @@ export default function UserDetailPage() {
             </div>
           <Button size="sm" onClick={openAssignDialog}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Assign License
+            {tEmployees('assignLicense')}
           </Button>
         </div>
 
@@ -276,7 +277,7 @@ export default function UserDetailPage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Mail className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase">Email</span>
+                <span className="text-xs font-medium uppercase">{tCommon('email')}</span>
               </div>
               <CopyableText className="text-sm font-medium truncate block">
                 {employee.email}
@@ -287,7 +288,7 @@ export default function UserDetailPage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Key className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase">Licenses</span>
+                <span className="text-xs font-medium uppercase">{t('title')}</span>
               </div>
               <p className="text-2xl font-semibold">{licenses.length}</p>
             </CardContent>
@@ -296,7 +297,7 @@ export default function UserDetailPage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <DollarSign className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase">Monthly Cost</span>
+                <span className="text-xs font-medium uppercase">{t('monthlyCost')}</span>
               </div>
               <p className="text-2xl font-semibold">EUR {totalMonthlyCost.toFixed(2)}</p>
             </CardContent>
@@ -305,7 +306,7 @@ export default function UserDetailPage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Calendar className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase">Start Date</span>
+                <span className="text-xs font-medium uppercase">{tEmployees('startDate')}</span>
               </div>
               <p className="text-sm font-medium">
                 {employee.start_date ? new Date(employee.start_date).toLocaleDateString(getLocale()) : '-'}
@@ -318,27 +319,27 @@ export default function UserDetailPage() {
         <div>
           <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
             <Key className="h-4 w-4 text-muted-foreground" />
-            Assigned Licenses
+            {tEmployees('assignedLicenses')}
           </h2>
           <div className="border rounded-lg bg-white">
             {licenses.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No licenses assigned</p>
+                <p className="text-sm">{tEmployees('noLicensesAssigned')}</p>
                 <Button variant="link" size="sm" onClick={openAssignDialog} className="mt-2">
-                  Assign a license
+                  {tEmployees('assignALicense')}
                 </Button>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-zinc-50/50">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">License / User ID</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Last Active</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Cost</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('licenseUserId')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('type')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('lastActive')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,10 +356,10 @@ export default function UserDetailPage() {
                               {license.provider_name}
                             </Link>
                             {isManual && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded">Manual</span>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded">{tEmployees('manual')}</span>
                             )}
                             {isRemovable && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{tEmployees('api')}</span>
                             )}
                           </div>
                         </td>
@@ -368,7 +369,7 @@ export default function UserDetailPage() {
                             {license.is_external_email && (
                               <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] px-1.5">
                                 <Globe className="h-3 w-3 mr-1" />
-                                External
+                                {tEmployees('external')}
                               </Badge>
                             )}
                           </div>
@@ -392,7 +393,7 @@ export default function UserDetailPage() {
                               size="icon"
                               className="h-7 w-7"
                               onClick={() => setUnassignDialog(license)}
-                              title="Unassign"
+                              title={t('unassignLicense')}
                             >
                               <UserMinus className="h-3.5 w-3.5" />
                             </Button>
@@ -402,7 +403,7 @@ export default function UserDetailPage() {
                                 size="icon"
                                 className="h-7 w-7 text-red-600"
                                 onClick={() => setRemoveDialog(license)}
-                                title="Remove from Provider"
+                                title={t('removeFromProvider')}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -427,9 +428,9 @@ export default function UserDetailPage() {
                   <UserMinus className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-red-600">Offboarded</p>
+                  <p className="font-medium text-red-600">{tEmployees('offboarded')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Termination date: {new Date(employee.termination_date).toLocaleDateString(getLocale())}
+                    {tEmployees('terminationDate')}: {new Date(employee.termination_date).toLocaleDateString(getLocale())}
                   </p>
                 </div>
               </div>
@@ -442,9 +443,9 @@ export default function UserDetailPage() {
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign License</DialogTitle>
+            <DialogTitle>{tEmployees('assignLicense')}</DialogTitle>
             <DialogDescription>
-              Select an unassigned license to assign to {employee.full_name}
+              {tEmployees('selectLicenseToAssign')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -454,12 +455,12 @@ export default function UserDetailPage() {
               </div>
             ) : availableLicenses.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No unassigned licenses available
+                {tEmployees('noUnassignedLicenses')}
               </p>
             ) : (
               <Select value={selectedLicenseId} onValueChange={setSelectedLicenseId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a license..." />
+                  <SelectValue placeholder={t('assignLicense')} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableLicenses.map((lic) => (
@@ -485,15 +486,14 @@ export default function UserDetailPage() {
       <Dialog open={!!unassignDialog} onOpenChange={() => setUnassignDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unassign License</DialogTitle>
+            <DialogTitle>{tEmployees('unassignLicense')}</DialogTitle>
             <DialogDescription>
-              Remove <strong>{unassignDialog?.provider_name}</strong> license from {employee.full_name}?
+              {tEmployees('confirmUnassign', { name: employee.full_name })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground">
-              The license will be marked as unassigned and can be reassigned to another employee.
-              The user will keep access in the provider system until removed.
+              {tEmployees('unassignDescription')}
             </p>
           </div>
           <DialogFooter>
@@ -514,34 +514,34 @@ export default function UserDetailPage() {
               <div className="p-1.5 bg-red-100 rounded-md">
                 <Trash2 className="h-4 w-4 text-red-600" />
               </div>
-              Remove from {removeDialog?.provider_name}
+              {tEmployees('removeFromProviderTitle', { provider: removeDialog?.provider_name || '' })}
             </DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-4 pt-2">
                 <p>
-                  Remove <span className="font-medium text-foreground">{removeDialog?.external_user_id}</span> from {removeDialog?.provider_name}?
+                  {tEmployees('removeFromProviderQuestion', { user: removeDialog?.external_user_id || '', provider: removeDialog?.provider_name || '' })}
                 </p>
 
                 <div className="bg-zinc-50 rounded-lg p-4 space-y-3 text-sm">
-                  <p className="font-medium text-foreground">This will:</p>
+                  <p className="font-medium text-foreground">{tEmployees('thisWill')}</p>
                   <ul className="space-y-2 text-muted-foreground">
                     <li className="flex items-start gap-2">
                       <span className="text-red-500 mt-0.5">-</span>
-                      Immediately revoke access to {removeDialog?.provider_name}
+                      {tEmployees('revokeAccessTo', { provider: removeDialog?.provider_name || '' })}
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-green-500 mt-0.5">+</span>
-                      Free up the license seat
+                      {tEmployees('freeUpLicenseSeat')}
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-green-500 mt-0.5">+</span>
-                      Save EUR {Number(removeDialog?.monthly_cost || 0).toFixed(2)} per month
+                      {tEmployees('saveCostPerMonth', { currency: 'EUR', amount: Number(removeDialog?.monthly_cost || 0).toFixed(2) })}
                     </li>
                   </ul>
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  This action is executed via the {removeDialog?.provider_name} API and cannot be undone.
+                  {tEmployees('apiActionCannotBeUndone', { provider: removeDialog?.provider_name || '' })}
                 </p>
               </div>
             </DialogDescription>

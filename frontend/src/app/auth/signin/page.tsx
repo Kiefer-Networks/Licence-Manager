@@ -92,7 +92,7 @@ function SignInContent() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@company.com"
+                placeholder={t('emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

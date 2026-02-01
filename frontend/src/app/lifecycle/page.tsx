@@ -300,7 +300,7 @@ export default function LifecyclePage() {
                                 setSelectedLicense(license);
                                 setRenewDialogOpen(true);
                               }}
-                              title="Renew"
+                              title={t('renewLicense')}
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -308,7 +308,7 @@ export default function LifecyclePage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleToggleNeedsReorder(license)}
-                              title={license.needs_reorder ? 'Remove from reorder' : 'Mark for reorder'}
+                              title={license.needs_reorder ? t('removeFromReorder') : t('markForReorder')}
                               className={license.needs_reorder ? 'text-blue-600' : ''}
                             >
                               <ShoppingCart className="h-4 w-4" />
@@ -320,7 +320,7 @@ export default function LifecyclePage() {
                                 setSelectedLicense(license);
                                 setCancelDialogOpen(true);
                               }}
-                              title="Cancel"
+                              title={t('cancelLicense')}
                             >
                               <Ban className="h-4 w-4" />
                             </Button>
@@ -397,7 +397,7 @@ export default function LifecyclePage() {
                                 setSelectedLicense(license);
                                 setRenewDialogOpen(true);
                               }}
-                              title="Undo cancellation"
+                              title={t('undoCancellation')}
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -461,7 +461,7 @@ export default function LifecyclePage() {
                                 setSelectedLicense(license);
                                 setRenewDialogOpen(true);
                               }}
-                              title="Renew"
+                              title={t('renewLicense')}
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -469,7 +469,7 @@ export default function LifecyclePage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleToggleNeedsReorder(license)}
-                              title="Remove from reorder"
+                              title={t('removeFromReorder')}
                               className="text-blue-600"
                             >
                               <ShoppingCart className="h-4 w-4" />
