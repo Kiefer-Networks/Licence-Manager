@@ -254,7 +254,7 @@ async def upload_provider_logo(
 async def get_provider_logo_file(
     provider_id: UUID,
     filename: str,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
 ) -> FileResponse:
     """Get a provider's logo file."""
     # Sanitize filename

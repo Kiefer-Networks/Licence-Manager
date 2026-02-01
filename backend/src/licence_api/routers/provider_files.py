@@ -13,7 +13,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import get_current_user, require_admin
+from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.services.provider_file_service import (
     ProviderFileService,
     VIEWABLE_EXTENSIONS,
@@ -101,7 +101,7 @@ async def list_provider_files(
 async def upload_provider_file(
     http_request: Request,
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
@@ -219,10 +219,10 @@ async def delete_provider_file(
     http_request: Request,
     provider_id: UUID,
     file_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> None:
-    """Delete a provider file. Admin only."""
+    """Delete a provider file. Requires providers.edit permission."""
     try:
         await service.delete_file(
             provider_id=provider_id,
