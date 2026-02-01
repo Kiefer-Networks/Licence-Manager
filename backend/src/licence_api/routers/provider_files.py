@@ -13,7 +13,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.services.provider_file_service import (
     ProviderFileService,
@@ -65,7 +65,7 @@ def get_provider_file_service(db: AsyncSession = Depends(get_db)) -> ProviderFil
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
 async def list_provider_files(
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
 ) -> ProviderFilesListResponse:
@@ -153,7 +153,7 @@ async def upload_provider_file(
 async def download_provider_file(
     provider_id: UUID,
     file_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
@@ -184,7 +184,7 @@ async def download_provider_file(
 async def view_provider_file(
     provider_id: UUID,
     file_id: UUID,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
