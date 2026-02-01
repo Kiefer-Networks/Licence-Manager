@@ -81,7 +81,28 @@ class HiBobProvider(HRISProvider):
         employees = []
 
         async with httpx.AsyncClient() as client:
-            # Use /people/search endpoint with POST (like PowerShell script)
+            # First, get manager emails from /people/search WITHOUT humanReadable
+            # This gives us reportsTo as a dict with email
+            manager_response = await client.post(
+                f"{self.BASE_URL}/people/search",
+                headers=self._get_headers(),
+                json={"showInactive": False},  # No humanReadable = raw values
+                timeout=30.0,
+            )
+            manager_response.raise_for_status()
+            manager_data = manager_response.json()
+
+            # Build mapping of employee ID to manager email
+            manager_email_map: dict[str, str] = {}
+            for emp in manager_data.get("employees", []):
+                work = emp.get("work", {})
+                reports_to = work.get("reportsTo", {})
+                if isinstance(reports_to, dict):
+                    manager_email = reports_to.get("email", "").lower()
+                    if manager_email:
+                        manager_email_map[emp.get("id")] = manager_email
+
+            # Now get employee data with humanReadable for readable department names
             response = await client.post(
                 f"{self.BASE_URL}/people/search",
                 headers=self._get_headers(),
@@ -111,15 +132,20 @@ class HiBobProvider(HRISProvider):
                     surname = emp.get("surname", "")
                     full_name = f"{first_name} {surname}".strip()
 
+                # Get manager email from the mapping we built earlier
+                emp_id = emp.get("id")
+                manager_email = manager_email_map.get(emp_id)
+
                 employees.append({
-                    "hibob_id": emp.get("id"),
+                    "hibob_id": emp_id,
                     "email": emp.get("email", "").lower(),
                     "full_name": full_name,
                     "department": work.get("department"),
                     "status": status,
                     "start_date": start_date,
                     "termination_date": termination_date,
-                    "avatar_url": f"/api/v1/users/employees/avatar/{emp.get('id')}",
+                    "manager_email": manager_email,
+                    "avatar_url": f"/api/v1/users/employees/avatar/{emp_id}",
                 })
 
         return employees
