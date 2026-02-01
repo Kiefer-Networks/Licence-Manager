@@ -290,7 +290,8 @@
     "totalCount": "{count} gesamt",
     "active": "Aktiv",
     "inactive": "Inaktiv",
-    "available": "Verfügbar"
+    "available": "Verfügbar",
+    "api": "API"
   },
   "providers": {
     "title": "Anbieter",
@@ -659,7 +660,11 @@
     "saveCostPerMonth": "{currency} {amount} pro Monat sparen",
     "removeFromProviderQuestion": "{user} von {provider} entfernen?",
     "removeFromProviderTitle": "Von {provider} entfernen",
-    "apiActionCannotBeUndone": "Diese Aktion wird über die {provider}-API ausgeführt und kann nicht rückgängig gemacht werden."
+    "apiActionCannotBeUndone": "Diese Aktion wird über die {provider}-API ausgeführt und kann nicht rückgängig gemacht werden.",
+    "adminAccounts": "Admin",
+    "ownedAdminAccounts": "Besessene Admin-Accounts",
+    "adminAccount": "Admin-Account",
+    "adminAccountsCostNote": "Diese Admin-Accounts werden von diesem Mitarbeiter verwaltet. Deren Kosten sind in der monatlichen Kostenberechnung enthalten."
   },
   "users": {
     "title": "Benutzer",
@@ -791,7 +796,10 @@
     "emailMatchesGlobalPattern": "Diese E-Mail entspricht einem globalen Muster",
     "makeGlobalPattern": "Globales Muster erstellen",
     "ownerOffboarded": "Besitzer ausgeschieden",
-    "serviceNamePlaceholder": "CI/CD-Service"
+    "serviceNamePlaceholder": "CI/CD-Service",
+    "markAsServiceAccountDescription": "Diese Lizenz als Service-Account markieren. Service-Accounts sind technische Accounts, die nicht an eine Person gebunden sind.",
+    "searchEmployee": "Mitarbeiter suchen...",
+    "noEmployeesFound": "Keine Mitarbeiter gefunden"
   },
   "adminAccounts": {
     "title": "Admin-Accounts",
@@ -826,7 +834,9 @@
     "ownerUpdated": "Besitzer erfolgreich aktualisiert",
     "failedToUpdateOwner": "Besitzer konnte nicht aktualisiert werden",
     "searchEmployee": "Mitarbeiter suchen...",
-    "noEmployeesFound": "Keine Mitarbeiter gefunden"
+    "noEmployeesFound": "Keine Mitarbeiter gefunden",
+    "markAsAdminAccount": "Als Admin-Account markieren",
+    "markAsAdminAccountDescription": "Diese Lizenz als Admin-Account markieren. Admin-Accounts sind Accounts mit erhöhten Rechten, die einem Mitarbeiter gehören."
   },
   "lifecycle": {
     "title": "Lizenz-Lebenszyklus",

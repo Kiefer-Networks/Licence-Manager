@@ -290,7 +290,8 @@
     "totalCount": "{count} total",
     "active": "Active",
     "inactive": "Inactive",
-    "available": "Available"
+    "available": "Available",
+    "api": "API"
   },
   "providers": {
     "title": "Providers",
@@ -659,7 +660,11 @@
     "saveCostPerMonth": "Save {currency} {amount} per month",
     "removeFromProviderQuestion": "Remove {user} from {provider}?",
     "removeFromProviderTitle": "Remove from {provider}",
-    "apiActionCannotBeUndone": "This action is executed via the {provider} API and cannot be undone."
+    "apiActionCannotBeUndone": "This action is executed via the {provider} API and cannot be undone.",
+    "adminAccounts": "Admin",
+    "ownedAdminAccounts": "Owned Admin Accounts",
+    "adminAccount": "Admin Account",
+    "adminAccountsCostNote": "These admin accounts are owned by this employee. Their costs are included in the monthly cost calculation."
   },
   "users": {
     "title": "Users",
@@ -791,7 +796,10 @@
     "emailMatchesGlobalPattern": "This email matches a global pattern",
     "makeGlobalPattern": "Make global pattern",
     "ownerOffboarded": "Owner offboarded",
-    "serviceNamePlaceholder": "CI/CD Service"
+    "serviceNamePlaceholder": "CI/CD Service",
+    "markAsServiceAccountDescription": "Mark this license as a service account. Service accounts are technical accounts not tied to a person.",
+    "searchEmployee": "Search employee...",
+    "noEmployeesFound": "No employees found"
   },
   "adminAccounts": {
     "title": "Admin Accounts",
@@ -826,7 +834,9 @@
     "ownerUpdated": "Owner updated successfully",
     "failedToUpdateOwner": "Failed to update owner",
     "searchEmployee": "Search employee...",
-    "noEmployeesFound": "No employees found"
+    "noEmployeesFound": "No employees found",
+    "markAsAdminAccount": "Mark as Admin Account",
+    "markAsAdminAccountDescription": "Mark this license as an admin account. Admin accounts are elevated access accounts owned by an employee."
   },
   "lifecycle": {
     "title": "License Lifecycle",
