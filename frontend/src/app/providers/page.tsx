@@ -498,7 +498,7 @@ export default function ProvidersPage() {
                   <SelectContent>
                     {licenseProviderTypes.map((pt) => (
                       <SelectItem key={pt.value} value={pt.value}>
-                        {pt.value === 'manual' ? t('manualNoApi') : pt.label}
+                        {pt.value === 'manual' ? t('manualNoApi') : t(pt.value)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -507,7 +507,7 @@ export default function ProvidersPage() {
             )}
             <div className="space-y-2">
               <Label className="text-xs font-medium">{t('displayName')}</Label>
-              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={dialogMode === 'hris' ? 'HiBob' : t('displayNamePlaceholder')} />
+              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={dialogMode === 'hris' ? t('hibob') : t('displayNamePlaceholder')} />
             </div>
             {/* API Provider Fields */}
             {!isManualProvider(newProviderType) && getProviderFields(newProviderType).map((field) => (

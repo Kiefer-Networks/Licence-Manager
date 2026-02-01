@@ -527,7 +527,7 @@ function LicensesContent() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
-                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>}
+                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
@@ -620,7 +620,7 @@ function LicensesContent() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
-                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>}
+                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
@@ -726,7 +726,7 @@ function LicensesContent() {
                             {license.provider_name}
                           </Link>
                           {isRemovable && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">API</span>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>
                           )}
                         </div>
                       </td>

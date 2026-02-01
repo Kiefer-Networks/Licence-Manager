@@ -354,6 +354,10 @@
     "auth0": "Auth0",
     "onepassword": "1Password",
     "mailjet": "Mailjet",
+    "mattermost": "Mattermost",
+    "gitlab": "GitLab",
+    "miro": "Miro",
+    "google_workspace": "Google Workspace",
     "manual": "Manuell",
     "manualNoApi": "Manuell (Keine API)",
     "apiIntegrated": "API",
@@ -1203,7 +1207,9 @@
     "exportFormat": "Format",
     "exporting": "Wird exportiert...",
     "exportRecords": "{count} Einträge exportieren",
-    "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen."
+    "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
+    "formatCsv": "CSV",
+    "formatJson": "JSON"
   },
   "setup": {
     "title": "Einrichtung",

@@ -65,7 +65,7 @@ export default function SetupPage() {
       // Create provider
       await api.createProvider({
         name: 'hibob',
-        display_name: 'HiBob',
+        display_name: tProviders('hibob'),
         credentials: {
           auth_token: token,
         },
@@ -99,7 +99,7 @@ export default function SetupPage() {
 
   const steps = [
     { id: 'welcome', label: t('welcome') },
-    { id: 'hibob', label: 'HiBob' },
+    { id: 'hibob', label: tProviders('hibob') },
     { id: 'providers', label: tProviders('title') },
     { id: 'complete', label: t('complete') },
   ];
