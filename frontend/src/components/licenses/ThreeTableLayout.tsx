@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { License, LicenseStats } from '@/lib/api';
 import { LicenseTable } from './LicenseTable';
 import { LicenseStatsCards } from './LicenseStats';
@@ -45,6 +46,7 @@ export function ThreeTableLayout({
   onAssignClick,
   onDeleteClick,
 }: ThreeTableLayoutProps) {
+  const t = useTranslations('licenses');
   const [activeTab, setActiveTab] = useState<Tab>('assigned');
 
   // Calculate ACTIVE-only stats for consistency with Overview
@@ -100,10 +102,10 @@ export function ThreeTableLayout({
   );
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
-    { id: 'assigned', label: 'Assigned', count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
-    { id: 'unassigned', label: 'Not in HRIS', count: unassignedActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActive.length > 0 },
-    { id: 'external', label: 'External', count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
-    ...(serviceAccounts.length > 0 ? [{ id: 'service_accounts' as Tab, label: 'Service Accounts', count: serviceAccountsActive.length, icon: <Bot className="h-4 w-4" /> }] : []),
+    { id: 'assigned', label: t('assigned'), count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
+    { id: 'unassigned', label: t('notInHRIS'), count: unassignedActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActive.length > 0 },
+    { id: 'external', label: t('external'), count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
+    ...(serviceAccounts.length > 0 ? [{ id: 'service_accounts' as Tab, label: t('serviceAccount'), count: serviceAccountsActive.length, icon: <Bot className="h-4 w-4" /> }] : []),
   ];
 
   const getLicenses = () => {
@@ -122,13 +124,13 @@ export function ThreeTableLayout({
   const getEmptyMessage = () => {
     switch (activeTab) {
       case 'assigned':
-        return 'No assigned licenses';
+        return t('noAssignedLicenses');
       case 'unassigned':
-        return 'No licenses outside HRIS';
+        return t('noLicensesNotInHRIS');
       case 'external':
-        return 'No external licenses';
+        return t('noExternalLicenses');
       case 'service_accounts':
-        return 'No service accounts';
+        return t('noServiceAccountsFound');
     }
   };
 
@@ -175,7 +177,7 @@ export function ThreeTableLayout({
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-red-500" />
               <h3 className="text-sm font-medium text-red-600">
-                Active Licenses - Not in HRIS ({unassignedActive.length})
+                {t('activeNotInHRIS', { count: unassignedActive.length })}
               </h3>
             </div>
             {unassignedActive.length > 0 ? (
@@ -184,7 +186,7 @@ export function ThreeTableLayout({
                   licenses={unassignedActive}
                   showProvider={showProvider}
                   showEmployee={true}
-                  emptyMessage="No active licenses outside HRIS"
+                  emptyMessage={t('noLicensesNotInHRIS')}
                   onServiceAccountClick={onServiceAccountClick}
                   onAdminAccountClick={onAdminAccountClick}
                   onAssignClick={onAssignClick}
@@ -193,7 +195,7 @@ export function ThreeTableLayout({
               </div>
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
-                <p className="text-sm text-emerald-600">All active licenses are matched to HRIS</p>
+                <p className="text-sm text-emerald-600">{t('allLicensesMatchedToHRIS')}</p>
               </div>
             )}
           </div>
@@ -202,13 +204,13 @@ export function ThreeTableLayout({
           {unassignedInactive.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Inactive Licenses - Not in HRIS ({unassignedInactive.length})
+                {t('inactiveLicensesNotInHRIS', { count: unassignedInactive.length })}
               </h3>
               <LicenseTable
                 licenses={unassignedInactive}
                 showProvider={showProvider}
                 showEmployee={true}
-                emptyMessage="No inactive licenses"
+                emptyMessage={t('noInactiveLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
@@ -225,7 +227,7 @@ export function ThreeTableLayout({
             <div className="flex items-center gap-2 mb-3">
               <Globe className="h-4 w-4 text-orange-500" />
               <h3 className="text-sm font-medium">
-                Active External Licenses ({externalActive.length})
+                {t('activeExternalLicenses', { count: externalActive.length })}
               </h3>
             </div>
             {externalActive.length > 0 ? (
@@ -233,7 +235,7 @@ export function ThreeTableLayout({
                 licenses={externalActive}
                 showProvider={showProvider}
                 showEmployee={true}
-                emptyMessage="No active external licenses"
+                emptyMessage={t('noActiveExternalLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
@@ -241,7 +243,7 @@ export function ThreeTableLayout({
               />
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
-                <p className="text-sm">No active external licenses</p>
+                <p className="text-sm">{t('noActiveExternalLicenses')}</p>
               </div>
             )}
           </div>
@@ -250,13 +252,13 @@ export function ThreeTableLayout({
           {externalInactive.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Inactive External Licenses ({externalInactive.length})
+                {t('inactiveExternalLicenses', { count: externalInactive.length })}
               </h3>
               <LicenseTable
                 licenses={externalInactive}
                 showProvider={showProvider}
                 showEmployee={true}
-                emptyMessage="No inactive external licenses"
+                emptyMessage={t('noInactiveExternalLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
                 onAssignClick={onAssignClick}
@@ -273,7 +275,7 @@ export function ThreeTableLayout({
             <div className="flex items-center gap-2 mb-3">
               <Bot className="h-4 w-4 text-blue-500" />
               <h3 className="text-sm font-medium">
-                Active Service Accounts ({serviceAccountsActive.length})
+                {t('activeServiceAccounts', { count: serviceAccountsActive.length })}
               </h3>
             </div>
             {serviceAccountsActive.length > 0 ? (
@@ -281,14 +283,14 @@ export function ThreeTableLayout({
                 licenses={serviceAccountsActive}
                 showProvider={showProvider}
                 showEmployee={true}
-                emptyMessage="No active service accounts"
+                emptyMessage={t('noActiveServiceAccounts')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
                 onDeleteClick={onDeleteClick}
               />
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
-                <p className="text-sm">No active service accounts</p>
+                <p className="text-sm">{t('noActiveServiceAccounts')}</p>
               </div>
             )}
           </div>
@@ -297,13 +299,13 @@ export function ThreeTableLayout({
           {serviceAccountsInactive.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Inactive Service Accounts ({serviceAccountsInactive.length})
+                {t('inactiveServiceAccounts', { count: serviceAccountsInactive.length })}
               </h3>
               <LicenseTable
                 licenses={serviceAccountsInactive}
                 showProvider={showProvider}
                 showEmployee={true}
-                emptyMessage="No inactive service accounts"
+                emptyMessage={t('noInactiveServiceAccounts')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
                 onDeleteClick={onDeleteClick}

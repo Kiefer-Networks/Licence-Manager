@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Globe, Skull, UserMinus, Bot, HelpCircle, UserCheck, AlertCircle } from 'lucide-react';
 
@@ -35,6 +36,8 @@ interface LicenseStatusBadgeProps {
  * 8. Unassigned (amber) - if no employee linked (optional)
  */
 export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseStatusBadgeProps) {
+  const t = useTranslations('licenses');
+
   const badges: React.ReactNode[] = [];
 
   // Service Account badge - shown when is_service_account=true
@@ -46,7 +49,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-blue-600 border-blue-200 bg-blue-50"
       >
         <Bot className="h-3 w-3 mr-1" />
-        {license.service_account_name || 'Service Account'}
+        {license.service_account_name || t('serviceAccount')}
       </Badge>
     );
   }
@@ -60,7 +63,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-green-600 border-green-200 bg-green-50"
       >
         <UserCheck className="h-3 w-3 mr-1" />
-        External Guest
+        {t('externalGuest')}
       </Badge>
     );
   }
@@ -75,7 +78,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-purple-600 border-purple-200 bg-purple-50"
       >
         <HelpCircle className="h-3 w-3 mr-1" />
-        Suggested: {license.suggested_employee_name} ({confidence}%)
+        {t('suggestedMatch', { name: license.suggested_employee_name, percent: confidence })}
       </Badge>
     );
   }
@@ -89,7 +92,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-orange-600 border-orange-200 bg-orange-50"
       >
         <AlertCircle className="h-3 w-3 mr-1" />
-        External (Review)
+        {t('externalReview')}
       </Badge>
     );
   }
@@ -103,7 +106,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-orange-600 border-orange-200 bg-orange-50"
       >
         <Globe className="h-3 w-3 mr-1" />
-        External
+        {t('external')}
       </Badge>
     );
   }
@@ -117,7 +120,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-red-600 border-red-200 bg-red-50"
       >
         <Skull className="h-3 w-3 mr-1" />
-        Offboarded
+        {t('offboarded')}
       </Badge>
     );
   }
@@ -131,7 +134,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         className="text-zinc-500 border-zinc-200 bg-zinc-50"
       >
         <UserMinus className="h-3 w-3 mr-1" />
-        Inactive
+        {t('inactive')}
       </Badge>
     );
   }
@@ -144,7 +147,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
         variant="outline"
         className="text-amber-600 border-amber-200 bg-amber-50"
       >
-        Unassigned
+        {t('unassigned')}
       </Badge>
     );
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,8 @@ interface SuggestedMatchCardProps {
  * Admins must manually decide what to do with each suggestion.
  */
 export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProps) {
+  const t = useTranslations('licenses');
+  const tCommon = useTranslations('common');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
       await api.confirmLicenseMatch(license.id);
       onUpdate?.();
     } catch (err) {
-      setError('Failed to confirm match');
+      setError(t('failedToConfirmMatch'));
     } finally {
       setIsLoading(false);
     }
@@ -47,7 +50,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
       await api.rejectLicenseMatch(license.id);
       onUpdate?.();
     } catch (err) {
-      setError('Failed to reject match');
+      setError(t('failedToRejectMatch'));
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +63,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
       await api.markAsExternalGuest(license.id);
       onUpdate?.();
     } catch (err) {
-      setError('Failed to mark as guest');
+      setError(t('failedToMarkAsGuest'));
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +110,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
                       : 'text-orange-600 border-orange-200 bg-orange-50'
                 }
               >
-                {confidence}% match
+                {t('matchPercent', { percent: confidence })}
               </Badge>
             </div>
             <p className="text-sm font-medium mt-1">
@@ -120,7 +123,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
             )}
             {license.match_method && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                via {license.match_method.replace('_', ' ')}
+                {t('viaMethod', { method: license.match_method.replace('_', ' ') })}
               </p>
             )}
           </div>
@@ -136,7 +139,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
               disabled={isLoading}
             >
               <UserPlus className="h-3.5 w-3.5 mr-1" />
-              External Guest
+              {t('externalGuest')}
             </Button>
           )}
           <Button
@@ -163,7 +166,7 @@ export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProp
             ) : (
               <>
                 <Check className="h-3.5 w-3.5 mr-1" />
-                Confirm
+                {tCommon('confirm')}
               </>
             )}
           </Button>

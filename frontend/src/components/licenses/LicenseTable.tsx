@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
@@ -37,7 +38,7 @@ export function LicenseTable({
   licenses,
   showProvider = true,
   showEmployee = true,
-  emptyMessage = 'No licenses found',
+  emptyMessage,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -46,6 +47,9 @@ export function LicenseTable({
   onAssignClick,
   onDeleteClick,
 }: LicenseTableProps) {
+  const t = useTranslations('licenses');
+  const tCommon = useTranslations('common');
+  const displayEmptyMessage = emptyMessage || tCommon('noResults');
   const hasActions = onServiceAccountClick || onAdminAccountClick || onAssignClick || onDeleteClick;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
@@ -138,7 +142,7 @@ export function LicenseTable({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
         <Input
-          placeholder="Search by email, name, provider..."
+          placeholder={t('searchPlaceholder')}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -153,7 +157,7 @@ export function LicenseTable({
         {paginatedLicenses.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
             <Key className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">{emptyMessage}</p>
+            <p className="text-sm">{displayEmptyMessage}</p>
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -172,30 +176,30 @@ export function LicenseTable({
                 {showProvider && (
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('provider_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Provider <SortIcon column="provider_name" />
+                      {t('provider')} <SortIcon column="provider_name" />
                     </button>
                   </th>
                 )}
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                   <button onClick={() => handleSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
-                    License <SortIcon column="external_user_id" />
+                    {t('license')} <SortIcon column="external_user_id" />
                   </button>
                 </th>
                 {showEmployee && (
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleSort('employee_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Employee <SortIcon column="employee_name" />
+                      {t('employee')} <SortIcon column="employee_name" />
                     </button>
                   </th>
                 )}
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                   <button onClick={() => handleSort('license_type')} className="flex items-center gap-1.5 hover:text-foreground">
-                    Type <SortIcon column="license_type" />
+                    {t('type')} <SortIcon column="license_type" />
                   </button>
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">
                   <button onClick={() => handleSort('monthly_cost')} className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto">
-                    Cost <SortIcon column="monthly_cost" />
+                    {t('cost')} <SortIcon column="monthly_cost" />
                   </button>
                 </th>
                 {hasActions && (
@@ -251,7 +255,7 @@ export function LicenseTable({
                             <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
                               <span className="text-xs font-medium text-blue-600">{license.service_account_owner_name?.charAt(0) || 'O'}</span>
                             </div>
-                            <span className="hover:underline text-muted-foreground text-xs">Owner: {license.service_account_owner_name}</span>
+                            <span className="hover:underline text-muted-foreground text-xs">{t('owner')}: {license.service_account_owner_name}</span>
                           </Link>
                         )}
                         {/* Regular employee assignment */}
@@ -298,19 +302,19 @@ export function LicenseTable({
                           {onServiceAccountClick && (
                             <DropdownMenuItem onClick={() => onServiceAccountClick(license)}>
                               <Bot className="h-4 w-4 mr-2" />
-                              {license.is_service_account ? 'Edit Service Account' : 'Mark as Service Account'}
+                              {license.is_service_account ? t('editServiceAccount') : t('markAsServiceAccount')}
                             </DropdownMenuItem>
                           )}
                           {onAdminAccountClick && (
                             <DropdownMenuItem onClick={() => onAdminAccountClick(license)}>
                               <ShieldCheck className="h-4 w-4 mr-2" />
-                              {license.is_admin_account ? 'Edit Admin Account' : 'Mark as Admin Account'}
+                              {license.is_admin_account ? t('editAdminAccount') : t('markAsAdminAccount')}
                             </DropdownMenuItem>
                           )}
                           {onAssignClick && !license.is_service_account && (
                             <DropdownMenuItem onClick={() => onAssignClick(license)}>
                               <UserPlus className="h-4 w-4 mr-2" />
-                              Assign to Employee
+                              {t('assignToEmployee')}
                             </DropdownMenuItem>
                           )}
                           {(onServiceAccountClick || onAdminAccountClick || onAssignClick) && onDeleteClick && (
@@ -322,7 +326,7 @@ export function LicenseTable({
                               className="text-red-600 focus:text-red-600"
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
+                              {tCommon('delete')}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -340,14 +344,14 @@ export function LicenseTable({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Page {page} of {totalPages} ({filteredLicenses.length} total)
+            {t('pageOf', { page, total: totalPages })} ({t('totalCount', { count: filteredLicenses.length })})
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>
-              Previous
+              {t('previous')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
-              Next
+              {tCommon('next')}
             </Button>
           </div>
         </div>

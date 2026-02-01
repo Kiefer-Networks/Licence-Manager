@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { LicenseStats as LicenseStatsType } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
@@ -14,6 +15,7 @@ interface LicenseStatsProps {
 }
 
 export function LicenseStatsCards({ stats }: LicenseStatsProps) {
+  const t = useTranslations('licenses');
   const hasNotInHris = stats.total_unassigned > 0;
   const hasAvailableSeats = stats.available_seats !== undefined && stats.available_seats !== null;
 
@@ -23,7 +25,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Key className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Active</span>
+            <span className="text-xs font-medium uppercase">{t('active')}</span>
           </div>
           <p className="text-2xl font-semibold">{stats.total_active}</p>
         </CardContent>
@@ -33,18 +35,18 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Users className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Assigned</span>
+            <span className="text-xs font-medium uppercase">{t('assigned')}</span>
           </div>
           <div className="flex items-baseline gap-1 flex-wrap">
             <span className="text-2xl font-semibold">{stats.total_assigned}</span>
             {stats.total_external > 0 && (
-              <span className="text-sm text-muted-foreground">+ {stats.total_external} <span className="text-xs">(ext)</span></span>
+              <span className="text-sm text-muted-foreground">+ {stats.total_external} <span className="text-xs">({t('ext')})</span></span>
             )}
             {(stats.total_service_accounts ?? 0) > 0 && (
-              <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">(svc)</span></span>
+              <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">({t('svc')})</span></span>
             )}
             {hasNotInHris && (
-              <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ not in HRIS)</span></span>
+              <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
             )}
           </div>
         </CardContent>
@@ -55,7 +57,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
               <Package className="h-4 w-4" />
-              <span className="text-xs font-medium uppercase">Available</span>
+              <span className="text-xs font-medium uppercase">{t('available')}</span>
             </div>
             <p className="text-2xl font-semibold text-emerald-600">{stats.available_seats}</p>
           </CardContent>
@@ -66,7 +68,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <UserMinus className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Inactive</span>
+            <span className="text-xs font-medium uppercase">{t('inactive')}</span>
           </div>
           <p className="text-2xl font-semibold text-zinc-400">{stats.total_inactive}</p>
         </CardContent>
@@ -76,7 +78,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Wallet className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Monthly Cost</span>
+            <span className="text-xs font-medium uppercase">{t('monthlyCost')}</span>
           </div>
           <p className="text-lg font-semibold">
             {formatMonthlyCost(stats.monthly_cost, stats.currency).replace(' / month', '')}

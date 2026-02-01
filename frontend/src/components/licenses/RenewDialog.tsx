@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,9 @@ export function RenewDialog({
   currentExpiration,
   hasPendingCancellation,
 }: RenewDialogProps) {
+  const t = useTranslations('lifecycle');
+  const tCommon = useTranslations('common');
+
   // Default to 1 year from now or current expiration
   const getDefaultDate = () => {
     const baseDate = currentExpiration ? new Date(currentExpiration) : new Date();
@@ -72,17 +76,17 @@ export function RenewDialog({
         <div className="space-y-4 py-4">
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
             <p className="text-sm text-emerald-800">
-              Renewing: <strong>{itemName}</strong>
+              {t('renewing')}: <strong>{itemName}</strong>
             </p>
             {currentExpiration && (
               <p className="text-xs text-emerald-700 mt-1">
-                Current expiration: {new Date(currentExpiration).toLocaleDateString(getLocale())}
+                {t('currentExpiration')}: {new Date(currentExpiration).toLocaleDateString(getLocale())}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="newExpirationDate">New Expiration Date</Label>
+            <Label htmlFor="newExpirationDate">{t('newExpirationDate')}</Label>
             <Input
               id="newExpirationDate"
               type="date"
@@ -104,10 +108,10 @@ export function RenewDialog({
                   htmlFor="clearCancellation"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  Clear pending cancellation
+                  {t('clearPendingCancellation')}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Remove the scheduled cancellation and keep the license active.
+                  {t('clearCancellationDescription')}
                 </p>
               </div>
             </div>
@@ -116,10 +120,10 @@ export function RenewDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon('cancel')}
           </Button>
           <Button onClick={handleConfirm} disabled={loading || !newExpirationDate}>
-            {loading ? 'Renewing...' : 'Confirm Renewal'}
+            {loading ? tCommon('loading') : t('confirmRenewal')}
           </Button>
         </DialogFooter>
       </DialogContent>

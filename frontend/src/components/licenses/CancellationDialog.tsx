@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,8 @@ export function CancellationDialog({
   description,
   itemName,
 }: CancellationDialogProps) {
+  const t = useTranslations('lifecycle');
+  const tCommon = useTranslations('common');
   const [effectiveDate, setEffectiveDate] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -64,12 +67,12 @@ export function CancellationDialog({
         <div className="space-y-4 py-4">
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
             <p className="text-sm text-amber-800">
-              You are about to cancel: <strong>{itemName}</strong>
+              {t('cancelLicense')}: <strong>{itemName}</strong>
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="effectiveDate">Effective Date</Label>
+            <Label htmlFor="effectiveDate">{t('effectiveDate')}</Label>
             <Input
               id="effectiveDate"
               type="date"
@@ -78,17 +81,17 @@ export function CancellationDialog({
               min={new Date().toISOString().split('T')[0]}
             />
             <p className="text-xs text-muted-foreground">
-              The license will remain active until this date.
+              {t('cancelDescription')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reason">Reason (optional)</Label>
+            <Label htmlFor="reason">{t('reason')} ({tCommon('optional')})</Label>
             <Textarea
               id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter cancellation reason..."
+              placeholder={t('reason')}
               rows={3}
             />
           </div>
@@ -96,14 +99,14 @@ export function CancellationDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon('cancel')}
           </Button>
           <Button
             variant="destructive"
             onClick={handleConfirm}
             disabled={loading || !effectiveDate}
           >
-            {loading ? 'Cancelling...' : 'Confirm Cancellation'}
+            {loading ? tCommon('loading') : tCommon('confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>
