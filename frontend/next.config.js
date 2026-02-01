@@ -57,7 +57,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' https://lh3.googleusercontent.com data: blob:",
+              `img-src 'self' ${apiUrl} https://lh3.googleusercontent.com data: blob:`,
               "font-src 'self' data:",
               `connect-src 'self' ${apiUrl} https://accounts.google.com https://oauth2.googleapis.com`,
               "frame-ancestors 'none'",
