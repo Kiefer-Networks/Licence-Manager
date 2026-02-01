@@ -175,3 +175,8 @@ ADMIN_USER_CREATE_LIMIT = _rate_limits["admin_user_create"]
 ADMIN_ROLE_MODIFY_LIMIT = _rate_limits["admin_role_modify"]
 PROVIDER_TEST_CONNECTION_LIMIT = _rate_limits["provider_test"]
 SENSITIVE_OPERATION_LIMIT = _rate_limits["sensitive"]
+
+# Backup operation limits (very restrictive to prevent abuse)
+BACKUP_EXPORT_LIMIT = "1/hour"
+BACKUP_RESTORE_LIMIT = "1/hour"
+BACKUP_INFO_LIMIT = "10/minute"

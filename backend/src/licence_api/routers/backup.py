@@ -15,18 +15,18 @@ from licence_api.models.dto.backup import (
     RestoreResponse,
 )
 from licence_api.security.auth import require_permission, Permissions
-from licence_api.security.rate_limit import limiter
+from licence_api.security.rate_limit import (
+    limiter,
+    BACKUP_EXPORT_LIMIT,
+    BACKUP_RESTORE_LIMIT,
+    BACKUP_INFO_LIMIT,
+)
 from licence_api.services.backup_service import BackupService
 
 router = APIRouter()
 
 # Maximum backup file size: 500MB
 MAX_BACKUP_SIZE = 500 * 1024 * 1024
-
-# Rate limits for backup operations (restrictive to prevent abuse)
-BACKUP_EXPORT_LIMIT = "1/hour"
-BACKUP_RESTORE_LIMIT = "1/hour"
-BACKUP_INFO_LIMIT = "10/minute"
 
 
 def get_backup_service(
