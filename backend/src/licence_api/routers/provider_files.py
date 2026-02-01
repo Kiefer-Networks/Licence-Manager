@@ -126,10 +126,8 @@ async def upload_provider_file(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or unsupported format")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or provider not found")
 
     ext = Path(file_orm.filename).suffix.lower()
     return ProviderFileResponse(

@@ -83,11 +83,8 @@ async def create_manual_licenses(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
 
 
 @router.post("/bulk", response_model=list[LicenseResponse])
@@ -110,11 +107,8 @@ async def create_manual_licenses_bulk(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
 
 
 @router.put("/{license_id}", response_model=LicenseResponse)
@@ -143,11 +137,8 @@ async def update_manual_license(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid update data")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License not found or invalid update data")
 
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
@@ -166,11 +157,8 @@ async def assign_manual_license(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License or employee not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignment failed")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License or employee not found")
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
@@ -206,8 +194,5 @@ async def delete_manual_license(
             request=http_request,
         )
         return {"success": True, "message": "License deleted"}
-    except ValueError as e:
-        error_msg = str(e).lower()
-        if "not found" in error_msg:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete license")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")

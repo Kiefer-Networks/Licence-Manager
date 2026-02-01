@@ -50,10 +50,10 @@ async def create_payment_method(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Invalid payment method data",
         )
 
 
@@ -89,10 +89,10 @@ async def update_payment_method(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Payment method not found",
         )
 
 
@@ -110,8 +110,8 @@ async def delete_payment_method(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Payment method not found",
         )

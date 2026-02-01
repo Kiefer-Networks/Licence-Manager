@@ -243,10 +243,10 @@ async def upload_provider_logo(
             request=http_request,
         )
         return LogoUploadResponse(logo_url=logo_url)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Invalid logo file",
         )
 
 
@@ -315,10 +315,10 @@ async def delete_provider_logo(
             user=current_user,
             request=http_request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Provider or logo not found",
         )
 
 

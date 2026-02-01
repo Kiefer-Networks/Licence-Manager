@@ -36,10 +36,10 @@ async def list_organization_licenses(
     """List all organization licenses for a provider."""
     try:
         return await service.list_licenses(provider_id)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Provider not found",
         )
 
 
@@ -59,10 +59,10 @@ async def create_organization_license(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Provider not found",
         )
 
 
@@ -84,10 +84,10 @@ async def update_organization_license(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="License or provider not found",
         )
 
 
@@ -107,8 +107,8 @@ async def delete_organization_license(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="License or provider not found",
         )

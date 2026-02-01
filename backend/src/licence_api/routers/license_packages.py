@@ -36,10 +36,10 @@ async def list_license_packages(
     """List all license packages for a provider."""
     try:
         return await service.list_packages(provider_id)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Provider not found",
         )
 
 
@@ -59,21 +59,10 @@ async def create_license_package(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
-        error_msg = str(e)
-        if "not found" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error_msg,
-            )
-        elif "already exists" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=error_msg,
-            )
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg,
+            detail="Invalid package data or provider not found",
         )
 
 
@@ -95,10 +84,10 @@ async def update_license_package(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Package or provider not found",
         )
 
 
@@ -118,8 +107,8 @@ async def delete_license_package(
             admin_user_id=current_user.id,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Package or provider not found",
         )
