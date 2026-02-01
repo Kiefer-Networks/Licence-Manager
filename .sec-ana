@@ -338,6 +338,16 @@ if (!contentType.includes('application/json')) {
 - **Risk:** Information disclosure in browser DevTools
 - **Fix:** Removed console.error call; error is re-thrown and handled by caller
 
+### SEC-47 [MEDIUM] - Credentials Not Cleared on Component Unmount
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **Files:** frontend/src/app/setup/page.tsx, frontend/src/app/providers/page.tsx
+- **Description:** Sensitive credentials (API tokens, passwords) stored in React state were not cleared when components unmounted. This left credentials in memory longer than necessary.
+- **Risk:** Credentials exposure via memory dumps or React DevTools
+- **Fix:** Added useEffect cleanup functions that clear credentials state on unmount:
+  - setup/page.tsx: setHibobAuthToken('') on unmount
+  - providers/page.tsx: setCredentials({}) on unmount
+
 ---
 
 ## 7. Configuration

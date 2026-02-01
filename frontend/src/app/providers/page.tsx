@@ -28,7 +28,10 @@ import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loa
 import Link from 'next/link';
 import { getLocale } from '@/lib/locale';
 
-const hrisProvider = { value: 'hibob', label: 'HiBob', fields: ['auth_token'] };
+const hrisProviderTypes = [
+  { value: 'hibob', label: 'HiBob', fields: ['auth_token'] },
+  { value: 'personio', label: 'Personio', fields: ['client_id', 'client_secret'] },
+];
 
 const licenseProviderTypes = [
   { value: '1password', label: '1Password', fields: ['api_token', 'sign_in_address'], type: 'api' },
@@ -88,6 +91,7 @@ const PROVIDER_LINKS: Record<string, string> = {
   gitlab: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
   google_workspace: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
   hibob: 'https://apidocs.hibob.com/reference/getting-started',
+  personio: 'https://developer.personio.de/docs/getting-started-with-the-personio-api',
   jetbrains: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
   mattermost: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
   microsoft: 'https://learn.microsoft.com/en-us/graph/auth-register-app-v2',
@@ -103,7 +107,7 @@ const PROVIDER_LINKS: Record<string, string> = {
 const PROVIDERS_WITH_SETUP = [
   '1password', 'adobe', 'atlassian', 'cursor', 'figma', 'github', 'gitlab',
   'google_workspace', 'hibob', 'jetbrains', 'mattermost', 'microsoft',
-  'miro', 'openai', 'slack', 'anthropic', 'auth0', 'mailjet'
+  'miro', 'openai', 'personio', 'slack', 'anthropic', 'auth0', 'mailjet'
 ];
 
 const getFieldLabel = (field: string, t: (key: string) => string) => {
@@ -144,6 +148,13 @@ export default function ProvidersPage() {
     fetchProviders();
   }, []);
 
+  // Clear sensitive credentials on unmount to prevent memory exposure
+  useEffect(() => {
+    return () => {
+      setCredentials({});
+    };
+  }, []);
+
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3000);
@@ -160,17 +171,19 @@ export default function ProvidersPage() {
     }
   }
 
-  const hrisProviders = providers.filter((p) => p.name === 'hibob');
-  const licenseProviders = providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const hrisProviderNames = hrisProviderTypes.map((p) => p.value);
+  const hrisProviders = providers.filter((p) => hrisProviderNames.includes(p.name));
+  const licenseProviders = providers.filter((p) => !hrisProviderNames.includes(p.name)).sort((a, b) => a.display_name.localeCompare(b.display_name));
 
   const getProviderFields = (providerName: string) => {
-    if (providerName === 'hibob') return hrisProvider.fields;
+    const hrisType = hrisProviderTypes.find((p) => p.value === providerName);
+    if (hrisType) return hrisType.fields;
     return licenseProviderTypes.find((p) => p.value === providerName)?.fields || [];
   };
 
   const handleOpenAddDialog = (mode: 'hris' | 'license') => {
     setDialogMode(mode);
-    setNewProviderType(mode === 'hris' ? 'hibob' : '');
+    setNewProviderType('');
     setNewProviderName('');
     setCredentials({});
     setManualConfig({
@@ -215,7 +228,7 @@ export default function ProvidersPage() {
     setSaving(true);
     setError(null);
     try {
-      const providerType = dialogMode === 'hris' ? 'hibob' : newProviderType;
+      const providerType = newProviderType;
       const isManual = isManualProvider(providerType);
 
       const config: { provider_type?: string; license_model?: string } = {};
@@ -352,7 +365,7 @@ export default function ProvidersPage() {
             {hrisProviders.length === 0 && (
               <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('hris')}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t('connectHiBob')}
+                {t('connectHris')}
               </Button>
             )}
           </div>
@@ -486,28 +499,35 @@ export default function ProvidersPage() {
           <DialogHeader>
             <DialogTitle>{dialogMode === 'hris' ? t('connectHris') : t('addProvider')}</DialogTitle>
             <DialogDescription>
-              {dialogMode === 'hris' ? t('connectHiBobDescription') : t('addNewLicenseProvider')}
+              {dialogMode === 'hris' ? t('connectHrisDescription') : t('addNewLicenseProvider')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 overflow-y-auto flex-1">
-            {dialogMode === 'license' && (
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">{t('providerType')}</Label>
-                <Select value={newProviderType} onValueChange={setNewProviderType}>
-                  <SelectTrigger><SelectValue placeholder={t('selectProviderType')} /></SelectTrigger>
-                  <SelectContent>
-                    {licenseProviderTypes.map((pt) => (
+            {/* Provider Type Selection */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">{t('providerType')}</Label>
+              <Select value={newProviderType} onValueChange={setNewProviderType}>
+                <SelectTrigger><SelectValue placeholder={t('selectProviderType')} /></SelectTrigger>
+                <SelectContent>
+                  {dialogMode === 'hris' ? (
+                    hrisProviderTypes.map((pt) => (
+                      <SelectItem key={pt.value} value={pt.value}>
+                        {t(pt.value)}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    licenseProviderTypes.map((pt) => (
                       <SelectItem key={pt.value} value={pt.value}>
                         {pt.value === 'manual' ? t('manualNoApi') : t(pt.value)}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label className="text-xs font-medium">{t('displayName')}</Label>
-              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={dialogMode === 'hris' ? t('hibob') : t('displayNamePlaceholder')} />
+              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={newProviderType ? t(newProviderType) : t('displayNamePlaceholder')} />
             </div>
             {/* API Provider Fields */}
             {!isManualProvider(newProviderType) && getProviderFields(newProviderType).map((field) => (

@@ -26,8 +26,15 @@ export default function SetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // HiBob credentials
+  // HiBob credentials - cleared on unmount for security
   const [hibobAuthToken, setHibobAuthToken] = useState('');
+
+  // Clear sensitive data on unmount to prevent memory exposure
+  useEffect(() => {
+    return () => {
+      setHibobAuthToken('');
+    };
+  }, []);
 
   useEffect(() => {
     async function checkStatus() {
