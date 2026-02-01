@@ -107,6 +107,27 @@ export interface InactiveLicenseExportRow {
   [key: string]: string | number | boolean | null | undefined;
 }
 
+export interface ExportTranslations {
+  provider: string;
+  userId: string;
+  employee: string;
+  email: string;
+  daysInactive: string;
+  monthlyCost: string;
+  terminationDate: string;
+  daysSinceOffboarding: string;
+  pendingLicenses: string;
+  licenseCount: string;
+  externalEmail: string;
+  assignedEmployee: string;
+  employeeEmail: string;
+  status: string;
+  licenseType: string;
+  licenses: string;
+  total: string;
+  unassigned: string;
+}
+
 export function exportInactiveLicenses(
   licenses: Array<{
     provider_name: string;
@@ -116,12 +137,13 @@ export function exportInactiveLicenses(
     days_inactive: number;
     monthly_cost?: number | string | null;
   }>,
+  translations: ExportTranslations,
   department?: string
 ): void {
   const data: InactiveLicenseExportRow[] = licenses.map((lic) => ({
     provider_name: lic.provider_name,
     external_user_id: lic.external_user_id,
-    employee_name: lic.employee_name || 'Unassigned',
+    employee_name: lic.employee_name || translations.unassigned,
     employee_email: lic.employee_email || '',
     days_inactive: lic.days_inactive,
     monthly_cost: formatCurrencyForExport(lic.monthly_cost),
@@ -133,12 +155,12 @@ export function exportInactiveLicenses(
   exportToCsv(data, {
     filename: `inactive_licenses${suffix}_${date}`,
     headers: {
-      provider_name: 'Provider',
-      external_user_id: 'User ID',
-      employee_name: 'Employee',
-      employee_email: 'Email',
-      days_inactive: 'Days Inactive',
-      monthly_cost: 'Monthly Cost',
+      provider_name: translations.provider,
+      external_user_id: translations.userId,
+      employee_name: translations.employee,
+      employee_email: translations.email,
+      days_inactive: translations.daysInactive,
+      monthly_cost: translations.monthlyCost,
     },
   });
 }
@@ -161,6 +183,7 @@ export function exportOffboarding(
     days_since_offboarding: number;
     pending_licenses: Array<{ provider: string }>;
   }>,
+  translations: ExportTranslations,
   department?: string
 ): void {
   const data: OffboardingExportRow[] = employees.map((emp) => ({
@@ -178,12 +201,12 @@ export function exportOffboarding(
   exportToCsv(data, {
     filename: `offboarding_report${suffix}_${date}`,
     headers: {
-      employee_name: 'Employee',
-      employee_email: 'Email',
-      termination_date: 'Termination Date',
-      days_since_offboarding: 'Days Since Offboarding',
-      pending_licenses: 'Pending Licenses',
-      pending_license_count: 'License Count',
+      employee_name: translations.employee,
+      employee_email: translations.email,
+      termination_date: translations.terminationDate,
+      days_since_offboarding: translations.daysSinceOffboarding,
+      pending_licenses: translations.pendingLicenses,
+      pending_license_count: translations.licenseCount,
     },
   });
 }
@@ -209,12 +232,13 @@ export function exportExternalUsers(
     license_type?: string | null;
     monthly_cost?: number | string | null;
   }>,
+  translations: ExportTranslations,
   department?: string
 ): void {
   const data: ExternalUserExportRow[] = licenses.map((lic) => ({
     external_user_id: lic.external_user_id,
     provider_name: lic.provider_name,
-    employee_name: lic.employee_name || 'Unassigned',
+    employee_name: lic.employee_name || translations.unassigned,
     employee_email: lic.employee_email || '',
     employee_status: lic.employee_status || 'active',
     license_type: lic.license_type || '',
@@ -227,13 +251,13 @@ export function exportExternalUsers(
   exportToCsv(data, {
     filename: `external_users${suffix}_${date}`,
     headers: {
-      external_user_id: 'External Email',
-      provider_name: 'Provider',
-      employee_name: 'Assigned Employee',
-      employee_email: 'Employee Email',
-      employee_status: 'Status',
-      license_type: 'License Type',
-      monthly_cost: 'Monthly Cost',
+      external_user_id: translations.externalEmail,
+      provider_name: translations.provider,
+      employee_name: translations.assignedEmployee,
+      employee_email: translations.employeeEmail,
+      employee_status: translations.status,
+      license_type: translations.licenseType,
+      monthly_cost: translations.monthlyCost,
     },
   });
 }
@@ -252,6 +276,7 @@ export function exportCosts(
     cost: number | string;
   }>,
   totalCost: number | string,
+  translations: ExportTranslations,
   department?: string
 ): void {
   const data: CostExportRow[] = costs.map((entry) => ({
@@ -262,7 +287,7 @@ export function exportCosts(
 
   // Add total row
   data.push({
-    provider_name: 'TOTAL',
+    provider_name: translations.total,
     license_count: costs.reduce((sum, c) => sum + c.license_count, 0),
     monthly_cost: formatCurrencyForExport(totalCost),
   });
@@ -273,9 +298,9 @@ export function exportCosts(
   exportToCsv(data, {
     filename: `cost_report${suffix}_${date}`,
     headers: {
-      provider_name: 'Provider',
-      license_count: 'Licenses',
-      monthly_cost: 'Monthly Cost',
+      provider_name: translations.provider,
+      license_count: translations.licenses,
+      monthly_cost: translations.monthlyCost,
     },
   });
 }
