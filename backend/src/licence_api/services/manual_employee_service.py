@@ -100,7 +100,7 @@ class ManualEmployeeService:
         # Resolve manager if provided
         if data.manager_email:
             await self.employee_repo.resolve_manager_ids()
-            await self.session.refresh(employee_orm)
+            employee_orm = await self.employee_repo.refresh(employee_orm)
 
         # Audit log
         await self.audit_service.log(
@@ -117,7 +117,7 @@ class ManualEmployeeService:
             },
         )
 
-        await self.session.commit()
+        # Note: Commit handled by get_db() dependency after endpoint completes
         return await self._build_employee_response(employee_orm)
 
     async def update_employee(
@@ -201,7 +201,7 @@ class ManualEmployeeService:
             # Resolve manager if changed
             if "manager_email" in update_data:
                 await self.employee_repo.resolve_manager_ids()
-                await self.session.refresh(employee_orm)
+                employee_orm = await self.employee_repo.refresh(employee_orm)
 
         # Audit log
         await self.audit_service.log(
@@ -213,7 +213,7 @@ class ManualEmployeeService:
             details={"changes": changes} if changes else {"no_changes": True},
         )
 
-        await self.session.commit()
+        # Note: Commit handled by get_db() dependency after endpoint completes
         return await self._build_employee_response(employee_orm)
 
     async def delete_employee(
@@ -259,7 +259,7 @@ class ManualEmployeeService:
             },
         )
 
-        await self.session.commit()
+        # Note: Commit handled by get_db() dependency after endpoint completes
 
     async def bulk_import_employees(
         self,
@@ -348,7 +348,7 @@ class ManualEmployeeService:
             },
         )
 
-        await self.session.commit()
+        # Note: Commit handled by get_db() dependency after endpoint completes
 
         return EmployeeBulkImportResponse(
             created=created,

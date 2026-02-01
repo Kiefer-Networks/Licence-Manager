@@ -22,10 +22,10 @@
 | Re-Audit 2026-02-01 (Round 4: Final Audit) | 0 | 0 | 0 | 0 | 0 | 6 |
 | Re-Audit 2026-02-01 (Round 5: Rate Limiting) | 0 | 0 | 0 | 0 | 0 | 8 |
 | Re-Audit 2026-02-01 (Round 6: Parameter Fix) | 0 | 0 | 0 | 0 | 0 | 1 |
-| Manual HRIS Implementation (Round 8) | 0 | 0 | 0 | 0 | 0 | 5 |
-| **Total** | **0** | **0** | **0** | **0** | **0** | **103** |
+| Manual HRIS Implementation (Round 8) | 0 | 0 | 0 | 0 | 0 | 6 |
+| **Total** | **0** | **0** | **0** | **0** | **0** | **104** |
 
-**Progress: 103 of 103 findings fixed (100%)**
+**Progress: 104 of 104 findings fixed (100%)**
 
 ### All Security Findings Resolved
 All critical, high, medium, and low severity findings have been addressed.
@@ -974,6 +974,16 @@ All security controls verified operational. The codebase achieves the highest le
 - **File:** backend/src/licence_api/services/backup_service.py:530-545
 - **Description:** Employee restore does not include manager_id field - manager relationships won't be restored
 - **Fix:** Added `manager_id=UUID(e["manager_id"]) if e.get("manager_id") else None`
+
+### SEC-V15-006 [MEDIUM] - MVC Violation: Direct Session Access in Service
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/services/manual_employee_service.py
+- **Description:** Service directly called session.refresh() and session.commit() violating repository pattern
+- **Fix:**
+  - Added `refresh()` method to BaseRepository
+  - Changed session.refresh() calls to employee_repo.refresh()
+  - Removed redundant session.commit() calls (handled by get_db() dependency)
 
 ---
 

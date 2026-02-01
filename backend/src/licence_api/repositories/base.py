@@ -128,3 +128,15 @@ class BaseRepository(Generic[T]):
         await self.session.delete(instance)
         await self.session.flush()
         return True
+
+    async def refresh(self, instance: T) -> T:
+        """Refresh an instance from the database.
+
+        Args:
+            instance: ORM instance to refresh
+
+        Returns:
+            Refreshed instance
+        """
+        await self.session.refresh(instance)
+        return instance
