@@ -32,9 +32,9 @@ def get_cancellation_service(db: AsyncSession = Depends(get_db)) -> Cancellation
 @router.post("/licenses/{license_id}/cancel", response_model=CancellationResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: CancellationRequest,
+    body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
@@ -46,8 +46,8 @@ async def cancel_license(
     try:
         license_orm = await service.cancel_license(
             license_id=license_id,
-            effective_date=request.effective_date,
-            reason=request.reason,
+            effective_date=body.effective_date,
+            reason=body.reason,
             cancelled_by=current_user.id,
         )
         return CancellationResponse(
@@ -64,9 +64,9 @@ async def cancel_license(
 @router.post("/licenses/{license_id}/renew")
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def renew_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: RenewRequest,
+    body: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
@@ -77,8 +77,8 @@ async def renew_license(
     try:
         license_orm = await service.renew_license(
             license_id=license_id,
-            new_expiration_date=request.new_expiration_date,
-            clear_cancellation=request.clear_cancellation,
+            new_expiration_date=body.new_expiration_date,
+            clear_cancellation=body.clear_cancellation,
         )
         return {
             "success": True,
@@ -93,9 +93,9 @@ async def renew_license(
 @router.patch("/licenses/{license_id}/needs-reorder")
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_license_needs_reorder(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: NeedsReorderUpdate,
+    body: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
@@ -103,7 +103,7 @@ async def set_license_needs_reorder(
     try:
         license_orm = await service.set_license_needs_reorder(
             license_id=license_id,
-            needs_reorder=request.needs_reorder,
+            needs_reorder=body.needs_reorder,
         )
         return {
             "success": True,
@@ -119,9 +119,9 @@ async def set_license_needs_reorder(
 @router.post("/packages/{package_id}/cancel", response_model=CancellationResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_package(
-    http_request: Request,
+    request: Request,
     package_id: UUID,
-    request: CancellationRequest,
+    body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
@@ -133,8 +133,8 @@ async def cancel_package(
     try:
         package = await service.cancel_package(
             package_id=package_id,
-            effective_date=request.effective_date,
-            reason=request.reason,
+            effective_date=body.effective_date,
+            reason=body.reason,
             cancelled_by=current_user.id,
         )
         return CancellationResponse(
@@ -151,9 +151,9 @@ async def cancel_package(
 @router.post("/packages/{package_id}/renew")
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def renew_package(
-    http_request: Request,
+    request: Request,
     package_id: UUID,
-    request: RenewRequest,
+    body: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
@@ -164,8 +164,8 @@ async def renew_package(
     try:
         package = await service.renew_package(
             package_id=package_id,
-            new_contract_end=request.new_expiration_date,
-            clear_cancellation=request.clear_cancellation,
+            new_contract_end=body.new_expiration_date,
+            clear_cancellation=body.clear_cancellation,
         )
         return {
             "success": True,
@@ -180,9 +180,9 @@ async def renew_package(
 @router.patch("/packages/{package_id}/needs-reorder")
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_package_needs_reorder(
-    http_request: Request,
+    request: Request,
     package_id: UUID,
-    request: NeedsReorderUpdate,
+    body: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> dict:
@@ -190,7 +190,7 @@ async def set_package_needs_reorder(
     try:
         package = await service.set_package_needs_reorder(
             package_id=package_id,
-            needs_reorder=request.needs_reorder,
+            needs_reorder=body.needs_reorder,
         )
         return {
             "success": True,
@@ -206,9 +206,9 @@ async def set_package_needs_reorder(
 @router.post("/org-licenses/{org_license_id}/cancel", response_model=CancellationResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def cancel_org_license(
-    http_request: Request,
+    request: Request,
     org_license_id: UUID,
-    request: CancellationRequest,
+    body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
 ) -> CancellationResponse:
@@ -220,8 +220,8 @@ async def cancel_org_license(
     try:
         org_license = await service.cancel_org_license(
             org_license_id=org_license_id,
-            effective_date=request.effective_date,
-            reason=request.reason,
+            effective_date=body.effective_date,
+            reason=body.reason,
             cancelled_by=current_user.id,
         )
         return CancellationResponse(

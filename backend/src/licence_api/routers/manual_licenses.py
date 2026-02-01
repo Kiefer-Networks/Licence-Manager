@@ -71,25 +71,25 @@ def get_manual_license_service(db: AsyncSession = Depends(get_db)) -> ManualLice
 @router.post("", response_model=list[LicenseResponse])
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses(
-    http_request: Request,
-    request: ManualLicenseCreate,
+    request: Request,
+    body: ManualLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> list[LicenseResponse]:
     """Create one or more manual licenses. Requires licenses.create permission."""
     try:
         return await service.create_licenses(
-            provider_id=request.provider_id,
-            quantity=request.quantity,
-            license_type=request.license_type,
-            license_key=request.license_key,
-            monthly_cost=request.monthly_cost,
-            currency=request.currency,
-            valid_until=request.valid_until,
-            notes=request.notes,
-            employee_id=request.employee_id,
+            provider_id=body.provider_id,
+            quantity=body.quantity,
+            license_type=body.license_type,
+            license_key=body.license_key,
+            monthly_cost=body.monthly_cost,
+            currency=body.currency,
+            valid_until=body.valid_until,
+            notes=body.notes,
+            employee_id=body.employee_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
@@ -98,23 +98,23 @@ async def create_manual_licenses(
 @router.post("/bulk", response_model=list[LicenseResponse])
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses_bulk(
-    http_request: Request,
-    request: ManualLicenseBulkCreate,
+    request: Request,
+    body: ManualLicenseBulkCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> list[LicenseResponse]:
     """Create multiple manual licenses with individual keys. Requires licenses.create permission."""
     try:
         return await service.create_licenses_bulk(
-            provider_id=request.provider_id,
-            license_keys=request.license_keys,
-            license_type=request.license_type,
-            monthly_cost=request.monthly_cost,
-            currency=request.currency,
-            valid_until=request.valid_until,
-            notes=request.notes,
+            provider_id=body.provider_id,
+            license_keys=body.license_keys,
+            license_type=body.license_type,
+            monthly_cost=body.monthly_cost,
+            currency=body.currency,
+            valid_until=body.valid_until,
+            notes=body.notes,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
@@ -123,29 +123,29 @@ async def create_manual_licenses_bulk(
 @router.put("/{license_id}", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_manual_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: ManualLicenseUpdate,
+    body: ManualLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> LicenseResponse:
     """Update a manual license. Requires licenses.edit permission."""
     try:
         # Determine if we should unassign
-        unassign = request.employee_id is None and "employee_id" in request.model_fields_set
+        unassign = body.employee_id is None and "employee_id" in body.model_fields_set
 
         return await service.update_license(
             license_id=license_id,
-            license_type=request.license_type,
-            license_key=request.license_key,
-            monthly_cost=request.monthly_cost,
-            currency=request.currency,
-            valid_until=request.valid_until,
-            notes=request.notes,
-            employee_id=request.employee_id if not unassign else None,
+            license_type=body.license_type,
+            license_key=body.license_key,
+            monthly_cost=body.monthly_cost,
+            currency=body.currency,
+            valid_until=body.valid_until,
+            notes=body.notes,
+            employee_id=body.employee_id if not unassign else None,
             unassign=unassign,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License not found or invalid update data")
@@ -154,7 +154,7 @@ async def update_manual_license(
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def assign_manual_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     body: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
@@ -166,7 +166,7 @@ async def assign_manual_license(
             license_id=license_id,
             employee_id=body.employee_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License or employee not found")
@@ -175,7 +175,7 @@ async def assign_manual_license(
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def unassign_manual_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
@@ -185,7 +185,7 @@ async def unassign_manual_license(
         return await service.unassign_license(
             license_id=license_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
@@ -194,7 +194,7 @@ async def unassign_manual_license(
 @router.delete("/{license_id}")
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_manual_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
@@ -204,7 +204,7 @@ async def delete_manual_license(
         await service.delete_license(
             license_id=license_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
         return {"success": True, "message": "License deleted"}
     except ValueError:

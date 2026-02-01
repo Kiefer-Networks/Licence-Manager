@@ -108,7 +108,7 @@ async def create_pattern(
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_pattern(
-    http_request: Request,
+    request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
@@ -129,7 +129,7 @@ async def delete_pattern(
     await service.delete_pattern(
         pattern_id=pattern_id,
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
         pattern_info={
             "email_pattern": pattern.email_pattern,
             "name": pattern.name,
@@ -231,7 +231,7 @@ async def get_license_type(
 @router.post("/license-types", response_model=ServiceAccountLicenseTypeResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_license_type(
-    http_request: Request,
+    request: Request,
     data: ServiceAccountLicenseTypeCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
@@ -251,14 +251,14 @@ async def create_license_type(
     return await service.create_license_type(
         data=data,
         created_by=current_user.id,
-        request=http_request,
+        request=request,
     )
 
 
 @router.delete("/license-types/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_license_type(
-    http_request: Request,
+    request: Request,
     entry_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
@@ -279,7 +279,7 @@ async def delete_license_type(
     await service.delete_license_type(
         entry_id=entry_id,
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
         entry_info={
             "license_type": entry.license_type,
             "name": entry.name,

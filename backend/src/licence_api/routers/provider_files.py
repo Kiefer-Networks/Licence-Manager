@@ -102,7 +102,7 @@ async def list_provider_files(
 @router.post("/{provider_id}/files", response_model=ProviderFileResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def upload_provider_file(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
@@ -131,7 +131,7 @@ async def upload_provider_file(
             description=description,
             category=category,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or provider not found")
@@ -222,7 +222,7 @@ async def view_provider_file(
 @router.delete("/{provider_id}/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_provider_file(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
@@ -234,7 +234,7 @@ async def delete_provider_file(
             provider_id=provider_id,
             file_id=file_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(

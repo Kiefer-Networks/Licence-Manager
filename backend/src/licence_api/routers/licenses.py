@@ -207,18 +207,18 @@ async def get_license(
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def assign_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: AssignLicenseRequest,
+    body: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> LicenseResponse:
     """Manually assign a license to an employee. Requires licenses.assign permission."""
     license = await license_service.assign_license_to_employee(
         license_id,
-        request.employee_id,
+        body.employee_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if license is None:
         raise HTTPException(
@@ -231,7 +231,7 @@ async def assign_license(
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def unassign_license(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
@@ -240,7 +240,7 @@ async def unassign_license(
     license = await license_service.unassign_license(
         license_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if license is None:
         raise HTTPException(
@@ -253,7 +253,7 @@ async def unassign_license(
 @router.post("/{license_id}/remove-from-provider", response_model=RemoveMemberResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def remove_license_from_provider(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
@@ -267,7 +267,7 @@ async def remove_license_from_provider(
         result = await license_service.remove_from_provider(
             license_id=license_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
         return RemoveMemberResponse(
             success=result["success"],
@@ -283,8 +283,8 @@ async def remove_license_from_provider(
 @router.post("/bulk/remove-from-provider", response_model=BulkActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_remove_from_provider(
-    http_request: Request,
-    request: BulkActionRequest,
+    request: Request,
+    body: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
@@ -294,16 +294,16 @@ async def bulk_remove_from_provider(
     Currently supported providers: Cursor (Enterprise only).
     Licenses from unsupported providers will be skipped with an error message.
     """
-    if len(request.license_ids) > 100:
+    if len(body.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 100 licenses per bulk operation",
         )
 
     result = await license_service.bulk_remove_from_provider(
-        license_ids=request.license_ids,
+        license_ids=body.license_ids,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     return BulkActionResponse(
@@ -324,8 +324,8 @@ async def bulk_remove_from_provider(
 @router.post("/bulk/delete", response_model=BulkActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_delete_licenses(
-    http_request: Request,
-    request: BulkActionRequest,
+    request: Request,
+    body: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
@@ -335,16 +335,16 @@ async def bulk_delete_licenses(
     It does NOT remove users from the external provider systems.
     Use bulk/remove-from-provider for that.
     """
-    if len(request.license_ids) > 100:
+    if len(body.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 100 licenses per bulk operation",
         )
 
     deleted_count = await license_service.bulk_delete(
-        license_ids=request.license_ids,
+        license_ids=body.license_ids,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     results = [
@@ -353,13 +353,13 @@ async def bulk_delete_licenses(
             success=True,
             message="License deleted from database",
         )
-        for lid in request.license_ids
+        for lid in body.license_ids
     ]
 
     return BulkActionResponse(
-        total=len(request.license_ids),
+        total=len(body.license_ids),
         successful=deleted_count,
-        failed=len(request.license_ids) - deleted_count,
+        failed=len(body.license_ids) - deleted_count,
         results=results,
     )
 
@@ -367,8 +367,8 @@ async def bulk_delete_licenses(
 @router.post("/bulk/unassign", response_model=BulkActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_unassign_licenses(
-    http_request: Request,
-    request: BulkActionRequest,
+    request: Request,
+    body: BulkActionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
 ) -> BulkActionResponse:
@@ -378,16 +378,16 @@ async def bulk_unassign_licenses(
     marking them as unassigned. The licenses remain in the database
     and the users remain in the external provider systems.
     """
-    if len(request.license_ids) > 100:
+    if len(body.license_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 100 licenses per bulk operation",
         )
 
     unassigned_count = await license_service.bulk_unassign(
-        license_ids=request.license_ids,
+        license_ids=body.license_ids,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     results = [
@@ -396,13 +396,13 @@ async def bulk_unassign_licenses(
             success=True,
             message="License unassigned from employee",
         )
-        for lid in request.license_ids
+        for lid in body.license_ids
     ]
 
     return BulkActionResponse(
-        total=len(request.license_ids),
+        total=len(body.license_ids),
         successful=unassigned_count,
-        failed=len(request.license_ids) - unassigned_count,
+        failed=len(body.license_ids) - unassigned_count,
         results=results,
     )
 
@@ -410,7 +410,7 @@ async def bulk_unassign_licenses(
 @router.put("/{license_id}/service-account", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_service_account_status(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     data: ServiceAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -431,7 +431,7 @@ async def update_service_account_status(
         service_account_owner_id=data.service_account_owner_id,
         apply_globally=data.apply_globally,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if result is None:
@@ -447,7 +447,7 @@ async def update_service_account_status(
 @router.put("/{license_id}/admin-account", response_model=LicenseResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_admin_account_status(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     data: AdminAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
@@ -471,7 +471,7 @@ async def update_admin_account_status(
         admin_account_owner_id=data.admin_account_owner_id,
         apply_globally=data.apply_globally,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if result is None:
@@ -489,7 +489,7 @@ async def update_admin_account_status(
 @router.post("/{license_id}/match/confirm", response_model=MatchActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def confirm_match(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
@@ -503,7 +503,7 @@ async def confirm_match(
     license_orm = await matching_service.confirm_match_with_commit(
         license_id=license_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if license_orm is None:
@@ -524,7 +524,7 @@ async def confirm_match(
 @router.post("/{license_id}/match/reject", response_model=MatchActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def reject_match(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
@@ -537,7 +537,7 @@ async def reject_match(
     license_orm = await matching_service.reject_match_with_commit(
         license_id=license_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if license_orm is None:
@@ -558,7 +558,7 @@ async def reject_match(
 @router.post("/{license_id}/match/external-guest", response_model=MatchActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def mark_as_external_guest(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
@@ -571,7 +571,7 @@ async def mark_as_external_guest(
     license_orm = await matching_service.mark_as_external_guest_with_commit(
         license_id=license_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if license_orm is None:
@@ -592,9 +592,9 @@ async def mark_as_external_guest(
 @router.post("/{license_id}/match/assign", response_model=MatchActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def manual_assign_match(
-    http_request: Request,
+    request: Request,
     license_id: UUID,
-    request: ManualAssignRequest,
+    body: ManualAssignRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
@@ -606,9 +606,9 @@ async def manual_assign_match(
     """
     license_orm = await matching_service.assign_to_employee_with_commit(
         license_id=license_id,
-        employee_id=request.employee_id,
+        employee_id=body.employee_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     if license_orm is None:

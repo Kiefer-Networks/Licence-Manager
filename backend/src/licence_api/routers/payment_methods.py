@@ -40,7 +40,7 @@ async def list_payment_methods(
 @router.post("", response_model=PaymentMethodResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_payment_method(
-    http_request: Request,
+    request: Request,
     data: PaymentMethodCreate,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
@@ -50,7 +50,7 @@ async def create_payment_method(
         return await service.create_payment_method(
             data=data,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(
@@ -78,7 +78,7 @@ async def get_payment_method(
 @router.put("/{payment_method_id}", response_model=PaymentMethodResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_payment_method(
-    http_request: Request,
+    request: Request,
     payment_method_id: UUID,
     data: PaymentMethodUpdate,
     current_user: Annotated[AdminUser, Depends(require_admin)],
@@ -90,7 +90,7 @@ async def update_payment_method(
             payment_method_id=payment_method_id,
             data=data,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(
@@ -102,7 +102,7 @@ async def update_payment_method(
 @router.delete("/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_payment_method(
-    http_request: Request,
+    request: Request,
     payment_method_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_admin)],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
@@ -112,7 +112,7 @@ async def delete_payment_method(
         await service.delete_payment_method(
             payment_method_id=payment_method_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(

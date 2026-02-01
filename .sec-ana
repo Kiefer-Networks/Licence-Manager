@@ -1,4 +1,4 @@
-# Security Audit Findings v13
+# Security Audit Findings v14
 # Generated: 2026-02-01
 # Status: Complete Re-Audit - All Security Issues Resolved
 
@@ -21,9 +21,10 @@
 | Re-Audit 2026-02-01 (Round 3: Backup/RBAC) | 0 | 0 | 0 | 0 | 0 | 7 |
 | Re-Audit 2026-02-01 (Round 4: Final Audit) | 0 | 0 | 0 | 0 | 0 | 6 |
 | Re-Audit 2026-02-01 (Round 5: Rate Limiting) | 0 | 0 | 0 | 0 | 0 | 8 |
-| **Total** | **0** | **0** | **0** | **1** | **1** | **96** |
+| Re-Audit 2026-02-01 (Round 6: Parameter Fix) | 0 | 0 | 0 | 0 | 0 | 1 |
+| **Total** | **0** | **0** | **0** | **1** | **1** | **97** |
 
-**Progress: 96 of 97 findings fixed (99%)**
+**Progress: 97 of 98 findings fixed (99%)**
 
 ### Remaining Open Findings Summary
 - 1 LOW: SEC-25 (No SQL injection test coverage - testing improvement, not vulnerability)
@@ -769,6 +770,26 @@ All critical, high, and medium severity security issues have been resolved. The 
 - **File:** backend/src/licence_api/routers/service_accounts.py:108,230,256
 - **Description:** delete_pattern, create_license_type, delete_license_type missing rate limiting
 - **Fix:** Added @limiter.limit(SENSITIVE_OPERATION_LIMIT) to all three endpoints
+
+---
+
+## 16. Rate Limiter Parameter Fix (2026-02-01 - Round 6)
+
+### SEC-V14-001 [CRITICAL] - Rate Limiter Startup Error Due to Parameter Naming
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **Files:** All routers with rate limiting decorators
+- **Description:** slowapi rate limiter requires the first parameter to be named `request` (not `http_request`). Functions using `http_request: Request` caused startup exception: "No 'request' or 'websocket' argument on function"
+- **Fix:** Changed all rate-limited endpoint parameter names from `http_request: Request` to `request: Request`, and renamed body parameters from `request` to `body` where conflicts existed
+
+**Files Fixed:**
+- `licenses.py`: 12 endpoints (assign, unassign, remove-from-provider, bulk operations, service/admin accounts, match operations)
+- `cancellation.py`: 7 endpoints (cancel/renew license/package/org-license, needs-reorder)
+- `settings.py`: 8 endpoints (company-domains, thresholds, settings CRUD, notification rules)
+- `provider_files.py`: 2 endpoints (upload, delete)
+- `service_accounts.py`: 3 endpoints (delete_pattern, create/delete_license_type)
+- `payment_methods.py`: 3 endpoints (create, update, delete)
+- `manual_licenses.py`: 6 endpoints (create, bulk, update, assign, unassign, delete)
 
 ---
 

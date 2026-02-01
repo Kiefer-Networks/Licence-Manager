@@ -177,16 +177,16 @@ async def get_company_domains(
 @router.put("/company-domains", response_model=CompanyDomainsResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_company_domains(
-    http_request: Request,
-    request: CompanyDomainsRequest,
+    request: Request,
+    body: CompanyDomainsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> CompanyDomainsResponse:
     """Set company domains. Requires settings.edit permission."""
     domains = await service.set_company_domains(
-        domains=request.domains,
+        domains=body.domains,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     return CompanyDomainsResponse(domains=domains)
 
@@ -206,18 +206,18 @@ async def get_threshold_settings(
 @router.put("/thresholds", response_model=ThresholdSettings)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_threshold_settings(
-    http_request: Request,
-    request: ThresholdSettings,
+    request: Request,
+    body: ThresholdSettings,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> ThresholdSettings:
     """Update threshold settings."""
     await service.set_thresholds(
-        thresholds=request.model_dump(),
+        thresholds=body.model_dump(),
         user=current_user,
-        request=http_request,
+        request=request,
     )
-    return request
+    return body
 
 
 @router.get("/{key}", response_model=dict[str, Any] | None)
@@ -233,8 +233,8 @@ async def get_setting(
 @router.put("/{key}", response_model=dict[str, Any])
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_setting(
-    http_request: Request,
-    request: SettingValue,
+    request: Request,
+    body: SettingValue,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
     key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$"),
@@ -242,16 +242,16 @@ async def set_setting(
     """Set a setting value. Requires settings.edit permission."""
     return await service.set(
         key=key,
-        value=request.value,
+        value=body.value,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_setting(
-    http_request: Request,
+    request: Request,
     key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
@@ -260,7 +260,7 @@ async def delete_setting(
     deleted = await service.delete(
         key=key,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if not deleted:
         raise HTTPException(
@@ -295,18 +295,18 @@ async def list_notification_rules(
 )
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_notification_rule(
-    http_request: Request,
-    request: NotificationRuleCreate,
+    request: Request,
+    body: NotificationRuleCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> NotificationRuleResponse:
     """Create a notification rule. Requires settings.edit permission."""
     rule = await service.create_notification_rule(
-        event_type=request.event_type,
-        slack_channel=request.slack_channel,
-        template=request.template,
+        event_type=body.event_type,
+        slack_channel=body.slack_channel,
+        template=body.template,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     return NotificationRuleResponse(
         id=rule.id,
@@ -320,20 +320,20 @@ async def create_notification_rule(
 @router.put("/notifications/rules/{rule_id}", response_model=NotificationRuleResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_notification_rule(
-    http_request: Request,
+    request: Request,
     rule_id: UUID,
-    request: NotificationRuleUpdate,
+    body: NotificationRuleUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> NotificationRuleResponse:
     """Update a notification rule. Requires settings.edit permission."""
     rule = await service.update_notification_rule(
         rule_id=rule_id,
-        slack_channel=request.slack_channel,
-        template=request.template,
-        enabled=request.enabled,
+        slack_channel=body.slack_channel,
+        template=body.template,
+        enabled=body.enabled,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if rule is None:
         raise HTTPException(
@@ -352,7 +352,7 @@ async def update_notification_rule(
 @router.delete("/notifications/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_notification_rule(
-    http_request: Request,
+    request: Request,
     rule_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
@@ -361,7 +361,7 @@ async def delete_notification_rule(
     deleted = await service.delete_notification_rule(
         rule_id=rule_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if not deleted:
         raise HTTPException(
@@ -373,8 +373,8 @@ async def delete_notification_rule(
 @router.post("/notifications/test", response_model=TestNotificationResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def test_slack_notification(
-    http_request: Request,
-    request: TestNotificationRequest,
+    request: Request,
+    body: TestNotificationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
     notification_service: Annotated[NotificationService, Depends(get_notification_service)],
@@ -391,7 +391,7 @@ async def test_slack_notification(
     bot_token = slack_config["bot_token"]
 
     success, message = await notification_service.send_test_notification(
-        channel=request.channel,
+        channel=body.channel,
         token=bot_token,
     )
 
