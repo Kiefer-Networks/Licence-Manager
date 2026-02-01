@@ -20,16 +20,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     (e.g., login endpoint gets CSRF token first).
     """
 
-    # Paths that are exempt from CSRF validation
-    EXEMPT_PATHS = {
+    # Paths that are exempt from CSRF validation (exact match only)
+    EXEMPT_PATHS = frozenset({
         "/api/v1/auth/csrf-token",  # CSRF token endpoint
         "/api/v1/auth/login",  # Login needs CSRF but we handle it specially
         "/api/v1/auth/refresh",  # Token refresh uses httpOnly cookies for security
         "/health",  # Health check
-    }
+    })
 
     # Safe HTTP methods that don't require CSRF validation
-    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+    SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
     async def dispatch(self, request: Request, call_next):
         """Process request and validate CSRF if needed."""
@@ -37,9 +37,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.method in self.SAFE_METHODS:
             return await call_next(request)
 
-        # Skip CSRF for exempt paths
+        # Skip CSRF for exempt paths (exact match only to prevent path traversal)
         path = request.url.path
-        if path in self.EXEMPT_PATHS or any(path.startswith(p) for p in self.EXEMPT_PATHS):
+        if path in self.EXEMPT_PATHS:
             return await call_next(request)
 
         # Get CSRF token from header
