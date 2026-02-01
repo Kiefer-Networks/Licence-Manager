@@ -95,6 +95,46 @@ async function refreshAccessToken(): Promise<boolean> {
 // Default request timeout in milliseconds (30 seconds)
 const REQUEST_TIMEOUT_MS = 30000;
 
+// File upload validation constants
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB for logos
+const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB for avatars
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const ALLOWED_DOCUMENT_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+const ALLOWED_UPLOAD_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOCUMENT_TYPES];
+
+/**
+ * Sanitize a filename to prevent path traversal and special characters.
+ * Only allows alphanumeric characters, hyphens, underscores, and dots.
+ */
+function sanitizeFilename(filename: string): string {
+  // Remove any path components
+  const baseName = filename.split(/[/\\]/).pop() || filename;
+  // Replace any characters that aren't alphanumeric, hyphen, underscore, or dot
+  return baseName.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+}
+
+/**
+ * Validate file before upload.
+ * Throws an error if validation fails.
+ */
+function validateFileUpload(file: File, options: {
+  maxSize?: number;
+  allowedTypes?: string[];
+} = {}): void {
+  const maxSize = options.maxSize || MAX_FILE_SIZE_BYTES;
+  const allowedTypes = options.allowedTypes || ALLOWED_UPLOAD_TYPES;
+
+  if (file.size > maxSize) {
+    const maxMB = Math.round(maxSize / (1024 * 1024));
+    throw new Error(`File size exceeds ${maxMB} MB limit`);
+  }
+
+  if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
+    throw new Error('File type not allowed');
+  }
+}
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = true): Promise<T> {
   const method = options.method || 'GET';
   const headers = await getAuthHeaders(method);
@@ -1329,6 +1369,12 @@ export const api = {
   },
 
   async uploadProviderLogo(providerId: string, file: File): Promise<{ logo_url: string }> {
+    // Validate file before upload
+    validateFileUpload(file, {
+      maxSize: MAX_LOGO_SIZE_BYTES,
+      allowedTypes: ALLOWED_IMAGE_TYPES,
+    });
+
     const formData = new FormData();
     formData.append('file', file);
     return fetchApi<{ logo_url: string }>(`/providers/${providerId}/logo`, {
@@ -1382,6 +1428,12 @@ export const api = {
   },
 
   async uploadProviderFile(providerId: string, file: File, description?: string, category?: string): Promise<ProviderFile> {
+    // Validate file before upload
+    validateFileUpload(file, {
+      maxSize: MAX_FILE_SIZE_BYTES,
+      allowedTypes: ALLOWED_UPLOAD_TYPES,
+    });
+
     const formData = new FormData();
     formData.append('file', file);
     if (description) formData.append('description', description);
@@ -2082,6 +2134,12 @@ export const api = {
   },
 
   async uploadAvatar(file: File): Promise<{ picture_url: string; message: string }> {
+    // Validate file before upload
+    validateFileUpload(file, {
+      maxSize: MAX_AVATAR_SIZE_BYTES,
+      allowedTypes: ALLOWED_IMAGE_TYPES,
+    });
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -2395,6 +2453,7 @@ export const api = {
 
   /**
    * Download an export file.
+   * Filename is sanitized to prevent path traversal and special characters.
    */
   async downloadExport(url: string, filename: string): Promise<void> {
     const response = await fetch(url, {
@@ -2410,7 +2469,8 @@ export const api = {
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = filename;
+    // Sanitize filename to prevent path traversal
+    link.download = sanitizeFilename(filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
