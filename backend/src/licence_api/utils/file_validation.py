@@ -43,6 +43,8 @@ def validate_svg_content(content: bytes) -> bool:
     Returns:
         True if SVG is safe, False if it contains dangerous content.
     """
+    # Note: bytes.lower() is valid in Python 3 and works for ASCII characters.
+    # SVG dangerous elements/attributes are ASCII, so this is correct.
     content_lower = content.lower()
 
     # Check for dangerous elements
