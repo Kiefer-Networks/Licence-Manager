@@ -417,13 +417,19 @@ class SyncService:
         pricing_config = provider_config.get("license_pricing", {})
         package_pricing = provider_config.get("package_pricing")
 
-        # Calculate package pricing (cost per license = total / license_count)
+        # Calculate package pricing (cost per license = total / package_size)
+        # Use max_users from provider_license_info (package size) for consistent pricing
         package_monthly_cost: Decimal | None = None
         package_currency = "EUR"
-        if package_pricing and len(licenses) > 0:
+        if package_pricing:
             total_cost = Decimal(str(package_pricing.get("cost", "0")))
             billing_cycle = package_pricing.get("billing_cycle", "yearly")
             package_currency = package_pricing.get("currency", "EUR")
+
+            # Get package size from provider_license_info (max_users)
+            # This ensures cost per license matches the provider pricing page display
+            provider_license_info = provider_config.get("provider_license_info", {})
+            package_size = provider_license_info.get("max_users", 0)
 
             # Convert to monthly cost
             if billing_cycle == "yearly":
@@ -433,12 +439,19 @@ class SyncService:
             else:
                 monthly_total = Decimal("0")
 
-            # Divide by number of licenses to get cost per license
-            if monthly_total > 0:
-                package_monthly_cost = monthly_total / len(licenses)
+            # Divide by package size to get cost per license
+            # This gives "cost per entitled seat" which is consistent with the provider pricing page
+            if monthly_total > 0 and package_size > 0:
+                package_monthly_cost = monthly_total / package_size
                 logger.info(
                     f"Package pricing: {total_cost} {package_currency}/{billing_cycle} "
-                    f"/ {len(licenses)} licenses = {package_monthly_cost:.2f}/month per license"
+                    f"/ {package_size} package seats = {package_monthly_cost:.2f}/month per license"
+                )
+            elif monthly_total > 0:
+                # Fallback: if no max_users configured, log warning
+                logger.warning(
+                    f"Package pricing configured but no max_users in provider_license_info. "
+                    f"Cannot calculate per-license cost."
                 )
 
         # Get company domains for matching
