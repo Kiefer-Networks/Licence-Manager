@@ -6,13 +6,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.manual_license_service import ManualLicenseService
 
 router = APIRouter()
@@ -22,25 +23,25 @@ class ManualLicenseCreate(BaseModel):
     """Request to create a manual license."""
 
     provider_id: UUID
-    license_type: str | None = None
-    license_key: str | None = None
-    quantity: int = 1
-    monthly_cost: Decimal | None = None
-    currency: str = "EUR"
+    license_type: str | None = Field(default=None, max_length=255)
+    license_key: str | None = Field(default=None, max_length=500)
+    quantity: int = Field(default=1, ge=1, le=1000)
+    monthly_cost: Decimal | None = Field(default=None, ge=0)
+    currency: str = Field(default="EUR", max_length=10)
     valid_until: datetime | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
     employee_id: UUID | None = None
 
 
 class ManualLicenseUpdate(BaseModel):
     """Request to update a manual license."""
 
-    license_type: str | None = None
-    license_key: str | None = None
-    monthly_cost: Decimal | None = None
-    currency: str | None = None
+    license_type: str | None = Field(default=None, max_length=255)
+    license_key: str | None = Field(default=None, max_length=500)
+    monthly_cost: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, max_length=10)
     valid_until: datetime | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
     employee_id: UUID | None = None
 
 
@@ -48,12 +49,12 @@ class ManualLicenseBulkCreate(BaseModel):
     """Request to create multiple manual licenses with keys."""
 
     provider_id: UUID
-    license_type: str | None = None
-    license_keys: list[str]
-    monthly_cost: Decimal | None = None
-    currency: str = "EUR"
+    license_type: str | None = Field(default=None, max_length=255)
+    license_keys: list[str] = Field(max_length=100)  # Max 100 keys
+    monthly_cost: Decimal | None = Field(default=None, ge=0)
+    currency: str = Field(default="EUR", max_length=10)
     valid_until: datetime | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class AssignLicenseRequest(BaseModel):
@@ -68,6 +69,7 @@ def get_manual_license_service(db: AsyncSession = Depends(get_db)) -> ManualLice
 
 
 @router.post("", response_model=list[LicenseResponse])
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses(
     http_request: Request,
     request: ManualLicenseCreate,
@@ -94,6 +96,7 @@ async def create_manual_licenses(
 
 
 @router.post("/bulk", response_model=list[LicenseResponse])
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses_bulk(
     http_request: Request,
     request: ManualLicenseBulkCreate,
@@ -118,6 +121,7 @@ async def create_manual_licenses_bulk(
 
 
 @router.put("/{license_id}", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_manual_license(
     http_request: Request,
     license_id: UUID,
@@ -148,6 +152,7 @@ async def update_manual_license(
 
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def assign_manual_license(
     http_request: Request,
     license_id: UUID,
@@ -168,6 +173,7 @@ async def assign_manual_license(
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def unassign_manual_license(
     http_request: Request,
     license_id: UUID,
@@ -186,6 +192,7 @@ async def unassign_manual_license(
 
 
 @router.delete("/{license_id}")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_manual_license(
     http_request: Request,
     license_id: UUID,
