@@ -4,35 +4,35 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OrganizationLicenseCreate(BaseModel):
     """Create a new organization license."""
 
-    name: str
-    license_type: str | None = None
+    name: str = Field(max_length=255)
+    license_type: str | None = Field(default=None, max_length=255)
     quantity: int | None = None
-    unit: str | None = None
+    unit: str | None = Field(default=None, max_length=50)
     monthly_cost: Decimal | None = None
-    currency: str = "EUR"
-    billing_cycle: str | None = None
+    currency: str = Field(default="EUR", max_length=10)
+    billing_cycle: str | None = Field(default=None, max_length=50)
     renewal_date: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class OrganizationLicenseUpdate(BaseModel):
     """Update an organization license."""
 
-    name: str | None = None
-    license_type: str | None = None
+    name: str | None = Field(default=None, max_length=255)
+    license_type: str | None = Field(default=None, max_length=255)
     quantity: int | None = None
-    unit: str | None = None
+    unit: str | None = Field(default=None, max_length=50)
     monthly_cost: Decimal | None = None
-    currency: str | None = None
-    billing_cycle: str | None = None
+    currency: str | None = Field(default=None, max_length=10)
+    billing_cycle: str | None = Field(default=None, max_length=50)
     renewal_date: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class OrganizationLicenseResponse(BaseModel):

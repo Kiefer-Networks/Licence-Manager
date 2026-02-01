@@ -10,32 +10,32 @@ from pydantic import BaseModel, Field
 class LicensePackageCreate(BaseModel):
     """Create a new license package."""
 
-    license_type: str
-    display_name: str | None = None
+    license_type: str = Field(max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
     total_seats: int = Field(ge=1)
     cost_per_seat: Decimal | None = None
-    billing_cycle: str | None = None
-    payment_frequency: str | None = None
-    currency: str = "EUR"
+    billing_cycle: str | None = Field(default=None, max_length=50)
+    payment_frequency: str | None = Field(default=None, max_length=50)
+    currency: str = Field(default="EUR", max_length=10)
     contract_start: date | None = None
     contract_end: date | None = None
     auto_renew: bool = True
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class LicensePackageUpdate(BaseModel):
     """Update a license package."""
 
-    display_name: str | None = None
+    display_name: str | None = Field(default=None, max_length=255)
     total_seats: int | None = Field(default=None, ge=1)
     cost_per_seat: Decimal | None = None
-    billing_cycle: str | None = None
-    payment_frequency: str | None = None
-    currency: str | None = None
+    billing_cycle: str | None = Field(default=None, max_length=50)
+    payment_frequency: str | None = Field(default=None, max_length=50)
+    currency: str | None = Field(default=None, max_length=10)
     contract_start: date | None = None
     contract_end: date | None = None
     auto_renew: bool | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class LicensePackageResponse(BaseModel):

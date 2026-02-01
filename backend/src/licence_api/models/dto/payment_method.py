@@ -28,19 +28,19 @@ class PaymentMethodCreate(BaseModel):
     """Create payment method request."""
 
     name: str = Field(max_length=255)
-    type: str  # credit_card, bank_account, stripe, paypal, invoice, other
+    type: str = Field(max_length=50)  # credit_card, bank_account, stripe, paypal, invoice, other
     details: dict[str, Any] = {}
     is_default: bool = False
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class PaymentMethodUpdate(BaseModel):
     """Update payment method request."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     details: dict[str, Any] | None = None
     is_default: bool | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class PaymentMethodResponse(BaseModel):

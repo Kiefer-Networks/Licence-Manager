@@ -10,17 +10,17 @@ class AdminAccountPatternCreate(BaseModel):
     """Create a new admin account pattern."""
 
     email_pattern: str = Field(max_length=255)
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class AdminAccountPatternUpdate(BaseModel):
     """Update an admin account pattern."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class AdminAccountPatternResponse(BaseModel):
