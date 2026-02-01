@@ -11,7 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
-from licence_api.security.rate_limit import limiter
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 
@@ -102,7 +102,7 @@ class SetupStatusDetailedResponse(BaseModel):
 class TestNotificationRequest(BaseModel):
     """Test notification request."""
 
-    channel: str
+    channel: str = Field(max_length=255)
 
 
 class TestNotificationResponse(BaseModel):
@@ -175,6 +175,7 @@ async def get_company_domains(
 
 
 @router.put("/company-domains", response_model=CompanyDomainsResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_company_domains(
     http_request: Request,
     request: CompanyDomainsRequest,
@@ -203,6 +204,7 @@ async def get_threshold_settings(
 
 
 @router.put("/thresholds", response_model=ThresholdSettings)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_threshold_settings(
     http_request: Request,
     request: ThresholdSettings,
@@ -229,6 +231,7 @@ async def get_setting(
 
 
 @router.put("/{key}", response_model=dict[str, Any])
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_setting(
     http_request: Request,
     request: SettingValue,
@@ -246,6 +249,7 @@ async def set_setting(
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_setting(
     http_request: Request,
     key: str,
@@ -289,6 +293,7 @@ async def list_notification_rules(
     response_model=NotificationRuleResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_notification_rule(
     http_request: Request,
     request: NotificationRuleCreate,
@@ -313,6 +318,7 @@ async def create_notification_rule(
 
 
 @router.put("/notifications/rules/{rule_id}", response_model=NotificationRuleResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_notification_rule(
     http_request: Request,
     rule_id: UUID,
@@ -344,6 +350,7 @@ async def update_notification_rule(
 
 
 @router.delete("/notifications/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_notification_rule(
     http_request: Request,
     rule_id: UUID,
@@ -364,7 +371,9 @@ async def delete_notification_rule(
 
 
 @router.post("/notifications/test", response_model=TestNotificationResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def test_slack_notification(
+    http_request: Request,
     request: TestNotificationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
