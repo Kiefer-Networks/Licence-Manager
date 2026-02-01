@@ -81,7 +81,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
   const [newPattern, setNewPattern] = useState({
     email_pattern: '',
     name: '',
-    owner_id: '',
     notes: '',
   });
   const [creatingPattern, setCreatingPattern] = useState(false);
@@ -202,12 +201,11 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       await api.createAdminAccountPattern({
         email_pattern: newPattern.email_pattern.trim(),
         name: newPattern.name.trim() || undefined,
-        owner_id: newPattern.owner_id || undefined,
         notes: newPattern.notes.trim() || undefined,
       });
       showToast('success', t('patternCreated'));
       setShowAddPattern(false);
-      setNewPattern({ email_pattern: '', name: '', owner_id: '', notes: '' });
+      setNewPattern({ email_pattern: '', name: '', notes: '' });
       loadPatterns();
     } catch (error) {
       showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
@@ -277,7 +275,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       await api.createAdminAccountPattern({
         email_pattern: makeGlobalLicense.external_user_id,
         name: makeGlobalLicense.admin_account_name || undefined,
-        owner_id: makeGlobalLicense.admin_account_owner_id || undefined,
       });
       showToast('success', t('patternCreated'));
       setMakeGlobalLicense(null);
@@ -429,7 +426,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 <tr className="border-b bg-zinc-50/50">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('emailPattern')}</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('matchingLicenses')}</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                 </tr>
@@ -444,16 +440,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {pattern.name || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {pattern.owner_name ? (
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-muted-foreground">{pattern.owner_name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge
@@ -866,12 +852,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                     <span className="text-sm">{makeGlobalLicense.admin_account_name}</span>
                   </div>
                 )}
-                {makeGlobalLicense.admin_account_owner_name && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{t('owner')}:</span>
-                    <span className="text-sm">{makeGlobalLicense.admin_account_owner_name}</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -918,22 +898,6 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 value={newPattern.name}
                 onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="owner">{t('owner')} ({tCommon('optional')})</Label>
-              <Select value={newPattern.owner_id || '__none__'} onValueChange={(v) => setNewPattern({ ...newPattern, owner_id: v === '__none__' ? '' : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tCommon('selectOption')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">{t('notes')}</Label>
