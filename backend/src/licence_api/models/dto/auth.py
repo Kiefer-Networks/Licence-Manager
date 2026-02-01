@@ -154,16 +154,16 @@ class UserNotificationPreferenceResponse(BaseModel):
     event_description: str
     enabled: bool
     slack_dm: bool
-    slack_channel: str | None = None
+    slack_channel: str | None = Field(default=None, max_length=255)
 
 
 class UserNotificationPreferenceUpdate(BaseModel):
     """User notification preference update request."""
 
-    event_type: str
+    event_type: str = Field(max_length=100)
     enabled: bool = True
     slack_dm: bool = False
-    slack_channel: str | None = None
+    slack_channel: str | None = Field(default=None, max_length=255)
 
 
 class UserNotificationPreferenceBulkUpdate(BaseModel):

@@ -3,14 +3,14 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CancellationRequest(BaseModel):
     """Request to cancel a license/package."""
 
     effective_date: date
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class CancellationResponse(BaseModel):

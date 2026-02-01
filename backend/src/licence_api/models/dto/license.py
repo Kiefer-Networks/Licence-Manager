@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from licence_api.models.domain.license import LicenseStatus
 
@@ -114,7 +114,7 @@ class ServiceAccountUpdate(BaseModel):
     """Update service account status for a license."""
 
     is_service_account: bool
-    service_account_name: str | None = None
+    service_account_name: str | None = Field(default=None, max_length=255)
     service_account_owner_id: UUID | None = None
     apply_globally: bool = False  # Add email to global service account patterns
 
@@ -123,6 +123,6 @@ class AdminAccountUpdate(BaseModel):
     """Update admin account status for a license."""
 
     is_admin_account: bool
-    admin_account_name: str | None = None
+    admin_account_name: str | None = Field(default=None, max_length=255)
     admin_account_owner_id: UUID | None = None
     apply_globally: bool = False  # Add email to global admin account patterns
