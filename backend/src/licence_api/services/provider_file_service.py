@@ -12,6 +12,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+from licence_api.utils.secure_logging import log_warning
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +234,7 @@ class ProviderFileService:
             try:
                 file_path.unlink()
             except OSError as e:
-                logger.warning(f"Failed to delete file from disk: {e}")
+                log_warning(logger, "Failed to delete file from disk", e)
 
         # Delete from database
         await self.file_repo.delete_file(file_orm)

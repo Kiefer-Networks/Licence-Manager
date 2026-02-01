@@ -19,6 +19,7 @@ from licence_api.repositories.admin_account_pattern_repository import AdminAccou
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.matching_service import MatchingService
+from licence_api.utils.secure_logging import log_error, log_warning
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,8 @@ class SyncService:
                 result = await self.sync_provider(provider.id)
                 results[provider.name] = result
             except Exception as e:
-                logger.error(f"Error syncing provider {provider.name}: {e}")
-                results[provider.name] = {"error": str(e)}
+                log_error(logger, f"Error syncing provider {provider.name}", e)
+                results[provider.name] = {"error": "Sync operation failed"}
                 await self.provider_repo.update_sync_status(
                     provider.id,
                     SyncStatus.FAILED,
@@ -118,7 +119,7 @@ class SyncService:
             return result
 
         except Exception as e:
-            logger.error(f"Error syncing provider {provider.name}: {e}")
+            log_error(logger, f"Error syncing provider {provider.name}", e)
             await self.provider_repo.update_sync_status(
                 provider_id,
                 SyncStatus.FAILED,
@@ -313,7 +314,7 @@ class SyncService:
                         if attempt == max_retries - 1:
                             failed += 1
                     else:
-                        logger.warning(f"Failed to fetch avatar for {hibob_id}: {e}")
+                        log_warning(logger, f"Failed to fetch avatar for {hibob_id}", e)
                         failed += 1
                         break
 

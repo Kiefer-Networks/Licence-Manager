@@ -26,6 +26,7 @@ from licence_api.utils.file_validation import (
     validate_image_signature,
     get_extension_from_content_type,
 )
+from licence_api.utils.secure_logging import log_error, log_warning
 
 logger = logging.getLogger(__name__)
 
@@ -583,13 +584,13 @@ class AuthService:
                 try:
                     old_file.unlink()
                 except OSError as e:
-                    logger.warning(f"Failed to delete old avatar file: {e}")
+                    log_warning(logger, "Failed to delete old avatar file", e)
 
         # Write new avatar
         try:
             file_path.write_bytes(content)
         except Exception as e:
-            logger.error(f"Failed to write avatar file: {e}")
+            log_error(logger, "Failed to write avatar file", e)
             raise ValueError("Failed to save avatar")
 
         # Update picture_url in database
@@ -612,7 +613,7 @@ class AuthService:
                 try:
                     file_path.unlink()
                 except OSError as e:
-                    logger.warning(f"Failed to delete avatar file: {e}")
+                    log_warning(logger, "Failed to delete avatar file", e)
 
         # Clear picture_url in database
         await self.user_repo.update_avatar(user_id, None)
