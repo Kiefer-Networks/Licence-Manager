@@ -48,344 +48,77 @@ const licenseProviderTypes = [
   { value: 'miro', label: 'Miro', fields: ['access_token', 'org_id'], type: 'api' },
   { value: 'openai', label: 'OpenAI', fields: ['admin_api_key', 'org_id'], type: 'api' },
   { value: 'slack', label: 'Slack', fields: ['bot_token', 'user_token'], type: 'api' },
-  { value: 'manual', label: 'Manual (No API)', fields: [], type: 'manual' },
+  { value: 'manual', label: 'manual', fields: [], type: 'manual' },
 ];
 
-const licenseModelOptions = [
-  { value: 'seat_based', label: 'Seat-based (per user)' },
-  { value: 'license_based', label: 'License-based (transferable)' },
+// Keys for translatable credential field labels
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  access_token: 'accessToken',
+  admin_api_key: 'adminApiKey',
+  admin_email: 'adminEmail',
+  api_key: 'apiKey',
+  api_secret: 'apiSecret',
+  api_token: 'apiToken',
+  auth_token: 'authToken',
+  base_url: 'baseUrl',
+  bot_token: 'botToken',
+  client_id: 'clientId',
+  client_secret: 'clientSecret',
+  customer_code: 'customerCode',
+  domain: 'domainField',
+  group_id: 'groupId',
+  org_id: 'orgId',
+  org_name: 'orgName',
+  server_url: 'serverUrl',
+  service_account_json: 'serviceAccountJson',
+  sign_in_address: 'signInAddress',
+  technical_account_id: 'technicalAccountId',
+  tenant_id: 'tenantId',
+  user_token: 'userToken',
+};
+
+// Documentation links for providers (not translated)
+const PROVIDER_LINKS: Record<string, string> = {
+  '1password': 'https://support.1password.com/scim/',
+  adobe: 'https://developer.adobe.com/developer-console/docs/guides/services/services-add-api-oauth-s2s/',
+  atlassian: 'https://support.atlassian.com/organization-administration/docs/manage-an-organization-with-the-admin-apis/',
+  cursor: 'https://cursor.sh/settings/team',
+  figma: 'https://www.figma.com/developers/api#access-tokens',
+  github: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
+  gitlab: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
+  google_workspace: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
+  hibob: 'https://apidocs.hibob.com/reference/getting-started',
+  jetbrains: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
+  mattermost: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
+  microsoft: 'https://learn.microsoft.com/en-us/graph/auth-register-app-v2',
+  miro: 'https://developers.miro.com/docs/getting-started',
+  openai: 'https://platform.openai.com/docs/api-reference/organization',
+  slack: 'https://api.slack.com/authentication/basics',
+  anthropic: 'https://docs.anthropic.com/en/api/admin-api',
+  auth0: 'https://auth0.com/docs/api/management/v2',
+  mailjet: 'https://dev.mailjet.com/email/guides/getting-started/',
+};
+
+// Provider types that have setup instructions
+const PROVIDERS_WITH_SETUP = [
+  '1password', 'adobe', 'atlassian', 'cursor', 'figma', 'github', 'gitlab',
+  'google_workspace', 'hibob', 'jetbrains', 'mattermost', 'microsoft',
+  'miro', 'openai', 'slack', 'anthropic', 'auth0', 'mailjet'
 ];
 
-// Custom labels for credential fields
-const FIELD_LABELS: Record<string, string> = {
-  access_token: 'Access Token',
-  admin_api_key: 'Admin API Key',
-  admin_email: 'Admin Email',
-  api_key: 'API Key',
-  api_secret: 'API Secret',
-  api_token: 'API Token',
-  auth_token: 'Auth Token',
-  base_url: 'Server URL (optional, for self-hosted)',
-  bot_token: 'Bot Token',
-  client_id: 'Client ID',
-  client_secret: 'Client Secret',
-  customer_code: 'Organization ID (X-Customer-Code)',
-  domain: 'Domain (e.g., your-tenant.auth0.com)',
-  group_id: 'Group ID',
-  org_id: 'Organization ID',
-  org_name: 'Organization Name',
-  server_url: 'Server URL',
-  service_account_json: 'Service Account JSON',
-  sign_in_address: 'Sign-in Address',
-  technical_account_id: 'Technical Account ID',
-  tenant_id: 'Tenant ID',
-  user_token: 'User Token',
-};
-
-// Detailed setup instructions for providers
-const PROVIDER_SETUP: Record<string, { permissions: string[]; steps: string[]; link?: string }> = {
-  '1password': {
-    permissions: [
-      'SCIM bridge token with full provisioning access',
-    ],
-    steps: [
-      '1. Log in to 1Password Business/Teams admin console',
-      '2. Go to Integrations → Directory',
-      '3. Click "Set up SCIM bridge"',
-      '4. Generate a new SCIM bearer token',
-      '5. Copy the Sign-in Address (e.g., company.1password.com)',
-      '6. Save the bearer token securely - it cannot be viewed again',
-    ],
-    link: 'https://support.1password.com/scim/',
-  },
-  adobe: {
-    permissions: [
-      'User Management API access',
-      'Service Account (Server-to-Server) credentials',
-    ],
-    steps: [
-      '1. Go to Adobe Developer Console (developer.adobe.com)',
-      '2. Create a new project or select existing',
-      '3. Add API → User Management API',
-      '4. Select OAuth Server-to-Server credential',
-      '5. Copy the Client ID and Client Secret',
-      '6. Find Organization ID: Admin Console → Overview',
-      '7. Technical Account ID: Found in credential details',
-      '8. Ensure the integration has User Management admin role',
-    ],
-    link: 'https://developer.adobe.com/developer-console/docs/guides/services/services-add-api-oauth-s2s/',
-  },
-  atlassian: {
-    permissions: [
-      'Organization admin access',
-      'API token with admin privileges',
-    ],
-    steps: [
-      '1. Go to admin.atlassian.com',
-      '2. Select your organization',
-      '3. Go to Settings → API keys',
-      '4. Click "Create API key"',
-      '5. Name it (e.g., "License Management")',
-      '6. Copy the API key immediately - it cannot be viewed again',
-      '7. Find Organization ID: Settings → Organization details',
-      '8. Admin Email: Your Atlassian admin account email',
-    ],
-    link: 'https://support.atlassian.com/organization-administration/docs/manage-an-organization-with-the-admin-apis/',
-  },
-  cursor: {
-    permissions: [
-      'Team Admin API Key with member management access',
-    ],
-    steps: [
-      '1. Log in to Cursor as a Team Admin',
-      '2. Go to Team Settings → API',
-      '3. Generate a new API key',
-      '4. Ensure Enterprise plan is active for full API access',
-      '5. Copy the API key and store it securely',
-    ],
-    link: 'https://cursor.sh/settings/team',
-  },
-  figma: {
-    permissions: [
-      'org:read - Read organization and team info',
-      'file:read - Optional for activity tracking',
-    ],
-    steps: [
-      '1. Go to Figma → Account Settings → Personal Access Tokens',
-      '2. Click "Create new token"',
-      '3. Name it (e.g., "License Management")',
-      '4. Select org:read scope (minimum required)',
-      '5. Copy the token immediately - it won\'t be shown again',
-      '6. Find Organization ID: Admin → Settings → Organization ID',
-    ],
-    link: 'https://www.figma.com/developers/api#access-tokens',
-  },
-  github: {
-    permissions: [
-      'read:org - Read organization and team membership',
-      'read:user - Read user profile data',
-      'admin:org (optional) - For seat management',
-    ],
-    steps: [
-      '1. Go to GitHub → Settings → Developer settings → Personal access tokens',
-      '2. Click "Generate new token (classic)"',
-      '3. Select scopes: read:org, read:user',
-      '4. For Enterprise: use admin:org for seat counts',
-      '5. Copy the token and store securely',
-      '6. Organization name: your GitHub org slug (github.com/ORG_NAME)',
-    ],
-    link: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
-  },
-  gitlab: {
-    permissions: [
-      'read_api - Read access to the API',
-      'read_user - Read user information',
-    ],
-    steps: [
-      '1. Go to GitLab → User Settings → Access Tokens',
-      '2. Create a new Personal Access Token',
-      '3. Select scopes: read_api, read_user',
-      '4. Set expiration date (recommended: 1 year)',
-      '5. Copy the token immediately',
-      '6. Group ID: Go to your group → Settings → General → Group ID',
-      '7. For self-hosted: Enter your GitLab server URL',
-    ],
-    link: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
-  },
-  google_workspace: {
-    permissions: [
-      'admin.directory.user.readonly - Read user directory',
-      'admin.directory.group.readonly - Optional for groups',
-    ],
-    steps: [
-      '1. Go to Google Cloud Console → Create new project',
-      '2. Enable Admin SDK API',
-      '3. Create Service Account with Domain-Wide Delegation',
-      '4. Download the JSON key file',
-      '5. In Google Admin: Security → API controls → Domain-wide delegation',
-      '6. Add the Service Account client ID',
-      '7. Add scope: https://www.googleapis.com/auth/admin.directory.user.readonly',
-      '8. Admin Email: A super admin email for impersonation',
-    ],
-    link: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
-  },
-  hibob: {
-    permissions: [
-      'API Token with employee read access',
-    ],
-    steps: [
-      '1. Log in to HiBob as Admin',
-      '2. Go to Settings → Integrations → Service Users',
-      '3. Create a new Service User',
-      '4. Grant "People" read permissions',
-      '5. Generate API token',
-      '6. Copy the token - it cannot be retrieved later',
-    ],
-    link: 'https://apidocs.hibob.com/reference/getting-started',
-  },
-  jetbrains: {
-    permissions: [
-      'Organization API access with license management',
-    ],
-    steps: [
-      '1. Go to JetBrains Account → Organization',
-      '2. Navigate to API Keys section',
-      '3. Generate new API key',
-      '4. Find Organization ID (X-Customer-Code):',
-      '   - Go to Organization → Settings',
-      '   - Copy the Organization ID/Customer Code',
-      '5. The API key provides access to license assignments',
-    ],
-    link: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
-  },
-  mattermost: {
-    permissions: [
-      'Personal Access Token or Bot Token',
-      'System Admin role recommended',
-    ],
-    steps: [
-      '1. Go to Mattermost → Account Settings → Security',
-      '2. Create a Personal Access Token',
-      '3. For bot tokens: Integrations → Bot Accounts',
-      '4. System Admin role provides full user list access',
-      '5. Regular users may only see users in their teams',
-      '6. Server URL: Your Mattermost instance URL (e.g., https://mattermost.company.com)',
-    ],
-    link: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
-  },
-  microsoft: {
-    permissions: [
-      'User.Read.All (Application) - Read all user profiles',
-      'Directory.Read.All (Application) - Read directory data',
-      'AuditLog.Read.All (Application) - Sign-in activity logs',
-    ],
-    steps: [
-      '1. Go to Azure Portal → Azure Active Directory',
-      '2. App registrations → New registration',
-      '3. Name it (e.g., "License Management")',
-      '4. Note the Application (Client) ID and Tenant ID',
-      '5. Certificates & secrets → New client secret',
-      '6. API permissions → Add permission → Microsoft Graph',
-      '7. Add Application permissions:',
-      '   - User.Read.All',
-      '   - Directory.Read.All',
-      '   - AuditLog.Read.All (optional, for activity)',
-      '8. Click "Grant admin consent"',
-    ],
-    link: 'https://learn.microsoft.com/en-us/graph/auth-register-app-v2',
-  },
-  miro: {
-    permissions: [
-      'team:read - Read team and member information',
-      'boards:read - Optional for activity tracking',
-    ],
-    steps: [
-      '1. Go to Miro → Profile Settings → Your apps',
-      '2. Create new app or use existing',
-      '3. Install app to your team/organization',
-      '4. Generate OAuth access token',
-      '5. Required scope: team:read',
-      '6. Organization ID: Admin → Organization settings → ID',
-      '7. Enterprise plan required for organization-wide access',
-    ],
-    link: 'https://developers.miro.com/docs/getting-started',
-  },
-  openai: {
-    permissions: [
-      'Admin API Key with organization member access',
-    ],
-    steps: [
-      '1. Go to platform.openai.com',
-      '2. Click on your profile → Organization settings',
-      '3. Note the Organization ID',
-      '4. Go to API keys → Create new secret key',
-      '5. You must be an Organization Owner to access member list',
-      '6. The Admin API provides access to:',
-      '   - Organization members',
-      '   - Usage data',
-      '   - Invite management',
-    ],
-    link: 'https://platform.openai.com/docs/api-reference/organization',
-  },
-  slack: {
-    permissions: [
-      'users:read - Access user list',
-      'users:read.email - Access user emails',
-      'team:read - Access workspace info',
-      'team.billing:read - Optional: paid seat status',
-    ],
-    steps: [
-      '1. Go to api.slack.com/apps → Create New App',
-      '2. Choose "From scratch"',
-      '3. Name it and select workspace',
-      '4. OAuth & Permissions → Add Bot Token Scopes:',
-      '   - users:read',
-      '   - users:read.email',
-      '   - team:read',
-      '   - team.billing:read (optional, shows paid seats)',
-      '5. Install App to Workspace',
-      '6. Copy Bot User OAuth Token (starts with xoxb-)',
-      '7. User Token (xoxp-) optional for additional access',
-    ],
-    link: 'https://api.slack.com/authentication/basics',
-  },
-  anthropic: {
-    permissions: [
-      'Admin API Key (starts with sk-ant-admin-)',
-      'Organization owner or admin role',
-    ],
-    steps: [
-      '1. Go to console.anthropic.com',
-      '2. Navigate to Organization → API Keys',
-      '3. Create an Admin API key (not a regular API key)',
-      '4. Admin keys start with sk-ant-admin-',
-      '5. You must be an Organization owner/admin',
-      '6. Copy the key immediately - it cannot be viewed again',
-    ],
-    link: 'https://docs.anthropic.com/en/api/admin-api',
-  },
-  auth0: {
-    permissions: [
-      'Management API - read:users',
-      'Management API - read:user_idp_tokens (optional)',
-    ],
-    steps: [
-      '1. Go to Auth0 Dashboard → Applications → APIs',
-      '2. Select "Auth0 Management API"',
-      '3. Go to Machine to Machine Applications tab',
-      '4. Authorize your app and select scopes:',
-      '   - read:users',
-      '   - read:user_idp_tokens (optional)',
-      '5. Applications → Your App → Settings',
-      '6. Copy Domain, Client ID, and Client Secret',
-      '7. Domain format: your-tenant.auth0.com',
-    ],
-    link: 'https://auth0.com/docs/api/management/v2',
-  },
-  mailjet: {
-    permissions: [
-      'API Key with account access',
-      'API Secret (private key)',
-    ],
-    steps: [
-      '1. Go to app.mailjet.com → Account Settings',
-      '2. Click on "REST API" → "API Key Management"',
-      '3. Copy your API Key (public)',
-      '4. Copy your Secret Key (private)',
-      '5. Keys are created automatically with your account',
-      '6. Master key has full access to all sub-accounts',
-    ],
-    link: 'https://dev.mailjet.com/email/guides/getting-started/',
-  },
-};
-
-const getFieldLabel = (field: string) => {
-  return FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+const getFieldLabel = (field: string, t: (key: string) => string) => {
+  const key = FIELD_LABEL_KEYS[field];
+  if (key) {
+    return t(key);
+  }
+  return field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
 export default function ProvidersPage() {
   const t = useTranslations('providers');
   const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
+  const tSetup = useTranslations('providerSetup');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -511,7 +244,7 @@ export default function ProvidersPage() {
       setAddDialogOpen(false);
       showToast('success', `${newProviderName} added`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add provider');
+      setError(err instanceof Error ? err.message : t('failedToCreate'));
     } finally {
       setSaving(false);
     }
@@ -544,9 +277,9 @@ export default function ProvidersPage() {
 
       await fetchProviders();
       setEditDialogOpen(false);
-      showToast('success', 'Provider updated');
+      showToast('success', t('providerUpdated'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update provider');
+      setError(err instanceof Error ? err.message : t('failedToUpdate'));
     } finally {
       setSaving(false);
     }
@@ -559,9 +292,9 @@ export default function ProvidersPage() {
       await fetchProviders();
       setDeleteDialogOpen(false);
       setDeletingProvider(null);
-      showToast('success', 'Provider deleted');
+      showToast('success', t('providerDeleted'));
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : 'Failed to delete provider');
+      showToast('error', err instanceof Error ? err.message : t('failedToDelete'));
     }
   };
 
@@ -570,9 +303,9 @@ export default function ProvidersPage() {
     try {
       const result = await api.syncProvider(providerId);
       await fetchProviders();
-      showToast(result.success ? 'success' : 'error', result.success ? 'Sync completed' : 'Sync failed');
+      showToast(result.success ? 'success' : 'error', result.success ? t('syncSuccess') : t('syncFailed'));
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : 'Sync failed');
+      showToast('error', err instanceof Error ? err.message : t('syncFailed'));
     } finally {
       setSyncingProviderId(null);
     }
@@ -603,8 +336,8 @@ export default function ProvidersPage() {
 
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Providers</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage HRIS and license provider integrations</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{t('pageDescription')}</p>
         </div>
 
         {/* HRIS Section */}
@@ -612,12 +345,12 @@ export default function ProvidersPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">HRIS Connection</h2>
+              <h2 className="text-sm font-medium">{t('hrisConnection')}</h2>
             </div>
             {hrisProviders.length === 0 && (
               <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('hris')}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Connect HiBob
+                {t('connectHiBob')}
               </Button>
             )}
           </div>
@@ -633,12 +366,12 @@ export default function ProvidersPage() {
                     <div>
                       <p className="font-medium text-sm">{provider.display_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {provider.last_sync_at ? `Last sync: ${new Date(provider.last_sync_at).toLocaleString(getLocale())}` : 'Never synced'}
+                        {provider.last_sync_at ? t('lastSyncTime', { time: new Date(provider.last_sync_at).toLocaleString(getLocale()) }) : t('neverSynced')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-0">Connected</Badge>
+                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-0">{t('connected')}</Badge>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSyncProvider(provider.id)} disabled={syncingProviderId === provider.id}>
                       <RefreshCw className={`h-4 w-4 ${syncingProviderId === provider.id ? 'animate-spin' : ''}`} />
                     </Button>
@@ -655,7 +388,7 @@ export default function ProvidersPage() {
           ) : (
             <div className="border rounded-lg bg-zinc-50/50 p-8 text-center">
               <Users className="h-8 w-8 mx-auto mb-2 text-zinc-300" />
-              <p className="text-sm text-muted-foreground">Connect HiBob to sync employee data</p>
+              <p className="text-sm text-muted-foreground">{t('connectHiBobDescription')}</p>
             </div>
           )}
         </section>
@@ -665,11 +398,11 @@ export default function ProvidersPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Key className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">License Providers</h2>
+              <h2 className="text-sm font-medium">{t('licenseProvidersSection')}</h2>
             </div>
             <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('license')}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Add Provider
+              {t('addProvider')}
             </Button>
           </div>
 
@@ -697,18 +430,18 @@ export default function ProvidersPage() {
                           <p className="text-xs text-muted-foreground">
                             {provider.license_stats ? (
                               <>
-                                <span className="font-medium text-zinc-700">{provider.license_stats.active} active</span>
+                                <span className="font-medium text-zinc-700">{provider.license_stats.active} {tLicenses('active').toLowerCase()}</span>
                                 {' · '}
-                                {provider.license_stats.assigned} assigned
+                                {provider.license_stats.assigned} {tLicenses('assigned').toLowerCase()}
                                 {provider.license_stats.external > 0 && (
-                                  <span className="text-orange-600"> + {provider.license_stats.external} ext</span>
+                                  <span className="text-orange-600"> + {provider.license_stats.external} {tLicenses('ext')}</span>
                                 )}
                                 {provider.license_stats.not_in_hris > 0 && (
-                                  <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.not_in_hris} <AlertTriangle className="h-3 w-3" /> not in HRIS</span>
+                                  <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.not_in_hris} <AlertTriangle className="h-3 w-3" /> {tLicenses('notInHRISShort')}</span>
                                 )}
                               </>
                             ) : (
-                              <>{provider.license_count} license{provider.license_count !== 1 ? 's' : ''}</>
+                              <>{tLicenses('licenseCount', { count: provider.license_count })}</>
                             )}
                             {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString(getLocale())}`}
                           </p>
@@ -716,7 +449,7 @@ export default function ProvidersPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className={isManual ? 'bg-purple-50 text-purple-700 border-0' : provider.enabled ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                          {isManual ? 'Manual' : provider.enabled ? 'Active' : 'Disabled'}
+                          {isManual ? t('manual') : provider.enabled ? t('active') : t('disabled')}
                         </Badge>
                         {!isManual && (
                           <Button
@@ -738,7 +471,7 @@ export default function ProvidersPage() {
           ) : (
             <div className="border rounded-lg bg-zinc-50/50 p-8 text-center">
               <Key className="h-8 w-8 mx-auto mb-2 text-zinc-300" />
-              <p className="text-sm text-muted-foreground">No license providers configured</p>
+              <p className="text-sm text-muted-foreground">{t('noLicenseProviders')}</p>
             </div>
           )}
         </section>
@@ -749,33 +482,35 @@ export default function ProvidersPage() {
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>{dialogMode === 'hris' ? 'Connect HRIS' : 'Add Provider'}</DialogTitle>
+            <DialogTitle>{dialogMode === 'hris' ? t('connectHris') : t('addProvider')}</DialogTitle>
             <DialogDescription>
-              {dialogMode === 'hris' ? 'Connect HiBob to sync employee data' : 'Add a new license provider'}
+              {dialogMode === 'hris' ? t('connectHiBobDescription') : t('addNewLicenseProvider')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 overflow-y-auto flex-1">
             {dialogMode === 'license' && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Provider Type</Label>
+                <Label className="text-xs font-medium">{t('providerType')}</Label>
                 <Select value={newProviderType} onValueChange={setNewProviderType}>
-                  <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('selectProviderType')} /></SelectTrigger>
                   <SelectContent>
-                    {licenseProviderTypes.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    {licenseProviderTypes.map((pt) => (
+                      <SelectItem key={pt.value} value={pt.value}>
+                        {pt.value === 'manual' ? t('manualNoApi') : pt.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Display Name</Label>
-              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={dialogMode === 'hris' ? 'HiBob' : 'e.g., Google Workspace'} />
+              <Label className="text-xs font-medium">{t('displayName')}</Label>
+              <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={dialogMode === 'hris' ? 'HiBob' : t('displayNamePlaceholder')} />
             </div>
             {/* API Provider Fields */}
             {!isManualProvider(newProviderType) && getProviderFields(newProviderType).map((field) => (
               <div key={field} className="space-y-2">
-                <Label className="text-xs font-medium">{getFieldLabel(field)}</Label>
+                <Label className="text-xs font-medium">{getFieldLabel(field, t)}</Label>
                 <Input
                   type={field.includes('key') || field.includes('token') || field.includes('secret') ? 'password' : 'text'}
                   value={credentials[field] || ''}
@@ -784,32 +519,32 @@ export default function ProvidersPage() {
               </div>
             ))}
             {/* Setup Instructions */}
-            {PROVIDER_SETUP[newProviderType] && (
+            {PROVIDERS_WITH_SETUP.includes(newProviderType) && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-3">
                 <div>
-                  <p className="text-xs font-medium text-blue-800 mb-1">Required Permissions:</p>
+                  <p className="text-xs font-medium text-blue-800 mb-1">{t('requiredPermissions')}</p>
                   <ul className="text-xs text-blue-700 space-y-0.5">
-                    {PROVIDER_SETUP[newProviderType].permissions.map((perm) => (
+                    {(tSetup.raw(`${newProviderType}.permissions`) as string[]).map((perm) => (
                       <li key={perm}>• {perm}</li>
                     ))}
                   </ul>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-blue-800 mb-1">Setup Steps:</p>
+                  <p className="text-xs font-medium text-blue-800 mb-1">{t('setupSteps')}</p>
                   <ol className="text-xs text-blue-700 space-y-0.5">
-                    {PROVIDER_SETUP[newProviderType].steps.map((step, idx) => (
+                    {(tSetup.raw(`${newProviderType}.steps`) as string[]).map((step, idx) => (
                       <li key={idx}>{step}</li>
                     ))}
                   </ol>
                 </div>
-                {PROVIDER_SETUP[newProviderType].link && (
+                {PROVIDER_LINKS[newProviderType] && (
                   <a
-                    href={PROVIDER_SETUP[newProviderType].link}
+                    href={PROVIDER_LINKS[newProviderType]}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1"
                   >
-                    View documentation →
+                    {t('viewDocumentation')}
                   </a>
                 )}
               </div>
@@ -818,22 +553,21 @@ export default function ProvidersPage() {
             {isManualProvider(newProviderType) && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">License Model</Label>
+                  <Label className="text-xs font-medium">{t('licenseModel')}</Label>
                   <Select value={manualConfig.license_model} onValueChange={(v) => setManualConfig({ ...manualConfig, license_model: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {licenseModelOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
+                      <SelectItem value="seat_based">{t('seatBased')}</SelectItem>
+                      <SelectItem value="license_based">{t('licenseBased')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">Logo (optional)</Label>
+                  <Label className="text-xs font-medium">{t('logoOptional')}</Label>
                   <div className="flex items-center gap-3">
                     {logoPreview ? (
                       <div className="relative">
-                        <img src={logoPreview} alt="Logo preview" className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
+                        <img src={logoPreview} alt={t('logoPreview')} className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
                         <button
                           type="button"
                           onClick={clearLogo}
@@ -856,14 +590,14 @@ export default function ProvidersPage() {
                       />
                       <span className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
                         <Upload className="h-3 w-3" />
-                        {logoPreview ? 'Change' : 'Upload'}
+                        {logoPreview ? t('change') : tCommon('upload')}
                       </span>
                     </label>
                   </div>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP. Max 2MB.</p>
+                  <p className="text-xs text-muted-foreground">{t('logoFormats')}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  After creating the provider, you can add license keys or seats and configure pricing in the Pricing tab.
+                  {t('manualProviderNote')}
                 </p>
               </>
             )}
@@ -892,7 +626,7 @@ export default function ProvidersPage() {
             </div>
             {editingProvider && getProviderFields(editingProvider.name).map((field) => (
               <div key={field} className="space-y-2">
-                <Label className="text-xs font-medium">{getFieldLabel(field)}</Label>
+                <Label className="text-xs font-medium">{getFieldLabel(field, t)}</Label>
                 <Input
                   type={field.includes('key') || field.includes('token') || field.includes('secret') ? 'password' : 'text'}
                   value={credentials[field] || ''}
@@ -908,7 +642,7 @@ export default function ProvidersPage() {
                 <div className="flex items-center gap-3">
                   {logoPreview ? (
                     <div className="relative">
-                      <img src={logoPreview} alt="Logo preview" className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
+                      <img src={logoPreview} alt={t('logoPreview')} className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
                       <button
                         type="button"
                         onClick={clearLogo}

@@ -63,11 +63,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-const licenseModelOptions = [
-  { value: 'seat_based', label: 'Seat-based (per user)' },
-  { value: 'license_based', label: 'License-based (transferable)' },
-];
-
 type Tab = 'overview' | 'licenses' | 'pricing' | 'files' | 'settings';
 
 export default function ProviderDetailPage() {
@@ -77,6 +72,11 @@ export default function ProviderDetailPage() {
   const t = useTranslations('providers');
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
+
+  const licenseModelOptions = [
+    { value: 'seat_based', label: t('seatBased') },
+    { value: 'license_based', label: t('licenseBased') },
+  ];
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -364,9 +364,9 @@ export default function ProviderDetailPage() {
       const result = await api.syncProvider(provider.id);
       await fetchProvider();
       await fetchLicenses();
-      showToast(result.success ? 'success' : 'error', result.success ? 'Sync completed' : 'Sync failed');
+      showToast(result.success ? 'success' : 'error', result.success ? t('syncCompleted') : t('syncFailed'));
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Sync failed');
+      showToast('error', error instanceof Error ? error.message : t('syncFailed'));
     } finally {
       setSyncing(false);
     }
@@ -379,7 +379,7 @@ export default function ProviderDetailPage() {
       if (addLicenseMode === 'bulk') {
         const keys = bulkKeys.split('\n').map((k) => k.trim()).filter((k) => k);
         if (keys.length === 0) {
-          showToast('error', 'Please enter at least one license key');
+          showToast('error', t('enterLicenseKey'));
           setSavingLicense(false);
           return;
         }
@@ -392,7 +392,7 @@ export default function ProviderDetailPage() {
           valid_until: licenseForm.valid_until || undefined,
           notes: licenseForm.notes || undefined,
         });
-        showToast('success', `${keys.length} licenses added`);
+        showToast('success', t('licensesAdded', { count: keys.length }));
       } else {
         await api.createManualLicenses({
           provider_id: provider.id,
@@ -404,7 +404,7 @@ export default function ProviderDetailPage() {
           valid_until: licenseForm.valid_until || undefined,
           notes: licenseForm.notes || undefined,
         });
-        showToast('success', addLicenseMode === 'seats' ? `${licenseForm.quantity} seats added` : 'License added');
+        showToast('success', addLicenseMode === 'seats' ? t('seatsAdded', { count: licenseForm.quantity }) : t('licenseAdded'));
       }
       setAddLicenseOpen(false);
       setLicenseForm({ license_type: '', license_key: '', quantity: '1', monthly_cost: '', valid_until: '', notes: '' });
@@ -413,7 +413,7 @@ export default function ProviderDetailPage() {
       await fetchCategorizedLicenses();
       await fetchProvider();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to add license');
+      showToast('error', error instanceof Error ? error.message : t('failedToAddLicense'));
     } finally {
       setSavingLicense(false);
     }
@@ -423,22 +423,22 @@ export default function ProviderDetailPage() {
     if (!assignDialog || !selectedEmployeeId) return;
     try {
       await api.assignManualLicense(assignDialog.id, selectedEmployeeId);
-      showToast('success', 'License assigned');
+      showToast('success', t('licenseAssigned'));
       setAssignDialog(null);
       setSelectedEmployeeId('');
       await fetchLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to assign');
+      showToast('error', error instanceof Error ? error.message : t('failedToAssign'));
     }
   };
 
   const handleUnassign = async (license: License) => {
     try {
       await api.unassignManualLicense(license.id);
-      showToast('success', 'License unassigned');
+      showToast('success', t('licenseUnassigned'));
       await fetchLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to unassign');
+      showToast('error', error instanceof Error ? error.message : t('failedToUnassign'));
     }
   };
 
@@ -446,13 +446,13 @@ export default function ProviderDetailPage() {
     if (!deleteDialog) return;
     try {
       await api.deleteManualLicense(deleteDialog.id);
-      showToast('success', 'License deleted');
+      showToast('success', t('licenseDeleted'));
       setDeleteDialog(null);
       await fetchLicenses();
       await fetchCategorizedLicenses();
       await fetchProvider();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to delete');
+      showToast('error', error instanceof Error ? error.message : t('failedToDeleteLicense'));
     }
   };
 
@@ -478,14 +478,14 @@ export default function ProviderDetailPage() {
       });
       const message = serviceAccountForm.is_service_account
         ? (serviceAccountForm.apply_globally
-          ? 'Marked as service account and added to global patterns'
-          : 'Marked as service account')
-        : 'Removed service account flag';
+          ? `${t('markedAsServiceAccount')} ${t('addedToGlobalPatterns')}`
+          : t('markedAsServiceAccount'))
+        : t('removedServiceAccountFlag');
       showToast('success', message);
       setServiceAccountDialog(null);
       await fetchCategorizedLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to update');
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
     } finally {
       setSavingServiceAccount(false);
     }
@@ -513,14 +513,14 @@ export default function ProviderDetailPage() {
       });
       const message = adminAccountForm.is_admin_account
         ? (adminAccountForm.apply_globally
-          ? 'Marked as admin account and added to global patterns'
-          : 'Marked as admin account')
-        : 'Removed admin account flag';
+          ? `${t('markedAsAdminAccount')} ${t('addedToGlobalPatterns')}`
+          : t('markedAsAdminAccount'))
+        : t('removedAdminAccountFlag');
       showToast('success', message);
       setAdminAccountDialog(null);
       await fetchCategorizedLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to update');
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
     } finally {
       setSavingAdminAccount(false);
     }
@@ -562,7 +562,7 @@ export default function ProviderDetailPage() {
 
   const handleSavePackage = async () => {
     if (!packageForm.license_type || !packageForm.total_seats) {
-      showToast('error', 'License type and total seats are required');
+      showToast('error', t('licenseTypeRequired'));
       return;
     }
     setSavingPackage(true);
@@ -582,28 +582,28 @@ export default function ProviderDetailPage() {
 
       if (editingPackage) {
         await api.updateLicensePackage(providerId, editingPackage.id, data);
-        showToast('success', 'Package updated');
+        showToast('success', t('packageUpdated'));
       } else {
         await api.createLicensePackage(providerId, data);
-        showToast('success', 'Package created');
+        showToast('success', t('packageCreated'));
       }
       setPackageDialogOpen(false);
       await fetchLicensePackages();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to save package');
+      showToast('error', error instanceof Error ? error.message : t('failedToSavePackage'));
     } finally {
       setSavingPackage(false);
     }
   };
 
   const handleDeletePackage = async (pkg: import('@/lib/api').LicensePackage) => {
-    if (!confirm(`Delete package "${pkg.display_name || pkg.license_type}"?`)) return;
+    if (!confirm(`${tCommon('confirmDelete')}`)) return;
     try {
       await api.deleteLicensePackage(providerId, pkg.id);
-      showToast('success', 'Package deleted');
+      showToast('success', t('packageDeleted'));
       await fetchLicensePackages();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to delete package');
+      showToast('error', error instanceof Error ? error.message : t('failedToDeletePackage'));
     }
   };
 
@@ -641,7 +641,7 @@ export default function ProviderDetailPage() {
 
   const handleSaveOrgLicense = async () => {
     if (!orgLicenseForm.name) {
-      showToast('error', 'Name is required');
+      showToast('error', t('nameRequired'));
       return;
     }
     setSavingOrgLicense(true);
@@ -660,28 +660,28 @@ export default function ProviderDetailPage() {
 
       if (editingOrgLicense) {
         await api.updateOrganizationLicense(providerId, editingOrgLicense.id, data);
-        showToast('success', 'Organization license updated');
+        showToast('success', t('orgLicenseUpdated'));
       } else {
         await api.createOrganizationLicense(providerId, data);
-        showToast('success', 'Organization license created');
+        showToast('success', t('orgLicenseCreated'));
       }
       setOrgLicenseDialogOpen(false);
       await fetchOrgLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to save organization license');
+      showToast('error', error instanceof Error ? error.message : t('failedToSaveOrgLicense'));
     } finally {
       setSavingOrgLicense(false);
     }
   };
 
   const handleDeleteOrgLicense = async (lic: import('@/lib/api').OrganizationLicense) => {
-    if (!confirm(`Delete "${lic.name}"?`)) return;
+    if (!confirm(`${tCommon('confirmDelete')}`)) return;
     try {
       await api.deleteOrganizationLicense(providerId, lic.id);
-      showToast('success', 'Organization license deleted');
+      showToast('success', t('orgLicenseDeleted'));
       await fetchOrgLicenses();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to delete');
+      showToast('error', error instanceof Error ? error.message : t('failedToDeleteLicense'));
     }
   };
 
@@ -727,9 +727,9 @@ export default function ProviderDetailPage() {
       await fetchLicenseTypes(updatedProvider);
       await fetchLicenses();
       await fetchCategorizedLicenses();
-      showToast('success', 'Pricing saved and applied to licenses');
+      showToast('success', t('pricingSavedApplied'));
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to save pricing');
+      showToast('error', error instanceof Error ? error.message : t('failedToSavePricing'));
     } finally {
       setSavingPricing(false);
     }
@@ -760,9 +760,9 @@ export default function ProviderDetailPage() {
       await fetchLicenses();
       await fetchCategorizedLicenses();
       await fetchLicenseTypes();
-      showToast('success', 'Individual pricing saved and applied to licenses');
+      showToast('success', t('individualPricingSaved'));
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to save individual pricing');
+      showToast('error', error instanceof Error ? error.message : t('failedToSavePricing'));
     } finally {
       setSavingIndividualPricing(false);
     }
@@ -782,9 +782,9 @@ export default function ProviderDetailPage() {
         config,
       });
       await fetchProvider();
-      showToast('success', 'Settings saved');
+      showToast('success', t('settingsSaved'));
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to save');
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
     } finally {
       setSavingSettings(false);
     }
@@ -800,11 +800,11 @@ export default function ProviderDetailPage() {
       await fetchFiles();
       setFileDescription('');
       setFileCategory('other');
-      showToast('success', 'File uploaded');
+      showToast('success', t('fileUploaded'));
       // Reset file input
       e.target.value = '';
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Upload failed');
+      showToast('error', error instanceof Error ? error.message : t('uploadFailed'));
     } finally {
       setUploadingFile(false);
     }
@@ -815,9 +815,9 @@ export default function ProviderDetailPage() {
     try {
       await api.deleteProviderFile(provider.id, fileId);
       await fetchFiles();
-      showToast('success', 'File deleted');
+      showToast('success', t('fileDeleted'));
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Delete failed');
+      showToast('error', error instanceof Error ? error.message : t('deleteFailed'));
     }
   };
 
@@ -858,9 +858,9 @@ export default function ProviderDetailPage() {
     return (
       <AppLayout>
         <div className="max-w-4xl mx-auto py-12 text-center">
-          <p className="text-muted-foreground">Provider not found</p>
+          <p className="text-muted-foreground">{t('providerNotFound')}</p>
           <Link href="/settings">
-            <Button variant="outline" className="mt-4">Back to Settings</Button>
+            <Button variant="outline" className="mt-4">{t('backToSettings')}</Button>
           </Link>
         </div>
       </AppLayout>
@@ -883,7 +883,7 @@ export default function ProviderDetailPage() {
         {/* Breadcrumbs */}
         <Breadcrumbs
           items={[
-            { label: 'Providers', href: '/providers' },
+            { label: t('title'), href: '/providers' },
             { label: provider.display_name },
           ]}
           className="pt-2"
@@ -911,7 +911,7 @@ export default function ProviderDetailPage() {
                 <h1 className="text-xl font-semibold">{provider.display_name}</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge variant="secondary" className={isManual ? 'bg-purple-50 text-purple-700 border-0' : 'bg-emerald-50 text-emerald-700 border-0'}>
-                    {isManual ? 'Manual' : 'API'}
+                    {isManual ? t('manual') : t('apiIntegrated')}
                   </Badge>
                   {provider.config?.billing_cycle && (
                     <span className="text-xs text-muted-foreground">{provider.config.billing_cycle}</span>
@@ -938,19 +938,28 @@ export default function ProviderDetailPage() {
         {/* Tabs */}
         <div className="border-b">
           <nav className="flex gap-6">
-            {(['overview', 'licenses', 'pricing', 'files', 'settings'] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-zinc-900 text-zinc-900'
-                    : 'border-transparent text-muted-foreground hover:text-zinc-900'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
+            {(['overview', 'licenses', 'pricing', 'files', 'settings'] as Tab[]).map((tab) => {
+              const tabLabels: Record<Tab, string> = {
+                overview: t('tabOverview'),
+                licenses: t('tabLicenses'),
+                pricing: t('tabPricing'),
+                files: t('tabFiles'),
+                settings: t('tabSettings'),
+              };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === tab
+                      ? 'border-zinc-900 text-zinc-900'
+                      : 'border-transparent text-muted-foreground hover:text-zinc-900'
+                  }`}
+                >
+                  {tabLabels[tab]}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
@@ -974,7 +983,7 @@ export default function ProviderDetailPage() {
                     <CardContent className="pt-5 pb-4">
                       <div className="flex items-center gap-2 text-muted-foreground mb-1">
                         <Key className="h-4 w-4" />
-                        <span className="text-xs font-medium uppercase">Active</span>
+                        <span className="text-xs font-medium uppercase">{t('active')}</span>
                       </div>
                       <p className="text-2xl font-semibold">{totalLicenses}</p>
                     </CardContent>
@@ -983,7 +992,7 @@ export default function ProviderDetailPage() {
                     <CardContent className="pt-5 pb-4">
                       <div className="flex items-center gap-2 text-muted-foreground mb-1">
                         <Users className="h-4 w-4" />
-                        <span className="text-xs font-medium uppercase">Assigned</span>
+                        <span className="text-xs font-medium uppercase">{t('assigned')}</span>
                       </div>
                       <div className="flex items-baseline gap-1 flex-wrap">
                         <span className="text-2xl font-semibold">{assignedLicenses}</span>
@@ -1001,7 +1010,7 @@ export default function ProviderDetailPage() {
                       <CardContent className="pt-5 pb-4">
                         <div className="flex items-center gap-2 text-muted-foreground mb-1">
                           <Package className="h-4 w-4" />
-                          <span className="text-xs font-medium uppercase">Available</span>
+                          <span className="text-xs font-medium uppercase">{t('available')}</span>
                         </div>
                         <p className="text-2xl font-semibold text-emerald-600">{availableSeats}</p>
                       </CardContent>
@@ -1011,7 +1020,7 @@ export default function ProviderDetailPage() {
                     <CardContent className="pt-5 pb-4">
                       <div className="flex items-center gap-2 text-muted-foreground mb-1">
                         <UserMinus className="h-4 w-4" />
-                        <span className="text-xs font-medium uppercase">Inactive</span>
+                        <span className="text-xs font-medium uppercase">{t('inactive')}</span>
                       </div>
                       <p className="text-2xl font-semibold text-zinc-400">{inactiveLicenses}</p>
                     </CardContent>
@@ -1034,16 +1043,16 @@ export default function ProviderDetailPage() {
             {/* Info */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Provider Information</CardTitle>
+                <CardTitle className="text-sm">{t('providerInformation')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type</span>
-                  <span>{isManual ? 'Manual Entry' : 'API Integration'}</span>
+                  <span className="text-muted-foreground">{tCommon('type')}</span>
+                  <span>{isManual ? t('manualEntry') : t('apiIntegration')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">License Model</span>
-                  <span>{isSeatBased ? 'Seat-based' : 'License-based'}</span>
+                  <span className="text-muted-foreground">{t('licenseModel')}</span>
+                  <span>{isSeatBased ? t('seatBased') : t('licenseBased')}</span>
                 </div>
                 {(() => {
                   // Get billing info from license_pricing config
@@ -1068,13 +1077,13 @@ export default function ProviderDetailPage() {
                   return (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Billing Cycle</span>
-                        <span className="capitalize">{billingCycle || 'Not set'}</span>
+                        <span className="text-muted-foreground">{t('billingCycle')}</span>
+                        <span className="capitalize">{billingCycle || tCommon('notSet')}</span>
                       </div>
                       {firstPricing?.cost && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Cost per License</span>
-                          <span>{firstPricing.currency || 'EUR'} {firstPricing.cost}/{firstPricing.billing_cycle === 'yearly' ? 'year' : 'month'}</span>
+                          <span className="text-muted-foreground">{t('costPerLicense')}</span>
+                          <span>{firstPricing.currency || 'EUR'} {firstPricing.cost}/{firstPricing.billing_cycle === 'yearly' ? t('perYear') : t('perMonth')}</span>
                         </div>
                       )}
                     </>
@@ -1082,7 +1091,7 @@ export default function ProviderDetailPage() {
                 })()}
                 {!isManual && provider.last_sync_at && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Last Sync</span>
+                    <span className="text-muted-foreground">{t('lastSync')}</span>
                     <span>{new Date(provider.last_sync_at).toLocaleString(getLocale())}</span>
                   </div>
                 )}
@@ -1111,22 +1120,22 @@ export default function ProviderDetailPage() {
                     return (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">License Type</span>
+                          <span className="text-muted-foreground">{t('licenseType')}</span>
                           <Badge variant="outline" className="capitalize">
-                            {licenseInfo.sku_name || 'Standard'}
-                            {licenseInfo.is_trial && <span className="ml-1 text-amber-600">(Trial)</span>}
+                            {licenseInfo.sku_name || t('standard')}
+                            {licenseInfo.is_trial && <span className="ml-1 text-amber-600">({t('trial')})</span>}
                           </Badge>
                         </div>
                         {licenseInfo.company && (
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Licensed To</span>
+                            <span className="text-muted-foreground">{t('licensedTo')}</span>
                             <span>{licenseInfo.company}</span>
                           </div>
                         )}
                         {maxSeats > 0 && (
                           <>
                             <div className="flex justify-between items-center">
-                              <span className="text-muted-foreground">Seat Usage</span>
+                              <span className="text-muted-foreground">{t('seatUsage')}</span>
                               <span className={usagePercent > 90 ? 'text-red-600 font-medium' : usagePercent > 75 ? 'text-amber-600' : ''}>
                                 {usedSeats} / {maxSeats} ({Math.round(usagePercent)}%)
                               </span>
@@ -1138,16 +1147,16 @@ export default function ProviderDetailPage() {
                               />
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Available Seats</span>
+                              <span className="text-muted-foreground">{t('availableSeats')}</span>
                               <span className={availableSeats < 10 ? 'text-amber-600 font-medium' : 'text-emerald-600'}>
-                                {availableSeats > 0 ? availableSeats : 'No seats available'}
+                                {availableSeats > 0 ? availableSeats : t('noSeatsAvailable')}
                               </span>
                             </div>
                           </>
                         )}
                         {expiresAt && (
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Expires</span>
+                            <span className="text-muted-foreground">{t('expires')}</span>
                             <span className={isExpiringSoon ? 'text-red-600 font-medium' : ''}>
                               {expiresAt.toLocaleDateString(getLocale())}
                               {isExpiringSoon && (
@@ -1161,7 +1170,7 @@ export default function ProviderDetailPage() {
                         )}
                         {licenseInfo.licensee_email && (
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">License Contact</span>
+                            <span className="text-muted-foreground">{t('licenseContact')}</span>
                             <span className="text-xs">{licenseInfo.licensee_email}</span>
                           </div>
                         )}
@@ -1211,7 +1220,7 @@ export default function ProviderDetailPage() {
             ) : (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
                 <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No licenses yet</p>
+                <p className="text-sm">{t('noLicensesYet')}</p>
               </div>
             )}
           </div>
@@ -1270,29 +1279,29 @@ export default function ProviderDetailPage() {
                       <>
                         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-white rounded-lg border">
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground uppercase">Package Size</p>
+                            <p className="text-xs text-muted-foreground uppercase">{t('packageSize')}</p>
                             <p className="text-xl font-semibold">{maxUsers} Users</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground uppercase">Active Users</p>
+                            <p className="text-xs text-muted-foreground uppercase">{t('activeUsers')}</p>
                             <p className="text-xl font-semibold">{totalLicenses}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground uppercase">{isYearly ? 'Yearly' : 'Monthly'} Cost</p>
+                            <p className="text-xs text-muted-foreground uppercase">{isYearly ? t('yearly') : t('monthly')} {t('cost')}</p>
                             <p className="text-xl font-semibold">{packageEdit.currency} {packageCost.toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground uppercase">Cost per User</p>
+                            <p className="text-xs text-muted-foreground uppercase">{t('costPerUser')}</p>
                             <p className="text-xl font-semibold text-emerald-600">
-                              {packageEdit.currency} {costPerUser.toFixed(2)}{isYearly ? '/yr' : '/mo'}
+                              {packageEdit.currency} {costPerUser.toFixed(2)}{isYearly ? t('perYearShort') : t('perMonthShort')}
                             </p>
                             {isYearly && (
-                              <p className="text-xs text-muted-foreground">({packageEdit.currency} {monthlyCostPerUser.toFixed(2)}/mo)</p>
+                              <p className="text-xs text-muted-foreground">({packageEdit.currency} {monthlyCostPerUser.toFixed(2)}{t('perMonthShort')})</p>
                             )}
                           </div>
                           {expiresAt && (
                             <div className="text-center">
-                              <p className="text-xs text-muted-foreground uppercase">Expires</p>
+                              <p className="text-xs text-muted-foreground uppercase">{t('expires')}</p>
                               <p className="text-xl font-semibold">{expiresAt.toLocaleDateString(getLocale())}</p>
                             </div>
                           )}
@@ -1300,7 +1309,7 @@ export default function ProviderDetailPage() {
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Total Package Cost</Label>
+                            <Label className="text-xs text-muted-foreground">{t('totalPackageCost')}</Label>
                             <div className="flex gap-1">
                               <Input
                                 type="number"
@@ -1325,20 +1334,20 @@ export default function ProviderDetailPage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                            <Label className="text-xs text-muted-foreground">{t('billingCycle')}</Label>
                             <Select value={packageEdit.billing_cycle} onValueChange={(v) => updatePackageEdit({ billing_cycle: v })}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                                <SelectItem value="monthly">{t('monthly')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Next Billing / Renewal</Label>
+                            <Label className="text-xs text-muted-foreground">{t('nextBillingRenewal')}</Label>
                             <Input
                               type="date"
                               value={nextBillingDate}
@@ -1347,9 +1356,9 @@ export default function ProviderDetailPage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Notes</Label>
+                            <Label className="text-xs text-muted-foreground">{t('notes')}</Label>
                             <Input
-                              placeholder="e.g., Professional Plan"
+                              placeholder={t('optionalNotes')}
                               value={packageEdit.notes}
                               onChange={(e) => updatePackageEdit({ notes: e.target.value })}
                             />
@@ -1374,14 +1383,14 @@ export default function ProviderDetailPage() {
               <>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-medium">License Type Pricing</h2>
+                    <h2 className="text-sm font-medium">{t('licenseTypePricing')}</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Set prices for each individual license. The total cost per user is calculated as the sum of their assigned licenses.
+                      {tCommon('description')}
                     </p>
                   </div>
                   <Button size="sm" onClick={handleSaveIndividualPricing} disabled={savingIndividualPricing}>
                     {savingIndividualPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                    Save Pricing
+                    {tCommon('save')} {t('pricing')}
                   </Button>
                 </div>
 
@@ -1407,9 +1416,9 @@ export default function ProviderDetailPage() {
                     if (edit.cost && parseFloat(edit.cost) > 0) {
                       const cost = parseFloat(edit.cost);
                       if (edit.billing_cycle === 'yearly') {
-                        monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}/month`;
+                        monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                       } else if (edit.billing_cycle === 'monthly') {
-                        monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}/month`;
+                        monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                       }
                     }
 
@@ -1433,7 +1442,7 @@ export default function ProviderDetailPage() {
 
                           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             <div className="space-y-1.5 md:col-span-2">
-                              <Label className="text-xs text-muted-foreground">Display Name</Label>
+                              <Label className="text-xs text-muted-foreground">{t('displayName')}</Label>
                               <Input
                                 placeholder={lt.license_type}
                                 value={edit.display_name}
@@ -1442,7 +1451,7 @@ export default function ProviderDetailPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">Cost</Label>
+                              <Label className="text-xs text-muted-foreground">{t('cost')}</Label>
                               <div className="flex gap-1">
                                 <Input
                                   type="number"
@@ -1467,27 +1476,27 @@ export default function ProviderDetailPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                              <Label className="text-xs text-muted-foreground">{t('billingCycle')}</Label>
                               <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="yearly">Yearly</SelectItem>
-                                  <SelectItem value="monthly">Monthly</SelectItem>
+                                  <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                                  <SelectItem value="monthly">{t('monthly')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">Payment</Label>
+                              <Label className="text-xs text-muted-foreground">{t('payment')}</Label>
                               <Select value={edit.payment_frequency} onValueChange={(v) => updateEdit({ payment_frequency: v })}>
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="monthly">Monthly</SelectItem>
-                                  <SelectItem value="yearly">Yearly</SelectItem>
+                                  <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                  <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1505,16 +1514,16 @@ export default function ProviderDetailPage() {
               <>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-medium">License Type Pricing</h2>
+                    <h2 className="text-sm font-medium">{t('licenseTypePricing')}</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {provider.config?.provider_license_info?.max_users
-                        ? 'Or set individual prices per license type (overrides package pricing).'
-                        : 'Set prices for each license type. Prices will be applied to existing and new licenses.'}
+                        ? t('individualPricesNote')
+                        : t('setPricesDescription')}
                     </p>
                   </div>
                   <Button size="sm" onClick={handleSavePricing} disabled={savingPricing}>
                     {savingPricing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                    Save Pricing
+                    {tCommon('save')} {t('pricing')}
                   </Button>
                 </div>
               </>
@@ -1523,8 +1532,8 @@ export default function ProviderDetailPage() {
             {!hasCombinedTypes && licenseTypes.length === 0 && (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
                 <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No license types found</p>
-                <p className="text-xs mt-1">Sync the provider to discover license types</p>
+                <p className="text-sm">{t('noLicenseTypesFound')}</p>
+                <p className="text-xs mt-1">{t('syncToDiscover')}</p>
               </div>
             )}
 
@@ -1552,9 +1561,9 @@ export default function ProviderDetailPage() {
                   if (edit.cost && parseFloat(edit.cost) > 0) {
                     const cost = parseFloat(edit.cost);
                     if (edit.billing_cycle === 'yearly') {
-                      monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}/month`;
+                      monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                     } else if (edit.billing_cycle === 'monthly') {
-                      monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}/month`;
+                      monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                     }
                   }
 
@@ -1583,7 +1592,7 @@ export default function ProviderDetailPage() {
 
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                           <div className="space-y-1.5 md:col-span-2">
-                            <Label className="text-xs text-muted-foreground">Display Name</Label>
+                            <Label className="text-xs text-muted-foreground">{t('displayName')}</Label>
                             <Input
                               placeholder={lt.license_type}
                               value={edit.display_name}
@@ -1592,7 +1601,7 @@ export default function ProviderDetailPage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Next Billing</Label>
+                            <Label className="text-xs text-muted-foreground">{t('nextBilling')}</Label>
                             <Input
                               type="date"
                               value={edit.next_billing_date}
@@ -1603,7 +1612,7 @@ export default function ProviderDetailPage() {
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Cost</Label>
+                            <Label className="text-xs text-muted-foreground">{t('cost')}</Label>
                             <div className="flex gap-1">
                               <Input
                                 type="number"
@@ -1628,38 +1637,38 @@ export default function ProviderDetailPage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                            <Label className="text-xs text-muted-foreground">{t('billingCycle')}</Label>
                             <Select value={edit.billing_cycle} onValueChange={(v) => updateEdit({ billing_cycle: v })}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="perpetual">Perpetual</SelectItem>
-                                <SelectItem value="one_time">One-time</SelectItem>
+                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                                <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                <SelectItem value="perpetual">{t('perpetual')}</SelectItem>
+                                <SelectItem value="one_time">{t('oneTime')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Payment</Label>
+                            <Label className="text-xs text-muted-foreground">{t('payment')}</Label>
                             <Select value={edit.payment_frequency} onValueChange={(v) => updateEdit({ payment_frequency: v })}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="one_time">One-time</SelectItem>
+                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                                <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                <SelectItem value="one_time">{t('oneTime')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Notes</Label>
+                            <Label className="text-xs text-muted-foreground">{t('notes')}</Label>
                             <Input
-                              placeholder="e.g., Volume discount"
+                              placeholder={t('optionalNotes')}
                               value={edit.notes}
                               onChange={(e) => updateEdit({ notes: e.target.value })}
                             />
@@ -1674,15 +1683,13 @@ export default function ProviderDetailPage() {
 
             {!hasCombinedTypes && licenseTypes.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                The monthly cost shown on licenses is calculated from the billing cycle.
-                Yearly costs are divided by 12, perpetual/one-time show as €0/month.
+                {t('monthlyCalculationNote')}
               </p>
             )}
 
             {hasCombinedTypes && individualLicenseTypes.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                The monthly cost per user is calculated as the sum of all their individual license prices.
-                Yearly costs are divided by 12.
+                {t('individualPriceCalculationNote')}
               </p>
             )}
 
@@ -1692,23 +1699,23 @@ export default function ProviderDetailPage() {
                 <div>
                   <h2 className="text-sm font-medium flex items-center gap-2">
                     <Package className="h-4 w-4" />
-                    License Packages
+                    {t('licensePackages')}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Track purchased seat packages and their utilization
+                    {t('licensePackagesDescription')}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => handleOpenPackageDialog()}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Add Package
+                  {tCommon('add')}
                 </Button>
               </div>
 
               {licensePackages.length === 0 ? (
                 <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
                   <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No license packages defined</p>
-                  <p className="text-xs mt-1">Add a package to track seat utilization</p>
+                  <p className="text-sm">{t('noLicensePackages')}</p>
+                  <p className="text-xs mt-1">{t('addPackageToTrack')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1726,10 +1733,10 @@ export default function ProviderDetailPage() {
                                 {pkg.utilization_percent}% used
                               </Badge>
                               {pkg.status === 'cancelled' && (
-                                <Badge variant="destructive">Cancelled</Badge>
+                                <Badge variant="destructive">{t('cancelled')}</Badge>
                               )}
                               {pkg.status === 'expired' && (
-                                <Badge variant="secondary">Expired</Badge>
+                                <Badge variant="secondary">{t('expired')}</Badge>
                               )}
                               {pkg.needs_reorder && (
                                 <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
@@ -1741,23 +1748,23 @@ export default function ProviderDetailPage() {
 
                             <div className="flex items-center gap-4 text-sm">
                               <div>
-                                <span className="text-muted-foreground">Seats:</span>{' '}
+                                <span className="text-muted-foreground">{t('seats')}:</span>{' '}
                                 <span className="font-medium">{pkg.assigned_seats}</span>
                                 <span className="text-muted-foreground"> / {pkg.total_seats}</span>
                                 {pkg.available_seats > 0 && (
-                                  <span className="text-emerald-600 ml-1">({pkg.available_seats} available)</span>
+                                  <span className="text-emerald-600 ml-1">({pkg.available_seats} {t('available')})</span>
                                 )}
                               </div>
                               {pkg.cost_per_seat && (
                                 <div>
-                                  <span className="text-muted-foreground">Cost/seat:</span>{' '}
+                                  <span className="text-muted-foreground">{t('costPerSeat')}:</span>{' '}
                                   <span className="font-medium">{pkg.currency} {pkg.cost_per_seat}</span>
                                 </div>
                               )}
                               {pkg.total_monthly_cost && (
                                 <div>
-                                  <span className="text-muted-foreground">Total:</span>{' '}
-                                  <span className="font-medium">{pkg.currency} {pkg.total_monthly_cost}/mo</span>
+                                  <span className="text-muted-foreground">{t('total')}:</span>{' '}
+                                  <span className="font-medium">{pkg.currency} {pkg.total_monthly_cost}{t('perMonthShort')}</span>
                                 </div>
                               )}
                             </div>
@@ -1765,16 +1772,16 @@ export default function ProviderDetailPage() {
                             {(pkg.contract_start || pkg.contract_end) && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                {pkg.contract_start && <span>From {new Date(pkg.contract_start).toLocaleDateString(getLocale())}</span>}
-                                {pkg.contract_end && <span>to {new Date(pkg.contract_end).toLocaleDateString(getLocale())}</span>}
-                                {pkg.auto_renew && <Badge variant="secondary" className="text-xs">Auto-renew</Badge>}
+                                {pkg.contract_start && <span>{t('fromDate', { date: new Date(pkg.contract_start).toLocaleDateString(getLocale()) })}</span>}
+                                {pkg.contract_end && <span>{t('toDate', { date: new Date(pkg.contract_end).toLocaleDateString(getLocale()) })}</span>}
+                                {pkg.auto_renew && <Badge variant="secondary" className="text-xs">{t('autoRenew')}</Badge>}
                               </div>
                             )}
                             {pkg.cancelled_at && pkg.cancellation_effective_date && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-red-600">
                                 <AlertTriangle className="h-3 w-3" />
                                 <span>
-                                  Cancellation effective: {new Date(pkg.cancellation_effective_date).toLocaleDateString(getLocale())}
+                                  {t('cancellationEffective', { date: new Date(pkg.cancellation_effective_date).toLocaleDateString(getLocale()) })}
                                   {pkg.cancellation_reason && ` - ${pkg.cancellation_reason}`}
                                 </span>
                               </div>
@@ -1810,23 +1817,23 @@ export default function ProviderDetailPage() {
                 <div>
                   <h2 className="text-sm font-medium flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
-                    Organization Licenses
+                    {t('organizationLicenses')}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Organization-wide licenses not tied to individual users (e.g., storage, capacity)
+                    {t('orgLicenseDescription')}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => handleOpenOrgLicenseDialog()}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Add License
+                  {t('addLicense')}
                 </Button>
               </div>
 
               {orgLicenses.length === 0 ? (
                 <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
                   <Building2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No organization licenses</p>
-                  <p className="text-xs mt-1">Add licenses for organization-wide resources</p>
+                  <p className="text-sm">{t('noOrgLicenses')}</p>
+                  <p className="text-xs mt-1">{t('addOrgLicenseNote')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1843,14 +1850,14 @@ export default function ProviderDetailPage() {
                             <div className="flex items-center gap-4 mt-2 text-sm">
                               {lic.quantity && (
                                 <div>
-                                  <span className="text-muted-foreground">Quantity:</span>{' '}
+                                  <span className="text-muted-foreground">{t('quantity')}:</span>{' '}
                                   <span className="font-medium">{lic.quantity} {lic.unit || 'units'}</span>
                                 </div>
                               )}
                               {lic.monthly_cost && (
                                 <div>
-                                  <span className="text-muted-foreground">Cost:</span>{' '}
-                                  <span className="font-medium">{lic.currency} {lic.monthly_cost}/mo</span>
+                                  <span className="text-muted-foreground">{t('cost')}:</span>{' '}
+                                  <span className="font-medium">{lic.currency} {lic.monthly_cost}{t('perMonthShort')}</span>
                                 </div>
                               )}
                             </div>
@@ -1858,7 +1865,7 @@ export default function ProviderDetailPage() {
                             {lic.renewal_date && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                <span>Renews {new Date(lic.renewal_date).toLocaleDateString(getLocale())}</span>
+                                <span>{t('renewsDate', { date: new Date(lic.renewal_date).toLocaleDateString(getLocale()) })}</span>
                               </div>
                             )}
                           </div>
@@ -1884,7 +1891,7 @@ export default function ProviderDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-medium">Documents & Files</h2>
+                <h2 className="text-sm font-medium">{t('documentsAndFiles')}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Upload contracts, invoices, and other documents related to this provider.
                 </p>
@@ -1896,25 +1903,25 @@ export default function ProviderDetailPage() {
               <CardContent className="pt-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Category</Label>
+                    <Label className="text-xs text-muted-foreground">{t('category')}</Label>
                     <Select value={fileCategory} onValueChange={setFileCategory}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="agreement">Agreement</SelectItem>
-                        <SelectItem value="contract">Contract</SelectItem>
-                        <SelectItem value="invoice">Invoice</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                        <SelectItem value="quote">Quote</SelectItem>
+                        <SelectItem value="agreement">{t('agreement')}</SelectItem>
+                        <SelectItem value="contract">{t('contract')}</SelectItem>
+                        <SelectItem value="invoice">{t('invoice')}</SelectItem>
+                        <SelectItem value="other">{t('other')}</SelectItem>
+                        <SelectItem value="quote">{t('quote')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-1.5 md:col-span-2">
-                    <Label className="text-xs text-muted-foreground">Description (optional)</Label>
+                    <Label className="text-xs text-muted-foreground">{t('descriptionOptional')}</Label>
                     <Input
-                      placeholder="e.g., Annual contract 2024"
+                      placeholder={t('optionalNotes')}
                       value={fileDescription}
                       onChange={(e) => setFileDescription(e.target.value)}
                     />
@@ -1932,12 +1939,12 @@ export default function ProviderDetailPage() {
                       {uploadingFile ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
+                          {tCommon('loading')}
                         </>
                       ) : (
                         <>
                           <Upload className="h-4 w-4 mr-2" />
-                          Upload File
+                          {t('uploadFile')}
                         </>
                       )}
                     </Label>
@@ -1961,19 +1968,19 @@ export default function ProviderDetailPage() {
             {files.length === 0 ? (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">
                 <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No files uploaded yet</p>
-                <p className="text-xs mt-1">Upload contracts, invoices, or other documents</p>
+                <p className="text-sm">{t('noFilesUploaded')}</p>
+                <p className="text-xs mt-1">{t('uploadDocumentsNote')}</p>
               </div>
             ) : (
               <div className="border rounded-lg bg-white overflow-hidden">
                 <table className="w-full">
                   <thead className="bg-zinc-50 border-b">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">File</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Category</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Size</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Uploaded</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t('file')}</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t('category')}</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t('size')}</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t('uploaded')}</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">{t('actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -2009,7 +2016,7 @@ export default function ProviderDetailPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-zinc-100 transition-colors"
-                                title="View in browser"
+                                title={t('viewInBrowser')}
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </a>
@@ -2019,7 +2026,7 @@ export default function ProviderDetailPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-zinc-100 transition-colors"
-                              title="Download"
+                              title={tCommon('download')}
                             >
                               <Download className="h-3.5 w-3.5" />
                             </a>
@@ -2028,7 +2035,7 @@ export default function ProviderDetailPage() {
                               size="icon"
                               className="h-7 w-7 text-red-600"
                               onClick={() => handleDeleteFile(file.id)}
-                              title="Delete"
+                              title={tCommon('delete')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -2047,18 +2054,18 @@ export default function ProviderDetailPage() {
           <div className="max-w-xl space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">General Settings</CardTitle>
+                <CardTitle className="text-sm">{t('generalSettings')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">Display Name</Label>
+                  <Label className="text-xs font-medium">{t('displayName')}</Label>
                   <Input
                     value={settingsForm.display_name}
                     onChange={(e) => setSettingsForm({ ...settingsForm, display_name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">License Model</Label>
+                  <Label className="text-xs font-medium">{t('licenseModel')}</Label>
                   <Select value={settingsForm.license_model} onValueChange={(v) => setSettingsForm({ ...settingsForm, license_model: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -2068,12 +2075,12 @@ export default function ProviderDetailPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Seat-based licenses are tied to users. License-based licenses can be transferred between users.
+                    {t('seatBasedDescription')}
                   </p>
                 </div>
                 <Button onClick={handleSaveSettings} disabled={savingSettings}>
                   {savingSettings ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  Save Settings
+                  {t('saveSettings')}
                 </Button>
               </CardContent>
             </Card>
@@ -2081,28 +2088,28 @@ export default function ProviderDetailPage() {
             {/* Danger Zone */}
             <Card className="border-red-200">
               <CardHeader>
-                <CardTitle className="text-sm text-red-600">Danger Zone</CardTitle>
+                <CardTitle className="text-sm text-red-600">{t('dangerZone')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Deleting this provider will remove all associated licenses.
+                  {t('deleteProviderWarning')}
                 </p>
                 <Button
                   variant="outline"
                   className="text-red-600 border-red-200 hover:bg-red-50"
                   onClick={async () => {
-                    if (confirm(`Delete provider "${provider.display_name}" and all its licenses?`)) {
+                    if (confirm(t('confirmDeleteProvider', { name: provider.display_name }))) {
                       try {
                         await api.deleteProvider(provider.id);
                         router.push('/settings');
                       } catch (e) {
-                        showToast('error', 'Failed to delete provider');
+                        showToast('error', t('deleteProviderFailed'));
                       }
                     }
                   }}
                 >
                   <Trash2 className="h-4 w-4 mr-1.5" />
-                  Delete Provider
+                  {t('deleteProvider')}
                 </Button>
               </CardContent>
             </Card>
@@ -2115,29 +2122,25 @@ export default function ProviderDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {addLicenseMode === 'bulk' ? 'Add Multiple Licenses' : addLicenseMode === 'seats' ? 'Add Seats' : 'Add License'}
+              {t('addLicense')}
             </DialogTitle>
             <DialogDescription>
-              {addLicenseMode === 'bulk'
-                ? 'Enter one license key per line'
-                : addLicenseMode === 'seats'
-                ? 'Add multiple unnamed seats'
-                : 'Add a single license with optional key'}
+              {t('addLicenseDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">License Type</Label>
+              <Label className="text-xs font-medium">{t('licenseType')}</Label>
               <Input
                 value={licenseForm.license_type}
                 onChange={(e) => setLicenseForm({ ...licenseForm, license_type: e.target.value })}
-                placeholder="e.g., Pro, Enterprise, Standard"
+                placeholder={t('optionalTypeSku')}
               />
             </div>
 
             {addLicenseMode === 'single' && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">License Key (optional)</Label>
+                <Label className="text-xs font-medium">{t('licenseKeyOptional')}</Label>
                 <Input
                   value={licenseForm.license_key}
                   onChange={(e) => setLicenseForm({ ...licenseForm, license_key: e.target.value })}
@@ -2148,7 +2151,7 @@ export default function ProviderDetailPage() {
 
             {addLicenseMode === 'bulk' && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">License Keys (one per line)</Label>
+                <Label className="text-xs font-medium">{t('licenseKeysMultiple')}</Label>
                 <Textarea
                   value={bulkKeys}
                   onChange={(e) => setBulkKeys(e.target.value)}
@@ -2160,7 +2163,7 @@ export default function ProviderDetailPage() {
 
             {addLicenseMode === 'seats' && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Number of Seats</Label>
+                <Label className="text-xs font-medium">{t('numberOfSeats')}</Label>
                 <Input
                   type="number"
                   min="1"
@@ -2172,17 +2175,17 @@ export default function ProviderDetailPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Cost per License</Label>
+                <Label className="text-xs font-medium">{t('costPerLicenseOptional')}</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={licenseForm.monthly_cost}
                   onChange={(e) => setLicenseForm({ ...licenseForm, monthly_cost: e.target.value })}
-                  placeholder={provider?.config?.default_cost || 'Optional'}
+                  placeholder={provider?.config?.default_cost || tCommon('optional')}
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Valid Until</Label>
+                <Label className="text-xs font-medium">{t('validUntil')}</Label>
                 <Input
                   type="date"
                   value={licenseForm.valid_until}
@@ -2192,11 +2195,11 @@ export default function ProviderDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Notes (optional)</Label>
+              <Label className="text-xs font-medium">{t('notesOptional')}</Label>
               <Input
                 value={licenseForm.notes}
                 onChange={(e) => setLicenseForm({ ...licenseForm, notes: e.target.value })}
-                placeholder="e.g., Purchased via vendor"
+                placeholder={t('optionalNotes')}
               />
             </div>
           </div>
@@ -2204,7 +2207,7 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setAddLicenseOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleAddLicense} disabled={savingLicense}>
               {savingLicense ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Add {addLicenseMode === 'bulk' ? 'Licenses' : addLicenseMode === 'seats' ? 'Seats' : 'License'}
+              {tCommon('add')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2214,16 +2217,16 @@ export default function ProviderDetailPage() {
       <Dialog open={!!assignDialog} onOpenChange={() => setAssignDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign License</DialogTitle>
+            <DialogTitle>{t('assignLicense')}</DialogTitle>
             <DialogDescription>
-              Assign <strong>{assignDialog?.metadata?.email || assignDialog?.external_user_id}</strong> to an employee
+              {t('selectEmployee')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label className="text-xs font-medium mb-2 block">Select Employee</Label>
+            <Label className="text-xs font-medium mb-2 block">{t('selectEmployee')}</Label>
             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
               <SelectTrigger>
-                <SelectValue placeholder="Choose employee..." />
+                <SelectValue placeholder={t('chooseEmployee')} />
               </SelectTrigger>
               <SelectContent>
                 {employees.map((emp) => (
@@ -2236,7 +2239,7 @@ export default function ProviderDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAssignDialog(null)}>{tCommon('cancel')}</Button>
-            <Button onClick={handleAssign} disabled={!selectedEmployeeId}>Assign</Button>
+            <Button onClick={handleAssign} disabled={!selectedEmployeeId}>{t('assign')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2245,9 +2248,9 @@ export default function ProviderDetailPage() {
       <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete License</DialogTitle>
+            <DialogTitle>{t('deleteLicense')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deleteDialog?.external_user_id}</strong>? This cannot be undone.
+              {t('deleteConfirmMessage', { email: deleteDialog?.external_user_id || '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -2263,11 +2266,10 @@ export default function ProviderDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-blue-500" />
-              Service Account Settings
+              {t('serviceAccountSettings')}
             </DialogTitle>
             <DialogDescription>
-              Configure <strong>{serviceAccountDialog?.external_user_id}</strong> as a service account.
-              Service accounts are intentionally not linked to HRIS employees.
+              {t('configureAsServiceAccount', { email: serviceAccountDialog?.external_user_id || '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2280,35 +2282,35 @@ export default function ProviderDetailPage() {
                 className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
               />
               <Label htmlFor="is_service_account" className="cursor-pointer">
-                Mark as Service Account
+                {t('markAsServiceAccount')}
               </Label>
             </div>
 
             {serviceAccountForm.is_service_account && (
               <>
                 <div>
-                  <Label className="text-xs font-medium mb-2 block">Service Account Name (optional)</Label>
+                  <Label className="text-xs font-medium mb-2 block">{t('serviceAccountNameOptional')}</Label>
                   <Input
-                    placeholder="e.g., Backup Service, CI/CD Bot, Shared Mailbox"
+                    placeholder={t('serviceAccountNamePlaceholder')}
                     value={serviceAccountForm.service_account_name}
                     onChange={(e) => setServiceAccountForm(prev => ({ ...prev, service_account_name: e.target.value }))}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    A descriptive name for this service account
+                    {t('serviceAccountNameDescription')}
                   </p>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-medium mb-2 block">Owner (optional)</Label>
+                  <Label className="text-xs font-medium mb-2 block">{t('ownerOptional')}</Label>
                   <Select
                     value={serviceAccountForm.service_account_owner_id}
                     onValueChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v === '__none__' ? '' : v }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select responsible employee..." />
+                      <SelectValue placeholder={t('selectResponsibleEmployee')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">No owner</SelectItem>
+                      <SelectItem value="__none__">{t('noOwner')}</SelectItem>
                       {employees.map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.full_name} ({emp.email})
@@ -2317,7 +2319,7 @@ export default function ProviderDetailPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    The employee responsible for this service account
+                    {t('responsiblePersonDescription')}
                   </p>
                 </div>
 
@@ -2331,11 +2333,10 @@ export default function ProviderDetailPage() {
                   />
                   <div>
                     <Label htmlFor="apply_globally" className="cursor-pointer font-medium">
-                      Apply globally
+                      {t('addToGlobalList')}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Add this email to the global service account patterns list.
-                      All licenses with this email will be automatically marked as service accounts.
+                      {t('globalPatternDescription')}
                     </p>
                   </div>
                 </div>
@@ -2346,7 +2347,7 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setServiceAccountDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveServiceAccount} disabled={savingServiceAccount}>
               {savingServiceAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save
+              {tCommon('save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2358,11 +2359,10 @@ export default function ProviderDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-purple-500" />
-              Admin Account Settings
+              {t('adminAccountSettings')}
             </DialogTitle>
             <DialogDescription>
-              Configure <strong>{adminAccountDialog?.external_user_id}</strong> as an admin account.
-              Admin accounts are elevated-privilege accounts linked to employees.
+              {t('configureAsAdminAccount', { email: adminAccountDialog?.external_user_id || '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2375,35 +2375,35 @@ export default function ProviderDetailPage() {
                 className="h-4 w-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
               />
               <Label htmlFor="is_admin_account" className="cursor-pointer">
-                Mark as Admin Account
+                {t('markAsAdminAccount')}
               </Label>
             </div>
 
             {adminAccountForm.is_admin_account && (
               <>
                 <div>
-                  <Label className="text-xs font-medium mb-2 block">Admin Account Name (optional)</Label>
+                  <Label className="text-xs font-medium mb-2 block">{t('adminAccountNameOptional')}</Label>
                   <Input
-                    placeholder="e.g., IT Admin, Root Access, Domain Admin"
+                    placeholder={t('adminAccountNamePlaceholder')}
                     value={adminAccountForm.admin_account_name}
                     onChange={(e) => setAdminAccountForm(prev => ({ ...prev, admin_account_name: e.target.value }))}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    A descriptive name for this admin account
+                    {t('adminAccountNameDescription')}
                   </p>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-medium mb-2 block">Owner (linked employee)</Label>
+                  <Label className="text-xs font-medium mb-2 block">{t('ownerLinkedEmployee')}</Label>
                   <Select
                     value={adminAccountForm.admin_account_owner_id}
                     onValueChange={(v) => setAdminAccountForm(prev => ({ ...prev, admin_account_owner_id: v === '__none__' ? '' : v }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select employee..." />
+                      <SelectValue placeholder={t('selectEmployee')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">No owner</SelectItem>
+                      <SelectItem value="__none__">{t('noOwner')}</SelectItem>
                       {employees.map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.full_name} ({emp.email})
@@ -2412,7 +2412,7 @@ export default function ProviderDetailPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    The employee who owns this admin account. If offboarded, a warning will be shown.
+                    {t('adminResponsibleDescription')}
                   </p>
                 </div>
 
@@ -2426,11 +2426,10 @@ export default function ProviderDetailPage() {
                   />
                   <div>
                     <Label htmlFor="apply_globally_admin" className="cursor-pointer font-medium">
-                      Apply globally
+                      {t('addToGlobalAdminList')}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Add this email to the global admin account patterns list.
-                      All licenses with this email will be automatically marked as admin accounts.
+                      {t('globalAdminPatternDescription')}
                     </p>
                   </div>
                 </div>
@@ -2441,7 +2440,7 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setAdminAccountDialog(null)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveAdminAccount} disabled={savingAdminAccount}>
               {savingAdminAccount && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save
+              {tCommon('save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2453,35 +2452,33 @@ export default function ProviderDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              {editingPackage ? 'Edit License Package' : 'Add License Package'}
+              {editingPackage ? t('editPackage') : t('addLicensePackage')}
             </DialogTitle>
             <DialogDescription>
-              {editingPackage
-                ? 'Update the license package details.'
-                : 'Define a purchased license package to track seat utilization.'}
+              {editingPackage ? t('editPackageDescription') : t('addPackageDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">License Type *</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('licenseTypeRequired2')}</Label>
                 <Input
-                  placeholder="e.g., Enterprise, Pro, Business"
+                  placeholder={t('optionalTypeSku')}
                   value={packageForm.license_type}
                   onChange={(e) => setPackageForm(prev => ({ ...prev, license_type: e.target.value }))}
                   disabled={!!editingPackage}
                 />
               </div>
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">Display Name</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('displayName')}</Label>
                 <Input
-                  placeholder="Optional friendly name"
+                  placeholder={t('optionalFriendlyName')}
                   value={packageForm.display_name}
                   onChange={(e) => setPackageForm(prev => ({ ...prev, display_name: e.target.value }))}
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Total Seats *</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('totalSeatsRequired')}</Label>
                 <Input
                   type="number"
                   min="1"
@@ -2491,7 +2488,7 @@ export default function ProviderDetailPage() {
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Cost per Seat</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('costPerSeat')}</Label>
                 <div className="flex gap-1">
                   <Input
                     type="number"
@@ -2514,19 +2511,19 @@ export default function ProviderDetailPage() {
                 </div>
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Billing Cycle</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('billingCycle')}</Label>
                 <Select value={packageForm.billing_cycle} onValueChange={(v) => setPackageForm(prev => ({ ...prev, billing_cycle: v }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                    <SelectItem value="yearly">{t('yearly')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Contract Start</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('contractStart')}</Label>
                 <Input
                   type="date"
                   value={packageForm.contract_start}
@@ -2534,7 +2531,7 @@ export default function ProviderDetailPage() {
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Contract End</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('contractEnd')}</Label>
                 <Input
                   type="date"
                   value={packageForm.contract_end}
@@ -2549,12 +2546,12 @@ export default function ProviderDetailPage() {
                   onChange={(e) => setPackageForm(prev => ({ ...prev, auto_renew: e.target.checked }))}
                   className="h-4 w-4 rounded border-zinc-300"
                 />
-                <Label htmlFor="auto_renew" className="text-sm cursor-pointer">Auto-renew</Label>
+                <Label htmlFor="auto_renew" className="text-sm cursor-pointer">{t('autoRenew')}</Label>
               </div>
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">Notes</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('notes')}</Label>
                 <Textarea
-                  placeholder="Optional notes..."
+                  placeholder={t('optionalNotes')}
                   value={packageForm.notes}
                   onChange={(e) => setPackageForm(prev => ({ ...prev, notes: e.target.value }))}
                   rows={2}
@@ -2566,7 +2563,7 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setPackageDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSavePackage} disabled={savingPackage}>
               {savingPackage && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingPackage ? 'Update' : 'Create'}
+              {editingPackage ? t('update') : t('create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2578,34 +2575,32 @@ export default function ProviderDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              {editingOrgLicense ? 'Edit Organization License' : 'Add Organization License'}
+              {editingOrgLicense ? t('editOrgLicense') : t('addOrgLicense')}
             </DialogTitle>
             <DialogDescription>
-              {editingOrgLicense
-                ? 'Update the organization license details.'
-                : 'Add an organization-wide license (e.g., storage, capacity, enterprise features).'}
+              {editingOrgLicense ? t('editOrgLicenseDescription') : t('addOrgLicenseDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">Name *</Label>
+                <Label className="text-xs font-medium mb-2 block">{tCommon('name')} *</Label>
                 <Input
-                  placeholder="e.g., SharePoint Storage Extension"
+                  placeholder={t('optionalFriendlyName')}
                   value={orgLicenseForm.name}
                   onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">License Type</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('licenseType')}</Label>
                 <Input
-                  placeholder="Optional type/SKU"
+                  placeholder={t('optionalTypeSku')}
                   value={orgLicenseForm.license_type}
                   onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, license_type: e.target.value }))}
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Quantity</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('quantity')}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -2615,15 +2610,15 @@ export default function ProviderDetailPage() {
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Unit</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('unit')}</Label>
                 <Input
-                  placeholder="e.g., GB, TB, users"
+                  placeholder={t('unitPlaceholder')}
                   value={orgLicenseForm.unit}
                   onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, unit: e.target.value }))}
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Monthly Cost</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('monthlyCost')}</Label>
                 <div className="flex gap-1">
                   <Input
                     type="number"
@@ -2646,20 +2641,20 @@ export default function ProviderDetailPage() {
                 </div>
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Billing Cycle</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('billingCycle')}</Label>
                 <Select value={orgLicenseForm.billing_cycle} onValueChange={(v) => setOrgLicenseForm(prev => ({ ...prev, billing_cycle: v }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="yearly">Yearly</SelectItem>
-                    <SelectItem value="one_time">One-time</SelectItem>
+                    <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                    <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                    <SelectItem value="one_time">{t('oneTime')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs font-medium mb-2 block">Renewal Date</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('renewalDate')}</Label>
                 <Input
                   type="date"
                   value={orgLicenseForm.renewal_date}
@@ -2667,9 +2662,9 @@ export default function ProviderDetailPage() {
                 />
               </div>
               <div className="col-span-2">
-                <Label className="text-xs font-medium mb-2 block">Notes</Label>
+                <Label className="text-xs font-medium mb-2 block">{t('notes')}</Label>
                 <Textarea
-                  placeholder="Optional notes..."
+                  placeholder={t('optionalNotes')}
                   value={orgLicenseForm.notes}
                   onChange={(e) => setOrgLicenseForm(prev => ({ ...prev, notes: e.target.value }))}
                   rows={2}
@@ -2681,7 +2676,7 @@ export default function ProviderDetailPage() {
             <Button variant="ghost" onClick={() => setOrgLicenseDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveOrgLicense} disabled={savingOrgLicense}>
               {savingOrgLicense && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingOrgLicense ? 'Update' : 'Create'}
+              {editingOrgLicense ? t('update') : t('create')}
             </Button>
           </DialogFooter>
         </DialogContent>
