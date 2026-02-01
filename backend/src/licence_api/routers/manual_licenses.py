@@ -56,6 +56,12 @@ class ManualLicenseBulkCreate(BaseModel):
     notes: str | None = None
 
 
+class AssignLicenseRequest(BaseModel):
+    """Request to assign a license to an employee."""
+
+    employee_id: UUID
+
+
 def get_manual_license_service(db: AsyncSession = Depends(get_db)) -> ManualLicenseService:
     """Get ManualLicenseService instance."""
     return ManualLicenseService(db)
@@ -145,7 +151,7 @@ async def update_manual_license(
 async def assign_manual_license(
     http_request: Request,
     license_id: UUID,
-    employee_id: UUID,
+    body: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
 ) -> LicenseResponse:
@@ -153,7 +159,7 @@ async def assign_manual_license(
     try:
         return await service.update_license(
             license_id=license_id,
-            employee_id=employee_id,
+            employee_id=body.employee_id,
             user=current_user,
             request=http_request,
         )

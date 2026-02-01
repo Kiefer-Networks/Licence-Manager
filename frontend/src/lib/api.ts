@@ -1815,8 +1815,9 @@ export const api = {
   },
 
   async assignManualLicense(licenseId: string, employeeId: string): Promise<License> {
-    return fetchApi<License>(`/manual-licenses/${licenseId}/assign?employee_id=${employeeId}`, {
+    return fetchApi<License>(`/manual-licenses/${licenseId}/assign`, {
       method: 'POST',
+      body: JSON.stringify({ employee_id: employeeId }),
     });
   },
 
