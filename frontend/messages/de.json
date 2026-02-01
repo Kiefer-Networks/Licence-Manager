@@ -1194,7 +1194,16 @@
     "noChanges": "Keine Änderungen aufgezeichnet",
     "showMore": "Mehr anzeigen",
     "showLess": "Weniger anzeigen",
-    "clearFilters": "Filter löschen"
+    "clearFilters": "Filter löschen",
+    "exportAuditLogs": "Protokoll exportieren",
+    "totalMatchingRecords": "Passende Einträge gesamt",
+    "exportLimitWarning": "Maximal {max} Einträge können gleichzeitig exportiert werden. Die neuesten Einträge werden exportiert.",
+    "numberOfRecords": "Anzahl der Einträge",
+    "maxRecords": "max. {max}",
+    "exportFormat": "Format",
+    "exporting": "Wird exportiert...",
+    "exportRecords": "{count} Einträge exportieren",
+    "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen."
   },
   "setup": {
     "title": "Einrichtung",

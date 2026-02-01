@@ -1194,7 +1194,16 @@
     "noChanges": "No changes recorded",
     "showMore": "Show more",
     "showLess": "Show less",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "exportAuditLogs": "Export Audit Logs",
+    "totalMatchingRecords": "Total matching records",
+    "exportLimitWarning": "Maximum {max} records can be exported at once. The most recent entries will be exported.",
+    "numberOfRecords": "Number of records",
+    "maxRecords": "max. {max}",
+    "exportFormat": "Format",
+    "exporting": "Exporting...",
+    "exportRecords": "Export {count} records",
+    "exportFailed": "Export failed. Please try again."
   },
   "setup": {
     "title": "Setup",

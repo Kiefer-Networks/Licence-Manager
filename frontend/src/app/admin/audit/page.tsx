@@ -11,6 +11,7 @@ import { Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { AuditFilters } from './components/AuditFilters';
 import { AuditTable } from './components/AuditTable';
 import { AuditDetails } from './components/AuditDetails';
+import { ExportDialog } from './components/ExportDialog';
 import { DatePreset } from './components/DateRangePicker';
 
 // Debounce helper
@@ -94,6 +95,7 @@ export default function AuditLogPage() {
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -197,7 +199,7 @@ export default function AuditLogPage() {
     setPage(1);
   };
 
-  const handleExport = async () => {
+  const handleExport = async (limit: number, format: 'csv' | 'json') => {
     setIsExporting(true);
     try {
       // Build date params
@@ -214,7 +216,8 @@ export default function AuditLogPage() {
       }
 
       const blob = await api.exportAuditLogs({
-        format: 'csv',
+        format,
+        limit,
         action: actionFilter || undefined,
         resource_type: resourceTypeFilter || undefined,
         admin_user_id: userFilter || undefined,
@@ -227,13 +230,14 @@ export default function AuditLogPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `audit_log_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `audit_log_${new Date().toISOString().split('T')[0]}.${format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err);
+      throw err;
     } finally {
       setIsExporting(false);
     }
@@ -286,7 +290,7 @@ export default function AuditLogPage() {
           availableResourceTypes={availableResourceTypes}
           availableUsers={availableUsers}
           onClearFilters={handleClearFilters}
-          onExport={handleExport}
+          onExport={() => setExportDialogOpen(true)}
           isExporting={isExporting}
           totalEntries={total}
         />
@@ -336,6 +340,14 @@ export default function AuditLogPage() {
         log={selectedLog}
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
+      />
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        totalRecords={total}
+        onExport={handleExport}
       />
     </AppLayout>
   );

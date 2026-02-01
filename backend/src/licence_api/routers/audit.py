@@ -174,6 +174,7 @@ async def export_audit_logs(
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     format: str = Query("csv", pattern="^(csv|json)$"),
+    limit: int = Query(MAX_EXPORT_RECORDS, ge=1, le=MAX_EXPORT_RECORDS),
     action: str | None = Query(None),
     resource_type: str | None = Query(None),
     admin_user_id: UUID | None = Query(None),
@@ -183,15 +184,16 @@ async def export_audit_logs(
 ) -> StreamingResponse:
     """Export audit logs as CSV or JSON. Requires audit.view permission.
 
-    Limited to MAX_EXPORT_RECORDS to prevent DoS attacks.
+    Args:
+        limit: Number of records to export (1-10000, default 10000)
     """
     # Validate filter inputs against whitelists
     action = validate_against_whitelist(action, ALLOWED_ACTIONS)
     resource_type = validate_against_whitelist(resource_type, ALLOWED_RESOURCE_TYPES)
 
-    # Get matching logs with limit to prevent DoS
+    # Get matching logs with user-specified limit (capped at MAX_EXPORT_RECORDS)
     logs, total = await audit_repo.get_recent(
-        limit=MAX_EXPORT_RECORDS,
+        limit=limit,
         offset=0,
         action=action,
         resource_type=resource_type,
@@ -200,13 +202,6 @@ async def export_audit_logs(
         date_to=date_to,
         search=search,
     )
-
-    # Check if results were truncated
-    if total > MAX_EXPORT_RECORDS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Export limited to {MAX_EXPORT_RECORDS} records. Found {total} records. Please narrow your search criteria.",
-        )
 
     # Fetch admin user emails
     user_ids = {log.admin_user_id for log in logs if log.admin_user_id}

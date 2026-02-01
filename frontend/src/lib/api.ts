@@ -2433,6 +2433,7 @@ export const api = {
 
   async exportAuditLogs(params: {
     format?: 'csv' | 'json';
+    limit?: number;
     action?: string;
     resource_type?: string;
     admin_user_id?: string;
@@ -2442,6 +2443,7 @@ export const api = {
   } = {}): Promise<Blob> {
     const searchParams = new URLSearchParams();
     searchParams.set('format', params.format || 'csv');
+    if (params.limit) searchParams.set('limit', params.limit.toString());
     if (params.action) searchParams.set('action', params.action);
     if (params.resource_type) searchParams.set('resource_type', params.resource_type);
     if (params.admin_user_id) searchParams.set('admin_user_id', params.admin_user_id);
