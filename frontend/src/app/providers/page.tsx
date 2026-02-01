@@ -232,11 +232,12 @@ export default function ProvidersPage() {
       });
 
       // Upload logo if provided (for manual providers)
+      // Logo upload failure is non-critical - provider was created successfully
       if (isManual && logoFile) {
         try {
           await api.uploadProviderLogo(newProvider.id, logoFile);
-        } catch (logoErr) {
-          console.error('Failed to upload logo:', logoErr);
+        } catch {
+          // Logo upload failed but provider was created - continue silently
         }
       }
 
@@ -266,12 +267,13 @@ export default function ProvidersPage() {
       await api.updateProvider(editingProvider.id, updates);
 
       // Upload logo if a new file was selected (for manual providers)
+      // Logo upload failure is non-critical - provider was updated successfully
       const isManual = editingProvider.config?.provider_type === 'manual' || editingProvider.name === 'manual';
       if (isManual && logoFile) {
         try {
           await api.uploadProviderLogo(editingProvider.id, logoFile);
-        } catch (logoErr) {
-          console.error('Failed to upload logo:', logoErr);
+        } catch {
+          // Logo upload failed but provider was updated - continue silently
         }
       }
 

@@ -58,8 +58,8 @@ export default function ProfilePage() {
         const response = await api.getNotificationPreferences();
         setNotifPrefs(response.preferences);
         setAvailableEventTypes(response.available_event_types);
-      } catch (err) {
-        console.error('Failed to fetch notification preferences:', err);
+      } catch {
+        // Error handled silently - notifications will show default state
       } finally {
         setNotifLoading(false);
       }
