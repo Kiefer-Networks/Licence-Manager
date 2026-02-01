@@ -59,6 +59,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         company_domains: list[str] | None = None,
         service_accounts_only: bool = False,
         admin_accounts_only: bool = False,
+        admin_account_owner_id: UUID | None = None,
     ) -> tuple[list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]], int]:
         """Get licenses with provider and employee details.
 
@@ -77,6 +78,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             company_domains: Company domains for external email detection
             service_accounts_only: Only return licenses marked as service accounts
             admin_accounts_only: Only return licenses marked as admin accounts
+            admin_account_owner_id: Filter by admin account owner (employee ID)
 
         Returns:
             Tuple of (license details, total count)
@@ -115,6 +117,10 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         if admin_accounts_only:
             query = query.where(LicenseORM.is_admin_account == True)
             count_query = count_query.where(LicenseORM.is_admin_account == True)
+
+        if admin_account_owner_id:
+            query = query.where(LicenseORM.admin_account_owner_id == admin_account_owner_id)
+            count_query = count_query.where(LicenseORM.admin_account_owner_id == admin_account_owner_id)
 
         if department:
             query = query.where(EmployeeORM.department == department)
@@ -397,6 +403,28 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             select(LicenseORM.employee_id, func.count())
             .where(LicenseORM.employee_id.in_(employee_ids))
             .group_by(LicenseORM.employee_id)
+        )
+        return dict(result.all())
+
+    async def count_admin_accounts_by_owner_ids(self, owner_ids: list[UUID]) -> dict[UUID, int]:
+        """Count admin accounts for multiple owners in a single query (batch).
+
+        This counts licenses where admin_account_owner_id matches the owner IDs.
+
+        Args:
+            owner_ids: List of employee UUIDs who own admin accounts
+
+        Returns:
+            Dict mapping owner ID to admin account count
+        """
+        if not owner_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(LicenseORM.admin_account_owner_id, func.count())
+            .where(LicenseORM.admin_account_owner_id.in_(owner_ids))
+            .where(LicenseORM.is_admin_account == True)
+            .group_by(LicenseORM.admin_account_owner_id)
         )
         return dict(result.all())
 

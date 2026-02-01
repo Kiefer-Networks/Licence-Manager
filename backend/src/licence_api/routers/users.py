@@ -90,7 +90,7 @@ async def list_employees(
     validated_sort_by = validate_sort_by(sort_by, ALLOWED_EMPLOYEE_SORT_COLUMNS, "full_name")
 
     offset = (page - 1) * page_size
-    employees, total, license_counts = await employee_service.list_employees(
+    employees, total, license_counts, admin_account_counts = await employee_service.list_employees(
         status=sanitized_status,
         department=sanitized_department,
         search=sanitized_search,
@@ -128,6 +128,7 @@ async def list_employees(
                 termination_date=emp.termination_date,
                 avatar=get_avatar_base64(emp.hibob_id),
                 license_count=license_counts.get(emp.id, 0),
+                owned_admin_account_count=admin_account_counts.get(emp.id, 0),
                 manager=manager_info,
                 synced_at=emp.synced_at,
             )
@@ -164,7 +165,7 @@ async def get_employee(
             detail="Employee not found",
         )
 
-    employee, license_count = result
+    employee, license_count, admin_account_count = result
 
     # Load manager if present
     manager_info = None
@@ -190,6 +191,7 @@ async def get_employee(
         termination_date=employee.termination_date,
         avatar=get_avatar_base64(employee.hibob_id),
         license_count=license_count,
+        owned_admin_account_count=admin_account_count,
         manager=manager_info,
         synced_at=employee.synced_at,
     )

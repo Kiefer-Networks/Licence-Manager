@@ -163,6 +163,7 @@ async def list_admin_account_licenses(
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
     search: str | None = Query(default=None, max_length=200),
     provider_id: UUID | None = None,
+    owner_id: UUID | None = None,
     sort_by: str = Query(default="external_user_id", max_length=50),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1, le=10000),
@@ -171,11 +172,15 @@ async def list_admin_account_licenses(
     """List all licenses marked as admin accounts.
 
     Requires licenses.view permission.
+
+    Args:
+        owner_id: Filter by owner employee ID (for employee detail page)
     """
     validated_sort_by = validate_sort_by(sort_by, ALLOWED_ADMIN_LICENSE_SORT_COLUMNS, "external_user_id")
     items, total = await service.get_admin_account_licenses(
         search=search,
         provider_id=provider_id,
+        owner_id=owner_id,
         sort_by=validated_sort_by,
         sort_dir=sort_dir,
         page=page,

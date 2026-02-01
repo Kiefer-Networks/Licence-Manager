@@ -272,6 +272,7 @@ class AdminAccountService:
         self,
         search: str | None = None,
         provider_id: UUID | None = None,
+        owner_id: UUID | None = None,
         include_orphaned_only: bool = False,
         sort_by: str = "external_user_id",
         sort_dir: str = "asc",
@@ -283,6 +284,7 @@ class AdminAccountService:
         Args:
             search: Search by email
             provider_id: Filter by provider
+            owner_id: Filter by owner (employee ID)
             include_orphaned_only: Only include orphaned admin accounts
             sort_by: Column to sort by
             sort_dir: Sort direction
@@ -298,6 +300,7 @@ class AdminAccountService:
             provider_id=provider_id,
             search=search,
             admin_accounts_only=True,
+            admin_account_owner_id=owner_id,
             sort_by=sort_by,
             sort_dir=sort_dir,
             offset=offset,

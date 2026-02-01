@@ -35,6 +35,7 @@ class EmployeeResponse(BaseModel):
     termination_date: date | None = None
     avatar: str | None = None  # Base64 data URL or None if no avatar
     license_count: int = 0
+    owned_admin_account_count: int = 0  # Number of admin accounts owned by this employee
     manager: ManagerInfo | None = None
     synced_at: datetime
 

@@ -26,7 +26,7 @@ class EmployeeService:
         sort_dir: str = "asc",
         offset: int = 0,
         limit: int = 50,
-    ) -> tuple[list, int, dict[UUID, int]]:
+    ) -> tuple[list, int, dict[UUID, int], dict[UUID, int]]:
         """List employees with filters.
 
         Args:
@@ -39,7 +39,7 @@ class EmployeeService:
             limit: Pagination limit
 
         Returns:
-            Tuple of (employees, total, license_counts)
+            Tuple of (employees, total, license_counts, admin_account_counts)
         """
         employees, total = await self.employee_repo.get_all_with_filters(
             status=status,
@@ -54,8 +54,9 @@ class EmployeeService:
         # Get license counts in a single batch query (avoids N+1)
         employee_ids = [emp.id for emp in employees]
         license_counts = await self.license_repo.count_by_employee_ids(employee_ids)
+        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids(employee_ids)
 
-        return employees, total, license_counts
+        return employees, total, license_counts, admin_account_counts
 
     async def get_departments(self) -> list[str]:
         """Get all unique departments.
@@ -66,13 +67,13 @@ class EmployeeService:
         return await self.employee_repo.get_all_departments()
 
     async def get_employee(self, employee_id: UUID) -> tuple | None:
-        """Get employee by ID with license count.
+        """Get employee by ID with license count and admin account count.
 
         Args:
             employee_id: Employee UUID
 
         Returns:
-            Tuple of (employee, license_count) or None if not found
+            Tuple of (employee, license_count, admin_account_count) or None if not found
         """
         employee = await self.employee_repo.get_by_id(employee_id)
         if employee is None:
@@ -81,7 +82,10 @@ class EmployeeService:
         license_counts = await self.license_repo.count_by_employee_ids([employee_id])
         license_count = license_counts.get(employee_id, 0)
 
-        return employee, license_count
+        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids([employee_id])
+        admin_account_count = admin_account_counts.get(employee_id, 0)
+
+        return employee, license_count, admin_account_count
 
     async def get_employees_by_ids(self, employee_ids: list[UUID]) -> dict:
         """Get multiple employees by IDs.
