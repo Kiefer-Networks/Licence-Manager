@@ -18,6 +18,7 @@ from licence_api.models.dto.admin_account import (
 )
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.services.cache_service import get_cache_service
 from licence_api.utils.validation import validate_sort_by
@@ -76,8 +77,9 @@ async def get_pattern(
 
 
 @router.post("/patterns", response_model=AdminAccountPatternResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_pattern(
-    http_request: Request,
+    request: Request,
     data: AdminAccountPatternCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
@@ -91,19 +93,20 @@ async def create_pattern(
     if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Pattern '{data.email_pattern}' already exists",
+            detail="A pattern with this value already exists",
         )
 
     return await service.create_pattern(
         data=data,
         created_by=current_user.id,
-        request=http_request,
+        request=request,
     )
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_pattern(
-    http_request: Request,
+    request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
@@ -124,7 +127,7 @@ async def delete_pattern(
     await service.delete_pattern(
         pattern_id=pattern_id,
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
         pattern_info={
             "email_pattern": pattern.email_pattern,
             "name": pattern.name,
@@ -133,8 +136,9 @@ async def delete_pattern(
 
 
 @router.post("/apply", response_model=ApplyAdminPatternsResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def apply_patterns(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> ApplyAdminPatternsResponse:
@@ -147,7 +151,7 @@ async def apply_patterns(
     """
     result = await service.apply_patterns_to_all_licenses(
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
     )
 
     # Invalidate dashboard cache
