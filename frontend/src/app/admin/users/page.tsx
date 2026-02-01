@@ -72,6 +72,9 @@ export default function AdminUsersPage() {
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Note: These client-side permission checks are for UX only (hiding buttons/UI).
+  // Server-side enforcement via require_permission() is the authoritative check.
+  // All API endpoints validate permissions independently.
   const canCreate = hasPermission(Permissions.ADMIN_USERS_CREATE);
   const canUpdate = hasPermission(Permissions.ADMIN_USERS_UPDATE);
   const canDelete = hasPermission(Permissions.ADMIN_USERS_DELETE);
