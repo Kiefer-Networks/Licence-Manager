@@ -28,6 +28,46 @@ router = APIRouter()
 # Maximum backup file size: 500MB
 MAX_BACKUP_SIZE = 500 * 1024 * 1024
 
+# Chunk size for streaming reads
+READ_CHUNK_SIZE = 64 * 1024  # 64KB
+
+
+async def read_upload_with_limit(
+    file: UploadFile,
+    max_size: int,
+) -> bytes:
+    """Read an uploaded file with size limit.
+
+    Reads the file in chunks and stops early if the max size is exceeded,
+    preventing memory exhaustion from oversized uploads.
+
+    Args:
+        file: The uploaded file
+        max_size: Maximum allowed file size in bytes
+
+    Returns:
+        The file content as bytes
+
+    Raises:
+        HTTPException: If file exceeds max_size
+    """
+    chunks = []
+    total_size = 0
+
+    while True:
+        chunk = await file.read(READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File too large. Maximum size: {max_size // 1024 // 1024}MB",
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
 
 def get_backup_service(
     db: AsyncSession = Depends(get_db),
@@ -121,14 +161,8 @@ async def restore_backup(
             detail="Invalid file type. Expected .lcbak file",
         )
 
-    # Read file content
-    content = await file.read()
-
-    if len(content) > MAX_BACKUP_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: {MAX_BACKUP_SIZE // 1024 // 1024}MB",
-        )
+    # Read file with streaming size check to prevent memory exhaustion
+    content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
 
     if len(content) == 0:
         raise HTTPException(
@@ -165,14 +199,8 @@ async def get_backup_info(
             detail="No filename provided",
         )
 
-    # Read file content
-    content = await file.read()
-
-    if len(content) > MAX_BACKUP_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: {MAX_BACKUP_SIZE // 1024 // 1024}MB",
-        )
+    # Read file with streaming size check to prevent memory exhaustion
+    content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
 
     if len(content) == 0:
         return BackupInfoResponse(
