@@ -36,15 +36,12 @@ export function sanitizeError(error: unknown): string {
  * In production, logs minimal information.
  */
 export function logError(context: string, error: unknown): void {
-  const isDev = process.env.NODE_ENV === 'development';
-
-  if (isDev) {
-    // In development, log more details for debugging
+  // Only log errors in development to avoid information disclosure in browser console
+  // In production, errors should be sent to a proper logging service (e.g., Sentry)
+  if (process.env.NODE_ENV === 'development') {
     console.error(`[${context}]`, error);
-  } else {
-    // In production, only log sanitized message
-    console.error(`[${context}] ${sanitizeError(error)}`);
   }
+  // Production: Silent - use error tracking service integration instead
 }
 
 /**
