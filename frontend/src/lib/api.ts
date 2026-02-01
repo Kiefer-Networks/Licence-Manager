@@ -92,53 +92,74 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+// Default request timeout in milliseconds (30 seconds)
+const REQUEST_TIMEOUT_MS = 30000;
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = true): Promise<T> {
   const method = options.method || 'GET';
   const headers = await getAuthHeaders(method);
   const url = `${API_BASE}/api/v1${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include', // Always include cookies
-    headers: {
-      ...headers,
-      ...options.headers,
-    },
-  });
+  // Create AbortController for timeout handling
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  // Handle 401 - attempt token refresh
-  if (response.status === 401 && retry && typeof window !== 'undefined') {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      // Retry the request with new token from cookies
-      return fetchApi<T>(endpoint, options, false);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      credentials: 'include', // Always include cookies
+      headers: {
+        ...headers,
+        ...options.headers,
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // Handle 401 - attempt token refresh
+    if (response.status === 401 && retry && typeof window !== 'undefined') {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry the request with new token from cookies
+        return fetchApi<T>(endpoint, options, false);
+      }
+      // No valid token - let AuthProvider/AppLayout handle redirect
+      // Don't redirect here to avoid conflicts with React Router
+      throw new Error('Session expired');
     }
-    // No valid token - let AuthProvider/AppLayout handle redirect
-    // Don't redirect here to avoid conflicts with React Router
-    throw new Error('Session expired');
-  }
 
-  // Handle 403 CSRF errors - refresh token and retry
-  if (response.status === 403 && retry) {
-    const error = await response.json().catch(() => ({ detail: '' }));
-    if (error.detail?.includes('CSRF')) {
-      csrfToken = null; // Clear cached token
-      return fetchApi<T>(endpoint, options, false);
+    // Handle 403 CSRF errors - refresh token and retry
+    if (response.status === 403 && retry) {
+      const error = await response.json().catch(() => ({ detail: '' }));
+      if (error.detail?.includes('CSRF')) {
+        csrfToken = null; // Clear cached token
+        return fetchApi<T>(endpoint, options, false);
+      }
+      throw new Error(error.detail || 'Access denied');
     }
-    throw new Error(error.detail || 'Access denied');
-  }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || 'Request failed');
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(error.detail || 'Request failed');
+    }
 
-  // Handle 204 No Content (e.g., DELETE responses)
-  if (response.status === 204) {
-    return undefined as T;
-  }
+    // Handle 204 No Content (e.g., DELETE responses)
+    if (response.status === 204) {
+      return undefined as T;
+    }
 
-  return response.json();
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle timeout (AbortError)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+
+    throw error;
+  }
 }
 
 // Types
