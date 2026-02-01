@@ -19,9 +19,10 @@
 | Re-Audit 2026-02-01 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Re-Audit 2026-02-01 (Round 2) | 0 | 0 | 0 | 0 | 0 | 7 |
 | Re-Audit 2026-02-01 (Round 3: Backup/RBAC) | 0 | 0 | 0 | 0 | 0 | 7 |
-| **Total** | **0** | **0** | **0** | **1** | **1** | **82** |
+| Re-Audit 2026-02-01 (Round 4: Final Audit) | 0 | 0 | 0 | 0 | 0 | 6 |
+| **Total** | **0** | **0** | **0** | **1** | **1** | **88** |
 
-**Progress: 82 of 83 findings fixed (99%)**
+**Progress: 88 of 89 findings fixed (99%)**
 
 ### Remaining Open Findings Summary
 - 1 LOW: SEC-25 (No SQL injection test coverage - testing improvement, not vulnerability)
@@ -661,6 +662,52 @@ All critical, high, and medium severity security issues have been resolved. The 
 - **File:** backend/src/licence_api/routers/settings.py:212
 - **Description:** Arbitrary key parameter could request sensitive settings
 - **Fix:** Added Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$") validation
+
+---
+
+## 14. Re-Audit Findings (2026-02-01 - Round 4: Final Comprehensive Audit)
+
+### SEC-V12-001 [MEDIUM] - NotificationRule DTOs Missing Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/settings.py:52-66
+- **Description:** event_type, slack_channel, template fields have no max_length
+- **Fix:** Added Field(max_length) to all string fields: event_type=100, slack_channel=255, template=5000
+
+### SEC-V12-002 [MEDIUM] - CompanyDomainsRequest Missing Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/settings.py:27-30
+- **Description:** domains list has no size limit, individual domains have no max_length
+- **Fix:** Added max_length=100 for list, field_validator for domain max 255 chars
+
+### SEC-V12-003 [LOW] - RefreshTokenRequest Missing Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/auth.py:21
+- **Description:** refresh_token field has no min/max length validation
+- **Fix:** Added Field(max_length=2000) to refresh_token field
+
+### SEC-V12-004 [LOW] - Auth DTO user_agent Missing max_length
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/auth.py:129
+- **Description:** user_agent field has no max_length constraint
+- **Fix:** Added Field(max_length=1000) to user_agent, Field(max_length=45) to ip_address
+
+### SEC-V12-005 [LOW] - Payment Methods Router RBAC Inconsistency
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/payment_methods.py:32,63
+- **Description:** Uses get_current_user instead of require_permission
+- **Fix:** Changed to require_permission(Permissions.SETTINGS_VIEW) for list and get endpoints
+
+### SEC-V12-006 [LOW] - Provider Files Router RBAC Inconsistency
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/provider_files.py:68,156,187
+- **Description:** Uses get_current_user instead of require_permission for list, download, view endpoints
+- **Fix:** Changed to require_permission(Permissions.PROVIDERS_VIEW) for all read endpoints
 
 ---
 
