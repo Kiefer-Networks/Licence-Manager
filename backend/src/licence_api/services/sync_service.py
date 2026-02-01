@@ -413,7 +413,33 @@ class SyncService:
 
         # Get provider config for pricing
         provider_orm = await self.provider_repo.get_by_id(provider_id)
-        pricing_config = (provider_orm.config or {}).get("license_pricing", {}) if provider_orm else {}
+        provider_config = provider_orm.config or {} if provider_orm else {}
+        pricing_config = provider_config.get("license_pricing", {})
+        package_pricing = provider_config.get("package_pricing")
+
+        # Calculate package pricing (cost per license = total / license_count)
+        package_monthly_cost: Decimal | None = None
+        package_currency = "EUR"
+        if package_pricing and len(licenses) > 0:
+            total_cost = Decimal(str(package_pricing.get("cost", "0")))
+            billing_cycle = package_pricing.get("billing_cycle", "yearly")
+            package_currency = package_pricing.get("currency", "EUR")
+
+            # Convert to monthly cost
+            if billing_cycle == "yearly":
+                monthly_total = total_cost / 12
+            elif billing_cycle == "monthly":
+                monthly_total = total_cost
+            else:
+                monthly_total = Decimal("0")
+
+            # Divide by number of licenses to get cost per license
+            if monthly_total > 0:
+                package_monthly_cost = monthly_total / len(licenses)
+                logger.info(
+                    f"Package pricing: {total_cost} {package_currency}/{billing_cycle} "
+                    f"/ {len(licenses)} licenses = {package_monthly_cost:.2f}/month per license"
+                )
 
         # Get company domains for matching
         settings_repo = SettingsRepository(self.session)
@@ -432,12 +458,16 @@ class SyncService:
                 lic_data["external_user_id"],
             )
 
-            # Apply pricing from config if available
+            # Apply pricing: package pricing takes precedence, then per-type pricing
             monthly_cost = lic_data.get("monthly_cost")
             currency = lic_data.get("currency", "EUR")
             license_type = lic_data.get("license_type")
 
-            if license_type and license_type in pricing_config:
+            if package_monthly_cost is not None:
+                # Package pricing: same cost for all licenses
+                monthly_cost = package_monthly_cost
+                currency = package_currency
+            elif license_type and license_type in pricing_config:
                 price_info = pricing_config[license_type]
                 cost = Decimal(price_info.get("cost", "0"))
                 billing_cycle = price_info.get("billing_cycle", "yearly")
