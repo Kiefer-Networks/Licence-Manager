@@ -34,6 +34,7 @@ from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.file_validation import validate_svg_content
+from licence_api.middleware.error_handler import sanitize_error_for_audit
 
 router = APIRouter()
 
@@ -449,14 +450,14 @@ async def trigger_sync(
 
         return SyncResponse(success=True, results=results)
     except Exception as e:
-        # Audit failed sync
+        # Audit failed sync with sanitized error details
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
             request=request,
-            details={"error": str(e), "success": False},
+            details={"success": False, **sanitize_error_for_audit(e)},
         )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
@@ -495,14 +496,14 @@ async def sync_provider(
             detail="Provider not found",
         )
     except Exception as e:
-        # Audit failed sync
+        # Audit failed sync with sanitized error details
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=provider_id,
             user=current_user,
             request=request,
-            details={"error": str(e), "success": False},
+            details={"success": False, **sanitize_error_for_audit(e)},
         )
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
@@ -870,13 +871,13 @@ async def resync_avatars(
             detail="HiBob provider not configured",
         )
     except Exception as e:
-        # Audit failed sync
+        # Audit failed sync with sanitized error details
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
             user=current_user,
             request=http_request,
-            details={"action": "avatar_resync", "error": str(e), "success": False},
+            details={"action": "avatar_resync", "success": False, **sanitize_error_for_audit(e)},
         )
         return SyncResponse(success=False, results={"error": "Avatar sync failed"})

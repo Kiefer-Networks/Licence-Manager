@@ -259,6 +259,69 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+def sanitize_error_for_audit(error: Exception) -> dict[str, str]:
+    """Sanitize exception information for audit log storage.
+
+    This function removes potentially sensitive details from exceptions
+    before storing them in audit logs. It avoids exposing:
+    - File system paths
+    - Database connection strings
+    - Stack traces
+    - Internal module names
+
+    Args:
+        error: The exception to sanitize
+
+    Returns:
+        Dict with 'error_type' and 'error_code' keys
+    """
+    import re
+
+    error_type = type(error).__name__
+
+    # Map exception types to safe error codes
+    error_code_map = {
+        "ConnectionError": "CONNECTION_FAILED",
+        "TimeoutError": "TIMEOUT",
+        "ValueError": "INVALID_VALUE",
+        "KeyError": "MISSING_KEY",
+        "TypeError": "TYPE_ERROR",
+        "AttributeError": "ATTRIBUTE_ERROR",
+        "PermissionError": "PERMISSION_DENIED",
+        "FileNotFoundError": "FILE_NOT_FOUND",
+        "IOError": "IO_ERROR",
+        "OSError": "OS_ERROR",
+        "HTTPException": "HTTP_ERROR",
+        "IntegrityError": "DATABASE_INTEGRITY_ERROR",
+        "OperationalError": "DATABASE_OPERATION_ERROR",
+        "ProgrammingError": "DATABASE_PROGRAMMING_ERROR",
+    }
+
+    error_code = error_code_map.get(error_type, "UNKNOWN_ERROR")
+
+    # For safe error types, include a sanitized message (no paths, no secrets)
+    error_msg = str(error)
+
+    # Remove file paths (Unix and Windows)
+    error_msg = re.sub(r"['\"]?(/[a-zA-Z0-9_./\-]+|[A-Z]:\\[^\s'\"]+)['\"]?", "[PATH]", error_msg)
+
+    # Remove anything that looks like a connection string
+    error_msg = re.sub(r"(postgresql|mysql|sqlite|mongodb|redis)://[^\s]+", "[CONNECTION_STRING]", error_msg)
+
+    # Remove email addresses
+    error_msg = re.sub(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", "[EMAIL]", error_msg)
+
+    # Truncate long messages
+    if len(error_msg) > 100:
+        error_msg = error_msg[:97] + "..."
+
+    return {
+        "error_type": error_type,
+        "error_code": error_code,
+        "error_summary": error_msg,
+    }
+
+
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
     """Handle SQLAlchemy exceptions without leaking database details.
 
