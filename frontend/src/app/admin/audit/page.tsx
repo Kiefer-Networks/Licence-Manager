@@ -236,7 +236,7 @@ export default function AuditLogPage() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export failed:', err);
+      // Error is re-thrown and will be handled by caller
       throw err;
     } finally {
       setIsExporting(false);

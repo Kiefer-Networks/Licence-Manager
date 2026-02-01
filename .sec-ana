@@ -330,6 +330,14 @@ if (!contentType.includes('application/json')) {
 - **Risk:** Reduced CSP effectiveness (XSS still mitigated by other controls)
 - **Mitigation:** Added documentation comment explaining the limitation and TODO to switch to nonce-based CSP when Next.js adds native support. Other XSS controls (input sanitization, no dangerouslySetInnerHTML) remain in place.
 
+### SEC-46 [LOW] - Console Error Logging in Export Function
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** frontend/src/app/admin/audit/page.tsx:239
+- **Description:** Export error was logged with console.error before re-throwing, exposing error details in browser console.
+- **Risk:** Information disclosure in browser DevTools
+- **Fix:** Removed console.error call; error is re-thrown and handled by caller
+
 ---
 
 ## 7. Configuration
