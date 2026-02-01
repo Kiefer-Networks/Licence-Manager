@@ -98,7 +98,7 @@ export default function AdminUsersPage() {
       setUsers(usersResponse.items);
       setRoles(rolesResponse.items);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+      const errorMessage = err instanceof Error ? err.message : tCommon('operationFailed');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -111,7 +111,7 @@ export default function AdminUsersPage() {
       const response = await api.getAdminUsers({ search });
       setUsers(response.items);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Search failed';
+      const errorMessage = err instanceof Error ? err.message : t('searchFailed');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -166,7 +166,7 @@ export default function AdminUsersPage() {
       setCreateDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create user';
+      const errorMessage = err instanceof Error ? err.message : t('failedToCreate');
       setFormErrors([errorMessage]);
     } finally {
       setIsSubmitting(false);
@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
       setEditDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update user';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setFormErrors([errorMessage]);
     } finally {
       setIsSubmitting(false);
@@ -207,7 +207,7 @@ export default function AdminUsersPage() {
       setDeleteDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete user';
+      const errorMessage = err instanceof Error ? err.message : t('failedToDelete');
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -222,7 +222,7 @@ export default function AdminUsersPage() {
       const result = await api.resetAdminUserPassword(selectedUser.id);
       setTemporaryPassword(result.temporary_password);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to reset password';
+      const errorMessage = err instanceof Error ? err.message : t('failedToResetPassword');
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -253,11 +253,11 @@ export default function AdminUsersPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>User Management</CardTitle>
-              <CardDescription>Manage admin users and their roles</CardDescription>
+              <CardTitle>{t('userManagement')}</CardTitle>
+              <CardDescription>{t('manageUsersDescription')}</CardDescription>
             </div>
             {canCreate && (
-              <Button onClick={openCreateDialog}>Add User</Button>
+              <Button onClick={openCreateDialog}>{t('addUser')}</Button>
             )}
           </div>
         </CardHeader>
@@ -265,31 +265,31 @@ export default function AdminUsersPage() {
           {error && (
             <div className="mb-4 bg-destructive/10 text-destructive text-sm p-3 rounded-md">
               {error}
-              <button className="ml-2 underline" onClick={() => setError('')}>Dismiss</button>
+              <button className="ml-2 underline" onClick={() => setError('')}>{t('dismiss')}</button>
             </div>
           )}
 
           <div className="flex gap-2 mb-4">
             <Input
-              placeholder="Search by email or name..."
+              placeholder={t('searchByEmailOrName')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="max-w-sm"
             />
-            <Button variant="outline" onClick={handleSearch}>Search</Button>
-            <Button variant="ghost" onClick={() => { setSearch(''); loadData(); }}>Clear</Button>
+            <Button variant="outline" onClick={handleSearch}>{tCommon('search')}</Button>
+            <Button variant="ghost" onClick={() => { setSearch(''); loadData(); }}>{tCommon('clear')}</Button>
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{tCommon('email')}</TableHead>
+                <TableHead>{tCommon('name')}</TableHead>
+                <TableHead>{t('roles')}</TableHead>
+                <TableHead>{tCommon('status')}</TableHead>
+                <TableHead>{t('lastLogin')}</TableHead>
+                <TableHead className="text-right">{tCommon('actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -311,34 +311,34 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell>
                     {!user.is_active ? (
-                      <Badge variant="secondary">Inactive</Badge>
+                      <Badge variant="secondary">{tCommon('inactive')}</Badge>
                     ) : user.require_password_change ? (
-                      <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Password Change Required</Badge>
+                      <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">{t('passwordChangeRequired')}</Badge>
                     ) : (
-                      <Badge variant="default" className="bg-green-600">Active</Badge>
+                      <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
                     )}
                   </TableCell>
                   <TableCell>
                     {user.last_login_at
                       ? new Date(user.last_login_at).toLocaleString()
-                      : 'Never'}
+                      : t('never')}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">
-                          Actions
+                          {tCommon('actions')}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {canUpdate && (
                           <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                            Edit
+                            {tCommon('edit')}
                           </DropdownMenuItem>
                         )}
                         {canResetPassword && (
                           <DropdownMenuItem onClick={() => openResetPasswordDialog(user)}>
-                            Reset Password
+                            {t('resetPassword')}
                           </DropdownMenuItem>
                         )}
                         {canDelete && user.id !== currentUser?.id && (
@@ -348,7 +348,7 @@ export default function AdminUsersPage() {
                               className="text-destructive"
                               onClick={() => openDeleteDialog(user)}
                             >
-                              Delete
+                              {tCommon('delete')}
                             </DropdownMenuItem>
                           </>
                         )}
@@ -360,7 +360,7 @@ export default function AdminUsersPage() {
               {users.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No users found
+                    {t('noUsersFound')}
                   </TableCell>
                 </TableRow>
               )}
@@ -383,7 +383,7 @@ export default function AdminUsersPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="create-email">Email</Label>
+              <Label htmlFor="create-email">{tCommon('email')}</Label>
               <Input
                 id="create-email"
                 type="email"
@@ -393,7 +393,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-name">Name (optional)</Label>
+              <Label htmlFor="create-name">{t('nameOptional')}</Label>
               <Input
                 id="create-name"
                 value={formData.name}
@@ -401,7 +401,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-password">Password</Label>
+              <Label htmlFor="create-password">{tCommon('password')}</Label>
               <Input
                 id="create-password"
                 type="password"
@@ -411,11 +411,11 @@ export default function AdminUsersPage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Minimum 12 characters, including uppercase, lowercase, number, and special character.
+                {t('passwordRequirementsText')}
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Roles</Label>
+              <Label>{t('roles')}</Label>
               <div className="flex flex-wrap gap-2">
                 {roles.map((role) => (
                   <Badge
@@ -455,7 +455,7 @@ export default function AdminUsersPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="edit-email">Email</Label>
+              <Label htmlFor="edit-email">{tCommon('email')}</Label>
               <Input
                 id="edit-email"
                 type="email"
@@ -465,7 +465,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name (optional)</Label>
+              <Label htmlFor="edit-name">{t('nameOptional')}</Label>
               <Input
                 id="edit-name"
                 value={formData.name}
@@ -473,7 +473,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Roles</Label>
+              <Label>{t('roles')}</Label>
               <div className="flex flex-wrap gap-2">
                 {roles.map((role) => (
                   <Badge
@@ -523,34 +523,34 @@ export default function AdminUsersPage() {
       <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
+            <DialogTitle>{t('resetPassword')}</DialogTitle>
             <DialogDescription>
               {temporaryPassword
-                ? 'A temporary password has been generated.'
-                : `Reset password for ${selectedUser?.email}?`}
+                ? t('temporaryPasswordGenerated')
+                : t('resetPasswordFor', { email: selectedUser?.email || '' })}
             </DialogDescription>
           </DialogHeader>
           {temporaryPassword ? (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-md">
-                <Label className="text-sm text-muted-foreground">Temporary Password</Label>
+                <Label className="text-sm text-muted-foreground">{t('temporaryPassword')}</Label>
                 <div className="font-mono text-lg mt-1 select-all">{temporaryPassword}</div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Please share this password securely with the user. They will be required to change it on first login.
+                {t('sharePasswordSecurely')}
               </p>
             </div>
           ) : null}
           <DialogFooter>
             {temporaryPassword ? (
-              <Button onClick={() => setResetPasswordDialogOpen(false)}>Done</Button>
+              <Button onClick={() => setResetPasswordDialogOpen(false)}>{t('done')}</Button>
             ) : (
               <>
                 <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
-                  Cancel
+                  {tCommon('cancel')}
                 </Button>
                 <Button onClick={handleResetPassword} disabled={isSubmitting}>
-                  {isSubmitting ? 'Resetting...' : 'Reset Password'}
+                  {isSubmitting ? t('resetting') : t('resetPassword')}
                 </Button>
               </>
             )}

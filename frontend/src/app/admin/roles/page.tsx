@@ -95,7 +95,7 @@ export default function AdminRolesPage() {
       setRoles(rolesResponse.items);
       setPermissionsByCategory(permissionsResponse);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+      const errorMessage = err instanceof Error ? err.message : tCommon('operationFailed');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -155,7 +155,7 @@ export default function AdminRolesPage() {
       setCreateDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create role';
+      const errorMessage = err instanceof Error ? err.message : t('failedToCreate');
       setFormErrors([errorMessage]);
     } finally {
       setIsSubmitting(false);
@@ -176,7 +176,7 @@ export default function AdminRolesPage() {
       setEditDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update role';
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setFormErrors([errorMessage]);
     } finally {
       setIsSubmitting(false);
@@ -192,7 +192,7 @@ export default function AdminRolesPage() {
       setDeleteDialogOpen(false);
       await loadData();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete role';
+      const errorMessage = err instanceof Error ? err.message : t('failedToDelete');
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -245,13 +245,13 @@ export default function AdminRolesPage() {
   const renderPermissionSelector = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <Label>Permissions</Label>
+        <Label>{t('permissions')}</Label>
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" onClick={selectAllPermissions}>
-            Select All
+            {t('selectAll')}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={clearAllPermissions}>
-            Clear All
+            {t('clearAll')}
           </Button>
         </div>
       </div>
@@ -279,7 +279,7 @@ export default function AdminRolesPage() {
                     onChange={() => toggleCategoryPermissions(category)}
                     className="rounded"
                   />
-                  <span className="text-sm font-medium">Select all {category}</span>
+                  <span className="text-sm font-medium">{t('selectAllCategory', { category })}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
                   {permissions.map(permission => (
@@ -318,11 +318,11 @@ export default function AdminRolesPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Role Management</CardTitle>
-              <CardDescription>Manage roles and their permissions</CardDescription>
+                <CardTitle>{t('roleManagement')}</CardTitle>
+              <CardDescription>{t('manageRolesDescription')}</CardDescription>
             </div>
             {canCreate && (
-              <Button onClick={openCreateDialog}>Create Role</Button>
+              <Button onClick={openCreateDialog}>{t('addRole')}</Button>
             )}
           </div>
         </CardHeader>
@@ -330,20 +330,20 @@ export default function AdminRolesPage() {
           {error && (
             <div className="mb-4 bg-destructive/10 text-destructive text-sm p-3 rounded-md">
               {error}
-              <button className="ml-2 underline" onClick={() => setError('')}>Dismiss</button>
+              <button className="ml-2 underline" onClick={() => setError('')}>{tCommon('close')}</button>
             </div>
           )}
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Permissions</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t('code')}</TableHead>
+                <TableHead>{tCommon('name')}</TableHead>
+                <TableHead>{tCommon('description')}</TableHead>
+                <TableHead>{t('type')}</TableHead>
+                <TableHead>{t('priority')}</TableHead>
+                <TableHead>{t('permissions')}</TableHead>
+                <TableHead className="text-right">{tCommon('actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -354,7 +354,7 @@ export default function AdminRolesPage() {
                   <TableCell className="max-w-xs truncate">{role.description || '-'}</TableCell>
                   <TableCell>
                     <Badge variant={role.is_system ? 'default' : 'secondary'}>
-                      {role.is_system ? 'System' : 'Custom'}
+                      {role.is_system ? t('system') : t('custom')}
                     </Badge>
                   </TableCell>
                   <TableCell>{role.priority}</TableCell>
@@ -403,7 +403,7 @@ export default function AdminRolesPage() {
               {roles.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    No roles found
+                    {t('noRolesFound')}
                   </TableCell>
                 </TableRow>
               )}
@@ -427,34 +427,34 @@ export default function AdminRolesPage() {
             )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="create-code">Code</Label>
+                <Label htmlFor="create-code">{t('code')}</Label>
                 <Input
                   id="create-code"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-                  placeholder="e.g., license_manager"
+                  placeholder={t('codePlaceholder')}
                   required
                 />
-                <p className="text-xs text-muted-foreground">Lowercase letters, numbers, and underscores only.</p>
+                <p className="text-xs text-muted-foreground">{t('lowercaseOnly')}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-name">Name</Label>
+                <Label htmlFor="create-name">{tCommon('name')}</Label>
                 <Input
                   id="create-name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., License Manager"
+                  placeholder={t('namePlaceholder')}
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-description">Description</Label>
+              <Label htmlFor="create-description">{tCommon('description')}</Label>
               <Textarea
                 id="create-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe what this role is for..."
+                placeholder={t('descriptionPlaceholder')}
                 rows={2}
               />
             </div>
@@ -486,7 +486,7 @@ export default function AdminRolesPage() {
             )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-code">Code</Label>
+                <Label htmlFor="edit-code">{t('code')}</Label>
                 <Input
                   id="edit-code"
                   value={formData.code}
@@ -495,7 +495,7 @@ export default function AdminRolesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-name">Name</Label>
+                <Label htmlFor="edit-name">{tCommon('name')}</Label>
                 <Input
                   id="edit-name"
                   value={formData.name}
@@ -505,7 +505,7 @@ export default function AdminRolesPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="edit-description">{t('description')}</Label>
               <Textarea
                 id="edit-description"
                 value={formData.description}
@@ -530,9 +530,9 @@ export default function AdminRolesPage() {
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{selectedRole?.name} - Permissions</DialogTitle>
+            <DialogTitle>{t('rolePermissions', { name: selectedRole?.name ?? '' })}</DialogTitle>
             <DialogDescription>
-              {selectedRole?.description || `Permissions assigned to the ${selectedRole?.name} role.`}
+              {selectedRole?.description || t('permissionsAssignedTo', { name: selectedRole?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-96 overflow-y-auto">
@@ -563,7 +563,7 @@ export default function AdminRolesPage() {
               ));
             })()}
             {(selectedRole?.permissions || []).length === 0 && (
-              <p className="text-muted-foreground text-center py-4">No permissions assigned.</p>
+              <p className="text-muted-foreground text-center py-4">{t('noPermissionsAssigned')}</p>
             )}
           </div>
           <DialogFooter>

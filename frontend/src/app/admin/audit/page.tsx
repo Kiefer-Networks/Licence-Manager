@@ -32,7 +32,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Loader2, ChevronLeft, ChevronRight, FileText, RefreshCw, Filter, Eye } from 'lucide-react';
 import { getLocale } from '@/lib/locale';
 
-function formatRelativeTime(dateString: string): string {
+function formatRelativeTime(dateString: string, t: (key: string, params?: Record<string, number>) => string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -41,10 +41,10 @@ function formatRelativeTime(dateString: string): string {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffSec < 60) return t('justNow');
+  if (diffMin < 60) return t('minutesAgo', { min: diffMin });
+  if (diffHour < 24) return t('hoursAgo', { hours: diffHour });
+  if (diffDay < 7) return t('daysAgo', { days: diffDay });
 
   return date.toLocaleDateString(getLocale(), {
     day: '2-digit',
@@ -139,7 +139,7 @@ export default function AuditLogPage() {
       setTotalPages(response.total_pages);
       setTotal(response.total);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load audit logs';
+      const errorMessage = err instanceof Error ? err.message : t('failedToLoad');
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -191,10 +191,10 @@ export default function AuditLogPage() {
           <Filter className="h-4 w-4 text-muted-foreground" />
           <Select value={actionFilter || "__all__"} onValueChange={(v) => { setActionFilter(v === "__all__" ? "" : v); setPage(1); }}>
             <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="All Actions" />
+              <SelectValue placeholder={t('allActions')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Actions</SelectItem>
+              <SelectItem value="__all__">{t('allActions')}</SelectItem>
               {availableActions.map((action) => (
                 <SelectItem key={action} value={action}>
                   {action}
@@ -205,10 +205,10 @@ export default function AuditLogPage() {
 
           <Select value={resourceTypeFilter || "__all__"} onValueChange={(v) => { setResourceTypeFilter(v === "__all__" ? "" : v); setPage(1); }}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Resources" />
+              <SelectValue placeholder={t('allResources')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Resources</SelectItem>
+              <SelectItem value="__all__">{t('allResources')}</SelectItem>
               {availableResourceTypes.map((type) => (
                 <SelectItem key={type} value={type}>
                   {type}
@@ -219,14 +219,14 @@ export default function AuditLogPage() {
 
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={handleClearFilters}>
-              Clear Filters
+              {tCommon('clear')}
             </Button>
           )}
 
           <div className="flex-1" />
 
           <span className="text-sm text-muted-foreground">
-            {total.toLocaleString()} entries
+            {t('entries', { count: total })}
           </span>
         </div>
 
@@ -264,12 +264,12 @@ export default function AuditLogPage() {
                   <TableRow key={log.id} className="hover:bg-zinc-50">
                     <TableCell className="text-sm">
                       <span title={new Date(log.created_at).toLocaleString(getLocale())}>
-                        {formatRelativeTime(log.created_at)}
+                        {formatRelativeTime(log.created_at, t)}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm">
                       {log.admin_user_email || (
-                        <span className="text-muted-foreground italic">System</span>
+                        <span className="text-muted-foreground italic">{t('systemUser')}</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -313,7 +313,7 @@ export default function AuditLogPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-2">
             <p className="text-sm text-muted-foreground">
-              Page {page} of {totalPages}
+              {t('pageOf', { page, total: totalPages })}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -323,7 +323,7 @@ export default function AuditLogPage() {
                 disabled={page === 1 || isLoading}
               >
                 <ChevronLeft className="h-4 w-4" />
-                Previous
+                {t('previous')}
               </Button>
               <Button
                 variant="outline"
@@ -331,7 +331,7 @@ export default function AuditLogPage() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages || isLoading}
               >
-                Next
+                {tCommon('next')}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -343,13 +343,13 @@ export default function AuditLogPage() {
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Audit Log Details</DialogTitle>
+            <DialogTitle>{t('auditLogDetails')}</DialogTitle>
           </DialogHeader>
           {selectedLog && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Timestamp</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('timestamp')}</p>
                   <p className="text-sm">
                     {new Date(selectedLog.created_at).toLocaleString(getLocale(), {
                       dateStyle: 'full',
@@ -358,32 +358,32 @@ export default function AuditLogPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">User</p>
-                  <p className="text-sm">{selectedLog.admin_user_email || 'System'}</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('user')}</p>
+                  <p className="text-sm">{selectedLog.admin_user_email || t('systemUser')}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Action</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('action')}</p>
                   <Badge variant="outline" className={getActionBadgeColor(selectedLog.action)}>
                     {selectedLog.action}
                   </Badge>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Resource Type</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('resourceType')}</p>
                   <p className="text-sm font-medium">{selectedLog.resource_type}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Resource ID</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('resource')}</p>
                   <p className="text-sm font-mono">{selectedLog.resource_id || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">IP Address</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('ipAddress')}</p>
                   <p className="text-sm font-mono">{selectedLog.ip_address || '-'}</p>
                 </div>
               </div>
 
               {selectedLog.changes && Object.keys(selectedLog.changes).length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Changes</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">{t('changes')}</p>
                   <div className="bg-zinc-50 rounded-lg p-3 overflow-auto max-h-64">
                     <pre className="text-xs font-mono whitespace-pre-wrap">
                       {JSON.stringify(selectedLog.changes, null, 2)}
