@@ -1,4 +1,4 @@
-# Security Audit Findings v10
+# Security Audit Findings v11
 # Generated: 2026-02-01
 # Status: Complete Re-Audit - All Security Issues Resolved
 
@@ -18,9 +18,10 @@
 | Service Account License Types | 0 | 0 | 0 | 0 | 0 | 6 |
 | Re-Audit 2026-02-01 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Re-Audit 2026-02-01 (Round 2) | 0 | 0 | 0 | 0 | 0 | 7 |
-| **Total** | **0** | **0** | **0** | **1** | **1** | **75** |
+| Re-Audit 2026-02-01 (Round 3: Backup/RBAC) | 0 | 0 | 0 | 0 | 0 | 7 |
+| **Total** | **0** | **0** | **0** | **1** | **1** | **82** |
 
-**Progress: 75 of 76 findings fixed (99%)**
+**Progress: 82 of 83 findings fixed (99%)**
 
 ### Remaining Open Findings Summary
 - 1 LOW: SEC-25 (No SQL injection test coverage - testing improvement, not vulnerability)
@@ -607,6 +608,59 @@ All critical, high, and medium severity security issues have been resolved. The 
 - **Files:** payment_method.py, license_package.py, organization_license.py, admin_account.py
 - **Description:** notes fields lack max_length constraints
 - **Fix:** Added Field(max_length=2000) to all notes fields, added max_length to all string fields
+
+---
+
+## 13. Re-Audit Findings (2026-02-01 - Round 3: Backup/RBAC/MVC Focus)
+
+### SEC-V11-001 [CRITICAL] - Missing Path Import in Provider File Service
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/services/provider_file_service.py:155,159,269
+- **Description:** Path class from pathlib used but never imported - causes runtime NameError
+- **Fix:** Added `from pathlib import Path` to imports
+
+### SEC-V11-002 [HIGH] - Provider DTO Missing Input Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/provider.py:15-18
+- **Description:** name, display_name fields have no max_length
+- **Fix:** Added Field(max_length=100) to name, Field(max_length=255) to display_name and logo_url
+
+### SEC-V11-003 [HIGH] - Backup Password Missing max_length
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/backup.py:10
+- **Description:** BackupExportRequest password field has min_length but no max_length
+- **Fix:** Added max_length=256 to password field
+
+### SEC-V11-004 [MEDIUM] - Restore Endpoint Password Form Field Validation
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/backup.py:141
+- **Description:** Restore password from Form() has no max_length constraint
+- **Fix:** Added max_length=256 to Form() validation
+
+### SEC-V11-005 [MEDIUM] - Organization License Quantity Missing ge Constraint
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/organization_license.py:15
+- **Description:** quantity field can be negative or zero
+- **Fix:** Added Field(ge=1) to quantity and Field(ge=0) to monthly_cost
+
+### SEC-V11-006 [MEDIUM] - Reports Endpoint Department Parameter Unvalidated
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/reports.py:43,62,72,82
+- **Description:** department query parameter has no max_length
+- **Fix:** Added max_length=100 to all department Query() parameters
+
+### SEC-V11-007 [LOW] - Settings Key Parameter Unvalidated
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/settings.py:212
+- **Description:** Arbitrary key parameter could request sensitive settings
+- **Fix:** Added Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$") validation
 
 ---
 
