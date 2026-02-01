@@ -101,8 +101,16 @@ class Settings(BaseSettings):
     audit_retention_days: int = 365  # How long to keep audit logs
 
     @model_validator(mode="after")
-    def validate_database_url(self) -> "Settings":
-        """Validate database URL format and security requirements."""
+    def validate_settings(self) -> "Settings":
+        """Validate settings for security requirements."""
+        # Security: Prevent debug mode in production
+        if self.environment == "production" and self.debug:
+            raise ValueError(
+                "DEBUG mode cannot be enabled in production environment. "
+                "This would expose API documentation and detailed error messages."
+            )
+
+        # Validate database URL format
         url = str(self.database_url)
 
         # Ensure PostgreSQL URL format

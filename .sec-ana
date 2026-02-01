@@ -348,6 +348,14 @@ if (!contentType.includes('application/json')) {
   - setup/page.tsx: setHibobAuthToken('') on unmount
   - providers/page.tsx: setCredentials({}) on unmount
 
+### SEC-48 [MEDIUM] - Debug Mode Allowed in Production
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/config.py
+- **Description:** No validation prevented DEBUG=true in production environment. This would expose API documentation (/docs, /redoc) and detailed error messages.
+- **Risk:** Information disclosure, API structure exposure
+- **Fix:** Added model validator that raises ValueError if debug=True when environment=production
+
 ---
 
 ## 7. Configuration
