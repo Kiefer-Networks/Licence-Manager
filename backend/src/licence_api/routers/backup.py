@@ -138,7 +138,7 @@ async def restore_backup(
     service: Annotated[BackupService, Depends(get_backup_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
-    password: str = Form(..., min_length=8),
+    password: str = Form(..., min_length=8, max_length=256),
 ) -> RestoreResponse:
     """Restore system from an encrypted backup.
 
