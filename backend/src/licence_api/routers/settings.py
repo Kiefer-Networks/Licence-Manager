@@ -4,7 +4,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -27,7 +27,16 @@ class SettingValue(BaseModel):
 class CompanyDomainsRequest(BaseModel):
     """Company domains request."""
 
-    domains: list[str]
+    domains: list[str] = Field(max_length=100)  # Max 100 domains
+
+    @field_validator("domains")
+    @classmethod
+    def validate_domains(cls, v: list[str]) -> list[str]:
+        """Validate each domain has max length."""
+        for domain in v:
+            if len(domain) > 255:
+                raise ValueError("Each domain must be max 255 characters")
+        return v
 
 
 class CompanyDomainsResponse(BaseModel):
@@ -39,11 +48,11 @@ class CompanyDomainsResponse(BaseModel):
 class ThresholdSettings(BaseModel):
     """Threshold settings for warnings and notifications."""
 
-    inactive_days: int = 30
-    expiring_days: int = 90
-    low_utilization_percent: int = 70
-    cost_increase_percent: int = 20
-    max_unassigned_licenses: int = 10
+    inactive_days: int = Field(default=30, ge=1, le=365)
+    expiring_days: int = Field(default=90, ge=1, le=365)
+    low_utilization_percent: int = Field(default=70, ge=0, le=100)
+    cost_increase_percent: int = Field(default=20, ge=0, le=1000)
+    max_unassigned_licenses: int = Field(default=10, ge=0, le=10000)
 
 
 DEFAULT_THRESHOLDS = ThresholdSettings()
@@ -52,16 +61,16 @@ DEFAULT_THRESHOLDS = ThresholdSettings()
 class NotificationRuleCreate(BaseModel):
     """Create notification rule request."""
 
-    event_type: str
-    slack_channel: str
-    template: str | None = None
+    event_type: str = Field(max_length=100)
+    slack_channel: str = Field(max_length=255)
+    template: str | None = Field(default=None, max_length=5000)
 
 
 class NotificationRuleUpdate(BaseModel):
     """Update notification rule request."""
 
-    slack_channel: str | None = None
-    template: str | None = None
+    slack_channel: str | None = Field(default=None, max_length=255)
+    template: str | None = Field(default=None, max_length=5000)
     enabled: bool | None = None
 
 
