@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,10 @@ interface ServiceAccountsTabProps {
 }
 
 export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabProps) {
+  const t = useTranslations('serviceAccounts');
+  const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
+
   // Patterns state
   const [patterns, setPatterns] = useState<ServiceAccountPattern[]>([]);
   const [loadingPatterns, setLoadingPatterns] = useState(true);
@@ -101,7 +106,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       const response = await api.getServiceAccountPatterns();
       setPatterns(response.items);
     } catch (error) {
-      showToast('error', 'Failed to load patterns');
+      showToast('error', t('failedToLoadPatterns'));
     } finally {
       setLoadingPatterns(false);
     }
@@ -121,7 +126,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       setLicenses(response.items);
       setLicensesTotal(response.total);
     } catch (error) {
-      showToast('error', 'Failed to load service account licenses');
+      showToast('error', t('failedToLoadLicenses'));
     } finally {
       setLoadingLicenses(false);
     }
@@ -156,7 +161,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       );
       setMatchesLicenses(filtered);
     } catch (error) {
-      showToast('error', 'Failed to load matching licenses');
+      showToast('error', t('failedToLoadMatching'));
     } finally {
       setLoadingMatches(false);
     }
@@ -164,7 +169,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
 
   const handleCreatePattern = async () => {
     if (!newPattern.email_pattern.trim()) {
-      showToast('error', 'Email pattern is required');
+      showToast('error', t('emailPatternRequired'));
       return;
     }
 
@@ -176,12 +181,12 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
         owner_id: newPattern.owner_id || undefined,
         notes: newPattern.notes.trim() || undefined,
       });
-      showToast('success', 'Pattern created');
+      showToast('success', t('patternCreated'));
       setShowAddPattern(false);
       setNewPattern({ email_pattern: '', name: '', owner_id: '', notes: '' });
       loadPatterns();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
+      showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
     } finally {
       setCreatingPattern(false);
     }
@@ -191,10 +196,10 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
     setDeletingPatternId(patternId);
     try {
       await api.deleteServiceAccountPattern(patternId);
-      showToast('success', 'Pattern deleted');
+      showToast('success', t('patternDeleted'));
       loadPatterns();
     } catch (error) {
-      showToast('error', 'Failed to delete pattern');
+      showToast('error', t('failedToDeletePattern'));
     } finally {
       setDeletingPatternId(null);
     }
@@ -205,14 +210,14 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
     try {
       const result = await api.applyServiceAccountPatterns();
       if (result.updated_count > 0) {
-        showToast('success', `Marked ${result.updated_count} license(s) as service accounts`);
+        showToast('success', t('patternsApplied', { count: result.updated_count }));
         loadLicenses();
         loadPatterns();
       } else {
-        showToast('info', 'No new licenses matched');
+        showToast('info', t('noNewMatches'));
       }
     } catch (error) {
-      showToast('error', 'Failed to apply patterns');
+      showToast('error', t('failedToApply'));
     } finally {
       setApplyingPatterns(false);
     }
@@ -250,11 +255,11 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
         name: makeGlobalLicense.service_account_name || undefined,
         owner_id: makeGlobalLicense.service_account_owner_id || undefined,
       });
-      showToast('success', 'Pattern created - this email will now be recognized globally');
+      showToast('success', t('patternCreated'));
       setMakeGlobalLicense(null);
       loadPatterns();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
+      showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
     } finally {
       setMakingGlobal(false);
     }
@@ -274,9 +279,9 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-medium">Global Patterns</h2>
+            <h2 className="text-lg font-medium">{t('patterns')}</h2>
             <p className="text-sm text-muted-foreground">
-              Email patterns that automatically mark licenses as service accounts during sync
+              {t('patternHelp')}
             </p>
           </div>
           <div className="flex gap-2">
@@ -291,11 +296,11 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
               ) : (
                 <Play className="h-4 w-4 mr-2" />
               )}
-              Apply to All Licenses
+              {t('applyToAll')}
             </Button>
             <Button size="sm" onClick={() => setShowAddPattern(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Pattern
+              {t('addPattern')}
             </Button>
           </div>
         </div>
@@ -309,18 +314,18 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           ) : patterns.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
               <Bot className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No patterns configured</p>
-              <p className="text-xs">Add a pattern to automatically detect service accounts</p>
+              <p className="text-sm">{tCommon('noData')}</p>
+              <p className="text-xs">{t('patternHelp')}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-zinc-50/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pattern</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Matches</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('emailPattern')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('matchingLicenses')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -379,9 +384,9 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       {/* Service Account Licenses Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-medium">Service Account Licenses</h2>
+          <h2 className="text-lg font-medium">{t('title')}</h2>
           <p className="text-sm text-muted-foreground">
-            All licenses currently marked as service accounts
+            {t('matchingLicenses')}
           </p>
         </div>
 
@@ -390,7 +395,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <Input
-              placeholder="Search by email..."
+              placeholder={tLicenses('searchPlaceholder')}
               value={licensesSearch}
               onChange={(e) => {
                 setLicensesSearch(e.target.value);
@@ -405,10 +410,10 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
             setLicensesPage(1);
           }}>
             <SelectTrigger className="w-44 h-9 bg-zinc-50 border-zinc-200">
-              <SelectValue placeholder="Provider" />
+              <SelectValue placeholder={tLicenses('provider')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Providers</SelectItem>
+              <SelectItem value="all">{tLicenses('allProviders')}</SelectItem>
               {providers.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   {provider.display_name}
@@ -418,7 +423,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           </Select>
 
           <span className="text-sm text-muted-foreground ml-auto">
-            {licensesTotal} license{licensesTotal !== 1 ? 's' : ''}
+            {tLicenses('licenseCount', { count: licensesTotal })}
           </span>
         </div>
 
@@ -431,7 +436,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           ) : licenses.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <Bot className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No service account licenses</p>
+              <p className="text-sm">{tCommon('noData')}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -439,15 +444,15 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                 <tr className="border-b bg-zinc-50/50">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleLicenseSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Email <SortIcon column="external_user_id" />
+                      {tCommon('email')} <SortIcon column="external_user_id" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">License Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Global</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('provider')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('licenseType')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('patterns')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -483,14 +488,14 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                     <td className="px-4 py-3">
                       <Badge variant={license.status === 'active' ? 'secondary' : 'outline'}
                              className={license.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                        {license.status}
+                        {license.status === 'active' ? tLicenses('active') : tLicenses('inactive')}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isEmailGlobal(license.external_user_id) ? (
                         <div
                           className="inline-flex items-center gap-1 text-emerald-600"
-                          title="This email matches a global pattern"
+                          title={t('emailMatchesGlobalPattern')}
                         >
                           <Check className="h-4 w-4" />
                           <Globe className="h-4 w-4" />
@@ -501,7 +506,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                           size="sm"
                           onClick={() => setMakeGlobalLicense(license)}
                           className="text-muted-foreground hover:text-foreground"
-                          title="Make global pattern"
+                          title={t('makeGlobalPattern')}
                         >
                           <Globe className="h-4 w-4" />
                         </Button>
@@ -518,7 +523,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
         {licensesTotalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Page {licensesPage} of {licensesTotalPages}
+              {tLicenses('pageOf', { page: licensesPage, total: licensesTotalPages })}
             </p>
             <div className="flex gap-2">
               <Button
@@ -527,7 +532,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                 onClick={() => setLicensesPage(licensesPage - 1)}
                 disabled={licensesPage === 1}
               >
-                Previous
+                {tLicenses('previous')}
               </Button>
               <Button
                 variant="outline"
@@ -535,7 +540,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                 onClick={() => setLicensesPage(licensesPage + 1)}
                 disabled={licensesPage === licensesTotalPages}
               >
-                Next
+                {tCommon('next')}
               </Button>
             </div>
           </div>
@@ -548,10 +553,10 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-blue-500" />
-              Matching Licenses
+              {t('matchingLicenses')}
             </DialogTitle>
             <DialogDescription>
-              Licenses matching pattern <code className="bg-zinc-100 px-2 py-0.5 rounded">{matchesDialog?.email_pattern}</code>
+              {t('emailPattern')}: <code className="bg-zinc-100 px-2 py-0.5 rounded">{matchesDialog?.email_pattern}</code>
               {matchesDialog?.name && <span> ({matchesDialog.name})</span>}
             </DialogDescription>
           </DialogHeader>
@@ -563,17 +568,17 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
             ) : matchesLicenses.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                 <Bot className="h-8 w-8 mb-2 opacity-30" />
-                <p className="text-sm">No matching licenses found</p>
+                <p className="text-sm">{t('noNewMatches')}</p>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white">
                   <tr className="border-b bg-zinc-50/50">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">License Type</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('email')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('provider')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('licenseType')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -603,12 +608,12 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                             <span className="text-muted-foreground">{license.service_account_owner_name}</span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-xs">Not assigned</span>
+                          <span className="text-muted-foreground text-xs">{tLicenses('unassigned')}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={license.status === 'active' ? 'secondary' : 'outline'} className={license.status === 'active' ? 'bg-emerald-50 text-emerald-700' : ''}>
-                          {license.status}
+                          {license.status === 'active' ? tLicenses('active') : tLicenses('inactive')}
                         </Badge>
                       </td>
                     </tr>
@@ -618,7 +623,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setMatchesDialog(null)}>Close</Button>
+            <Button variant="ghost" onClick={() => setMatchesDialog(null)}>{tCommon('close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -627,43 +632,41 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       <Dialog open={!!makeGlobalLicense} onOpenChange={(open) => !open && setMakeGlobalLicense(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Make Global Pattern</DialogTitle>
+            <DialogTitle>{t('addPattern')}</DialogTitle>
             <DialogDescription>
-              Add this email as a global pattern. All licenses with this email will automatically
-              be marked as service accounts.
+              {t('patternHelp')}
             </DialogDescription>
           </DialogHeader>
           {makeGlobalLicense && (
             <div className="space-y-4 py-4">
               <div className="p-3 bg-zinc-50 rounded-lg space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Email:</span>
+                  <span className="text-sm text-muted-foreground">{tCommon('email')}:</span>
                   <code className="text-sm bg-white px-2 py-0.5 rounded border">
                     {makeGlobalLicense.external_user_id}
                   </code>
                 </div>
                 {makeGlobalLicense.service_account_name && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Name:</span>
+                    <span className="text-sm text-muted-foreground">{tCommon('name')}:</span>
                     <span className="text-sm">{makeGlobalLicense.service_account_name}</span>
                   </div>
                 )}
                 {makeGlobalLicense.service_account_owner_name && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Owner:</span>
+                    <span className="text-sm text-muted-foreground">{t('owner')}:</span>
                     <span className="text-sm">{makeGlobalLicense.service_account_owner_name}</span>
                   </div>
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                After adding this pattern, any future syncs will automatically mark licenses
-                with this email as service accounts.
+                {t('patternHelp')}
               </p>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setMakeGlobalLicense(null)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleMakeGlobal} disabled={makingGlobal}>
               {makingGlobal ? (
@@ -671,7 +674,7 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
               ) : (
                 <Globe className="h-4 w-4 mr-2" />
               )}
-              Make Global
+              {t('addPattern')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -681,15 +684,14 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
       <Dialog open={showAddPattern} onOpenChange={setShowAddPattern}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Service Account Pattern</DialogTitle>
+            <DialogTitle>{t('addPattern')}</DialogTitle>
             <DialogDescription>
-              Add an email pattern to automatically detect service accounts.
-              Use * for wildcard matching (e.g., svc-*@company.com).
+              {t('patternHelp')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="email_pattern">Email Pattern *</Label>
+              <Label htmlFor="email_pattern">{t('emailPattern')} *</Label>
               <Input
                 id="email_pattern"
                 placeholder="svc-*@company.com"
@@ -697,26 +699,26 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
                 onChange={(e) => setNewPattern({ ...newPattern, email_pattern: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                Use * for wildcards. Examples: service@company.com, svc-*@company.com
+                {t('patternHelp')}
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{tCommon('name')}</Label>
               <Input
                 id="name"
-                placeholder="CI/CD Service"
+                placeholder={t('serviceNamePlaceholder')}
                 value={newPattern.name}
                 onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="owner">Owner (optional)</Label>
+              <Label htmlFor="owner">{t('owner')} ({tCommon('optional')})</Label>
               <Select value={newPattern.owner_id || '__none__'} onValueChange={(v) => setNewPattern({ ...newPattern, owner_id: v === '__none__' ? '' : v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select owner..." />
+                  <SelectValue placeholder={tCommon('selectOption')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No owner</SelectItem>
+                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
                   {employees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.full_name}
@@ -726,10 +728,10 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes">{t('notes')}</Label>
               <Textarea
                 id="notes"
-                placeholder="Optional notes about this service account..."
+                placeholder={t('notes')}
                 value={newPattern.notes}
                 onChange={(e) => setNewPattern({ ...newPattern, notes: e.target.value })}
               />
@@ -737,13 +739,13 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddPattern(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleCreatePattern} disabled={creatingPattern}>
               {creatingPattern ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
-              Add Pattern
+              {t('addPattern')}
             </Button>
           </DialogFooter>
         </DialogContent>

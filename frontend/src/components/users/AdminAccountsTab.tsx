@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +70,10 @@ interface AdminAccountsTabProps {
 }
 
 export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps) {
+  const t = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
+  const tLicenses = useTranslations('licenses');
+
   // Patterns state
   const [patterns, setPatterns] = useState<AdminAccountPattern[]>([]);
   const [loadingPatterns, setLoadingPatterns] = useState(true);
@@ -120,7 +125,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       const response = await api.getAdminAccountPatterns();
       setPatterns(response.items);
     } catch (error) {
-      showToast('error', 'Failed to load patterns');
+      showToast('error', t('failedToLoadPatterns'));
     } finally {
       setLoadingPatterns(false);
     }
@@ -140,7 +145,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       setLicenses(response.items);
       setLicensesTotal(response.total);
     } catch (error) {
-      showToast('error', 'Failed to load admin account licenses');
+      showToast('error', t('failedToLoadLicenses'));
     } finally {
       setLoadingLicenses(false);
     }
@@ -175,7 +180,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       );
       setMatchesLicenses(filtered);
     } catch (error) {
-      showToast('error', 'Failed to load matching licenses');
+      showToast('error', t('failedToLoadMatching'));
     } finally {
       setLoadingMatches(false);
     }
@@ -183,7 +188,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
 
   const handleCreatePattern = async () => {
     if (!newPattern.email_pattern.trim()) {
-      showToast('error', 'Email pattern is required');
+      showToast('error', t('emailPatternRequired'));
       return;
     }
 
@@ -195,12 +200,12 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
         owner_id: newPattern.owner_id || undefined,
         notes: newPattern.notes.trim() || undefined,
       });
-      showToast('success', 'Pattern created');
+      showToast('success', t('patternCreated'));
       setShowAddPattern(false);
       setNewPattern({ email_pattern: '', name: '', owner_id: '', notes: '' });
       loadPatterns();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
+      showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
     } finally {
       setCreatingPattern(false);
     }
@@ -210,10 +215,10 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
     setDeletingPatternId(patternId);
     try {
       await api.deleteAdminAccountPattern(patternId);
-      showToast('success', 'Pattern deleted');
+      showToast('success', t('patternDeleted'));
       loadPatterns();
     } catch (error) {
-      showToast('error', 'Failed to delete pattern');
+      showToast('error', t('failedToDeletePattern'));
     } finally {
       setDeletingPatternId(null);
     }
@@ -224,14 +229,14 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
     try {
       const result = await api.applyAdminAccountPatterns();
       if (result.updated_count > 0) {
-        showToast('success', `Marked ${result.updated_count} license(s) as admin accounts`);
+        showToast('success', t('patternsApplied', { count: result.updated_count }));
         loadLicenses();
         loadPatterns();
       } else {
-        showToast('info', 'No new licenses matched');
+        showToast('info', t('noNewMatches'));
       }
     } catch (error) {
-      showToast('error', 'Failed to apply patterns');
+      showToast('error', t('failedToApply'));
     } finally {
       setApplyingPatterns(false);
     }
@@ -269,11 +274,11 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
         name: makeGlobalLicense.admin_account_name || undefined,
         owner_id: makeGlobalLicense.admin_account_owner_id || undefined,
       });
-      showToast('success', 'Pattern created - this email will now be recognized globally');
+      showToast('success', t('patternCreated'));
       setMakeGlobalLicense(null);
       loadPatterns();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to create pattern');
+      showToast('error', error instanceof Error ? error.message : t('failedToCreatePattern'));
     } finally {
       setMakingGlobal(false);
     }
@@ -347,9 +352,9 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-medium">Global Patterns</h2>
+            <h2 className="text-lg font-medium">{t('patterns')}</h2>
             <p className="text-sm text-muted-foreground">
-              Email patterns that automatically mark licenses as admin accounts during sync
+              {t('emailPattern')}
             </p>
           </div>
           <div className="flex gap-2">
@@ -364,11 +369,11 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
               ) : (
                 <Play className="h-4 w-4 mr-2" />
               )}
-              Apply to All Licenses
+              {t('applyToAll')}
             </Button>
             <Button size="sm" onClick={() => setShowAddPattern(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Pattern
+              {t('addPattern')}
             </Button>
           </div>
         </div>
@@ -382,18 +387,18 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           ) : patterns.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
               <ShieldCheck className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No patterns configured</p>
-              <p className="text-xs">Add a pattern to automatically detect admin accounts</p>
+              <p className="text-sm">{tCommon('noData')}</p>
+              <p className="text-xs">{t('emailPattern')}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-zinc-50/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pattern</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Matches</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('emailPattern')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('matchingLicenses')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -452,9 +457,9 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       {/* Admin Account Licenses Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-medium">Admin Account Licenses</h2>
+          <h2 className="text-lg font-medium">{t('title')}</h2>
           <p className="text-sm text-muted-foreground">
-            All licenses currently marked as admin accounts
+            {t('matchingLicenses')}
           </p>
         </div>
 
@@ -469,7 +474,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                   </div>
                   <div>
                     <p className="text-2xl font-semibold text-purple-700">{summaryStats.uniqueAdmins}</p>
-                    <p className="text-xs text-purple-600">Admin Accounts</p>
+                    <p className="text-xs text-purple-600">{t('title')}</p>
                   </div>
                 </div>
               </CardContent>
@@ -483,7 +488,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                   </div>
                   <div>
                     <p className="text-2xl font-semibold text-blue-700">{summaryStats.totalLicenses}</p>
-                    <p className="text-xs text-blue-600">Total Licenses</p>
+                    <p className="text-xs text-blue-600">{tLicenses('title')}</p>
                   </div>
                 </div>
               </CardContent>
@@ -497,7 +502,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                   </div>
                   <div>
                     <p className="text-2xl font-semibold text-emerald-700">{summaryStats.uniqueProviders}</p>
-                    <p className="text-xs text-emerald-600">Providers</p>
+                    <p className="text-xs text-emerald-600">{tLicenses('provider')}</p>
                   </div>
                 </div>
               </CardContent>
@@ -512,7 +517,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                     </div>
                     <div>
                       <p className="text-2xl font-semibold text-amber-700">{summaryStats.suspendedLicenses}</p>
-                      <p className="text-xs text-amber-600">Suspended</p>
+                      <p className="text-xs text-amber-600">{tCommon('inactive')}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -526,7 +531,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                     </div>
                     <div>
                       <p className="text-2xl font-semibold text-zinc-700">0</p>
-                      <p className="text-xs text-zinc-600">Suspended</p>
+                      <p className="text-xs text-zinc-600">{tCommon('inactive')}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -540,7 +545,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <Input
-              placeholder="Search by email..."
+              placeholder={tLicenses('searchPlaceholder')}
               value={licensesSearch}
               onChange={(e) => {
                 setLicensesSearch(e.target.value);
@@ -555,10 +560,10 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
             setLicensesPage(1);
           }}>
             <SelectTrigger className="w-44 h-9 bg-zinc-50 border-zinc-200">
-              <SelectValue placeholder="Provider" />
+              <SelectValue placeholder={tLicenses('provider')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Providers</SelectItem>
+              <SelectItem value="all">{tLicenses('allProviders')}</SelectItem>
               {providers.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   {provider.display_name}
@@ -568,7 +573,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           </Select>
 
           <span className="text-sm text-muted-foreground ml-auto">
-            {summaryStats.uniqueAdmins} admin{summaryStats.uniqueAdmins !== 1 ? 's' : ''} • {licensesTotal} license{licensesTotal !== 1 ? 's' : ''}
+            {tLicenses('licenseCount', { count: licensesTotal })}
           </span>
         </div>
 
@@ -581,7 +586,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           ) : groupedAccounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <ShieldCheck className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No admin account licenses</p>
+              <p className="text-sm">{tCommon('noData')}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -589,14 +594,14 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 <tr className="border-b bg-zinc-50/50">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                     <button onClick={() => handleLicenseSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
-                      Email <SortIcon column="external_user_id" />
+                      {tCommon('email')} <SortIcon column="external_user_id" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Providers</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Global</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('provider')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('name')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('patterns')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -635,7 +640,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                             {account.owner_name}
                           </span>
                           {account.owner_status === 'offboarded' && (
-                            <span title="Owner offboarded"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
+                            <span title={t('ownerOffboarded')}><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
                           )}
                         </div>
                       ) : (
@@ -646,12 +651,12 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       <div className="flex items-center gap-1.5">
                         {account.activeCount > 0 && (
                           <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-0 text-xs">
-                            {account.activeCount} active
+                            {account.activeCount} {tCommon('active').toLowerCase()}
                           </Badge>
                         )}
                         {account.suspendedCount > 0 && (
                           <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
-                            {account.suspendedCount} suspended
+                            {account.suspendedCount} {tCommon('inactive').toLowerCase()}
                           </Badge>
                         )}
                       </div>
@@ -660,7 +665,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                       {account.hasGlobalPattern ? (
                         <div
                           className="inline-flex items-center gap-1 text-emerald-600"
-                          title="This email matches a global pattern"
+                          title={t('emailMatchesGlobalPattern')}
                         >
                           <Check className="h-4 w-4" />
                           <Globe className="h-4 w-4" />
@@ -671,7 +676,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                           size="sm"
                           onClick={() => setMakeGlobalLicense(account.licenses[0])}
                           className="text-muted-foreground hover:text-foreground"
-                          title="Make global pattern"
+                          title={t('makeGlobalPattern')}
                         >
                           <Globe className="h-4 w-4" />
                         </Button>
@@ -688,7 +693,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
         {licensesTotalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Page {licensesPage} of {licensesTotalPages}
+              {tLicenses('pageOf', { page: licensesPage, total: licensesTotalPages })}
             </p>
             <div className="flex gap-2">
               <Button
@@ -697,7 +702,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 onClick={() => setLicensesPage(licensesPage - 1)}
                 disabled={licensesPage === 1}
               >
-                Previous
+                {tLicenses('previous')}
               </Button>
               <Button
                 variant="outline"
@@ -705,7 +710,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                 onClick={() => setLicensesPage(licensesPage + 1)}
                 disabled={licensesPage === licensesTotalPages}
               >
-                Next
+                {tCommon('next')}
               </Button>
             </div>
           </div>
@@ -718,10 +723,10 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-purple-500" />
-              Matching Licenses
+              {t('matchingLicenses')}
             </DialogTitle>
             <DialogDescription>
-              Licenses matching pattern <code className="bg-zinc-100 px-2 py-0.5 rounded">{matchesDialog?.email_pattern}</code>
+              {t('emailPattern')}: <code className="bg-zinc-100 px-2 py-0.5 rounded">{matchesDialog?.email_pattern}</code>
               {matchesDialog?.name && <span> ({matchesDialog.name})</span>}
             </DialogDescription>
           </DialogHeader>
@@ -733,17 +738,17 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
             ) : matchesLicenses.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                 <ShieldCheck className="h-8 w-8 mb-2 opacity-30" />
-                <p className="text-sm">No matching licenses found</p>
+                <p className="text-sm">{t('noNewMatches')}</p>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white">
                   <tr className="border-b bg-zinc-50/50">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">License Type</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('email')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('provider')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tLicenses('licenseType')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('owner')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -774,16 +779,16 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
                               {license.admin_account_owner_name}
                             </span>
                             {license.admin_account_owner_status === 'offboarded' && (
-                              <span title="Owner is offboarded"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
+                              <span title={t('ownerOffboarded')}><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-xs">Not assigned</span>
+                          <span className="text-muted-foreground text-xs">{tLicenses('unassigned')}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={license.status === 'active' ? 'secondary' : 'outline'} className={license.status === 'active' ? 'bg-emerald-50 text-emerald-700' : ''}>
-                          {license.status}
+                          {license.status === 'active' ? tLicenses('active') : tLicenses('inactive')}
                         </Badge>
                       </td>
                     </tr>
@@ -793,7 +798,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setMatchesDialog(null)}>Close</Button>
+            <Button variant="ghost" onClick={() => setMatchesDialog(null)}>{tCommon('close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -802,43 +807,38 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       <Dialog open={!!makeGlobalLicense} onOpenChange={(open) => !open && setMakeGlobalLicense(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Make Global Pattern</DialogTitle>
+            <DialogTitle>{t('addPattern')}</DialogTitle>
             <DialogDescription>
-              Add this email as a global pattern. All licenses with this email will automatically
-              be marked as admin accounts.
+              {t('emailPattern')}
             </DialogDescription>
           </DialogHeader>
           {makeGlobalLicense && (
             <div className="space-y-4 py-4">
               <div className="p-3 bg-zinc-50 rounded-lg space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Email:</span>
+                  <span className="text-sm text-muted-foreground">{tCommon('email')}:</span>
                   <code className="text-sm bg-white px-2 py-0.5 rounded border">
                     {makeGlobalLicense.external_user_id}
                   </code>
                 </div>
                 {makeGlobalLicense.admin_account_name && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Name:</span>
+                    <span className="text-sm text-muted-foreground">{tCommon('name')}:</span>
                     <span className="text-sm">{makeGlobalLicense.admin_account_name}</span>
                   </div>
                 )}
                 {makeGlobalLicense.admin_account_owner_name && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Owner:</span>
+                    <span className="text-sm text-muted-foreground">{t('owner')}:</span>
                     <span className="text-sm">{makeGlobalLicense.admin_account_owner_name}</span>
                   </div>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                After adding this pattern, any future syncs will automatically mark licenses
-                with this email as admin accounts.
-              </p>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setMakeGlobalLicense(null)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleMakeGlobal} disabled={makingGlobal}>
               {makingGlobal ? (
@@ -846,7 +846,7 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
               ) : (
                 <Globe className="h-4 w-4 mr-2" />
               )}
-              Make Global
+              {t('addPattern')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -856,42 +856,38 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
       <Dialog open={showAddPattern} onOpenChange={setShowAddPattern}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Admin Account Pattern</DialogTitle>
+            <DialogTitle>{t('addPattern')}</DialogTitle>
             <DialogDescription>
-              Add an email pattern to automatically detect admin accounts.
-              Use * for wildcard matching (e.g., *-admin@company.com).
+              {t('emailPattern')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="email_pattern">Email Pattern *</Label>
+              <Label htmlFor="email_pattern">{t('emailPattern')} *</Label>
               <Input
                 id="email_pattern"
-                placeholder="*-admin@company.com"
+                placeholder={t('emailPatternPlaceholder')}
                 value={newPattern.email_pattern}
                 onChange={(e) => setNewPattern({ ...newPattern, email_pattern: e.target.value })}
               />
-              <p className="text-xs text-muted-foreground">
-                Use * for wildcards. Examples: max-admin@company.com, *-admin@company.com
-              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{tCommon('name')}</Label>
               <Input
                 id="name"
-                placeholder="IT Admin"
+                placeholder={t('adminNamePlaceholder')}
                 value={newPattern.name}
                 onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="owner">Owner (optional)</Label>
+              <Label htmlFor="owner">{t('owner')} ({tCommon('optional')})</Label>
               <Select value={newPattern.owner_id || '__none__'} onValueChange={(v) => setNewPattern({ ...newPattern, owner_id: v === '__none__' ? '' : v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select owner..." />
+                  <SelectValue placeholder={tCommon('selectOption')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No owner</SelectItem>
+                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
                   {employees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.full_name}
@@ -901,10 +897,10 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes">{t('notes')}</Label>
               <Textarea
                 id="notes"
-                placeholder="Optional notes about this admin account..."
+                placeholder={t('notes')}
                 value={newPattern.notes}
                 onChange={(e) => setNewPattern({ ...newPattern, notes: e.target.value })}
               />
@@ -912,13 +908,13 @@ export function AdminAccountsTab({ providers, showToast }: AdminAccountsTabProps
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddPattern(false)}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={handleCreatePattern} disabled={creatingPattern}>
               {creatingPattern ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
-              Add Pattern
+              {t('addPattern')}
             </Button>
           </DialogFooter>
         </DialogContent>
