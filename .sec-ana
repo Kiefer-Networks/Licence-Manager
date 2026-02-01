@@ -361,6 +361,7 @@
 ### SEC-49 [LOW] - Console Error in Production Error Handler
 - **Status:** FIXED
 - **Fixed Date:** 2026-02-01
+- **Commit:** da2a52f25aa2
 - **File:** frontend/src/lib/error-handler.ts:46
 - **Description:** logError() outputs sanitized messages to browser console in production
 - **Fix:** Changed to only log in development mode, production is silent
