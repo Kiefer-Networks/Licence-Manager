@@ -38,5 +38,6 @@ export default getRequestConfig(async () => {
   return {
     locale,
     messages: await getMessages(locale),
+    timeZone: 'Europe/Berlin',
   };
 });
