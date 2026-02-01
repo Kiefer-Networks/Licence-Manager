@@ -1,23 +1,24 @@
-# Security Audit Findings v7
+# Security Audit Findings v8
 # Generated: 2026-02-01
-# Status: Complete Re-Audit - All Critical/High/Medium Issues Resolved
+# Status: Re-Audit After Service Account License Types Feature
 
 ## Summary
 
 | Category | Critical | High | Medium | Low | Total Open | Fixed |
 |----------|----------|------|--------|-----|------------|-------|
 | Authentication & Authorization | 0 | 0 | 0 | 0 | 0 | 5 |
-| Input Validation & Injection | 0 | 0 | 0 | 0 | 0 | 6 |
-| Sensitive Data Handling | 0 | 0 | 0 | 0 | 0 | 5 |
-| MVC/Architecture Violations | 0 | 0 | 0 | 0 | 0 | 5 |
+| Input Validation & Injection | 0 | 0 | 0 | 0 | 0 | 9 |
+| Sensitive Data Handling | 0 | 0 | 0 | 0 | 0 | 6 |
+| MVC/Architecture Violations | 0 | 0 | 0 | 0 | 0 | 6 |
 | Best Practices | 0 | 0 | 0 | 1 | 1 | 7 |
 | Audit System | 0 | 0 | 0 | 0 | 0 | 4 |
-| Frontend Security | 0 | 0 | 0 | 0 | 0 | 13 |
+| Frontend Security | 0 | 0 | 0 | 0 | 0 | 14 |
 | Configuration | 0 | 0 | 0 | 0 | 0 | 4 |
 | Cryptography | 0 | 0 | 0 | 0 | 0 | 2 |
-| **Total** | **0** | **0** | **0** | **1** | **1** | **51** |
+| Service Account License Types | 0 | 0 | 0 | 0 | 0 | 6 |
+| **Total** | **0** | **0** | **0** | **1** | **1** | **63** |
 
-**Progress: 51 of 52 findings fixed (98%)**
+**Progress: 63 of 64 findings fixed (98%)**
 
 ### Remaining Open Findings Summary
 - 1 LOW: SEC-25 (No SQL injection test coverage - testing improvement, not vulnerability)
@@ -473,3 +474,49 @@ All critical, high, and medium severity security issues have been resolved. The 
 6. Proper error handling without information disclosure
 7. Secure cryptographic implementations
 8. Defense-in-depth security architecture
+
+---
+
+## 10. Service Account License Types Feature (NEW - 2026-02-01)
+
+### SEC-LT-001 [MEDIUM] - Missing Input Validation for name/notes Fields
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/models/dto/service_account.py:66-68, 76-79
+- **Description:** The name and notes fields in ServiceAccountLicenseTypeCreate DTO lacked max_length validation
+- **Fix:** Added Field(max_length=255) for name and Field(max_length=2000) for notes
+
+### SEC-LT-002 [LOW] - User Input Echoed in Error Messages
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/service_accounts.py:244, 97
+- **Description:** User-provided license_type and email_pattern values were echoed in HTTP error messages
+- **Fix:** Replaced with generic error message "License type rule with this value already exists"
+
+### SEC-LT-003 [MEDIUM] - Inefficient Database Query - Full Table Scan
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/repositories/service_account_license_type_repository.py:54-64, 121-131
+- **Description:** matches_license_type and find_matching_licenses fetched all records into memory
+- **Fix:** Optimized to use database-level ILIKE/LOWER filtering
+
+### SEC-LT-004 [MEDIUM] - Missing Rate Limiting on Batch Operations
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/routers/service_accounts.py:285-307
+- **Description:** apply-license-types endpoint lacked rate limiting
+- **Fix:** Added rate_limit decorator consistent with apply patterns endpoint
+
+### SEC-LT-005 [LOW] - Missing Input Sanitization in Frontend
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** frontend/src/components/users/ServiceAccountsTab.tsx:98-103
+- **Description:** Frontend input fields lacked maxLength attributes
+- **Fix:** Added maxLength={500} for license_type, maxLength={255} for name, maxLength={2000} for notes
+
+### SEC-LT-006 [LOW] - Inefficient Case-Insensitive Matching
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-01
+- **File:** backend/src/licence_api/repositories/service_account_license_type_repository.py
+- **Description:** Multiple .lower() calls in loops were inefficient
+- **Fix:** Consolidated with SEC-LT-003 - using database-level func.lower() comparison
