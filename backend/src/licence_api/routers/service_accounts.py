@@ -139,7 +139,7 @@ async def delete_pattern(
 @router.post("/apply", response_model=ApplyPatternsResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def apply_patterns(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ApplyPatternsResponse:
@@ -152,7 +152,7 @@ async def apply_patterns(
     """
     result = await service.apply_patterns_to_all_licenses(
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
     )
 
     # Invalidate dashboard cache
@@ -287,7 +287,7 @@ async def delete_license_type(
 @router.post("/apply-license-types", response_model=ApplyLicenseTypesResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def apply_license_types(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ApplyLicenseTypesResponse:
@@ -300,7 +300,7 @@ async def apply_license_types(
     """
     result = await service.apply_license_types_to_all_licenses(
         admin_user_id=current_user.id,
-        request=http_request,
+        request=request,
     )
 
     # Invalidate dashboard cache
