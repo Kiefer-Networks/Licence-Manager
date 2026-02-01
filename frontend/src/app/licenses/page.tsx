@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { api, License, Provider, CategorizedLicensesResponse } from '@/lib/api';
+import { api, License, Provider, CategorizedLicensesResponse, Employee } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatsCards, LicenseStatusBadge } from '@/components/licenses';
@@ -42,7 +42,19 @@ import {
   Globe,
   Users,
   AlertTriangle,
+  Bot,
+  ShieldCheck,
+  MoreHorizontal,
+  Check,
+  User,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -62,6 +74,8 @@ type Tab = 'assigned' | 'unassigned' | 'external';
 function LicensesContent() {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
+  const tServiceAccounts = useTranslations('serviceAccounts');
+  const tAdminAccounts = useTranslations('adminAccounts');
   const searchParams = useSearchParams();
   const [categorizedData, setCategorizedData] = useState<CategorizedLicensesResponse | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -80,6 +94,16 @@ function LicensesContent() {
   const [bulkActionDialog, setBulkActionDialog] = useState<'remove' | 'delete' | 'unassign' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Mark as service/admin account state
+  const [markAsDialog, setMarkAsDialog] = useState<{ license: License; type: 'service' | 'admin' } | null>(null);
+  const [markAsName, setMarkAsName] = useState('');
+  const [markAsOwnerId, setMarkAsOwnerId] = useState('');
+  const [markAsOwnerQuery, setMarkAsOwnerQuery] = useState('');
+  const [markAsLoading, setMarkAsLoading] = useState(false);
+  const [showOwnerResults, setShowOwnerResults] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
   const licenseProviders = providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -270,6 +294,84 @@ function LicensesContent() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Load employees for owner search
+  const loadEmployees = async (search?: string) => {
+    setLoadingEmployees(true);
+    try {
+      const response = await api.getEmployees({
+        page_size: 50,
+        status: 'active',
+        search: search || undefined,
+      });
+      setEmployees(response.items);
+    } catch (error) {
+      handleSilentError('loadEmployees', error);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  // Debounce employee search
+  useEffect(() => {
+    if (!markAsDialog) return;
+
+    const timer = setTimeout(() => {
+      loadEmployees(markAsOwnerQuery.trim() || undefined);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [markAsOwnerQuery, markAsDialog]);
+
+  const handleOpenMarkAs = (license: License, type: 'service' | 'admin') => {
+    setMarkAsDialog({ license, type });
+    setMarkAsName('');
+    setMarkAsOwnerId('');
+    setMarkAsOwnerQuery('');
+    setShowOwnerResults(false);
+    loadEmployees();
+  };
+
+  const handleSelectOwner = (emp: Employee) => {
+    setMarkAsOwnerId(emp.id);
+    setMarkAsOwnerQuery(emp.full_name);
+    setShowOwnerResults(false);
+  };
+
+  const handleClearOwner = () => {
+    setMarkAsOwnerId('');
+    setMarkAsOwnerQuery('');
+    setShowOwnerResults(false);
+  };
+
+  const handleMarkAs = async () => {
+    if (!markAsDialog) return;
+
+    setMarkAsLoading(true);
+    try {
+      if (markAsDialog.type === 'service') {
+        await api.updateLicenseServiceAccount(markAsDialog.license.id, {
+          is_service_account: true,
+          service_account_name: markAsName || undefined,
+          service_account_owner_id: markAsOwnerId || undefined,
+        });
+        setToast({ message: tServiceAccounts('markedAsServiceAccount'), type: 'success' });
+      } else {
+        await api.updateLicenseAdminAccount(markAsDialog.license.id, {
+          is_admin_account: true,
+          admin_account_name: markAsName || undefined,
+          admin_account_owner_id: markAsOwnerId || undefined,
+        });
+        setToast({ message: tAdminAccounts('markedAsAdminAccount'), type: 'success' });
+      }
+      setMarkAsDialog(null);
+      loadLicenses();
+    } catch (error) {
+      setToast({ message: t('failedToUpdate'), type: 'error' });
+    } finally {
+      setMarkAsLoading(false);
+    }
+  };
 
   // Reset page when filters change
   useEffect(() => {
@@ -513,6 +615,7 @@ function LicensesContent() {
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
                         <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                        <th className="w-10 px-4 py-3"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -563,6 +666,25 @@ function LicensesContent() {
                             <td className="px-4 py-3 text-right tabular-nums text-sm">
                               {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
                             </td>
+                            <td className="px-4 py-3">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
+                                    <Bot className="h-4 w-4 mr-2" />
+                                    {tServiceAccounts('markAsServiceAccount')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'admin')}>
+                                    <ShieldCheck className="h-4 w-4 mr-2" />
+                                    {tAdminAccounts('markAsAdminAccount')}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
                           </tr>
                         );
                       })}
@@ -606,6 +728,7 @@ function LicensesContent() {
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
                         <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                        <th className="w-10 px-4 py-3"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -655,6 +778,25 @@ function LicensesContent() {
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums text-sm">
                               {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
+                                    <Bot className="h-4 w-4 mr-2" />
+                                    {tServiceAccounts('markAsServiceAccount')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'admin')}>
+                                    <ShieldCheck className="h-4 w-4 mr-2" />
+                                    {tAdminAccounts('markAsAdminAccount')}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         );
@@ -902,6 +1044,139 @@ function LicensesContent() {
             <Button onClick={handleBulkUnassign} disabled={bulkActionLoading}>
               {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {t('unassignCount', { count: assignedLicenses.length })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark As Service/Admin Account Dialog */}
+      <Dialog open={!!markAsDialog} onOpenChange={() => setMarkAsDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {markAsDialog?.type === 'service' ? (
+                <>
+                  <Bot className="h-5 w-5 text-blue-500" />
+                  {tServiceAccounts('markAsServiceAccount')}
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-5 w-5 text-purple-500" />
+                  {tAdminAccounts('markAsAdminAccount')}
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {markAsDialog?.type === 'service'
+                ? tServiceAccounts('markAsServiceAccountDescription')
+                : tAdminAccounts('markAsAdminAccountDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          {markAsDialog && (
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-zinc-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{t('user')}:</span>
+                  <code className="text-sm bg-white px-2 py-0.5 rounded border">
+                    {markAsDialog.license.external_user_id}
+                  </code>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="markAsName">{tCommon('name')}</Label>
+                <Input
+                  id="markAsName"
+                  placeholder={markAsDialog.type === 'service' ? tServiceAccounts('serviceNamePlaceholder') : tAdminAccounts('adminNamePlaceholder')}
+                  value={markAsName}
+                  onChange={(e) => setMarkAsName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{markAsDialog.type === 'service' ? tServiceAccounts('owner') : tAdminAccounts('owner')}</Label>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                    <Input
+                      placeholder={tServiceAccounts('searchEmployee')}
+                      value={markAsOwnerQuery}
+                      onChange={(e) => {
+                        setMarkAsOwnerQuery(e.target.value);
+                        setShowOwnerResults(true);
+                        if (!e.target.value) {
+                          setMarkAsOwnerId('');
+                        }
+                      }}
+                      onFocus={() => setShowOwnerResults(true)}
+                      className="pl-9 pr-9"
+                    />
+                    {markAsOwnerQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearOwner}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {showOwnerResults && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                      <button
+                        type="button"
+                        onClick={handleClearOwner}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
+                          !markAsOwnerId ? 'bg-zinc-50' : ''
+                        }`}
+                      >
+                        <span className="text-muted-foreground">{tCommon('none')}</span>
+                      </button>
+                      {loadingEmployees ? (
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {tCommon('loading')}
+                        </div>
+                      ) : employees.length === 0 ? (
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                          {tServiceAccounts('noEmployeesFound')}
+                        </div>
+                      ) : (
+                        employees.map((emp) => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => handleSelectOwner(emp)}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
+                              markAsOwnerId === emp.id ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <User className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{emp.full_name}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {emp.department || '-'} · {emp.email}
+                              </div>
+                            </div>
+                            {markAsOwnerId === emp.id && (
+                              <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMarkAsDialog(null)} disabled={markAsLoading}>
+              {tCommon('cancel')}
+            </Button>
+            <Button onClick={handleMarkAs} disabled={markAsLoading}>
+              {markAsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {markAsDialog?.type === 'service' ? tServiceAccounts('markAsServiceAccount') : tAdminAccounts('markAsAdminAccount')}
             </Button>
           </DialogFooter>
         </DialogContent>
