@@ -13,23 +13,34 @@ from licence_api.config import get_settings
 # CSRF token validity duration
 CSRF_TOKEN_LIFETIME = timedelta(hours=8)
 
+# Token format delimiter - used to separate token:timestamp:signature
+# Note: Colon is safe because tokens are url-safe base64 (no colons)
+# and timestamps/signatures are numeric/hex (no colons)
+CSRF_TOKEN_DELIMITER = ":"
+CSRF_TOKEN_PARTS = 3  # Expected number of parts: token, timestamp, signature
+
 
 def generate_csrf_token() -> tuple[str, str]:
     """Generate a CSRF token and its signature.
 
+    Token format: token:timestamp:signature
+    - token: 32 bytes of url-safe base64 random data
+    - timestamp: Unix timestamp for expiry checking
+    - signature: HMAC-SHA256 of token:timestamp
+
     Returns:
-        Tuple of (token, signature)
+        Tuple of (raw_token, signed_token)
     """
     settings = get_settings()
     token = secrets.token_urlsafe(32)
     timestamp = int(datetime.now(timezone.utc).timestamp())
-    message = f"{token}:{timestamp}"
+    message = f"{token}{CSRF_TOKEN_DELIMITER}{timestamp}"
     signature = hmac.new(
         settings.jwt_secret.encode(),
         message.encode(),
         hashlib.sha256,
     ).hexdigest()
-    return token, f"{token}:{timestamp}:{signature}"
+    return token, CSRF_TOKEN_DELIMITER.join([token, str(timestamp), signature])
 
 
 def verify_csrf_token(signed_token: str) -> bool:
@@ -42,8 +53,8 @@ def verify_csrf_token(signed_token: str) -> bool:
         True if valid, False otherwise
     """
     try:
-        parts = signed_token.split(":")
-        if len(parts) != 3:
+        parts = signed_token.split(CSRF_TOKEN_DELIMITER)
+        if len(parts) != CSRF_TOKEN_PARTS:
             return False
 
         token, timestamp_str, provided_signature = parts
@@ -56,7 +67,7 @@ def verify_csrf_token(signed_token: str) -> bool:
 
         # Verify signature
         settings = get_settings()
-        message = f"{token}:{timestamp}"
+        message = f"{token}{CSRF_TOKEN_DELIMITER}{timestamp}"
         expected_signature = hmac.new(
             settings.jwt_secret.encode(),
             message.encode(),
@@ -105,9 +116,9 @@ async def validate_csrf(
 
     # Verify cookie matches header token (double submit cookie pattern)
     if csrf_cookie:
-        # Extract token part from signed token
-        header_token = x_csrf_token.split(":")[0] if ":" in x_csrf_token else x_csrf_token
-        cookie_token = csrf_cookie.split(":")[0] if ":" in csrf_cookie else csrf_cookie
+        # Extract token part (first component) from signed token
+        header_token = x_csrf_token.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in x_csrf_token else x_csrf_token
+        cookie_token = csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_cookie else csrf_cookie
         if not hmac.compare_digest(header_token, cookie_token):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

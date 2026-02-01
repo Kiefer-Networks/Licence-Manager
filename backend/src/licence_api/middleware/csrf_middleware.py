@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from licence_api.security.csrf import verify_csrf_token
+from licence_api.security.csrf import verify_csrf_token, CSRF_TOKEN_DELIMITER
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -60,9 +60,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Optional: Verify cookie matches header (double submit pattern)
         csrf_cookie = request.cookies.get("csrf_token")
         if csrf_cookie:
-            # Extract token part from signed tokens for comparison
-            header_token = csrf_header.split(":")[0] if ":" in csrf_header else csrf_header
-            cookie_token = csrf_cookie.split(":")[0] if ":" in csrf_cookie else csrf_cookie
+            # Extract token part (first component) from signed tokens for comparison
+            header_token = csrf_header.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_header else csrf_header
+            cookie_token = csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_cookie else csrf_cookie
             if not hmac.compare_digest(header_token, cookie_token):
                 return JSONResponse(
                     status_code=403,
