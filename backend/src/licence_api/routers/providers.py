@@ -449,8 +449,30 @@ async def trigger_sync(
         await cache.invalidate_all()
 
         return SyncResponse(success=True, results=results)
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Network/connection errors - audit and return failure
+        await audit_service.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=request,
+            details={"success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
+        )
+        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
+    except ValueError as e:
+        # Validation errors - audit and return failure
+        await audit_service.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=request,
+            details={"success": False, "error_code": "VALIDATION_ERROR", "error_type": "ValueError"},
+        )
+        return SyncResponse(success=False, results={"error": "Invalid provider configuration"})
     except Exception as e:
-        # Audit failed sync with sanitized error details
+        # Unexpected errors - audit with sanitized details and return failure
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
@@ -495,8 +517,19 @@ async def sync_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Network/connection errors - audit and return failure
+        await audit_service.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=provider_id,
+            user=current_user,
+            request=request,
+            details={"success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
+        )
+        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
     except Exception as e:
-        # Audit failed sync with sanitized error details
+        # Unexpected errors - audit with sanitized details and return failure
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
@@ -870,8 +903,19 @@ async def resync_avatars(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="HiBob provider not configured",
         )
+    except (ConnectionError, TimeoutError, OSError) as e:
+        # Network/connection errors - audit and return failure
+        await audit_service.log(
+            action=AuditAction.PROVIDER_SYNC,
+            resource_type=ResourceType.PROVIDER,
+            resource_id=None,
+            user=current_user,
+            request=http_request,
+            details={"action": "avatar_resync", "success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
+        )
+        return SyncResponse(success=False, results={"error": "Connection to HiBob failed"})
     except Exception as e:
-        # Audit failed sync with sanitized error details
+        # Unexpected errors - audit with sanitized details and return failure
         await audit_service.log(
             action=AuditAction.PROVIDER_SYNC,
             resource_type=ResourceType.PROVIDER,
