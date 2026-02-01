@@ -3,8 +3,9 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Date, DateTime, Index, String
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
 
@@ -24,6 +25,14 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+    # Manager relationship - stores email from HRIS, resolved to ID after sync
+    manager_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    manager_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Relationships - use lazy="select" for collections to avoid N+1 queries
     # Load explicitly with selectinload() when needed
     licenses: Mapped[list["LicenseORM"]] = relationship(
@@ -33,9 +42,18 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
         foreign_keys="[LicenseORM.employee_id]",
     )
 
+    # Manager relationship (self-referential)
+    manager: Mapped["EmployeeORM | None"] = relationship(
+        "EmployeeORM",
+        remote_side="EmployeeORM.id",
+        foreign_keys=[manager_id],
+        lazy="select",
+    )
+
     __table_args__ = (
         Index("idx_employees_email", "email"),
         Index("idx_employees_status", "status"),
+        Index("idx_employees_manager_id", "manager_id"),
     )
 
 

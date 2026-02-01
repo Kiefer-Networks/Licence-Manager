@@ -10,7 +10,7 @@ from licence_api.models.orm.employee import EmployeeORM
 from licence_api.repositories.base import BaseRepository
 
 # Whitelist of valid sort columns to prevent column injection
-VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at"}
+VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email"}
 
 
 class EmployeeRepository(BaseRepository[EmployeeORM]):
@@ -178,11 +178,12 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         start_date: datetime | None,
         termination_date: datetime | None,
         synced_at: datetime,
+        manager_email: str | None = None,
     ) -> EmployeeORM:
         """Create or update employee by HiBob ID.
 
         Args:
-            hibob_id: HiBob employee ID
+            hibob_id: HiBob employee ID (or Personio employee ID)
             email: Employee email
             full_name: Full name
             department: Department name
@@ -190,6 +191,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             start_date: Start date
             termination_date: Termination date
             synced_at: Sync timestamp
+            manager_email: Manager's email address (resolved to ID after sync)
 
         Returns:
             Created or updated EmployeeORM
@@ -204,6 +206,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             existing.start_date = start_date
             existing.termination_date = termination_date
             existing.synced_at = synced_at
+            existing.manager_email = manager_email
             await self.session.flush()
             await self.session.refresh(existing)
             return existing
@@ -217,7 +220,35 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             start_date=start_date,
             termination_date=termination_date,
             synced_at=synced_at,
+            manager_email=manager_email,
         )
+
+    async def resolve_manager_ids(self) -> int:
+        """Resolve manager_email to manager_id for all employees.
+
+        This should be called after syncing all employees to link
+        managers by their email addresses.
+
+        Returns:
+            Number of manager relationships resolved
+        """
+        # Get all employees with manager_email but no manager_id
+        query = select(EmployeeORM).where(
+            EmployeeORM.manager_email.isnot(None)
+        )
+        result = await self.session.execute(query)
+        employees = result.scalars().all()
+
+        resolved = 0
+        for emp in employees:
+            if emp.manager_email:
+                manager = await self.get_by_email(emp.manager_email.lower())
+                if manager and manager.id != emp.id:  # Avoid self-reference
+                    emp.manager_id = manager.id
+                    resolved += 1
+
+        await self.session.flush()
+        return resolved
 
     async def count_by_status(self, department: str | None = None) -> dict[str, int]:
         """Count employees by status.

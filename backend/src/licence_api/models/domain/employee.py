@@ -25,6 +25,8 @@ class Employee(BaseModel):
     status: EmployeeStatus
     start_date: date | None = None
     termination_date: date | None = None
+    manager_email: str | None = None
+    manager_id: UUID | None = None
     synced_at: datetime
     created_at: datetime
     updated_at: datetime
