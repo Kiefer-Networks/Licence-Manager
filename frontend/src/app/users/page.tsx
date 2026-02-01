@@ -266,7 +266,14 @@ export default function UsersPage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge variant="outline" className="tabular-nums">{employee.license_count}</Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="tabular-nums">{employee.license_count}</Badge>
+                            {(employee.owned_admin_account_count || 0) > 0 && (
+                              <Badge variant="outline" className="tabular-nums bg-purple-50 text-purple-700 border-purple-200">
+                                +{employee.owned_admin_account_count} {t('adminAccounts')}
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground tabular-nums">
                           <div className="flex items-center justify-between">

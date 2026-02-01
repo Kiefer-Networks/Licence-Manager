@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, Employee, License, Provider } from '@/lib/api';
+import { api, Employee, License, Provider, AdminAccountLicenseListResponse } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyableText } from '@/components/ui/copy-button';
@@ -42,6 +42,7 @@ import {
   DollarSign,
   Clock,
   Globe,
+  Shield,
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
@@ -59,6 +60,7 @@ export default function UserDetailPage() {
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [ownedAdminAccounts, setOwnedAdminAccounts] = useState<License[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -108,11 +110,20 @@ export default function UserDetailPage() {
     }
   }, []);
 
+  const fetchOwnedAdminAccounts = useCallback(async () => {
+    try {
+      const data = await api.getAdminAccountLicenses({ owner_id: employeeId, page_size: 100 });
+      setOwnedAdminAccounts(data.items);
+    } catch (error) {
+      handleSilentError('fetchOwnedAdminAccounts', error);
+    }
+  }, [employeeId]);
+
   useEffect(() => {
-    Promise.all([fetchEmployee(), fetchLicenses(), fetchProviders()]).finally(() =>
+    Promise.all([fetchEmployee(), fetchLicenses(), fetchProviders(), fetchOwnedAdminAccounts()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchEmployee, fetchLicenses, fetchProviders]);
+  }, [fetchEmployee, fetchLicenses, fetchProviders, fetchOwnedAdminAccounts]);
 
   const openAssignDialog = async () => {
     setAssignDialogOpen(true);
@@ -191,7 +202,9 @@ export default function UserDetailPage() {
   };
 
   // Stats
-  const totalMonthlyCost = licenses.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
+  const licenseMonthlyCost = licenses.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
+  const adminAccountsMonthlyCost = ownedAdminAccounts.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
+  const totalMonthlyCost = licenseMonthlyCost + adminAccountsMonthlyCost;
   const manualProviders = providers.filter(p => p.config?.provider_type === 'manual' || p.name === 'manual');
 
   if (loading) {
@@ -316,7 +329,14 @@ export default function UserDetailPage() {
                 <Key className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase">{t('title')}</span>
               </div>
-              <p className="text-2xl font-semibold">{licenses.length}</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-semibold">{licenses.length}</p>
+                {ownedAdminAccounts.length > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    + {ownedAdminAccounts.length} {tEmployees('adminAccounts')}
+                  </span>
+                )}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -444,6 +464,54 @@ export default function UserDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Owned Admin Accounts */}
+        {ownedAdminAccounts.length > 0 && (
+          <div>
+            <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              {tEmployees('ownedAdminAccounts')}
+            </h2>
+            <div className="border rounded-lg bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-zinc-50/50">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('adminAccount')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tCommon('type')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ownedAdminAccounts.map((license) => (
+                    <tr key={license.id} className="border-b last:border-0 hover:bg-zinc-50/50">
+                      <td className="px-4 py-3">
+                        <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">
+                          {license.provider_name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="text-muted-foreground font-mono text-xs">{license.external_user_id}</span>
+                          {license.admin_account_name && (
+                            <span className="text-xs text-zinc-500">{license.admin_account_name}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{license.license_type || '-'}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-sm">
+                        {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {tEmployees('adminAccountsCostNote')}
+            </p>
+          </div>
+        )}
 
         {/* Employee Info */}
         {employee.termination_date && (

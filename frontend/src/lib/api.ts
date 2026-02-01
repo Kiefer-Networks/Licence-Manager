@@ -522,6 +522,7 @@ export interface Employee {
   termination_date?: string;
   avatar?: string;  // Base64 data URL or null
   license_count: number;
+  owned_admin_account_count?: number;  // Number of admin accounts owned by this employee
   manager?: ManagerInfo;
   synced_at: string;
 }
@@ -1673,6 +1674,7 @@ export const api = {
   async getAdminAccountLicenses(params: {
     search?: string;
     provider_id?: string;
+    owner_id?: string;
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
     page?: number;
@@ -1681,6 +1683,7 @@ export const api = {
     const searchParams = new URLSearchParams();
     if (params.search) searchParams.set('search', params.search);
     if (params.provider_id) searchParams.set('provider_id', params.provider_id);
+    if (params.owner_id) searchParams.set('owner_id', params.owner_id);
     if (params.sort_by) searchParams.set('sort_by', params.sort_by);
     if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
     if (params.page) searchParams.set('page', params.page.toString());
