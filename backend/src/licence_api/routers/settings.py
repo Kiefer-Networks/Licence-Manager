@@ -3,7 +3,7 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -211,9 +211,9 @@ async def update_threshold_settings(
 
 @router.get("/{key}", response_model=dict[str, Any] | None)
 async def get_setting(
-    key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$"),
 ) -> dict[str, Any] | None:
     """Get a specific setting by key. Requires settings.view permission."""
     return await service.get(key)
@@ -222,10 +222,10 @@ async def get_setting(
 @router.put("/{key}", response_model=dict[str, Any])
 async def set_setting(
     http_request: Request,
-    key: str,
     request: SettingValue,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$"),
 ) -> dict[str, Any]:
     """Set a setting value. Requires settings.edit permission."""
     return await service.set(
