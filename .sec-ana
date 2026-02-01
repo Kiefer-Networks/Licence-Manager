@@ -778,24 +778,55 @@ All critical, high, and medium severity security issues have been resolved. The 
 
 All critical, high, and medium severity issues have been resolved. The codebase implements defense-in-depth security with:
 
-1. **Authentication:** JWT with refresh token rotation, bcrypt password hashing
-2. **Authorization:** RBAC permissions on all endpoints
-3. **Input Validation:** Parameterized queries (SQLAlchemy ORM), max length constraints
+1. **Authentication:** JWT with refresh token rotation, bcrypt password hashing (12 rounds)
+2. **Authorization:** RBAC permissions on ALL 20 API routers
+3. **Input Validation:** Parameterized queries (SQLAlchemy ORM), comprehensive Field validation on all DTOs
 4. **CSRF Protection:** Double-submit cookie pattern on all state-changing operations
-5. **Rate Limiting:** Configurable limits with Redis backend for distributed deployments
+5. **Rate Limiting:** Configurable limits on ALL POST/PUT/DELETE/PATCH endpoints, Redis backend support
 6. **Error Handling:** Generic messages, no sensitive data disclosure
 7. **Audit Logging:** Comprehensive action tracking with credential masking
 8. **Frontend Security:** CSP, HSTS, no XSS vectors, request timeouts
-9. **Database Security:** Connection pooling with health checks, password validation
+9. **Database Security:** Connection pooling with health checks (pool_pre_ping=True, pool_recycle=3600)
 10. **Export Security:** CSV formula injection prevention
+11. **Backup Security:** AES-256-GCM encryption, PBKDF2 key derivation (600,000 iterations)
 
-### Verified Security Controls
+### Verified Security Controls (Re-Audit 2026-02-01)
 
-- All 15 API routers use require_permission() or require_admin
-- All sensitive endpoints have rate limiting
-- All file uploads validate content type and size
-- All error responses use generic messages
+**RBAC Verification (20 Routers):**
+- All endpoints use require_permission(), require_admin, or require_superadmin
+- No endpoints use only get_current_user for state-changing operations
+- Fine-grained permission model: LICENSES_*, PROVIDERS_*, SETTINGS_*, REPORTS_*, AUDIT_*, EMPLOYEES_*, DASHBOARD_*, SYSTEM_ADMIN
+
+**Rate Limiting Verification:**
+- AUTH_LOGIN_LIMIT: 5/minute (configurable)
+- AUTH_REFRESH_LIMIT: 5/minute (configurable)
+- AUTH_PASSWORD_CHANGE_LIMIT: 2/minute (configurable)
+- SENSITIVE_OPERATION_LIMIT: 10/minute (configurable)
+- BACKUP_EXPORT_LIMIT: 1/hour
+- BACKUP_RESTORE_LIMIT: 1/hour
+- All POST/PUT/DELETE/PATCH endpoints decorated with @limiter.limit()
+
+**Backup System Security:**
+- Encryption: AES-256-GCM (cryptography.hazmat.primitives.ciphers.aead.AESGCM)
+- Key Derivation: PBKDF2-SHA256 with 600,000 iterations
+- Salt: 16 bytes random
+- File Format: LICENCE_BACKUP_V1 header + salt + nonce + ciphertext
+- Max File Size: 500MB
+- Password: min 8 chars, max 256 chars
+- Serialization: JSON (NOT pickle) - prevents code execution attacks
+
+**Input Validation:**
+- All string fields have max_length constraints
+- All numeric fields have ge/le constraints
+- Pattern validation on sort_dir, role codes, settings keys
+- Pagination: page (1-10000), page_size (1-200)
+- Search fields: max_length 200-255
+- Whitelist validation on sort columns and filter values
+
+**Additional Controls:**
 - All cookies use Secure, HttpOnly, SameSite=Strict
 - No hardcoded credentials in source code
 - No dangerous patterns (eval, dangerouslySetInnerHTML, raw SQL)
-- Database connection pool properly configured with health checks
+- Database connection pool with health checks
+- X-Forwarded-For validation with trusted proxy list
+- CORS logging middleware for rejected requests
