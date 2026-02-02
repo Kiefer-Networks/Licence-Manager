@@ -131,21 +131,22 @@ async def get_provider(
 
 
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_provider(
-    http_request: Request,
-    request: ProviderCreate,
+    request: Request,
+    body: ProviderCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
     try:
         return await provider_service.create_provider(
-            name=request.name,
-            display_name=request.display_name,
-            credentials=request.credentials,
-            config=request.config,
+            name=body.name,
+            display_name=body.display_name,
+            credentials=body.credentials,
+            config=body.config,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(
@@ -155,24 +156,25 @@ async def create_provider(
 
 
 @router.put("/{provider_id}", response_model=ProviderResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_provider(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
-    request: ProviderUpdate,
+    body: ProviderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderResponse:
     """Update a provider. Requires providers.edit permission."""
     result = await provider_service.update_provider(
         provider_id=provider_id,
-        display_name=request.display_name,
-        logo_url=request.logo_url,
-        enabled=request.enabled,
-        config=request.config,
-        credentials=request.credentials,
-        payment_method_id=request.payment_method_id,
+        display_name=body.display_name,
+        logo_url=body.logo_url,
+        enabled=body.enabled,
+        config=body.config,
+        credentials=body.credentials,
+        payment_method_id=body.payment_method_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if result is None:
         raise HTTPException(
@@ -233,8 +235,9 @@ class LogoUploadResponse(BaseModel):
 
 
 @router.post("/{provider_id}/logo", response_model=LogoUploadResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def upload_provider_logo(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -260,7 +263,7 @@ async def upload_provider_logo(
             content=content,
             filename=file.filename,
             user=current_user,
-            request=http_request,
+            request=request,
         )
         return LogoUploadResponse(logo_url=logo_url)
     except ValueError:
@@ -322,8 +325,9 @@ async def get_provider_logo_file(
 
 
 @router.delete("/{provider_id}/logo", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_provider_logo(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -333,7 +337,7 @@ async def delete_provider_logo(
         await provider_service.delete_logo(
             provider_id=provider_id,
             user=current_user,
-            request=http_request,
+            request=request,
         )
     except ValueError:
         raise HTTPException(
@@ -343,8 +347,9 @@ async def delete_provider_logo(
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_provider(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -353,7 +358,7 @@ async def delete_provider(
     deleted = await provider_service.delete_provider(
         provider_id=provider_id,
         user=current_user,
-        request=http_request,
+        request=request,
     )
     if not deleted:
         raise HTTPException(
@@ -708,10 +713,11 @@ async def get_provider_pricing(
 
 
 @router.put("/{provider_id}/pricing", response_model=LicenseTypePricingResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_provider_pricing(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
-    request: LicenseTypePricingRequest,
+    body: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
@@ -725,17 +731,17 @@ async def update_provider_pricing(
         )
 
     # Build pricing config
-    pricing_config = PricingService.build_pricing_config_dict(request.pricing)
+    pricing_config = PricingService.build_pricing_config_dict(body.pricing)
 
     # Build package pricing config
     package_pricing = None
-    if request.package_pricing and request.package_pricing.cost:
+    if body.package_pricing and body.package_pricing.cost:
         package_pricing = {
-            "cost": request.package_pricing.cost,
-            "currency": request.package_pricing.currency,
-            "billing_cycle": request.package_pricing.billing_cycle,
-            "next_billing_date": request.package_pricing.next_billing_date,
-            "notes": request.package_pricing.notes,
+            "cost": body.package_pricing.cost,
+            "currency": body.package_pricing.currency,
+            "billing_cycle": body.package_pricing.billing_cycle,
+            "next_billing_date": body.package_pricing.next_billing_date,
+            "notes": body.package_pricing.notes,
         }
 
     # Use pricing service to update (handles audit logging and commit)
@@ -744,12 +750,12 @@ async def update_provider_pricing(
         pricing_config=pricing_config,
         package_pricing=package_pricing,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     return LicenseTypePricingResponse(
-        pricing=request.pricing,
-        package_pricing=request.package_pricing,
+        pricing=body.pricing,
+        package_pricing=body.package_pricing,
     )
 
 
@@ -837,10 +843,11 @@ async def get_provider_individual_license_types(
 
 
 @router.put("/{provider_id}/individual-pricing", response_model=IndividualLicenseTypesResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_provider_individual_pricing(
-    http_request: Request,
+    request: Request,
     provider_id: UUID,
-    request: IndividualLicenseTypePricingRequest,
+    body: IndividualLicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -866,7 +873,7 @@ async def update_provider_individual_pricing(
 
     # Build individual pricing config
     individual_pricing_config = {}
-    for p in request.pricing:
+    for p in body.pricing:
         individual_pricing_config[p.license_type] = {
             "cost": p.cost,
             "currency": p.currency,
@@ -882,7 +889,7 @@ async def update_provider_individual_pricing(
         provider_id=provider_id,
         individual_pricing_config=individual_pricing_config,
         user=current_user,
-        request=http_request,
+        request=request,
     )
 
     # Return updated license types
@@ -890,8 +897,9 @@ async def update_provider_individual_pricing(
 
 
 @router.post("/sync/avatars", response_model=SyncResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def resync_avatars(
-    http_request: Request,
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
@@ -914,7 +922,7 @@ async def resync_avatars(
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"action": "avatar_resync", "force": force, "results": results},
         )
 
@@ -931,7 +939,7 @@ async def resync_avatars(
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"action": "avatar_resync", "success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
         )
         return SyncResponse(success=False, results={"error": "Connection to HiBob failed"})
@@ -942,7 +950,7 @@ async def resync_avatars(
             resource_type=ResourceType.PROVIDER,
             resource_id=None,
             user=current_user,
-            request=http_request,
+            request=request,
             details={"action": "avatar_resync", "success": False, **sanitize_error_for_audit(e)},
         )
         return SyncResponse(success=False, results={"error": "Avatar sync failed"})

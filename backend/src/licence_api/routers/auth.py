@@ -484,7 +484,9 @@ async def get_notification_preferences(
 
 
 @router.put("/me/notification-preferences", response_model=UserNotificationPreferencesResponse)
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def update_notification_preferences(
+    request: Request,
     body: UserNotificationPreferenceBulkUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
@@ -526,7 +528,9 @@ async def update_notification_preferences(
 
 
 @router.patch("/me/notification-preferences/{event_type}", response_model=UserNotificationPreferenceResponse)
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def update_single_notification_preference(
+    request: Request,
     event_type: str,
     body: UserNotificationPreferenceUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
