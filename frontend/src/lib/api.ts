@@ -1295,6 +1295,17 @@ export interface CurrentUserInfo {
   roles: string[];
   permissions: string[];
   is_superadmin: boolean;
+  // Locale preferences
+  date_format?: string;
+  number_format?: string;
+  currency?: string;
+}
+
+export interface ProfileUpdateRequest {
+  name?: string;
+  date_format?: string;
+  number_format?: string;
+  currency?: string;
 }
 
 export interface LoginResponse {
@@ -2310,7 +2321,7 @@ export const api = {
   },
 
   // Profile Update
-  async updateProfile(data: { name?: string }): Promise<CurrentUserInfo> {
+  async updateProfile(data: ProfileUpdateRequest): Promise<CurrentUserInfo> {
     return fetchApi<CurrentUserInfo>('/auth/me', {
       method: 'PATCH',
       body: JSON.stringify(data),
