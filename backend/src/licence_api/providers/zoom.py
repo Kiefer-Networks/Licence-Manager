@@ -83,7 +83,8 @@ class ZoomProvider(BaseProvider):
             )
 
             if response.status_code != 200:
-                raise ValueError(f"Failed to get Zoom access token: {response.text}")
+                logger.debug("Zoom OAuth error response: %s", response.text)
+                raise ValueError("Failed to authenticate with Zoom API")
 
             data = response.json()
             self._access_token = data["access_token"]
@@ -196,7 +197,8 @@ class ZoomProvider(BaseProvider):
                 )
 
                 if response.status_code != 200:
-                    raise ValueError(f"Zoom API error: {response.text}")
+                    logger.debug("Zoom API error response: %s", response.text)
+                    raise ValueError("Failed to fetch users from Zoom API")
 
                 data = response.json()
 
