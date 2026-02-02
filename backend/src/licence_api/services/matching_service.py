@@ -125,10 +125,13 @@ class MatchingService:
             company_domains: List of company domain names
 
         Returns:
-            True if email is external
+            True if email is external (has @ and domain is not a company domain)
+            False if email is internal (company domain) OR if it's not an email at all
         """
         if not email or "@" not in email:
-            return True  # Treat non-email identifiers as external
+            # Non-email identifiers (like license keys, server IDs) are NOT external
+            # They are internal unassigned resources
+            return False
 
         domain = email.split("@")[1].lower()
 
@@ -254,9 +257,10 @@ class MatchingService:
 
         # For remaining levels, only process if email format
         if "@" not in email:
+            # Non-email identifiers (license keys, server IDs, etc.) are internal unassigned
             return MatchResult(
-                is_external=True,
-                status=MATCH_STATUS_EXTERNAL_REVIEW,
+                is_external=False,
+                status=None,  # No status - treat as "not_in_hris" / unassigned
             )
 
         local = email.split("@")[0]
