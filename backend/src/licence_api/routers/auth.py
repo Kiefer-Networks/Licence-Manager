@@ -305,7 +305,9 @@ async def logout(
 
 
 @router.post("/logout-all")
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def logout_all_sessions(
+    request: Request,
     response: Response,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
@@ -361,7 +363,9 @@ async def change_password(
 
 
 @router.patch("/me", response_model=UserInfo)
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def update_profile(
+    request: Request,
     body: ProfileUpdateRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
@@ -374,7 +378,9 @@ async def update_profile(
 
 
 @router.post("/me/avatar", response_model=AvatarUploadResponse)
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def upload_avatar(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
@@ -433,7 +439,9 @@ async def get_avatar(
 
 
 @router.delete("/me/avatar")
+@limiter.limit(AUTH_REFRESH_LIMIT)
 async def delete_avatar(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> dict[str, str]:

@@ -1,6 +1,6 @@
-# Security Audit Findings v14
-# Generated: 2026-02-01
-# Status: Complete Re-Audit - All Security Issues Resolved
+# Security Audit Findings v15
+# Generated: 2026-02-02
+# Status: Fresh Audit - New Issues Found
 
 ## Summary
 
@@ -23,11 +23,51 @@
 | Re-Audit 2026-02-01 (Round 5: Rate Limiting) | 0 | 0 | 0 | 0 | 0 | 8 |
 | Re-Audit 2026-02-01 (Round 6: Parameter Fix) | 0 | 0 | 0 | 0 | 0 | 1 |
 | Manual HRIS Implementation (Round 8) | 0 | 0 | 0 | 0 | 0 | 7 |
-| **Total** | **0** | **0** | **0** | **0** | **0** | **105** |
+| Fresh Audit 2026-02-02 (Round 9) | 0 | 1 | 2 | 1 | 4 | 0 |
+| **Total** | **0** | **1** | **2** | **1** | **4** | **105** |
 
-**Progress: 105 of 105 findings fixed (100%)**
+**Progress: 105 of 109 findings fixed (96%)**
 
-### All Security Findings Resolved
+---
+
+## 22. Fresh Security Audit (2026-02-02 - Round 9)
+
+### SEC-V16-001 [HIGH] - Missing Rate Limiting on RBAC Endpoints
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-02
+- **Files:** backend/src/licence_api/routers/rbac.py, auth.py
+- **Description:** Multiple POST/PUT/DELETE endpoints missing rate limiting
+- **Fix:** Added @limiter.limit() to all 9 endpoints:
+  - rbac.py: update_user, delete_user, create_role, update_role, delete_role (ADMIN_SENSITIVE_LIMIT)
+  - auth.py: logout_all_sessions, update_profile, upload_avatar, delete_avatar (AUTH_REFRESH_LIMIT)
+
+### SEC-V16-002 [MEDIUM] - Unbounded Lists in Request DTOs
+- **Status:** OPEN
+- **File:** backend/src/licence_api/models/dto/auth.py
+- **Description:** List parameters without max_length constraints:
+  - Line 68: role_codes in UserCreateRequest
+  - Line 76: role_codes in UserUpdateRequest
+  - Line 97: permission_codes in RoleCreateRequest
+  - Line 105: permission_codes in RoleUpdateRequest
+  - Line 172: preferences in UserNotificationPreferenceBulkUpdate
+- **Risk:** Memory exhaustion via large payloads (DoS)
+- **Fix Required:** Add Field(max_length=N) to all list fields
+
+### SEC-V16-003 [MEDIUM] - Console.error in Production Frontend Code
+- **Status:** OPEN
+- **File:** frontend/src/components/exports/ExportButton.tsx
+- **Description:** console.error without development mode guard
+- **Risk:** Information disclosure to browser console
+- **Fix Required:** Wrap in process.env.NODE_ENV check
+
+### SEC-V16-004 [LOW] - Missing max_length on Audit Query Parameters
+- **Status:** OPEN
+- **File:** backend/src/licence_api/routers/audit.py
+- **Description:** action and resource_type Query params lack max_length
+- **Risk:** Memory overhead from extremely long strings
+- **Fix Required:** Add max_length=50 to Query parameters
+
+---
 All critical, high, medium, and low severity findings have been addressed.
 
 ---

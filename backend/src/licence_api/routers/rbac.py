@@ -109,15 +109,17 @@ async def get_user(
 
 
 @router.put("/users/{user_id}", response_model=UserInfo)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def update_user(
+    request: Request,
     user_id: UUID,
-    request: UserUpdateRequest,
+    body: UserUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> UserInfo:
     """Update user details."""
     # Check role management permission
-    if request.role_codes is not None:
+    if body.role_codes is not None:
         if not current_user.has_permission(Permissions.USERS_MANAGE_ROLES):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -127,7 +129,7 @@ async def update_user(
     try:
         return await service.update_user(
             user_id=user_id,
-            request=request,
+            request=body,
             current_user=current_user,
         )
     except UserNotFoundError:
@@ -137,8 +139,9 @@ async def update_user(
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def delete_user(
-    http_request: Request,
+    request: Request,
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_DELETE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
@@ -149,7 +152,7 @@ async def delete_user(
         await service.delete_user(
             user_id=user_id,
             current_user=current_user,
-            http_request=http_request,
+            http_request=request,
             user_agent=user_agent,
         )
     except UserNotFoundError:
@@ -253,14 +256,16 @@ async def list_roles(
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def create_role(
-    request: RoleCreateRequest,
+    request: Request,
+    body: RoleCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> RoleResponse:
     """Create a custom role."""
     try:
-        return await service.create_role(request)
+        return await service.create_role(body)
     except RoleAlreadyExistsError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role already exists")
     except ValidationError:
@@ -281,9 +286,11 @@ async def get_role(
 
 
 @router.put("/roles/{role_id}", response_model=RoleResponse)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def update_role(
+    request: Request,
     role_id: UUID,
-    request: RoleUpdateRequest,
+    body: RoleUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> RoleResponse:
@@ -291,7 +298,7 @@ async def update_role(
     try:
         return await service.update_role(
             role_id=role_id,
-            request=request,
+            request=body,
             current_user=current_user,
         )
     except RoleNotFoundError:
@@ -301,7 +308,9 @@ async def update_role(
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def delete_role(
+    request: Request,
     role_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_DELETE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
