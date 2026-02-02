@@ -383,6 +383,7 @@ async def test_provider_connection(
         CursorProvider,
         SlackProvider,
         JetBrainsProvider,
+        ZoomProvider,
     )
 
     providers = {
@@ -399,6 +400,7 @@ async def test_provider_connection(
         ProviderName.CURSOR: CursorProvider,
         ProviderName.SLACK: SlackProvider,
         ProviderName.JETBRAINS: JetBrainsProvider,
+        ProviderName.ZOOM: ZoomProvider,
     }
 
     provider_class = providers.get(ProviderName(body.name) if body.name in [e.value for e in ProviderName] else None)

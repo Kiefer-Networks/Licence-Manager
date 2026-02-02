@@ -51,11 +51,13 @@ const licenseProviderTypes = [
   { value: 'miro', label: 'Miro', fields: ['access_token', 'org_id'], type: 'api' },
   { value: 'openai', label: 'OpenAI', fields: ['admin_api_key', 'org_id'], type: 'api' },
   { value: 'slack', label: 'Slack', fields: ['bot_token', 'user_token'], type: 'api' },
+  { value: 'zoom', label: 'Zoom', fields: ['account_id', 'client_id', 'client_secret'], type: 'api' },
   { value: 'manual', label: 'manual', fields: [], type: 'manual' },
 ];
 
 // Keys for translatable credential field labels
 const FIELD_LABEL_KEYS: Record<string, string> = {
+  account_id: 'accountId',
   access_token: 'accessToken',
   admin_api_key: 'adminApiKey',
   admin_email: 'adminEmail',
@@ -101,13 +103,14 @@ const PROVIDER_LINKS: Record<string, string> = {
   anthropic: 'https://docs.anthropic.com/en/api/admin-api',
   auth0: 'https://auth0.com/docs/api/management/v2',
   mailjet: 'https://dev.mailjet.com/email/guides/getting-started/',
+  zoom: 'https://developers.zoom.us/docs/internal-apps/',
 };
 
 // Provider types that have setup instructions
 const PROVIDERS_WITH_SETUP = [
   '1password', 'adobe', 'atlassian', 'cursor', 'figma', 'github', 'gitlab',
   'google_workspace', 'hibob', 'jetbrains', 'mattermost', 'microsoft',
-  'miro', 'openai', 'personio', 'slack', 'anthropic', 'auth0', 'mailjet'
+  'miro', 'openai', 'personio', 'slack', 'anthropic', 'auth0', 'mailjet', 'zoom'
 ];
 
 const getFieldLabel = (field: string, t: (key: string) => string) => {

@@ -20,6 +20,7 @@ from licence_api.providers.onepassword import OnePasswordProvider
 from licence_api.providers.openai import OpenAIProvider
 from licence_api.providers.personio import PersonioProvider
 from licence_api.providers.slack import SlackProvider
+from licence_api.providers.zoom import ZoomProvider
 
 __all__ = [
     "AdobeProvider",
@@ -42,4 +43,5 @@ __all__ = [
     "OpenAIProvider",
     "PersonioProvider",
     "SlackProvider",
+    "ZoomProvider",
 ]

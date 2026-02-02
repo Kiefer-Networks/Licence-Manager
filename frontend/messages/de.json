@@ -361,6 +361,7 @@
     "mattermost": "Mattermost",
     "gitlab": "GitLab",
     "miro": "Miro",
+    "zoom": "Zoom",
     "google_workspace": "Google Workspace",
     "manual": "Manuell",
     "manualNoApi": "Manuell (Keine API)",
@@ -574,6 +575,7 @@
     "setupSteps": "Einrichtungsschritte:",
     "viewDocumentation": "Dokumentation ansehen →",
     "change": "Ändern",
+    "accountId": "Konto-ID",
     "accessToken": "Zugriffstoken",
     "adminApiKey": "Admin-API-Schlüssel",
     "adminEmail": "Admin-E-Mail",
@@ -1673,6 +1675,22 @@
         "4. Kopieren Sie Ihren geheimen Schlüssel (privat)",
         "5. Schlüssel werden automatisch mit Ihrem Konto erstellt",
         "6. Master-Schlüssel hat vollen Zugriff auf alle Sub-Accounts"
+      ]
+    },
+    "zoom": {
+      "permissions": [
+        "Server-to-Server OAuth-App",
+        "user:read:list Berechtigung (zum Auflisten von Benutzern)"
+      ],
+      "steps": [
+        "1. Gehen Sie zu Zoom App Marketplace → Develop → Build App",
+        "2. Wählen Sie 'Server-to-Server OAuth' App-Typ",
+        "3. Geben Sie den App-Namen ein und erstellen Sie die App",
+        "4. Kopieren Sie die Account ID aus der App-Übersicht",
+        "5. Gehen Sie zum Tab 'App Credentials'",
+        "6. Kopieren Sie Client ID und Client Secret",
+        "7. Fügen Sie die Berechtigung user:read:list im 'Scopes'-Bereich hinzu",
+        "8. Klicken Sie auf 'Activate' im Activation-Tab"
       ]
     }
   },

@@ -361,6 +361,7 @@
     "mattermost": "Mattermost",
     "gitlab": "GitLab",
     "miro": "Miro",
+    "zoom": "Zoom",
     "google_workspace": "Google Workspace",
     "manual": "Manual",
     "manualNoApi": "Manual (No API)",
@@ -574,6 +575,7 @@
     "setupSteps": "Setup Steps:",
     "viewDocumentation": "View documentation →",
     "change": "Change",
+    "accountId": "Account ID",
     "accessToken": "Access Token",
     "adminApiKey": "Admin API Key",
     "adminEmail": "Admin Email",
@@ -1673,6 +1675,22 @@
         "4. Copy your Secret Key (private)",
         "5. Keys are created automatically with your account",
         "6. Master key has full access to all sub-accounts"
+      ]
+    },
+    "zoom": {
+      "permissions": [
+        "Server-to-Server OAuth app",
+        "user:read:list scope (to list users)"
+      ],
+      "steps": [
+        "1. Go to Zoom App Marketplace → Develop → Build App",
+        "2. Select 'Server-to-Server OAuth' app type",
+        "3. Fill in app name and create the app",
+        "4. Copy the Account ID from app overview",
+        "5. Go to 'App Credentials' tab",
+        "6. Copy Client ID and Client Secret",
+        "7. Add scope: user:read:list in 'Scopes' section",
+        "8. Click 'Activate' in the Activation tab"
       ]
     }
   },

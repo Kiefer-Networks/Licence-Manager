@@ -31,6 +31,7 @@ class ProviderName(StrEnum):
     OPENAI = "openai"
     PERSONIO = "personio"
     SLACK = "slack"
+    ZOOM = "zoom"
 
 
 class ProviderType(StrEnum):

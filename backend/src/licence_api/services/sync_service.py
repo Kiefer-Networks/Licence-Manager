@@ -164,6 +164,7 @@ class SyncService:
             OpenAIProvider,
             PersonioProvider,
             SlackProvider,
+            ZoomProvider,
         )
 
         providers = {
@@ -186,6 +187,7 @@ class SyncService:
             ProviderName.OPENAI: OpenAIProvider,
             ProviderName.PERSONIO: PersonioProvider,
             ProviderName.SLACK: SlackProvider,
+            ProviderName.ZOOM: ZoomProvider,
         }
 
         provider_class = providers.get(name)
