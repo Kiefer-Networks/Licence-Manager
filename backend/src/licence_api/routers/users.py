@@ -239,10 +239,10 @@ async def create_employee(
             user=current_user,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Invalid employee data or email already exists",
         )
 
 
@@ -267,10 +267,10 @@ async def update_employee(
             user=current_user,
             request=request,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Invalid employee data or employee cannot be modified",
         )
 
 
@@ -294,10 +294,10 @@ async def delete_employee(
             request=request,
         )
         return {"success": True, "message": "Employee deleted"}
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Employee not found or cannot be deleted",
         )
 
 

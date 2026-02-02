@@ -56,7 +56,7 @@ class AdminAccountUpdate(BaseModel):
     """Update admin account status on a license."""
 
     is_admin_account: bool
-    admin_account_name: str | None = None
+    admin_account_name: str | None = Field(default=None, max_length=255)
     admin_account_owner_id: UUID | None = None
     apply_globally: bool = False
 
