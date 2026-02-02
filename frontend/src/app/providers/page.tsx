@@ -461,7 +461,7 @@ export default function ProvidersPage() {
                             ) : (
                               <>{tLicenses('licenseCount', { count: provider.license_count })}</>
                             )}
-                            {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString(getLocale())}`}
+                            {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
                           </p>
                         </div>
                       </div>

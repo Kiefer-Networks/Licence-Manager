@@ -262,7 +262,8 @@ export default function ProviderDetailPage() {
         api.getProviderLicenseTypes(providerId),
         api.getProviderPricing(providerId),
       ]);
-      setLicenseTypes(typesData.license_types);
+      // Sort license types alphabetically
+      setLicenseTypes([...typesData.license_types].sort((a, b) => a.license_type.localeCompare(b.license_type)));
 
       // Initialize pricing edits with current values
       const edits: Record<string, { cost: string; currency: string; billing_cycle: string; payment_frequency: string; display_name: string; next_billing_date: string; notes: string }> = {};
@@ -303,7 +304,8 @@ export default function ProviderDetailPage() {
   const fetchIndividualLicenseTypes = useCallback(async () => {
     try {
       const data = await api.getProviderIndividualLicenseTypes(providerId);
-      setIndividualLicenseTypes(data.license_types);
+      // Sort individual license types alphabetically
+      setIndividualLicenseTypes([...data.license_types].sort((a, b) => a.license_type.localeCompare(b.license_type)));
       setHasCombinedTypes(data.has_combined_types);
 
       // Initialize individual pricing edits

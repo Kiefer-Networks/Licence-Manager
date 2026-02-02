@@ -151,10 +151,10 @@ class JetBrainsProvider(BaseProvider):
                                 assignee_name = assignee.get("registrationName", "License Key")
 
                         # Determine status
+                        # Note: "unassigned" should be determined by employee_id at the system level,
+                        # not by provider status. All non-suspended licenses are "active".
                         if is_suspended:
-                            status = "suspended"
-                        elif not assignee:
-                            status = "unassigned"
+                            status = "inactive"
                         else:
                             status = "active"
 
