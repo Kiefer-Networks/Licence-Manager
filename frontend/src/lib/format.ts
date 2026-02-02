@@ -1,14 +1,105 @@
 /**
  * Formatting utilities for dates, currencies, and other common formats.
- * Uses user's locale from browser settings for internationalization.
+ * These functions use default locale settings.
+ * For user-preference-aware formatting, use the useLocale() hook from locale-provider.
  */
 
 import { getLocale } from './locale';
 
+// Currency symbols mapping
+export const CURRENCY_SYMBOLS: Record<string, string> = {
+  EUR: '\u20AC',
+  USD: '$',
+  GBP: '\u00A3',
+  CHF: 'CHF',
+};
+
+// Number format locale mapping
+export const NUMBER_FORMAT_LOCALES: Record<string, string> = {
+  'de-DE': 'de-DE',
+  'en-US': 'en-US',
+  'de-CH': 'de-CH',
+};
+
+// Date format patterns
+export type DateFormatPattern = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+
+/**
+ * Format a date according to user preference pattern
+ */
+export function formatDateWithPattern(
+  date: string | Date | null | undefined,
+  pattern: DateFormatPattern = 'DD.MM.YYYY'
+): string {
+  if (!date) return '-';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '-';
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+
+  switch (pattern) {
+    case 'MM/DD/YYYY':
+      return `${month}/${day}/${year}`;
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`;
+    case 'DD.MM.YYYY':
+    default:
+      return `${day}.${month}.${year}`;
+  }
+}
+
+/**
+ * Format a number according to user preference locale
+ */
+export function formatNumberWithLocale(
+  value: number | string | null | undefined,
+  locale: string = 'de-DE',
+  decimals: number = 2
+): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '-';
+
+  const numberLocale = NUMBER_FORMAT_LOCALES[locale] || 'de-DE';
+  return new Intl.NumberFormat(numberLocale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num);
+}
+
+/**
+ * Format currency according to user preferences
+ */
+export function formatCurrencyWithPrefs(
+  value: number | string | null | undefined,
+  currency: string = 'EUR',
+  numberLocale: string = 'de-DE'
+): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '-';
+
+  const locale = NUMBER_FORMAT_LOCALES[numberLocale] || 'de-DE';
+  const symbol = CURRENCY_SYMBOLS[currency] || currency;
+
+  const formatted = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
+
+  // Format with proper currency symbol placement
+  if (currency === 'EUR' || currency === 'GBP') {
+    return `${formatted} ${symbol}`;
+  }
+  return `${symbol}${formatted}`;
+}
+
 /**
  * Format a date as relative time (e.g., "2 hours ago", "3 days ago")
  */
-export function formatRelativeTime(date: string | Date): string {
+export function formatRelativeTime(date: string | Date, dateFormat: DateFormatPattern = 'DD.MM.YYYY'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
@@ -26,15 +117,11 @@ export function formatRelativeTime(date: string | Date): string {
   if (diffWeek < 4) return `${diffWeek}w ago`;
   if (diffMonth < 12) return `${diffMonth}mo ago`;
 
-  return d.toLocaleDateString(getLocale(), {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return formatDateWithPattern(d, dateFormat);
 }
 
 /**
- * Format a date for display (uses user's locale)
+ * Format a date for display (uses browser locale - for backwards compatibility)
  */
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-';
@@ -62,7 +149,7 @@ export function formatDateTime(date: string | Date | null | undefined): string {
 }
 
 /**
- * Format currency for display
+ * Format currency for display (uses browser locale - for backwards compatibility)
  */
 export function formatCurrency(
   value: number | string | null | undefined,
@@ -108,20 +195,27 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Format monthly cost in standard format: "EUR 15 / month"
+ * Format monthly cost with currency symbol
  */
 export function formatMonthlyCost(
   value: number | string | null | undefined,
-  currency = 'EUR'
+  currency = 'EUR',
+  numberLocale = 'de-DE'
 ): string {
   if (value === null || value === undefined || value === '') return '-';
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return '-';
 
-  const formatted = new Intl.NumberFormat(getLocale(), {
+  const symbol = CURRENCY_SYMBOLS[currency] || currency;
+  const locale = NUMBER_FORMAT_LOCALES[numberLocale] || 'de-DE';
+
+  const formatted = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(num);
 
-  return `${currency} ${formatted} / month`;
+  if (currency === 'EUR' || currency === 'GBP') {
+    return `${formatted} ${symbol} / month`;
+  }
+  return `${symbol}${formatted} / month`;
 }
