@@ -99,17 +99,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   const displayEmail = user?.email || '';
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 w-60 bg-white border-r border-zinc-200">
+      <div className="fixed inset-y-0 left-0 w-60 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800">
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-14 px-5 border-b border-zinc-200">
+          <div className="flex items-center justify-between h-14 px-5 border-b border-zinc-200 dark:border-zinc-800">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <div className="h-7 w-7 rounded-md bg-zinc-900 flex items-center justify-center">
-                <Key className="h-4 w-4 text-white" />
+              <div className="h-7 w-7 rounded-md bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center">
+                <Key className="h-4 w-4 text-white dark:text-zinc-900" />
               </div>
-              <span className="font-semibold text-[15px] tracking-tight">{t('licenses')}</span>
+              <span className="font-semibold text-[15px] tracking-tight text-zinc-900 dark:text-zinc-100">{t('licenses')}</span>
             </Link>
             <LanguageSwitcher />
           </div>
@@ -125,8 +125,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   className={cn(
                     'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors',
                     isActive
-                      ? 'bg-zinc-100 text-zinc-900'
-                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -139,7 +139,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {visibleAdminNav.length > 0 && (
               <>
                 <div className="pt-4 pb-1 px-2.5">
-                  <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  <span className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                     {t('administration')}
                   </span>
                 </div>
@@ -152,8 +152,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                       className={cn(
                         'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors',
                         isActive
-                          ? 'bg-zinc-100 text-zinc-900'
-                          : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                          ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                          : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
                       )}
                     >
                       <item.icon className="h-4 w-4" />
@@ -166,19 +166,19 @@ export function AppLayout({ children }: AppLayoutProps) {
           </nav>
 
           {/* User menu */}
-          <div className="p-3 border-t border-zinc-200">
+          <div className="p-3 border-t border-zinc-200 dark:border-zinc-800">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start h-auto py-2 px-2.5 hover:bg-zinc-50">
+                <Button variant="ghost" className="w-full justify-start h-auto py-2 px-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium text-zinc-600">
+                    <div className="h-7 w-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                         {displayName.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div className="text-left min-w-0">
-                      <p className="text-[13px] font-medium text-zinc-900 truncate">{displayName}</p>
-                      <p className="text-[11px] text-zinc-500 truncate">
+                      <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">{displayName}</p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                         {displayEmail}
                       </p>
                     </div>
@@ -186,7 +186,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-52">
-                <div className="px-2 py-1.5 text-xs text-zinc-500">
+                <div className="px-2 py-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   {user?.roles.join(', ') || t('noRoles')}
                 </div>
                 <DropdownMenuSeparator />
@@ -205,7 +205,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 dark:text-red-400">
                   <LogOut className="mr-2 h-4 w-4" />
                   {t('signOut')}
                 </DropdownMenuItem>

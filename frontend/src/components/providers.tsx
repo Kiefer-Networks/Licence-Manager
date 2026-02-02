@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider, AbstractIntlMessages } from 'next-intl';
 import { useState } from 'react';
 import { AuthProvider } from '@/components/auth-provider';
+import { ThemeProvider } from '@/components/theme-provider';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -24,10 +25,17 @@ export function Providers({ children, locale, messages }: ProvidersProps) {
   );
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>{children}</AuthProvider>
-      </QueryClientProvider>
-    </NextIntlClientProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryClientProvider>
+      </NextIntlClientProvider>
+    </ThemeProvider>
   );
 }

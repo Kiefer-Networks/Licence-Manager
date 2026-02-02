@@ -1704,6 +1704,14 @@
     "savePreferences": "Save Preferences",
     "preferencesSaved": "Notification preferences saved",
     "failedToSave": "Failed to save preferences",
-    "failedToUpdate": "Failed to update"
+    "failedToUpdate": "Failed to update",
+    "appearance": "Appearance",
+    "themeSettings": "Theme",
+    "themeDescription": "Select your preferred color scheme for the application",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "themeSystemHint": "System theme automatically switches based on your device settings",
+    "toggleTheme": "Toggle theme"
   }
 }

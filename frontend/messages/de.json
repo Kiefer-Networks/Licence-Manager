@@ -1704,6 +1704,14 @@
     "savePreferences": "Einstellungen speichern",
     "preferencesSaved": "Benachrichtigungseinstellungen gespeichert",
     "failedToSave": "Speichern der Einstellungen fehlgeschlagen",
-    "failedToUpdate": "Aktualisierung fehlgeschlagen"
+    "failedToUpdate": "Aktualisierung fehlgeschlagen",
+    "appearance": "Darstellung",
+    "themeSettings": "Farbschema",
+    "themeDescription": "Wählen Sie Ihr bevorzugtes Farbschema für die Anwendung",
+    "themeLight": "Hell",
+    "themeDark": "Dunkel",
+    "themeSystem": "System",
+    "themeSystemHint": "Das Systemdesign wechselt automatisch basierend auf Ihren Geräteeinstellungen",
+    "toggleTheme": "Design wechseln"
   }
 }

@@ -12,13 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2 } from 'lucide-react';
+import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check } from 'lucide-react';
+import { useTheme } from '@/components/theme-provider';
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const { user, refreshUser } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   // General tab state
   const [name, setName] = useState('');
@@ -276,10 +278,14 @@ export default function ProfilePage() {
         </div>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               {t('general')}
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              {t('appearance')}
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
@@ -431,6 +437,80 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Appearance Tab */}
+          <TabsContent value="appearance" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="h-5 w-5" />
+                  {t('themeSettings')}
+                </CardTitle>
+                <CardDescription>{t('themeDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <button
+                    onClick={() => setTheme('light')}
+                    className={`relative flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors ${
+                      theme === 'light'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                      <Sun className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <span className="font-medium text-sm">{t('themeLight')}</span>
+                    {theme === 'light' && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setTheme('dark')}
+                    className={`relative flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors ${
+                      theme === 'dark'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                      <Moon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <span className="font-medium text-sm">{t('themeDark')}</span>
+                    {theme === 'dark' && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setTheme('system')}
+                    className={`relative flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors ${
+                      theme === 'system'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                      <Monitor className="h-6 w-6 text-zinc-600 dark:text-zinc-400" />
+                    </div>
+                    <span className="font-medium text-sm">{t('themeSystem')}</span>
+                    {theme === 'system' && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                  </button>
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {t('themeSystemHint')}
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
