@@ -370,10 +370,13 @@ async def update_profile(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserInfo:
-    """Update current user's profile (name)."""
+    """Update current user's profile (name and locale preferences)."""
     return await auth_service.update_profile(
         user_id=current_user.id,
         name=body.name,
+        date_format=body.date_format,
+        number_format=body.number_format,
+        currency=body.currency,
     )
 
 

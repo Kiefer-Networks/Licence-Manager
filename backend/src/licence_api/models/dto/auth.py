@@ -57,6 +57,10 @@ class UserInfo(BaseModel):
     permissions: list[str]
     is_superadmin: bool = False
     last_login_at: datetime | None = None
+    # Locale preferences
+    date_format: str | None = "DD.MM.YYYY"
+    number_format: str | None = "de-DE"
+    currency: str | None = "EUR"
 
 
 class UserCreateRequest(BaseModel):
@@ -183,6 +187,10 @@ class ProfileUpdateRequest(BaseModel):
     """Profile update request for the current user."""
 
     name: str | None = Field(default=None, max_length=255)
+    # Locale preferences
+    date_format: str | None = Field(default=None, max_length=20)
+    number_format: str | None = Field(default=None, max_length=20)
+    currency: str | None = Field(default=None, max_length=10)
 
 
 class AvatarUploadResponse(BaseModel):

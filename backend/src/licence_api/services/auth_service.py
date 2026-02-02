@@ -444,6 +444,9 @@ class AuthService:
             permissions=permissions,
             is_superadmin="superadmin" in roles,
             last_login_at=user.last_login_at,
+            date_format=user.date_format or "DD.MM.YYYY",
+            number_format=user.number_format or "de-DE",
+            currency=user.currency or "EUR",
         )
 
     async def change_password(
@@ -557,12 +560,18 @@ class AuthService:
         self,
         user_id: UUID,
         name: str | None = None,
+        date_format: str | None = None,
+        number_format: str | None = None,
+        currency: str | None = None,
     ) -> UserInfo:
         """Update user profile.
 
         Args:
             user_id: User UUID
             name: New name (None to clear)
+            date_format: Date format preference
+            number_format: Number format locale
+            currency: Currency code
 
         Returns:
             Updated UserInfo
@@ -572,7 +581,17 @@ class AuthService:
         """
         if name is not None:
             await self.user_repo.update_name(user_id, name if name else None)
-            await self.session.commit()
+
+        # Update locale preferences if any are provided
+        if date_format is not None or number_format is not None or currency is not None:
+            await self.user_repo.update_locale_preferences(
+                user_id,
+                date_format=date_format,
+                number_format=number_format,
+                currency=currency,
+            )
+
+        await self.session.commit()
 
         user_info = await self.get_user_info(user_id)
         if user_info is None:

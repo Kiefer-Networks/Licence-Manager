@@ -393,7 +393,40 @@ class UserRepository(BaseRepository[AdminUserORM]):
         if user is None:
             return None
 
-        user.avatar_url = avatar_url
+        user.picture_url = avatar_url
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def update_locale_preferences(
+        self,
+        user_id: UUID,
+        date_format: str | None = None,
+        number_format: str | None = None,
+        currency: str | None = None,
+    ) -> AdminUserORM | None:
+        """Update user's locale preferences.
+
+        Args:
+            user_id: User UUID
+            date_format: Date format (e.g., DD.MM.YYYY, MM/DD/YYYY)
+            number_format: Number format locale (e.g., de-DE, en-US)
+            currency: Currency code (e.g., EUR, USD)
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        if date_format is not None:
+            user.date_format = date_format
+        if number_format is not None:
+            user.number_format = number_format
+        if currency is not None:
+            user.currency = currency
+
         await self.session.flush()
         await self.session.refresh(user)
         return user
