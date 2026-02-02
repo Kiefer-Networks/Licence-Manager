@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check } from 'lucide-react';
+import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check, Globe, Calendar, Hash, DollarSign } from 'lucide-react';
 import { useTheme } from '@/components/theme-provider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
@@ -21,6 +22,14 @@ export default function ProfilePage() {
   const tNav = useTranslations('nav');
   const { user, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
+
+  // Locale settings state
+  const [dateFormat, setDateFormat] = useState('DD.MM.YYYY');
+  const [numberFormat, setNumberFormat] = useState('de-DE');
+  const [currency, setCurrency] = useState('EUR');
+  const [localeSaving, setLocaleSaving] = useState(false);
+  const [localeSuccess, setLocaleSuccess] = useState('');
+  const [localeError, setLocaleError] = useState('');
 
   // General tab state
   const [name, setName] = useState('');
@@ -52,6 +61,15 @@ export default function ProfilePage() {
       setName(user.name);
     }
   }, [user?.name]);
+
+  // Initialize locale settings from user
+  useEffect(() => {
+    if (user) {
+      setDateFormat(user.date_format || 'DD.MM.YYYY');
+      setNumberFormat(user.number_format || 'de-DE');
+      setCurrency(user.currency || 'EUR');
+    }
+  }, [user?.date_format, user?.number_format, user?.currency]);
 
   // Fetch notification preferences
   useEffect(() => {
@@ -268,6 +286,35 @@ export default function ProfilePage() {
       setSecurityError(errorMessage);
     }
   };
+
+  // Handle locale settings save
+  const handleSaveLocale = async () => {
+    setLocaleSaving(true);
+    setLocaleError('');
+    setLocaleSuccess('');
+
+    try {
+      await api.updateProfile({
+        date_format: dateFormat,
+        number_format: numberFormat,
+        currency: currency,
+      });
+      await refreshUser?.();
+      setLocaleSuccess(t('localeSaved'));
+      setTimeout(() => setLocaleSuccess(''), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
+      setLocaleError(errorMessage);
+    } finally {
+      setLocaleSaving(false);
+    }
+  };
+
+  // Check if locale settings have changed
+  const hasLocaleChanges =
+    dateFormat !== (user?.date_format || 'DD.MM.YYYY') ||
+    numberFormat !== (user?.number_format || 'de-DE') ||
+    currency !== (user?.currency || 'EUR');
 
   return (
     <AppLayout>
@@ -511,6 +558,109 @@ export default function ProfilePage() {
                 <p className="mt-4 text-sm text-muted-foreground">
                   {t('themeSystemHint')}
                 </p>
+              </CardContent>
+            </Card>
+
+            {/* Locale Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  {t('localeSettings')}
+                </CardTitle>
+                <CardDescription>{t('localeDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {localeError && (
+                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                    {localeError}
+                  </div>
+                )}
+                {localeSuccess && (
+                  <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
+                    {localeSuccess}
+                  </div>
+                )}
+
+                {/* Date Format */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    {t('dateFormat')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('dateFormatDescription')}</p>
+                  <Select value={dateFormat} onValueChange={setDateFormat}>
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DD.MM.YYYY">{t('dateFormatDMY')}</SelectItem>
+                      <SelectItem value="MM/DD/YYYY">{t('dateFormatMDY')}</SelectItem>
+                      <SelectItem value="YYYY-MM-DD">{t('dateFormatYMD')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Number Format */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    {t('numberFormat')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('numberFormatDescription')}</p>
+                  <Select value={numberFormat} onValueChange={setNumberFormat}>
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="de-DE">{t('numberFormatDE')}</SelectItem>
+                      <SelectItem value="en-US">{t('numberFormatEN')}</SelectItem>
+                      <SelectItem value="de-CH">{t('numberFormatCH')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Currency */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    {t('currency')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('currencyDescription')}</p>
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">{t('currencyEUR')}</SelectItem>
+                      <SelectItem value="USD">{t('currencyUSD')}</SelectItem>
+                      <SelectItem value="GBP">{t('currencyGBP')}</SelectItem>
+                      <SelectItem value="CHF">{t('currencyCHF')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={handleSaveLocale}
+                    disabled={localeSaving || !hasLocaleChanges}
+                  >
+                    {localeSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {t('saving')}
+                      </>
+                    ) : (
+                      t('saveLocale')
+                    )}
+                  </Button>
+                  {hasLocaleChanges && (
+                    <p className="mt-2 text-sm text-amber-600">
+                      {tCommon('unsavedChanges')}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

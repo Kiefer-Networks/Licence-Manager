@@ -1747,6 +1747,26 @@
     "themeDark": "Dunkel",
     "themeSystem": "System",
     "themeSystemHint": "Das Systemdesign wechselt automatisch basierend auf Ihren Geräteeinstellungen",
-    "toggleTheme": "Design wechseln"
+    "toggleTheme": "Design wechseln",
+    "localeSettings": "Regionale Einstellungen",
+    "localeDescription": "Konfigurieren Sie die Darstellung von Datum, Zahlen und Währung",
+    "dateFormat": "Datumsformat",
+    "dateFormatDescription": "Wählen Sie, wie Daten angezeigt werden sollen",
+    "dateFormatDMY": "TT.MM.JJJJ (02.02.2026)",
+    "dateFormatMDY": "MM/TT/JJJJ (02/02/2026)",
+    "dateFormatYMD": "JJJJ-MM-TT (2026-02-02)",
+    "numberFormat": "Zahlenformat",
+    "numberFormatDescription": "Wählen Sie, wie Zahlen formatiert werden sollen",
+    "numberFormatDE": "Deutsch (1.234,56)",
+    "numberFormatEN": "Englisch (1,234.56)",
+    "numberFormatCH": "Schweiz (1'234.56)",
+    "currency": "Währung",
+    "currencyDescription": "Wählen Sie Ihre bevorzugte Währung für die Anzeige",
+    "currencyEUR": "Euro (€)",
+    "currencyUSD": "US-Dollar ($)",
+    "currencyGBP": "Britisches Pfund (£)",
+    "currencyCHF": "Schweizer Franken (CHF)",
+    "localeSaved": "Regionale Einstellungen gespeichert",
+    "saveLocale": "Einstellungen speichern"
   }
 }

@@ -1747,6 +1747,26 @@
     "themeDark": "Dark",
     "themeSystem": "System",
     "themeSystemHint": "System theme automatically switches based on your device settings",
-    "toggleTheme": "Toggle theme"
+    "toggleTheme": "Toggle theme",
+    "localeSettings": "Regional Settings",
+    "localeDescription": "Configure how dates, numbers and currencies are displayed",
+    "dateFormat": "Date Format",
+    "dateFormatDescription": "Choose how dates should be displayed",
+    "dateFormatDMY": "DD.MM.YYYY (02.02.2026)",
+    "dateFormatMDY": "MM/DD/YYYY (02/02/2026)",
+    "dateFormatYMD": "YYYY-MM-DD (2026-02-02)",
+    "numberFormat": "Number Format",
+    "numberFormatDescription": "Choose how numbers should be formatted",
+    "numberFormatDE": "German (1.234,56)",
+    "numberFormatEN": "English (1,234.56)",
+    "numberFormatCH": "Swiss (1'234.56)",
+    "currency": "Currency",
+    "currencyDescription": "Choose your preferred currency for display",
+    "currencyEUR": "Euro (€)",
+    "currencyUSD": "US Dollar ($)",
+    "currencyGBP": "British Pound (£)",
+    "currencyCHF": "Swiss Franc (CHF)",
+    "localeSaved": "Regional settings saved",
+    "saveLocale": "Save Settings"
   }
 }
