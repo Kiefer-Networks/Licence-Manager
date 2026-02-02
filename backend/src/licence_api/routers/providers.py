@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import LOGOS_DIR
@@ -73,8 +73,21 @@ def get_provider_service(db: AsyncSession = Depends(get_db)) -> ProviderService:
 class TestConnectionRequest(BaseModel):
     """Request to test provider connection."""
 
-    name: str  # Allow any provider name (including 'manual')
+    name: str = Field(max_length=100)  # Provider name
     credentials: dict[str, Any]
+
+    @field_validator("credentials")
+    @classmethod
+    def validate_credentials_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate credentials dict size and content."""
+        if len(v) > 20:
+            raise ValueError("Too many credential fields")
+        for key, value in v.items():
+            if len(key) > 100:
+                raise ValueError("Credential key too long")
+            if isinstance(value, str) and len(value) > 10000:
+                raise ValueError("Credential value too long")
+        return v
 
 
 class TestConnectionResponse(BaseModel):
