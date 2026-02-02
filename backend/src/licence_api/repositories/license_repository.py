@@ -787,13 +787,15 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         # This is a bit expensive but necessary for accurate stats
         # Only fetch active licenses without employee_id, excluding service accounts
         # (service accounts are intentionally unassigned and should not count as problems)
+        # Also exclude licenses with suggested_employee_id (these are "suggested", not "external")
         unassigned_results = await self.session.execute(
-            select(LicenseORM.provider_id, LicenseORM.external_user_id)
+            select(LicenseORM.provider_id, LicenseORM.external_user_id, LicenseORM.match_status)
             .where(
                 and_(
                     LicenseORM.status == "active",
                     LicenseORM.employee_id.is_(None),
                     LicenseORM.is_service_account == False,
+                    LicenseORM.suggested_employee_id.is_(None),  # Exclude suggested matches
                 )
             )
         )
@@ -801,16 +803,17 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         for row in unassigned_results:
             provider_id = row.provider_id
             email = (row.external_user_id or "").lower()
+            match_status = row.match_status
 
             if provider_id not in stats:
                 stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "external": 0}
 
-            # Check if external
-            is_external = True
-            if email and "@" in email:
+            # Check if external - either by match_status or by domain check
+            is_external = match_status in ("external_review", "external_guest")
+            if not is_external and email and "@" in email:
                 domain = email.split("@")[1]
-                if any(domain == d or domain.endswith("." + d) for d in company_domains):
-                    is_external = False
+                if not any(domain == d or domain.endswith("." + d) for d in company_domains):
+                    is_external = True
 
             if is_external:
                 stats[provider_id]["external"] += 1
