@@ -42,16 +42,15 @@
   - auth.py: logout_all_sessions, update_profile, upload_avatar, delete_avatar (AUTH_REFRESH_LIMIT)
 
 ### SEC-V16-002 [MEDIUM] - Unbounded Lists in Request DTOs
-- **Status:** OPEN
+- **Status:** FIXED
+- **Fixed Date:** 2026-02-02
 - **File:** backend/src/licence_api/models/dto/auth.py
-- **Description:** List parameters without max_length constraints:
-  - Line 68: role_codes in UserCreateRequest
-  - Line 76: role_codes in UserUpdateRequest
-  - Line 97: permission_codes in RoleCreateRequest
-  - Line 105: permission_codes in RoleUpdateRequest
-  - Line 172: preferences in UserNotificationPreferenceBulkUpdate
-- **Risk:** Memory exhaustion via large payloads (DoS)
-- **Fix Required:** Add Field(max_length=N) to all list fields
+- **Description:** List parameters without max_length constraints
+- **Fix:** Added Field(max_length) to all list fields:
+  - role_codes: max_length=50 (max 50 roles per user)
+  - permission_codes: max_length=200 (max 200 permissions per role)
+  - preferences: max_length=50 (max 50 notification preferences)
+  - Also added max_length to name/description fields
 
 ### SEC-V16-003 [MEDIUM] - Console.error in Production Frontend Code
 - **Status:** OPEN

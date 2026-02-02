@@ -63,17 +63,17 @@ class UserCreateRequest(BaseModel):
     """User creation request."""
 
     email: EmailStr
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     password: str = Field(min_length=12)
-    role_codes: list[str] = []
+    role_codes: list[str] = Field(default=[], max_length=50)  # Max 50 roles per user
 
 
 class UserUpdateRequest(BaseModel):
     """User update request."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
-    role_codes: list[str] | None = None
+    role_codes: list[str] | None = Field(default=None, max_length=50)  # Max 50 roles per user
 
 
 class RoleResponse(BaseModel):
@@ -93,16 +93,16 @@ class RoleCreateRequest(BaseModel):
 
     code: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
     name: str = Field(min_length=2, max_length=100)
-    description: str | None = None
-    permission_codes: list[str] = []
+    description: str | None = Field(default=None, max_length=500)
+    permission_codes: list[str] = Field(default=[], max_length=200)  # Max 200 permissions per role
 
 
 class RoleUpdateRequest(BaseModel):
     """Role update request."""
 
-    name: str | None = None
-    description: str | None = None
-    permission_codes: list[str] | None = None
+    name: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    permission_codes: list[str] | None = Field(default=None, max_length=200)  # Max 200 permissions
 
 
 class PermissionResponse(BaseModel):
@@ -169,7 +169,7 @@ class UserNotificationPreferenceUpdate(BaseModel):
 class UserNotificationPreferenceBulkUpdate(BaseModel):
     """Bulk update notification preferences."""
 
-    preferences: list[UserNotificationPreferenceUpdate]
+    preferences: list[UserNotificationPreferenceUpdate] = Field(max_length=50)  # Max 50 event types
 
 
 class UserNotificationPreferencesResponse(BaseModel):
