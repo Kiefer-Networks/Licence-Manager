@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 const REMOVABLE_PROVIDERS = ['cursor'];
 
@@ -57,6 +57,7 @@ export default function UserDetailPage() {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const tEmployees = useTranslations('employees');
+  const { formatDate } = useLocale();
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -355,7 +356,7 @@ export default function UserDetailPage() {
                 <span className="text-xs font-medium uppercase">{tEmployees('startDate')}</span>
               </div>
               <p className="text-sm font-medium">
-                {employee.start_date ? new Date(employee.start_date).toLocaleDateString(getLocale()) : '-'}
+                {employee.start_date ? formatDate(employee.start_date) : '-'}
               </p>
             </CardContent>
           </Card>
@@ -425,7 +426,7 @@ export default function UserDetailPage() {
                           {license.last_activity_at ? (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {new Date(license.last_activity_at).toLocaleDateString(getLocale())}
+                              {formatDate(license.last_activity_at)}
                             </span>
                           ) : '-'}
                         </td>
@@ -524,7 +525,7 @@ export default function UserDetailPage() {
                 <div>
                   <p className="font-medium text-red-600">{tEmployees('offboarded')}</p>
                   <p className="text-sm text-muted-foreground">
-                    {tEmployees('terminationDate')}: {new Date(employee.termination_date).toLocaleDateString(getLocale())}
+                    {tEmployees('terminationDate')}: {formatDate(employee.termination_date)}
                   </p>
                 </div>
               </div>

@@ -28,7 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyButton, CopyableText } from '@/components/ui/copy-button';
@@ -72,6 +72,7 @@ export default function ProviderDetailPage() {
   const t = useTranslations('providers');
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
+  const { formatDate, formatCurrency, formatNumber } = useLocale();
 
   const licenseModelOptions = [
     { value: 'seat_based', label: t('seatBased') },
@@ -1094,7 +1095,7 @@ export default function ProviderDetailPage() {
                 {!isManual && provider.last_sync_at && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('lastSync')}</span>
-                    <span>{new Date(provider.last_sync_at).toLocaleString(getLocale())}</span>
+                    <span>{formatDate(provider.last_sync_at)}</span>
                   </div>
                 )}
               </CardContent>
@@ -1160,7 +1161,7 @@ export default function ProviderDetailPage() {
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">{t('expires')}</span>
                             <span className={isExpiringSoon ? 'text-red-600 font-medium' : ''}>
-                              {expiresAt.toLocaleDateString(getLocale())}
+                              {formatDate(expiresAt)}
                               {isExpiringSoon && (
                                 <Badge variant="outline" className="ml-2 text-red-600 border-red-200 bg-red-50">
                                   <AlertTriangle className="h-3 w-3 mr-1" />
@@ -1290,7 +1291,7 @@ export default function ProviderDetailPage() {
                           </div>
                           <div className="text-center">
                             <p className="text-xs text-muted-foreground uppercase">{isYearly ? t('yearly') : t('monthly')} {t('cost')}</p>
-                            <p className="text-xl font-semibold">{packageEdit.currency} {packageCost.toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xl font-semibold">{formatCurrency(packageCost, packageEdit.currency)}</p>
                           </div>
                           <div className="text-center">
                             <p className="text-xs text-muted-foreground uppercase">{t('costPerUser')}</p>
@@ -1304,7 +1305,7 @@ export default function ProviderDetailPage() {
                           {expiresAt && (
                             <div className="text-center">
                               <p className="text-xs text-muted-foreground uppercase">{t('expires')}</p>
-                              <p className="text-xl font-semibold">{expiresAt.toLocaleDateString(getLocale())}</p>
+                              <p className="text-xl font-semibold">{formatDate(expiresAt)}</p>
                             </div>
                           )}
                         </div>
@@ -1774,8 +1775,8 @@ export default function ProviderDetailPage() {
                             {(pkg.contract_start || pkg.contract_end) && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                {pkg.contract_start && <span>{t('fromDate', { date: new Date(pkg.contract_start).toLocaleDateString(getLocale()) })}</span>}
-                                {pkg.contract_end && <span>{t('toDate', { date: new Date(pkg.contract_end).toLocaleDateString(getLocale()) })}</span>}
+                                {pkg.contract_start && <span>{t('fromDate', { date: formatDate(pkg.contract_start) })}</span>}
+                                {pkg.contract_end && <span>{t('toDate', { date: formatDate(pkg.contract_end) })}</span>}
                                 {pkg.auto_renew && <Badge variant="secondary" className="text-xs">{t('autoRenew')}</Badge>}
                               </div>
                             )}
@@ -1783,7 +1784,7 @@ export default function ProviderDetailPage() {
                               <div className="flex items-center gap-2 mt-2 text-xs text-red-600">
                                 <AlertTriangle className="h-3 w-3" />
                                 <span>
-                                  {t('cancellationEffective', { date: new Date(pkg.cancellation_effective_date).toLocaleDateString(getLocale()) })}
+                                  {t('cancellationEffective', { date: formatDate(pkg.cancellation_effective_date) })}
                                   {pkg.cancellation_reason && ` - ${pkg.cancellation_reason}`}
                                 </span>
                               </div>
@@ -1867,7 +1868,7 @@ export default function ProviderDetailPage() {
                             {lic.renewal_date && (
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                <span>{t('renewsDate', { date: new Date(lic.renewal_date).toLocaleDateString(getLocale()) })}</span>
+                                <span>{t('renewsDate', { date: formatDate(lic.renewal_date) })}</span>
                               </div>
                             )}
                           </div>
@@ -2008,7 +2009,7 @@ export default function ProviderDetailPage() {
                           {formatFileSize(file.file_size)}
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {new Date(file.created_at).toLocaleDateString(getLocale())}
+                          {formatDate(file.created_at)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">

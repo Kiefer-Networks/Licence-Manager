@@ -19,8 +19,8 @@ import { handleSilentError } from '@/lib/error-handler';
 import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight, Bot, ShieldCheck, CheckCircle, AlertCircle, Info, Plus, Upload, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ServiceAccountsTab } from '@/components/users/ServiceAccountsTab';
-import { getLocale } from '@/lib/locale';
 import { AdminAccountsTab } from '@/components/users/AdminAccountsTab';
+import { useLocale } from '@/components/locale-provider';
 import { ManualEmployeeDialog } from '@/components/users/ManualEmployeeDialog';
 import { EmployeeBulkImportDialog } from '@/components/users/EmployeeBulkImportDialog';
 
@@ -33,13 +33,9 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString(getLocale());
-}
-
 export default function UsersPage() {
   const t = useTranslations('employees');
+  const { formatDate } = useLocale();
   const tCommon = useTranslations('common');
   const tUsers = useTranslations('users');
   const tServiceAccounts = useTranslations('serviceAccounts');

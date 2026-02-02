@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { CostTrendEntry } from '@/lib/api';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 interface CostTrendChartProps {
   data: CostTrendEntry[];
@@ -29,22 +29,19 @@ export function CostTrendChart({
   className = '',
 }: CostTrendChartProps) {
   const t = useTranslations('dashboard');
+  const { formatCurrency, numberFormat } = useLocale();
   const chartData = useMemo(() => {
     return data.map((entry) => ({
-      month: new Date(entry.month).toLocaleDateString(getLocale(), {
+      month: new Date(entry.month).toLocaleDateString(numberFormat, {
         month: 'short',
         year: '2-digit',
       }),
       cost: Number(entry.total_cost),
       licenses: entry.license_count,
     }));
-  }, [data]);
+  }, [data, numberFormat]);
 
   const currentCost = data.length > 0 ? Number(data[data.length - 1].total_cost) : 0;
-
-  const formatCost = (value: number) => {
-    return `EUR ${value.toLocaleString(getLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
 
   const TrendIcon = trendDirection === 'up' ? TrendingUp : trendDirection === 'down' ? TrendingDown : Minus;
   const trendColor = trendDirection === 'up' ? 'text-red-500' : trendDirection === 'down' ? 'text-emerald-500' : 'text-zinc-400';
@@ -75,7 +72,7 @@ export function CostTrendChart({
         </div>
         <div className="text-right">
           <p className="text-2xl font-semibold tabular-nums">
-            {formatCost(currentCost)}
+            {formatCurrency(currentCost)}
           </p>
           <p className="text-xs text-muted-foreground">{t('currentMonthly')}</p>
         </div>
@@ -116,7 +113,7 @@ export function CostTrendChart({
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 fontSize: '12px',
               }}
-              formatter={(value: number) => [formatCost(value), t('costLabel')]}
+              formatter={(value: number) => [formatCurrency(value), t('costLabel')]}
               labelStyle={{ fontWeight: 500, marginBottom: 4 }}
             />
             <Area

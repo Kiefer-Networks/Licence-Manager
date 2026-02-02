@@ -26,7 +26,7 @@ import { api, Provider } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X } from 'lucide-react';
 import Link from 'next/link';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 const hrisProviderTypes = [
   { value: 'hibob', label: 'HiBob', fields: ['auth_token'] },
@@ -126,6 +126,7 @@ export default function ProvidersPage() {
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
   const tSetup = useTranslations('providerSetup');
+  const { formatDate } = useLocale();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -384,7 +385,7 @@ export default function ProvidersPage() {
                     <div>
                       <p className="font-medium text-sm">{provider.display_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {provider.last_sync_at ? t('lastSyncTime', { time: new Date(provider.last_sync_at).toLocaleString(getLocale()) }) : t('neverSynced')}
+                        {provider.last_sync_at ? t('lastSyncTime', { time: formatDate(provider.last_sync_at) }) : t('neverSynced')}
                       </p>
                     </div>
                   </div>
@@ -461,7 +462,7 @@ export default function ProvidersPage() {
                             ) : (
                               <>{tLicenses('licenseCount', { count: provider.license_count })}</>
                             )}
-                            {!isManual && provider.last_sync_at && ` · ${new Date(provider.last_sync_at).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
+                            {!isManual && provider.last_sync_at && ` · ${formatDate(provider.last_sync_at)}`}
                           </p>
                         </div>
                       </div>

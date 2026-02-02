@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Eye, FileText } from 'lucide-react';
 import { AuditLogEntry } from '@/lib/api';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 interface AuditTableProps {
   logs: AuditLogEntry[];
@@ -22,7 +22,8 @@ interface AuditTableProps {
 
 function formatRelativeTime(
   dateString: string,
-  t: (key: string, params?: Record<string, number>) => string
+  t: (key: string, params?: Record<string, number>) => string,
+  formatDate: (date: string | Date | null | undefined) => string
 ): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -37,13 +38,7 @@ function formatRelativeTime(
   if (diffHour < 24) return t('hoursAgo', { hours: diffHour });
   if (diffDay < 7) return t('daysAgo', { days: diffDay });
 
-  return date.toLocaleDateString(getLocale(), {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDate(dateString);
 }
 
 function getActionBadgeColor(action: string): string {
@@ -120,6 +115,7 @@ function generateSummary(log: AuditLogEntry): string {
 
 export function AuditTable({ logs, onViewDetails }: AuditTableProps) {
   const t = useTranslations('audit');
+  const { formatDate } = useLocale();
 
   if (logs.length === 0) {
     return (
@@ -148,12 +144,9 @@ export function AuditTable({ logs, onViewDetails }: AuditTableProps) {
             <TableRow key={log.id} className="hover:bg-zinc-50">
               <TableCell className="text-sm">
                 <span
-                  title={new Date(log.created_at).toLocaleString(getLocale(), {
-                    dateStyle: 'full',
-                    timeStyle: 'medium',
-                  })}
+                  title={formatDate(log.created_at)}
                 >
-                  {formatRelativeTime(log.created_at, t)}
+                  {formatRelativeTime(log.created_at, t, formatDate)}
                 </span>
               </TableCell>
               <TableCell className="text-sm">

@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const tLicenses = useTranslations('licenses');
   const tProviders = useTranslations('providers');
   const tEmployees = useTranslations('employees');
+  const { formatDate, formatCurrency, formatNumber } = useLocale();
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,7 +248,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('monthlyCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
-                      EUR {totalCost.toLocaleString(getLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      {formatCurrency(totalCost)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {tLicenses('allLicenses')}
@@ -320,7 +321,7 @@ export default function DashboardPage() {
                           <div className="h-8 w-px bg-zinc-200" />
                           <div>
                             <p className="text-2xl font-semibold text-emerald-600">
-                              EUR {potentialSavings.toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                              {formatCurrency(potentialSavings)}
                             </p>
                             <p className="text-xs text-muted-foreground">{t('perMonth')}</p>
                           </div>
@@ -440,12 +441,12 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-sm tabular-nums">
-                          EUR {Number(provider.monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
+                          {formatCurrency(provider.monthly_cost)}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
                           <Clock className="h-3 w-3" />
                           {provider.last_sync_at
-                            ? new Date(provider.last_sync_at).toLocaleDateString(getLocale())
+                            ? formatDate(provider.last_sync_at)
                             : tCommon('none')}
                         </p>
                       </div>

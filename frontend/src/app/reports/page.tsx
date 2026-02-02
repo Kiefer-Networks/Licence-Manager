@@ -45,7 +45,6 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { formatMonthlyCost } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
 import { LicenseStatusBadge } from '@/components/licenses';
@@ -53,13 +52,14 @@ import { CostTrendChart } from '@/components/charts';
 import { ExportButton } from '@/components/exports';
 import { LicenseRecommendations } from '@/components/reports';
 import Link from 'next/link';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 export default function ReportsPage() {
   const t = useTranslations('reports');
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
   const tExport = useTranslations('export');
+  const { formatDate, formatCurrency, formatNumber } = useLocale();
 
   // Build export translations object
   const exportTranslations: ExportTranslations = {
@@ -272,7 +272,7 @@ export default function ReportsPage() {
                   <CardContent className="pt-5 pb-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tLicenses('monthlyCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums">
-                      EUR {Number(utilizationReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                      {formatCurrency(utilizationReport?.total_monthly_cost)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">{t('totalLicenseCosts')}</p>
                   </CardContent>
@@ -281,7 +281,7 @@ export default function ReportsPage() {
                   <CardContent className="pt-5 pb-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('unassignedCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-amber-600">
-                      EUR {Number(utilizationReport?.total_monthly_waste || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                      {formatCurrency(utilizationReport?.total_monthly_waste)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">{t('noEmployeeLinked')}</p>
                   </CardContent>
@@ -290,7 +290,7 @@ export default function ReportsPage() {
                   <CardContent className="pt-5 pb-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('externalCost')}</p>
                     <p className="text-3xl font-semibold mt-1 tabular-nums text-blue-600">
-                      EUR {Number(utilizationReport?.total_external_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                      {formatCurrency(utilizationReport?.total_external_cost)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">{t('externalEmailLicenses')}</p>
                   </CardContent>
@@ -375,20 +375,20 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-3 py-3 text-right tabular-nums">
                             {provider.monthly_cost ? (
-                              <span>€{Number(provider.monthly_cost).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}</span>
+                              <span>{formatCurrency(provider.monthly_cost)}</span>
                             ) : '-'}
                           </td>
                           <td className="px-3 py-3 text-right tabular-nums">
                             {provider.monthly_waste ? (
                               <span className="text-amber-600">
-                                €{Number(provider.monthly_waste).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                                {formatCurrency(provider.monthly_waste)}
                               </span>
                             ) : '-'}
                           </td>
                           <td className="px-3 py-3 text-right tabular-nums">
                             {provider.external_cost ? (
                               <span className="text-blue-600">
-                                €{Number(provider.external_cost).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                                {formatCurrency(provider.external_cost)}
                               </span>
                             ) : '-'}
                           </td>
@@ -451,7 +451,7 @@ export default function ReportsPage() {
                           <td className="px-4 py-3 text-right tabular-nums">{contract.total_seats}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <span>{new Date(contract.contract_end).toLocaleDateString(getLocale())}</span>
+                              <span>{formatDate(contract.contract_end)}</span>
                               <Badge variant={contract.days_until_expiry <= 30 ? 'destructive' : 'secondary'} className="tabular-nums">
                                 {contract.days_until_expiry}d
                               </Badge>
@@ -464,7 +464,7 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             {contract.total_cost ? (
-                              <span>EUR {Number(contract.total_cost).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}</span>
+                              <span>{formatCurrency(contract.total_cost)}</span>
                             ) : '-'}
                           </td>
                         </tr>
@@ -492,7 +492,7 @@ export default function ReportsPage() {
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('potentialSavings')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums text-emerald-600">
-                    EUR {Number(duplicateAccountsReport?.potential_savings || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
+                    {formatCurrency(duplicateAccountsReport?.potential_savings)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('perMonthIfConsolidated')}</p>
                 </div>
@@ -526,7 +526,7 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             {dup.total_monthly_cost ? (
-                              <span>EUR {Number(dup.total_monthly_cost).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}</span>
+                              <span>{formatCurrency(dup.total_monthly_cost)}</span>
                             ) : '-'}
                           </td>
                         </tr>
@@ -573,7 +573,7 @@ export default function ReportsPage() {
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('potentialSavings')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums text-emerald-600">
-                    €{Number(inactiveReport?.potential_savings || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
+                    {formatCurrency(inactiveReport?.potential_savings)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('perMonthIfRevoked')}</p>
                 </div>
@@ -646,7 +646,7 @@ export default function ReportsPage() {
                               </Badge>
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums">
-                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, 'EUR') : '-'}
+                              {license.monthly_cost ? formatCurrency(license.monthly_cost) : '-'}
                             </td>
                           </tr>
                         );
@@ -725,7 +725,7 @@ export default function ReportsPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {employee.termination_date ? new Date(employee.termination_date).toLocaleDateString(getLocale()) : '-'}
+                            {employee.termination_date ? formatDate(employee.termination_date) : '-'}
                           </td>
                           <td className="px-4 py-3">
                             <Badge variant="destructive" className="tabular-nums">{employee.days_since_offboarding}d</Badge>
@@ -856,7 +856,7 @@ export default function ReportsPage() {
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{license.license_type || '-'}</td>
                             <td className="px-4 py-3 text-right tabular-nums">
-                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, 'EUR') : '-'}
+                              {license.monthly_cost ? formatCurrency(license.monthly_cost) : '-'}
                             </td>
                           </tr>
                         );
@@ -902,7 +902,7 @@ export default function ReportsPage() {
                   </div>
                   <div>
                     <p className="text-3xl font-semibold tabular-nums">
-                      €{Number(costReport?.total_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
+                      {formatCurrency(costReport?.total_cost)}
                     </p>
                     <p className="text-sm text-muted-foreground">{t('totalMonthlyCost')}</p>
                   </div>
@@ -939,7 +939,7 @@ export default function ReportsPage() {
                           <td className="px-4 py-3 font-medium">{entry.provider_name}</td>
                           <td className="px-4 py-3 tabular-nums">{entry.license_count}</td>
                           <td className="px-4 py-3 text-right tabular-nums font-medium">
-                            €{Number(entry.cost).toLocaleString(getLocale(), { minimumFractionDigits: 2 })}
+                            {formatCurrency(entry.cost)}
                           </td>
                         </tr>
                       ))}
@@ -966,14 +966,14 @@ export default function ReportsPage() {
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('totalMonthlyCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
-                    €{Number(costsByDepartmentReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                    {formatCurrency(costsByDepartmentReport?.total_monthly_cost)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('acrossAllDepartments')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('avgCostPerEmployee')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
-                    €{Number(costsByDepartmentReport?.average_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                    {formatCurrency(costsByDepartmentReport?.average_cost_per_employee)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('companyAverage')}</p>
                 </div>
@@ -1000,10 +1000,10 @@ export default function ReportsPage() {
                           <td className="px-4 py-3 text-right tabular-nums">{dept.employee_count}</td>
                           <td className="px-4 py-3 text-right tabular-nums">{dept.license_count}</td>
                           <td className="px-4 py-3 text-right tabular-nums font-medium">
-                            €{Number(dept.total_monthly_cost).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                            {formatCurrency(dept.total_monthly_cost)}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
-                            €{Number(dept.cost_per_employee).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                            {formatCurrency(dept.cost_per_employee)}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-1">
@@ -1038,21 +1038,21 @@ export default function ReportsPage() {
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('totalMonthlyCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
-                    €{Number(costsByEmployeeReport?.total_monthly_cost || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                    {formatCurrency(costsByEmployeeReport?.total_monthly_cost)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('allEmployees')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('averageCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
-                    €{Number(costsByEmployeeReport?.average_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                    {formatCurrency(costsByEmployeeReport?.average_cost_per_employee)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('perEmployee')}</p>
                 </div>
                 <div className="border rounded-lg bg-white p-5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('medianCost')}</p>
                   <p className="text-3xl font-semibold mt-1 tabular-nums">
-                    €{Number(costsByEmployeeReport?.median_cost_per_employee || 0).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                    {formatCurrency(costsByEmployeeReport?.median_cost_per_employee)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{t('perEmployee')}</p>
                 </div>
@@ -1116,7 +1116,7 @@ export default function ReportsPage() {
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums">{employee.license_count}</td>
                             <td className="px-4 py-3 text-right tabular-nums font-medium">
-                              €{Number(employee.total_monthly_cost).toLocaleString(getLocale(), { minimumFractionDigits: 0 })}
+                              {formatCurrency(employee.total_monthly_cost)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-1">

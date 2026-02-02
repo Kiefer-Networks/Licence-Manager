@@ -29,13 +29,14 @@ import {
 } from 'lucide-react';
 import { CancellationDialog } from '@/components/licenses/CancellationDialog';
 import { RenewDialog } from '@/components/licenses/RenewDialog';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 export default function LifecyclePage() {
   const t = useTranslations('lifecycle');
   const tLicenses = useTranslations('licenses');
   const tProviders = useTranslations('providers');
   const tCommon = useTranslations('common');
+  const { formatDate, formatCurrency } = useLocale();
   const [overview, setOverview] = useState<LicenseLifecycleOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('expiring');
@@ -278,7 +279,7 @@ export default function LifecyclePage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {new Date(license.expires_at).toLocaleDateString(getLocale())}
+                          {formatDate(license.expires_at)}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
@@ -289,7 +290,7 @@ export default function LifecyclePage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {license.monthly_cost ? `EUR ${Number(license.monthly_cost).toFixed(2)}` : '-'}
+                          {license.monthly_cost ? formatCurrency(license.monthly_cost) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -372,13 +373,13 @@ export default function LifecyclePage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {new Date(license.cancelled_at).toLocaleDateString(getLocale())}
+                          {formatDate(license.cancelled_at)}
                           {license.cancelled_by_name && (
                             <p className="text-muted-foreground">{t('cancelledBy')} {license.cancelled_by_name}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {new Date(license.cancellation_effective_date).toLocaleDateString(getLocale())}
+                          {formatDate(license.cancellation_effective_date)}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">
                           {license.cancellation_reason || '-'}
@@ -447,10 +448,10 @@ export default function LifecyclePage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          {license.expires_at ? new Date(license.expires_at).toLocaleDateString(getLocale()) : '-'}
+                          {license.expires_at ? formatDate(license.expires_at) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {license.monthly_cost ? `EUR ${Number(license.monthly_cost).toFixed(2)}` : '-'}
+                          {license.monthly_cost ? formatCurrency(license.monthly_cost) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">

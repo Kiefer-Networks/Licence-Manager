@@ -13,7 +13,7 @@ import {
 import { ChevronDown, ChevronRight, Clock, User, Target, Package, Globe } from 'lucide-react';
 import { AuditLogEntry } from '@/lib/api';
 import { ChangesDisplay } from './ChangesDisplay';
-import { getLocale } from '@/lib/locale';
+import { useLocale } from '@/components/locale-provider';
 
 interface AuditDetailsProps {
   log: AuditLogEntry | null;
@@ -43,7 +43,13 @@ function getActionBadgeColor(action: string): string {
 
 export function AuditDetails({ log, open, onOpenChange }: AuditDetailsProps) {
   const t = useTranslations('audit');
+  const { formatDate, numberFormat } = useLocale();
   const [showRawData, setShowRawData] = useState(false);
+
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return `${formatDate(date)} ${date.toLocaleTimeString(numberFormat)}`;
+  };
 
   if (!log) return null;
 
@@ -66,10 +72,7 @@ export function AuditDetails({ log, open, onOpenChange }: AuditDetailsProps) {
                   {t('timestamp')}
                 </p>
                 <p className="text-sm">
-                  {new Date(log.created_at).toLocaleString(getLocale(), {
-                    dateStyle: 'full',
-                    timeStyle: 'medium',
-                  })}
+                  {formatDateTime(log.created_at)}
                 </p>
               </div>
             </div>
