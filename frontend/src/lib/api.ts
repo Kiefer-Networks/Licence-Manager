@@ -597,6 +597,37 @@ export interface InactiveLicenseReport {
   licenses: InactiveLicenseEntry[];
 }
 
+export interface LicenseRecommendation {
+  license_id: string;
+  provider_id: string;
+  provider_name: string;
+  external_user_id: string;
+  license_type?: string;
+  employee_id?: string;
+  employee_name?: string;
+  employee_email?: string;
+  employee_status?: string;
+  days_inactive: number;
+  last_activity_at?: string;
+  monthly_cost?: string;
+  yearly_savings?: string;
+  recommendation_type: 'cancel' | 'reassign' | 'review';
+  recommendation_reason: string;
+  priority: 'high' | 'medium' | 'low';
+  is_external_email: boolean;
+}
+
+export interface LicenseRecommendationsReport {
+  total_recommendations: number;
+  high_priority_count: number;
+  medium_priority_count: number;
+  low_priority_count: number;
+  total_monthly_savings: string;
+  total_yearly_savings: string;
+  currency: string;
+  recommendations: LicenseRecommendation[];
+}
+
 export interface BulkActionResult {
   license_id: string;
   success: boolean;
@@ -2000,6 +2031,21 @@ export const api = {
     params.set('days', days.toString());
     if (department) params.set('department', department);
     return fetchApi<InactiveLicenseReport>(`/reports/inactive?${params.toString()}`);
+  },
+
+  async getLicenseRecommendations(options?: {
+    min_days_inactive?: number;
+    department?: string;
+    provider_id?: string;
+    limit?: number;
+  }): Promise<LicenseRecommendationsReport> {
+    const params = new URLSearchParams();
+    if (options?.min_days_inactive) params.set('min_days_inactive', options.min_days_inactive.toString());
+    if (options?.department) params.set('department', options.department);
+    if (options?.provider_id) params.set('provider_id', options.provider_id);
+    if (options?.limit) params.set('limit', options.limit.toString());
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchApi<LicenseRecommendationsReport>(`/reports/recommendations${query}`);
   },
 
   async getOffboardingReport(department?: string): Promise<OffboardingReport> {

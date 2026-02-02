@@ -197,6 +197,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         self,
         days_threshold: int = 30,
         department: str | None = None,
+        provider_id: UUID | None = None,
         limit: int = 100,
     ) -> list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]]:
         """Get licenses with no activity for specified days.
@@ -204,6 +205,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         Args:
             days_threshold: Number of days without activity
             department: Filter by employee department
+            provider_id: Filter by provider UUID
             limit: Maximum results
 
         Returns:
@@ -224,6 +226,9 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         if department:
             query = query.where(EmployeeORM.department == department)
+
+        if provider_id:
+            query = query.where(LicenseORM.provider_id == provider_id)
 
         query = query.order_by(LicenseORM.last_activity_at.asc().nulls_first()).limit(limit)
 

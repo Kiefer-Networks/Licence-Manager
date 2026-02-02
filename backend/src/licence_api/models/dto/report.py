@@ -319,3 +319,41 @@ class LicenseLifecycleOverview(BaseModel):
     total_needs_reorder: int
     expiring_licenses: list[ExpiringLicense]
     cancelled_licenses: list[CancelledLicense]
+
+
+# ==================== LICENSE RECOMMENDATIONS ====================
+
+
+class LicenseRecommendation(BaseModel):
+    """License optimization recommendation entry."""
+
+    license_id: str
+    provider_id: str
+    provider_name: str
+    external_user_id: str
+    license_type: str | None = None
+    employee_id: str | None = None
+    employee_name: str | None = None
+    employee_email: str | None = None
+    employee_status: str | None = None
+    days_inactive: int
+    last_activity_at: datetime | None = None
+    monthly_cost: Decimal | None = None
+    yearly_savings: Decimal | None = None
+    recommendation_type: str  # "cancel", "reassign", "review"
+    recommendation_reason: str
+    priority: str  # "high", "medium", "low"
+    is_external_email: bool = False
+
+
+class LicenseRecommendationsReport(BaseModel):
+    """License recommendations report response DTO."""
+
+    total_recommendations: int
+    high_priority_count: int
+    medium_priority_count: int
+    low_priority_count: int
+    total_monthly_savings: Decimal
+    total_yearly_savings: Decimal
+    currency: str = "EUR"
+    recommendations: list[LicenseRecommendation]

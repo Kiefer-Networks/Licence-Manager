@@ -41,6 +41,7 @@ import {
   BarChart3,
   Users2,
   User,
+  Lightbulb,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -50,6 +51,7 @@ import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportC
 import { LicenseStatusBadge } from '@/components/licenses';
 import { CostTrendChart } from '@/components/charts';
 import { ExportButton } from '@/components/exports';
+import { LicenseRecommendations } from '@/components/reports';
 import Link from 'next/link';
 import { getLocale } from '@/lib/locale';
 
@@ -223,6 +225,10 @@ export default function ReportsPage() {
               <TabsTrigger value="costs-employee" className="gap-1.5 data-[state=active]:bg-white">
                 <User className="h-3.5 w-3.5" />
                 {t('byEmployee')}
+              </TabsTrigger>
+              <TabsTrigger value="recommendations" className="gap-1.5 data-[state=active]:bg-white">
+                <Lightbulb className="h-3.5 w-3.5" />
+                {t('recommendations')}
               </TabsTrigger>
             </TabsList>
 
@@ -1135,6 +1141,13 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            {/* License Recommendations */}
+            <TabsContent value="recommendations">
+              <LicenseRecommendations
+                department={selectedDepartment !== 'all' ? selectedDepartment : undefined}
+              />
             </TabsContent>
           </Tabs>
         )}

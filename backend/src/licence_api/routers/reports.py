@@ -20,6 +20,7 @@ from licence_api.models.dto.report import (
     ExternalUsersReport,
     InactiveLicenseReport,
     LicenseLifecycleOverview,
+    LicenseRecommendationsReport,
     OffboardingReport,
     UtilizationReport,
 )
@@ -213,3 +214,50 @@ async def get_lifecycle_overview(
     licenses along with detailed lists of expiring and cancelled licenses.
     """
     return await report_service.get_license_lifecycle_overview()
+
+
+# ==================== LICENSE RECOMMENDATIONS ====================
+
+
+@router.get("/recommendations", response_model=LicenseRecommendationsReport)
+async def get_license_recommendations(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
+    report_service: Annotated[ReportService, Depends(get_report_service)],
+    min_days_inactive: int = Query(
+        default=60, ge=30, le=365,
+        description="Minimum days of inactivity to consider"
+    ),
+    department: str | None = Query(
+        default=None, max_length=100,
+        description="Filter by department"
+    ),
+    provider_id: str | None = Query(
+        default=None, max_length=36,
+        description="Filter by provider UUID"
+    ),
+    limit: int = Query(
+        default=100, ge=1, le=500,
+        description="Maximum recommendations to return"
+    ),
+) -> LicenseRecommendationsReport:
+    """Get license optimization recommendations based on usage patterns.
+
+    Analyzes inactive licenses and generates actionable recommendations:
+    - **Cancel**: For licenses inactive >90 days with no assigned employee
+    - **Reassign**: For licenses inactive >60 days but assigned to active employee
+    - **Review**: For other potentially wasteful licenses
+
+    Recommendations are prioritized by:
+    - Employee status (offboarded employees are highest priority)
+    - Days of inactivity
+    - Monthly cost (higher cost = higher priority)
+    - External email addresses
+
+    Returns estimated monthly and yearly savings if recommendations are implemented.
+    """
+    return await report_service.get_license_recommendations(
+        min_days_inactive=min_days_inactive,
+        department=department,
+        provider_id=provider_id,
+        limit=limit,
+    )

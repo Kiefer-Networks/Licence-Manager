@@ -40,6 +40,8 @@ from licence_api.models.dto.report import (
     InactiveLicenseEntry,
     InactiveLicenseReport,
     LicenseLifecycleOverview,
+    LicenseRecommendation,
+    LicenseRecommendationsReport,
     MonthlyCost,
     OffboardedEmployee,
     OffboardingReport,
@@ -1207,4 +1209,165 @@ class ReportService:
             total_needs_reorder=total_needs_reorder,
             expiring_licenses=expiring_report.licenses,
             cancelled_licenses=cancelled_report.licenses,
+        )
+
+    # ==================== LICENSE RECOMMENDATIONS ====================
+
+    async def get_license_recommendations(
+        self,
+        min_days_inactive: int = 60,
+        department: str | None = None,
+        provider_id: str | None = None,
+        limit: int = 100,
+    ) -> LicenseRecommendationsReport:
+        """Get license optimization recommendations based on usage patterns.
+
+        Analyzes inactive licenses and generates actionable recommendations:
+        - Cancel: For licenses inactive >90 days with no assigned employee
+        - Reassign: For licenses inactive >60 days but assigned to active employee
+        - Review: For other potentially wasteful licenses
+
+        Args:
+            min_days_inactive: Minimum days of inactivity to consider (default 60)
+            department: Optional filter by department
+            provider_id: Optional filter by provider
+            limit: Maximum recommendations to return
+
+        Returns:
+            LicenseRecommendationsReport with prioritized recommendations
+        """
+        from uuid import UUID as PyUUID
+
+        # Get company domains for external email detection
+        setting = await self.settings_repo.get("company_domains")
+        company_domains = setting.get("domains", []) if setting else []
+
+        # Get inactive licenses
+        provider_uuid = PyUUID(provider_id) if provider_id else None
+        inactive = await self.license_repo.get_inactive(
+            days_threshold=min_days_inactive,
+            department=department,
+            provider_id=provider_uuid,
+            limit=limit * 2,  # Fetch more to account for filtering
+        )
+
+        recommendations: list[LicenseRecommendation] = []
+        total_monthly_savings = Decimal("0")
+
+        for lic, provider, employee in inactive:
+            # Calculate days inactive
+            days_inactive = 0
+            if lic.last_activity_at:
+                days_inactive = (datetime.now(timezone.utc) - lic.last_activity_at).days
+            else:
+                days_inactive = min_days_inactive + 90  # Assume very inactive
+
+            # Check if external email
+            is_external = False
+            if "@" in lic.external_user_id and company_domains:
+                is_external = not is_company_email(lic.external_user_id, company_domains)
+
+            # Determine recommendation type and priority
+            monthly_cost = lic.monthly_cost or Decimal("0")
+            yearly_savings = monthly_cost * 12
+
+            # Priority calculation factors:
+            # - Days inactive: more = higher priority
+            # - Cost: higher cost = higher priority
+            # - Employee status: offboarded = high priority
+            # - External: external emails = higher priority
+
+            recommendation_type = "review"
+            recommendation_reason = ""
+            priority = "low"
+
+            if employee and employee.status == "offboarded":
+                # Highest priority: offboarded employees with licenses
+                recommendation_type = "cancel"
+                recommendation_reason = "License assigned to offboarded employee"
+                priority = "high"
+            elif not employee and days_inactive > 90:
+                # High priority: unassigned and very inactive
+                recommendation_type = "cancel"
+                recommendation_reason = f"Unassigned license inactive for {days_inactive} days"
+                priority = "high"
+            elif is_external and days_inactive > 60:
+                # Medium-high priority: external email and inactive
+                recommendation_type = "review"
+                recommendation_reason = f"External email inactive for {days_inactive} days"
+                priority = "high" if monthly_cost > 50 else "medium"
+            elif employee and employee.status == "active" and days_inactive > 90:
+                # Medium priority: active employee but very inactive license
+                recommendation_type = "reassign"
+                recommendation_reason = f"Active employee not using license for {days_inactive} days"
+                priority = "medium"
+            elif days_inactive > 60:
+                # Lower priority: moderately inactive
+                recommendation_type = "review"
+                recommendation_reason = f"License inactive for {days_inactive} days"
+                priority = "low" if monthly_cost < 20 else "medium"
+            else:
+                # Skip if doesn't meet threshold
+                continue
+
+            # Boost priority for high-cost licenses
+            if monthly_cost > 100 and priority == "medium":
+                priority = "high"
+            elif monthly_cost > 50 and priority == "low":
+                priority = "medium"
+
+            total_monthly_savings += monthly_cost
+
+            recommendations.append(
+                LicenseRecommendation(
+                    license_id=str(lic.id),
+                    provider_id=str(provider.id),
+                    provider_name=provider.display_name,
+                    external_user_id=lic.external_user_id,
+                    license_type=lic.license_type,
+                    employee_id=str(employee.id) if employee else None,
+                    employee_name=employee.full_name if employee else None,
+                    employee_email=employee.email if employee else None,
+                    employee_status=employee.status if employee else None,
+                    days_inactive=days_inactive,
+                    last_activity_at=lic.last_activity_at,
+                    monthly_cost=monthly_cost if monthly_cost > 0 else None,
+                    yearly_savings=yearly_savings if yearly_savings > 0 else None,
+                    recommendation_type=recommendation_type,
+                    recommendation_reason=recommendation_reason,
+                    priority=priority,
+                    is_external_email=is_external,
+                )
+            )
+
+        # Sort by priority (high first), then by cost (highest first)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        recommendations.sort(
+            key=lambda r: (
+                priority_order.get(r.priority, 3),
+                -(r.monthly_cost or Decimal("0")),
+            )
+        )
+
+        # Limit results
+        recommendations = recommendations[:limit]
+
+        # Count by priority
+        high_count = sum(1 for r in recommendations if r.priority == "high")
+        medium_count = sum(1 for r in recommendations if r.priority == "medium")
+        low_count = sum(1 for r in recommendations if r.priority == "low")
+
+        # Recalculate savings for limited results
+        limited_monthly_savings = sum(
+            r.monthly_cost or Decimal("0") for r in recommendations
+        )
+
+        return LicenseRecommendationsReport(
+            total_recommendations=len(recommendations),
+            high_priority_count=high_count,
+            medium_priority_count=medium_count,
+            low_priority_count=low_count,
+            total_monthly_savings=limited_monthly_savings,
+            total_yearly_savings=limited_monthly_savings * 12,
+            recommendations=recommendations,
         )
