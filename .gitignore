@@ -387,7 +387,7 @@ user-data/
 
 # Generated reports
 reports/generated/
-exports/
+/exports/
 
 # Session files
 sessions/
