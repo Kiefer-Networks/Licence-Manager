@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api, Employee, EmployeeCreate, EmployeeUpdate } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search, X, User } from 'lucide-react';
 
 interface ManualEmployeeDialogProps {
   open: boolean;
@@ -55,6 +55,12 @@ export function ManualEmployeeDialog({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Manager autocomplete state
+  const [managerSearchQuery, setManagerSearchQuery] = useState('');
+  const [managerResults, setManagerResults] = useState<Employee[]>([]);
+  const [showManagerResults, setShowManagerResults] = useState(false);
+  const [loadingManagers, setLoadingManagers] = useState(false);
+
   const isEdit = !!employee;
 
   // Reset form when dialog opens or employee changes
@@ -70,6 +76,7 @@ export function ManualEmployeeDialog({
           termination_date: employee.termination_date || '',
           manager_email: employee.manager?.email || '',
         });
+        setManagerSearchQuery(employee.manager?.full_name || '');
       } else {
         setFormData({
           email: '',
@@ -80,10 +87,58 @@ export function ManualEmployeeDialog({
           termination_date: '',
           manager_email: '',
         });
+        setManagerSearchQuery('');
       }
       setErrors({});
+      setShowManagerResults(false);
+      setManagerResults([]);
     }
   }, [open, employee]);
+
+  // Debounced manager search
+  useEffect(() => {
+    if (!open) return;
+
+    const timer = setTimeout(async () => {
+      const query = managerSearchQuery.trim();
+      if (query.length < 2) {
+        setManagerResults([]);
+        return;
+      }
+
+      setLoadingManagers(true);
+      try {
+        const response = await api.getEmployees({
+          page_size: 10,
+          status: 'active',
+          search: query,
+        });
+        // Filter out current employee being edited
+        const filtered = employee
+          ? response.items.filter((emp) => emp.id !== employee.id)
+          : response.items;
+        setManagerResults(filtered);
+      } catch {
+        setManagerResults([]);
+      } finally {
+        setLoadingManagers(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [managerSearchQuery, open, employee]);
+
+  const handleSelectManager = (manager: Employee) => {
+    setFormData({ ...formData, manager_email: manager.email });
+    setManagerSearchQuery(manager.full_name);
+    setShowManagerResults(false);
+  };
+
+  const handleClearManager = () => {
+    setFormData({ ...formData, manager_email: '' });
+    setManagerSearchQuery('');
+    setShowManagerResults(false);
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -264,19 +319,79 @@ export function ManualEmployeeDialog({
             </div>
           )}
 
-          {/* Manager Email */}
+          {/* Manager */}
           <div className="grid gap-2">
-            <Label htmlFor="manager_email">{t('managerEmail')}</Label>
-            <Input
-              id="manager_email"
-              type="email"
-              value={formData.manager_email}
-              onChange={(e) =>
-                setFormData({ ...formData, manager_email: e.target.value })
-              }
-              placeholder={t('managerEmailPlaceholder')}
-              maxLength={255}
-            />
+            <Label htmlFor="manager_email">{tCommon('manager')}</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input
+                id="manager_email"
+                value={managerSearchQuery}
+                onChange={(e) => {
+                  setManagerSearchQuery(e.target.value);
+                  setShowManagerResults(true);
+                  if (!e.target.value) {
+                    setFormData({ ...formData, manager_email: '' });
+                  }
+                }}
+                onFocus={() => setShowManagerResults(true)}
+                placeholder={t('searchManager')}
+                maxLength={255}
+                className="pl-9 pr-9"
+              />
+              {managerSearchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClearManager}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+
+              {/* Autocomplete dropdown */}
+              {showManagerResults && managerSearchQuery.length >= 2 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {loadingManagers ? (
+                    <div className="flex items-center justify-center py-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                    </div>
+                  ) : managerResults.length > 0 ? (
+                    managerResults.map((emp) => (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => handleSelectManager(emp)}
+                        className="w-full px-3 py-2 text-left hover:bg-zinc-50 flex items-center gap-2"
+                      >
+                        {emp.avatar ? (
+                          <img
+                            src={emp.avatar}
+                            alt=""
+                            className="h-6 w-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center">
+                            <User className="h-3 w-3 text-zinc-500" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{emp.full_name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="py-3 text-center text-sm text-muted-foreground">
+                      {t('noManagersFound')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {formData.manager_email && (
+              <p className="text-xs text-muted-foreground">{formData.manager_email}</p>
+            )}
           </div>
         </div>
 
