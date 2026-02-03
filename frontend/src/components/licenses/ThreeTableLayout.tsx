@@ -188,21 +188,21 @@ export function ThreeTableLayout({
       </div>
 
       {/* Tables */}
-      {activeTab === 'unassigned' ? (
-        // Special handling for "Not in HRIS": Two tables - Active first, then Inactive
+      {activeTab === 'not_in_hris' ? (
+        // "Not in HRIS": Has user email but not found in HRIS
         <div className="space-y-8">
           {/* Active - Critical! */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-red-500" />
               <h3 className="text-sm font-medium text-red-600">
-                {t('activeNotInHRIS', { count: unassignedActive.length })}
+                {t('activeNotInHRIS', { count: notInHrisActive.length })}
               </h3>
             </div>
-            {unassignedActive.length > 0 ? (
+            {notInHrisActive.length > 0 ? (
               <div className="border border-red-200 rounded-lg overflow-hidden">
                 <LicenseTable
-                  licenses={unassignedActive}
+                  licenses={notInHrisActive}
                   showProvider={showProvider}
                   showEmployee={true}
                   emptyMessage={t('noLicensesNotInHRIS')}
@@ -220,10 +220,60 @@ export function ThreeTableLayout({
           </div>
 
           {/* Inactive */}
+          {notInHrisInactive.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                {t('inactiveLicensesNotInHRIS', { count: notInHrisInactive.length })}
+              </h3>
+              <LicenseTable
+                licenses={notInHrisInactive}
+                showProvider={showProvider}
+                showEmployee={true}
+                emptyMessage={t('noInactiveLicenses')}
+                onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
+                onAssignClick={onAssignClick}
+                onDeleteClick={onDeleteClick}
+              />
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'unassigned' ? (
+        // "Unassigned": No user assigned (empty or non-email external_user_id)
+        <div className="space-y-8">
+          {/* Active */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Package className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-medium text-amber-600">
+                {t('activeUnassigned', { count: unassignedActive.length })}
+              </h3>
+            </div>
+            {unassignedActive.length > 0 ? (
+              <div className="border border-amber-200 rounded-lg overflow-hidden">
+                <LicenseTable
+                  licenses={unassignedActive}
+                  showProvider={showProvider}
+                  showEmployee={true}
+                  emptyMessage={t('noUnassignedLicenses')}
+                  onServiceAccountClick={onServiceAccountClick}
+                  onAdminAccountClick={onAdminAccountClick}
+                  onAssignClick={onAssignClick}
+                  onDeleteClick={onDeleteClick}
+                />
+              </div>
+            ) : (
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
+                <p className="text-sm text-emerald-600">{t('allLicensesAssigned')}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Inactive */}
           {unassignedInactive.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                {t('inactiveLicensesNotInHRIS', { count: unassignedInactive.length })}
+                {t('inactiveUnassigned', { count: unassignedInactive.length })}
               </h3>
               <LicenseTable
                 licenses={unassignedInactive}
