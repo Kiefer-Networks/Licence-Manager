@@ -12,15 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, Employee, EmployeeSource, Provider } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Users, ChevronRight, Bot, ShieldCheck, CheckCircle, AlertCircle, Info, Plus, Upload, UserPlus } from 'lucide-react';
+import { Search, Users, Bot, ShieldCheck, CheckCircle, AlertCircle, Info, Upload, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ServiceAccountsTab } from '@/components/users/ServiceAccountsTab';
 import { AdminAccountsTab } from '@/components/users/AdminAccountsTab';
-import { useLocale } from '@/components/locale-provider';
+import { EmployeeTable, mapEmployeeToTableData } from '@/components/users/EmployeeTable';
 import { ManualEmployeeDialog } from '@/components/users/ManualEmployeeDialog';
 import { EmployeeBulkImportDialog } from '@/components/users/EmployeeBulkImportDialog';
 
@@ -35,7 +34,6 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function UsersPage() {
   const t = useTranslations('employees');
-  const { formatDate } = useLocale();
   const tCommon = useTranslations('common');
   const tUsers = useTranslations('users');
   const tServiceAccounts = useTranslations('serviceAccounts');
@@ -76,11 +74,6 @@ export default function UsersPage() {
       setSortColumn(column);
       setSortDirection('asc');
     }
-  };
-
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
-    return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
 
   useEffect(() => {
@@ -219,138 +212,23 @@ export default function UsersPage() {
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg bg-white overflow-hidden">
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-                </div>
-              ) : employees.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                  <Users className="h-8 w-8 mb-2 opacity-30" />
-                  <p className="text-sm">{t('noEmployees')}</p>
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-zinc-50/50">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('full_name')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {tCommon('name')} <SortIcon column="full_name" />
-                        </button>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('email')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {tCommon('email')} <SortIcon column="email" />
-                        </button>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('department')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {t('department')} <SortIcon column="department" />
-                        </button>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        {tCommon('manager')}
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {tCommon('status')} <SortIcon column="status" />
-                        </button>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('license_count')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {t('licenseCount')} <SortIcon column="license_count" />
-                        </button>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                        <button onClick={() => handleSort('start_date')} className="flex items-center gap-1.5 hover:text-foreground">
-                          {t('startDate')} <SortIcon column="start_date" />
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.map((employee) => (
-                      <tr
-                        key={employee.id}
-                        onClick={() => router.push(`/users/${employee.id}`)}
-                        className="border-b last:border-0 hover:bg-zinc-50/50 transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {employee.avatar ? (
-                              <img
-                                src={employee.avatar}
-                                alt=""
-                                className="h-7 w-7 rounded-full object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="h-7 w-7 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-medium text-zinc-600">{employee.full_name.charAt(0)}</span>
-                              </div>
-                            )}
-                            <span className="font-medium">{employee.full_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{employee.email}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{employee.department || '-'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {employee.manager ? (
-                            <span
-                              className="hover:text-foreground cursor-pointer hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/users/${employee.manager!.id}`);
-                              }}
-                            >
-                              {employee.manager.full_name}
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant={employee.status === 'active' ? 'secondary' : 'destructive'} className={employee.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
-                              {employee.status === 'active' ? t('active') : t('offboarded')}
-                            </Badge>
-                            {employee.is_manual && (
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                {t('manual')}
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="outline" className="tabular-nums">{employee.license_count}</Badge>
-                            {(employee.owned_admin_account_count || 0) > 0 && (
-                              <Badge variant="outline" className="tabular-nums bg-purple-50 text-purple-700 border-purple-200">
-                                +{employee.owned_admin_account_count} {t('adminAccounts')}
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground tabular-nums">
-                          <div className="flex items-center justify-between">
-                            {formatDate(employee.start_date)}
-                            <ChevronRight className="h-4 w-4 text-zinc-300" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{tCommon('page')} {page} {tCommon('of')} {totalPages}</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>{tCommon('back')}</Button>
-                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>{tCommon('next')}</Button>
-                </div>
-              </div>
-            )}
+            <EmployeeTable
+              employees={employees.map(mapEmployeeToTableData)}
+              columns={['name', 'email', 'department', 'manager', 'status', 'license_count', 'start_date']}
+              loading={loading}
+              emptyMessage={t('noEmployees')}
+              sortable
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              pagination={{
+                page,
+                totalPages,
+                onPageChange: setPage,
+              }}
+              linkToEmployee
+              showChevron
+            />
           </TabsContent>
 
           <TabsContent value="service-accounts" className="mt-6">

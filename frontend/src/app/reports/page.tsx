@@ -46,11 +46,13 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
 import { LicenseStatusBadge } from '@/components/licenses';
 import { CostTrendChart } from '@/components/charts';
 import { ExportButton } from '@/components/exports';
 import { LicenseRecommendations } from '@/components/reports';
+import { EmployeeTable, EmployeeTableData } from '@/components/users/EmployeeTable';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
 
@@ -98,11 +100,22 @@ export default function ReportsPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [loading, setLoading] = useState(true);
+  // Min cost filter for costs-by-employee report
+  const [minCostFilter, setMinCostFilter] = useState<string>('');
+  const [debouncedMinCost, setDebouncedMinCost] = useState<string>('');
 
   // Load departments once
   useEffect(() => {
     api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
   }, []);
+
+  // Debounce min cost filter
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedMinCost(minCostFilter);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [minCostFilter]);
 
   // Load reports when department changes
   useEffect(() => {
@@ -122,7 +135,7 @@ export default function ReportsPage() {
       api.getDuplicateAccountsReport(),
       // Cost Breakdown Reports
       api.getCostsByDepartmentReport(),
-      api.getCostsByEmployeeReport(dept, 100),
+      api.getCostsByEmployeeReport(dept, debouncedMinCost ? parseFloat(debouncedMinCost) : undefined, 100),
     ]).then(([inactive, offboarding, cost, externalUsers, expiring, utilization, costTrend, duplicates, costsByDept, costsByEmployee]) => {
       if (!cancelled) {
         setInactiveReport(inactive);
@@ -139,7 +152,7 @@ export default function ReportsPage() {
     }).catch((e) => handleSilentError('loadReports', e)).finally(() => !cancelled && setLoading(false));
 
     return () => { cancelled = true; };
-  }, [selectedDepartment]);
+  }, [selectedDepartment, debouncedMinCost]);
 
   return (
     <AppLayout>
@@ -699,55 +712,22 @@ export default function ReportsPage() {
               </div>
 
               {/* Table */}
-              <div className="border rounded-lg bg-white overflow-hidden">
-                {offboardingReport && offboardingReport.employees.length > 0 ? (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('termination')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('daysSince')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('pendingLicenses')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {offboardingReport.employees.map((employee) => (
-                        <tr key={employee.employee_email} className="border-b last:border-0 hover:bg-zinc-50/50">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-full bg-zinc-100 flex items-center justify-center">
-                                <span className="text-xs font-medium text-zinc-600">{employee.employee_name.charAt(0)}</span>
-                              </div>
-                              <div>
-                                <p className="font-medium">{employee.employee_name}</p>
-                                <p className="text-xs text-muted-foreground">{employee.employee_email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {employee.termination_date ? formatDate(employee.termination_date) : '-'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant="destructive" className="tabular-nums">{employee.days_since_offboarding}d</Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {employee.pending_licenses.map((lic, i) => (
-                                <Badge key={i} variant="outline">{lic.provider}</Badge>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <UserMinus className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">{t('noOffboardedWithPending')}</p>
-                  </div>
-                )}
-              </div>
+              <EmployeeTable
+                employees={offboardingReport?.employees.map((emp): EmployeeTableData => ({
+                  id: emp.employee_email, // Use email as ID since no real ID available
+                  full_name: emp.employee_name,
+                  email: emp.employee_email,
+                  status: 'offboarded',
+                  termination_date: emp.termination_date,
+                  days_since_offboarding: emp.days_since_offboarding,
+                  pending_licenses: emp.pending_licenses,
+                })) || []}
+                columns={['name', 'termination_date', 'days_since_offboarding', 'pending_licenses']}
+                emptyMessage={t('noOffboardedWithPending')}
+                compact
+                showAdminAccountBadge={false}
+                showManualBadge={false}
+              />
             </TabsContent>
 
             {/* External Users */}
@@ -1067,80 +1047,50 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {/* Table */}
-              <div className="border rounded-lg bg-white overflow-hidden">
-                {costsByEmployeeReport && costsByEmployeeReport.employees.length > 0 ? (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-zinc-50/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('department')}</th>
-                        <th className="text-center px-4 py-3 font-medium text-muted-foreground">{tCommon('status')}</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('licenses')}</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tLicenses('monthlyCost')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('tools')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {costsByEmployeeReport.employees.map((employee) => {
-                        const isOffboarded = employee.status === 'offboarded';
-                        return (
-                          <tr key={employee.employee_id} className="border-b last:border-0 hover:bg-zinc-50/50">
-                            <td className="px-4 py-3">
-                              <Link href={`/users/${employee.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                <div className={`h-7 w-7 rounded-full flex items-center justify-center ${isOffboarded ? 'bg-red-100' : 'bg-zinc-100 group-hover:bg-zinc-200'} transition-colors`}>
-                                  <span className={`text-xs font-medium ${isOffboarded ? 'text-red-600' : 'text-zinc-600'}`}>
-                                    {employee.employee_name.charAt(0)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className={`font-medium hover:underline ${isOffboarded ? 'line-through text-muted-foreground' : ''}`}>
-                                    {employee.employee_name}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">{employee.employee_email}</p>
-                                </div>
-                              </Link>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">{employee.department || '-'}</td>
-                            <td className="px-4 py-3 text-center">
-                              {isOffboarded ? (
-                                <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-xs">
-                                  <Skull className="h-3 w-3 mr-1" />
-                                  Offboarded
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs">
-                                  {tCommon('active')}
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums">{employee.license_count}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-medium">
-                              {formatCurrency(employee.total_monthly_cost)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-1">
-                                {employee.licenses.slice(0, 3).map((lic, i) => (
-                                  <Badge key={i} variant="outline" className="text-xs">{lic.provider_name}</Badge>
-                                ))}
-                                {employee.licenses.length > 3 && (
-                                  <Badge variant="secondary" className="text-xs">+{employee.licenses.length - 3}</Badge>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <User className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">{t('noEmployeeDataAvailable')}</p>
-                    <p className="text-xs mt-1">{t('assignLicensesToSeeIndividualCosts')}</p>
-                  </div>
+              {/* Min Cost Filter */}
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground whitespace-nowrap">{t('minMonthlyCost')}:</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="10"
+                  placeholder={t('minCostPlaceholder')}
+                  value={minCostFilter}
+                  onChange={(e) => setMinCostFilter(e.target.value)}
+                  className="w-40 h-9"
+                />
+                {minCostFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMinCostFilter('')}
+                    className="text-muted-foreground"
+                  >
+                    {tCommon('clear')}
+                  </Button>
                 )}
               </div>
+
+              {/* Table */}
+              <EmployeeTable
+                employees={costsByEmployeeReport?.employees.map((emp): EmployeeTableData => ({
+                  id: emp.employee_id,
+                  full_name: emp.employee_name,
+                  email: emp.employee_email,
+                  department: emp.department,
+                  status: emp.status,
+                  license_count: emp.license_count,
+                  total_monthly_cost: emp.total_monthly_cost,
+                  licenses: emp.licenses,
+                })) || []}
+                columns={['name', 'department', 'status', 'license_count', 'monthly_cost', 'tools']}
+                emptyMessage={t('noEmployeeDataAvailable')}
+                emptyDescription={t('assignLicensesToSeeIndividualCosts')}
+                linkToEmployee
+                compact
+                showAdminAccountBadge={false}
+                showManualBadge={false}
+              />
             </TabsContent>
 
             {/* License Recommendations */}
