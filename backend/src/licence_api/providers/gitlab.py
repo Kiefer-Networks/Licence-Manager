@@ -86,7 +86,7 @@ class GitLabProvider(BaseProvider):
                     username = member.get("username")
                     user_id = member.get("id")
 
-                    # Get detailed user info
+                    # Get detailed user info (includes email if admin token)
                     user_data = {}
                     try:
                         user_response = await client.get(
@@ -96,8 +96,10 @@ class GitLabProvider(BaseProvider):
                         )
                         if user_response.status_code == 200:
                             user_data = user_response.json()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # Log but continue - we'll use member data
+                        import logging
+                        logging.getLogger(__name__).debug(f"Could not fetch user {user_id}: {e}")
 
                     # Map access level to license type
                     access_level = member.get("access_level", 0)
@@ -121,10 +123,20 @@ class GitLabProvider(BaseProvider):
                             f"{user_data['last_activity_on']}T00:00:00+00:00"
                         )
 
-                    email = member.get("email") or user_data.get("email") or f"{username}@gitlab.com"
+                    # Email priority: user detail API > member email > commit_email > None
+                    # Don't fake emails - better to have none than wrong ones
+                    email = (
+                        user_data.get("email")
+                        or user_data.get("commit_email")
+                        or user_data.get("public_email")
+                        or member.get("email")
+                    )
+
+                    # Use email as external_user_id for HRIS matching, fall back to username
+                    external_id = email.lower() if email else username
 
                     licenses.append({
-                        "external_user_id": username,
+                        "external_user_id": external_id,
                         "email": email.lower() if email else None,
                         "license_type": license_type,
                         "status": status,

@@ -96,6 +96,7 @@ export const TEXTAREA_FIELDS = ['service_account_json'];
 
 /**
  * Fields that should show as password type.
+ * Note: URLs, IDs, and identifiers are NOT secrets.
  */
 export const SECRET_FIELDS = [
   'access_token',
@@ -107,6 +108,7 @@ export const SECRET_FIELDS = [
   'bot_token',
   'client_secret',
   'user_token',
+  'service_account_json',
 ];
 
 /**
