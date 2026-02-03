@@ -74,7 +74,7 @@ ALLOWED_EMPLOYEE_SOURCES = {"hibob", "personio", "manual"}
 # Allowed sort columns for employees (whitelist to prevent injection)
 ALLOWED_EMPLOYEE_SORT_COLUMNS = {
     "full_name", "email", "department", "status", "source",
-    "start_date", "termination_date", "synced_at",
+    "start_date", "termination_date", "synced_at", "license_count",
 }
 
 
