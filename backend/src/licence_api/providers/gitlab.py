@@ -110,12 +110,17 @@ class GitLabProvider(BaseProvider):
 
                 for user in users:
                     user_id = user.get("id")
-                    username = user.get("username")
+                    username = user.get("username", "")
                     state = user.get("state", "active")
                     is_bot = user.get("bot", False)
+                    name = user.get("name", "")
 
                     # Skip bot accounts
                     if is_bot:
+                        continue
+
+                    # Skip placeholder users (created during imports)
+                    if "_placeholder_" in username.lower() or name.startswith("Placeholder"):
                         continue
 
                     # Get email
