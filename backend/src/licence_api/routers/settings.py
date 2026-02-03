@@ -22,7 +22,20 @@ router = APIRouter()
 class SettingValue(BaseModel):
     """Setting value wrapper."""
 
-    value: dict[str, Any]
+    value: dict[str, Any] = Field(max_length=100)
+
+    @field_validator("value")
+    @classmethod
+    def validate_value_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate dict size and content to prevent DoS."""
+        for key, val in v.items():
+            if len(key) > 100:
+                raise ValueError("Key too long (max 100)")
+            if isinstance(val, str) and len(val) > 10000:
+                raise ValueError("Value too long (max 10000)")
+            if isinstance(val, dict) and len(val) > 50:
+                raise ValueError("Nested dict too large (max 50 keys)")
+        return v
 
 
 class CompanyDomainsRequest(BaseModel):
@@ -267,11 +280,11 @@ async def set_setting(
 async def delete_setting(
     request: Request,
     key: str,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete a setting. Requires settings.edit permission."""
+    """Delete a setting. Requires settings.delete permission."""
     deleted = await service.delete(
         key=key,
         user=current_user,
@@ -371,11 +384,11 @@ async def update_notification_rule(
 async def delete_notification_rule(
     request: Request,
     rule_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete a notification rule. Requires settings.edit permission."""
+    """Delete a notification rule. Requires settings.delete permission."""
     deleted = await service.delete_notification_rule(
         rule_id=rule_id,
         user=current_user,

@@ -113,13 +113,13 @@ async def create_pattern(
 async def delete_pattern(
     request: Request,
     pattern_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a service account pattern.
 
-    Requires licenses.edit permission.
+    Requires licenses.delete permission.
     Note: This does not unmark existing licenses that were marked by this pattern.
     """
     # Get pattern before deletion for audit
@@ -266,13 +266,13 @@ async def create_license_type(
 async def delete_license_type(
     request: Request,
     entry_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a service account license type.
 
-    Requires licenses.edit permission.
+    Requires licenses.delete permission.
     Note: This does not unmark existing licenses that were marked by this license type.
     """
     # Get entry before deletion for audit

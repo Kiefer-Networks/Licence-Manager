@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -53,7 +53,7 @@ class RemoveMemberResponse(BaseModel):
 class BulkActionRequest(BaseModel):
     """Request for bulk license actions."""
 
-    license_ids: list[UUID]
+    license_ids: list[UUID] = Field(max_length=500)
 
 
 class BulkActionResult(BaseModel):

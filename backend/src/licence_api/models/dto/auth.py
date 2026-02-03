@@ -25,7 +25,7 @@ class LocalLoginRequest(BaseModel):
     """Local login request."""
 
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class PasswordChangeRequest(BaseModel):

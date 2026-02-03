@@ -358,6 +358,7 @@ class Permissions:
     # Settings
     SETTINGS_VIEW = "settings.view"
     SETTINGS_EDIT = "settings.edit"
+    SETTINGS_DELETE = "settings.delete"
 
     # Payment Methods
     PAYMENT_METHODS_VIEW = "payment_methods.view"

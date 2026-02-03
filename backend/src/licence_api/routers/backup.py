@@ -188,6 +188,7 @@ async def restore_backup(
 async def get_backup_info(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> BackupInfoResponse:
@@ -216,7 +217,4 @@ async def get_backup_info(
             error="Empty file",
         )
 
-    # Note: BackupService doesn't need a session for get_backup_info
-    # but we create one for consistency
-    service = BackupService(None)  # type: ignore
     return service.get_backup_info(content)

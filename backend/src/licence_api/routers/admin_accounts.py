@@ -110,13 +110,13 @@ async def create_pattern(
 async def delete_pattern(
     request: Request,
     pattern_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete an admin account pattern.
 
-    Requires licenses.edit permission.
+    Requires licenses.delete permission.
     Note: This does not unmark existing licenses that were marked by this pattern.
     """
     # Get pattern before deletion for audit

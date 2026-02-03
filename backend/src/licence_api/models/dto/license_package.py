@@ -12,11 +12,11 @@ class LicensePackageCreate(BaseModel):
 
     license_type: str = Field(max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
-    total_seats: int = Field(ge=1)
-    cost_per_seat: Decimal | None = None
+    total_seats: int = Field(ge=1, le=1000000)
+    cost_per_seat: Decimal | None = Field(default=None, ge=0, le=1000000)
     billing_cycle: str | None = Field(default=None, max_length=50)
     payment_frequency: str | None = Field(default=None, max_length=50)
-    currency: str = Field(default="EUR", max_length=10)
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
     contract_start: date | None = None
     contract_end: date | None = None
     auto_renew: bool = True
@@ -27,11 +27,11 @@ class LicensePackageUpdate(BaseModel):
     """Update a license package."""
 
     display_name: str | None = Field(default=None, max_length=255)
-    total_seats: int | None = Field(default=None, ge=1)
-    cost_per_seat: Decimal | None = None
+    total_seats: int | None = Field(default=None, ge=1, le=1000000)
+    cost_per_seat: Decimal | None = Field(default=None, ge=0, le=1000000)
     billing_cycle: str | None = Field(default=None, max_length=50)
     payment_frequency: str | None = Field(default=None, max_length=50)
-    currency: str | None = Field(default=None, max_length=10)
+    currency: str | None = Field(default=None, max_length=3, pattern=r"^[A-Z]{3}$")
     contract_start: date | None = None
     contract_end: date | None = None
     auto_renew: bool | None = None

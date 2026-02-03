@@ -348,11 +348,11 @@ async def get_provider_logo_file(
 async def delete_provider_logo(
     request: Request,
     provider_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete a provider's logo. Requires providers.edit permission."""
+    """Delete a provider's logo. Requires providers.delete permission."""
     try:
         await provider_service.delete_logo(
             provider_id=provider_id,

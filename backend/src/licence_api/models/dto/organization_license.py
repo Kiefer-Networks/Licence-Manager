@@ -12,10 +12,10 @@ class OrganizationLicenseCreate(BaseModel):
 
     name: str = Field(max_length=255)
     license_type: str | None = Field(default=None, max_length=255)
-    quantity: int | None = Field(default=None, ge=1)
+    quantity: int | None = Field(default=None, ge=1, le=1000000)
     unit: str | None = Field(default=None, max_length=50)
-    monthly_cost: Decimal | None = Field(default=None, ge=0)
-    currency: str = Field(default="EUR", max_length=10)
+    monthly_cost: Decimal | None = Field(default=None, ge=0, le=100000000)
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
     billing_cycle: str | None = Field(default=None, max_length=50)
     renewal_date: date | None = None
     notes: str | None = Field(default=None, max_length=2000)
@@ -26,10 +26,10 @@ class OrganizationLicenseUpdate(BaseModel):
 
     name: str | None = Field(default=None, max_length=255)
     license_type: str | None = Field(default=None, max_length=255)
-    quantity: int | None = Field(default=None, ge=1)
+    quantity: int | None = Field(default=None, ge=1, le=1000000)
     unit: str | None = Field(default=None, max_length=50)
-    monthly_cost: Decimal | None = None
-    currency: str | None = Field(default=None, max_length=10)
+    monthly_cost: Decimal | None = Field(default=None, ge=0, le=100000000)
+    currency: str | None = Field(default=None, max_length=3, pattern=r"^[A-Z]{3}$")
     billing_cycle: str | None = Field(default=None, max_length=50)
     renewal_date: date | None = None
     notes: str | None = Field(default=None, max_length=2000)

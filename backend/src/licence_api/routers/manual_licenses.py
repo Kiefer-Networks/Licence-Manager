@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -27,8 +27,8 @@ class ManualLicenseCreate(BaseModel):
     license_type: str | None = Field(default=None, max_length=255)
     license_key: str | None = Field(default=None, max_length=500)
     quantity: int = Field(default=1, ge=1, le=1000)
-    monthly_cost: Decimal | None = Field(default=None, ge=0)
-    currency: str = Field(default="EUR", max_length=10)
+    monthly_cost: Decimal | None = Field(default=None, ge=0, le=1000000)
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
     valid_until: datetime | None = None
     notes: str | None = Field(default=None, max_length=2000)
     employee_id: UUID | None = None
@@ -39,8 +39,8 @@ class ManualLicenseUpdate(BaseModel):
 
     license_type: str | None = Field(default=None, max_length=255)
     license_key: str | None = Field(default=None, max_length=500)
-    monthly_cost: Decimal | None = Field(default=None, ge=0)
-    currency: str | None = Field(default=None, max_length=10)
+    monthly_cost: Decimal | None = Field(default=None, ge=0, le=1000000)
+    currency: str | None = Field(default=None, max_length=3, pattern=r"^[A-Z]{3}$")
     valid_until: datetime | None = None
     notes: str | None = Field(default=None, max_length=2000)
     employee_id: UUID | None = None
@@ -52,10 +52,19 @@ class ManualLicenseBulkCreate(BaseModel):
     provider_id: UUID
     license_type: str | None = Field(default=None, max_length=255)
     license_keys: list[str] = Field(max_length=100)  # Max 100 keys
-    monthly_cost: Decimal | None = Field(default=None, ge=0)
-    currency: str = Field(default="EUR", max_length=10)
+    monthly_cost: Decimal | None = Field(default=None, ge=0, le=1000000)
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
     valid_until: datetime | None = None
     notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("license_keys")
+    @classmethod
+    def validate_license_keys(cls, v: list[str]) -> list[str]:
+        """Validate each license key has max length."""
+        for key in v:
+            if len(key) > 500:
+                raise ValueError("Each license key must be max 500 characters")
+        return v
 
 
 class AssignLicenseRequest(BaseModel):

@@ -103,11 +103,11 @@ async def delete_license_package(
     request: Request,
     provider_id: UUID,
     package_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete a license package."""
+    """Delete a license package. Requires licenses.delete permission."""
     try:
         await service.delete_package(
             provider_id=provider_id,

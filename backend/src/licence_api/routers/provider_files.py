@@ -225,11 +225,11 @@ async def delete_provider_file(
     request: Request,
     provider_id: UUID,
     file_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete a provider file. Requires providers.edit permission."""
+    """Delete a provider file. Requires providers.delete permission."""
     try:
         await service.delete_file(
             provider_id=provider_id,

@@ -103,11 +103,11 @@ async def delete_organization_license(
     request: Request,
     provider_id: UUID,
     license_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
-    """Delete an organization license."""
+    """Delete an organization license. Requires licenses.delete permission."""
     try:
         await service.delete_license(
             provider_id=provider_id,
