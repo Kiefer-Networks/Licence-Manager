@@ -44,6 +44,7 @@ const licenseProviderTypes = [
   { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
   { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'group_id', 'base_url'], type: 'api' },
   { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api' },
+  { value: 'huggingface', label: 'Hugging Face', fields: ['access_token', 'organization'], type: 'api' },
   { value: 'jetbrains', label: 'JetBrains', fields: ['api_key', 'customer_code'], type: 'api' },
   { value: 'mailjet', label: 'Mailjet', fields: ['api_key', 'api_secret'], type: 'api' },
   { value: 'mattermost', label: 'Mattermost', fields: ['access_token', 'server_url'], type: 'api' },
@@ -74,6 +75,7 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   group_id: 'groupId',
   org_id: 'orgId',
   org_name: 'orgName',
+  organization: 'organization',
   server_url: 'serverUrl',
   service_account_json: 'serviceAccountJson',
   sign_in_address: 'signInAddress',
@@ -93,6 +95,7 @@ const PROVIDER_LINKS: Record<string, string> = {
   gitlab: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
   google_workspace: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
   hibob: 'https://apidocs.hibob.com/reference/getting-started',
+  huggingface: 'https://huggingface.co/docs/hub/en/api',
   personio: 'https://developer.personio.de/docs/getting-started-with-the-personio-api',
   jetbrains: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
   mattermost: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
@@ -108,9 +111,9 @@ const PROVIDER_LINKS: Record<string, string> = {
 
 // Provider types that have setup instructions
 const PROVIDERS_WITH_SETUP = [
-  '1password', 'adobe', 'atlassian', 'cursor', 'figma', 'github', 'gitlab',
-  'google_workspace', 'hibob', 'jetbrains', 'mattermost', 'microsoft',
-  'miro', 'openai', 'personio', 'slack', 'anthropic', 'auth0', 'mailjet', 'zoom'
+  '1password', 'adobe', 'anthropic', 'atlassian', 'auth0', 'cursor', 'figma',
+  'github', 'gitlab', 'google_workspace', 'hibob', 'huggingface', 'jetbrains',
+  'mailjet', 'mattermost', 'microsoft', 'miro', 'openai', 'personio', 'slack', 'zoom'
 ];
 
 const getFieldLabel = (field: string, t: (key: string) => string) => {

@@ -362,6 +362,7 @@
     "miro": "Miro",
     "zoom": "Zoom",
     "google_workspace": "Google Workspace",
+    "huggingface": "Hugging Face",
     "manual": "Manual",
     "manualNoApi": "Manual (No API)",
     "apiIntegrated": "API",
@@ -591,6 +592,7 @@
     "groupId": "Group ID",
     "orgId": "Organization ID",
     "orgName": "Organization Name",
+    "organization": "Organization",
     "serverUrl": "Server URL",
     "serviceAccountJson": "Service Account JSON",
     "signInAddress": "Sign-in Address",
@@ -1511,6 +1513,20 @@
         "6. Add the Service Account client ID",
         "7. Add scope: https://www.googleapis.com/auth/admin.directory.user.readonly",
         "8. Admin Email: A super admin email for impersonation"
+      ]
+    },
+    "huggingface": {
+      "permissions": [
+        "Access Token with read permissions",
+        "Organization membership"
+      ],
+      "steps": [
+        "1. Log in to Hugging Face",
+        "2. Go to Settings → Access Tokens",
+        "3. Click 'New token'",
+        "4. Name: 'License Management', Type: Read",
+        "5. Copy the token (starts with hf_)",
+        "6. Organization: Your org name from the URL (huggingface.co/your-org)"
       ]
     },
     "hibob": {

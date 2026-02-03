@@ -362,6 +362,7 @@
     "miro": "Miro",
     "zoom": "Zoom",
     "google_workspace": "Google Workspace",
+    "huggingface": "Hugging Face",
     "manual": "Manuell",
     "manualNoApi": "Manuell (Keine API)",
     "apiIntegrated": "API",
@@ -591,6 +592,7 @@
     "groupId": "Gruppen-ID",
     "orgId": "Organisations-ID",
     "orgName": "Organisationsname",
+    "organization": "Organisation",
     "serverUrl": "Server-URL",
     "serviceAccountJson": "Service-Account-JSON",
     "signInAddress": "Anmeldeadresse",
@@ -1511,6 +1513,20 @@
         "6. Service-Account-Client-ID hinzufügen",
         "7. Bereich hinzufügen: https://www.googleapis.com/auth/admin.directory.user.readonly",
         "8. Admin-E-Mail: Eine Super-Admin-E-Mail für Impersonation"
+      ]
+    },
+    "huggingface": {
+      "permissions": [
+        "Access Token mit Leseberechtigungen",
+        "Organisationsmitgliedschaft"
+      ],
+      "steps": [
+        "1. Melden Sie sich bei Hugging Face an",
+        "2. Gehen Sie zu Settings → Access Tokens",
+        "3. Klicken Sie auf 'New token'",
+        "4. Name: 'License Management', Typ: Read",
+        "5. Kopieren Sie den Token (beginnt mit hf_)",
+        "6. Organisation: Ihr Org-Name aus der URL (huggingface.co/ihre-org)"
       ]
     },
     "hibob": {
