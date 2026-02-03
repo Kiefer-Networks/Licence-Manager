@@ -2104,9 +2104,10 @@ export const api = {
     return fetchApi<CostsByDepartmentReport>('/reports/costs-by-department');
   },
 
-  async getCostsByEmployeeReport(department?: string, limit: number = 100): Promise<CostsByEmployeeReport> {
+  async getCostsByEmployeeReport(department?: string, minCost?: number, limit: number = 100): Promise<CostsByEmployeeReport> {
     const params = new URLSearchParams();
     if (department) params.set('department', department);
+    if (minCost !== undefined) params.set('min_cost', minCost.toString());
     params.set('limit', limit.toString());
     return fetchApi<CostsByEmployeeReport>(`/reports/costs-by-employee?${params.toString()}`);
   },

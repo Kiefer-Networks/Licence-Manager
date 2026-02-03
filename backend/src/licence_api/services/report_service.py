@@ -964,12 +964,14 @@ class ReportService:
     async def get_costs_by_employee(
         self,
         department: str | None = None,
+        min_cost: float | None = None,
         limit: int = 100,
     ) -> CostsByEmployeeReport:
         """Get license costs grouped by employee.
 
         Args:
             department: Optional filter by department
+            min_cost: Optional minimum monthly cost filter
             limit: Max employees to return (default 100, sorted by cost desc)
 
         Returns:
@@ -1018,6 +1020,11 @@ class ReportService:
         for emp_id, data in emp_data.items():
             emp = data["employee"]
             cost = data["cost"]
+
+            # Apply min_cost filter
+            if min_cost is not None and float(cost) < min_cost:
+                continue
+
             costs_list.append(float(cost))
 
             employees.append(EmployeeCost(
@@ -1034,7 +1041,7 @@ class ReportService:
         # Sort by cost descending
         employees.sort(key=lambda x: x.total_monthly_cost, reverse=True)
 
-        # Calculate statistics
+        # Calculate statistics (based on filtered results)
         total_cost = sum(e.total_monthly_cost for e in employees)
         avg_cost = total_cost / len(employees) if employees else Decimal("0")
         median_cost = Decimal(str(statistics.median(costs_list))) if costs_list else Decimal("0")
@@ -1044,7 +1051,7 @@ class ReportService:
         employees = employees[:limit]
 
         return CostsByEmployeeReport(
-            total_employees=len(emp_data),
+            total_employees=len(employees),
             total_monthly_cost=round(total_cost, 2),
             average_cost_per_employee=round(avg_cost, 2),
             median_cost_per_employee=round(median_cost, 2),

@@ -163,14 +163,20 @@ async def get_costs_by_employee_report(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    min_cost: float | None = Query(default=None, ge=0, le=1000000, description="Minimum monthly cost filter"),
     limit: int = Query(default=100, ge=1, le=500, description="Maximum employees to return"),
 ) -> CostsByEmployeeReport:
     """Get cost breakdown grouped by employee.
 
     Shows license costs per employee, sorted by highest cost first.
     Includes median and average statistics for benchmarking.
+    Use min_cost to filter employees with costs above a threshold.
     """
-    return await report_service.get_costs_by_employee(department=department, limit=limit)
+    return await report_service.get_costs_by_employee(
+        department=department,
+        min_cost=min_cost,
+        limit=limit,
+    )
 
 
 # ==================== LICENSE LIFECYCLE REPORTS ====================
