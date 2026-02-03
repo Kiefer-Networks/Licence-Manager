@@ -1454,6 +1454,10 @@ export const api = {
     return fetchApi<Provider>(`/providers/${providerId}`);
   },
 
+  async getProviderPublicCredentials(providerId: string): Promise<{ credentials: Record<string, string> }> {
+    return fetchApi<{ credentials: Record<string, string> }>(`/providers/${providerId}/public-credentials`);
+  },
+
   async createProvider(data: {
     name: string;
     display_name: string;

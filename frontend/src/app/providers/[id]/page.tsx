@@ -119,6 +119,7 @@ export default function ProviderDetailPage() {
   const [credentialsForm, setCredentialsForm] = useState<Record<string, string>>({});
   const [savingCredentials, setSavingCredentials] = useState(false);
   const [showCredentialsEdit, setShowCredentialsEdit] = useState(false);
+  const [publicCredentials, setPublicCredentials] = useState<Record<string, string>>({});
 
   // Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<License | null>(null);
@@ -234,6 +235,15 @@ export default function ProviderDetailPage() {
       });
     } catch (error) {
       handleSilentError('fetchProvider', error);
+    }
+  }, [providerId]);
+
+  const fetchPublicCredentials = useCallback(async () => {
+    try {
+      const data = await api.getProviderPublicCredentials(providerId);
+      setPublicCredentials(data.credentials);
+    } catch (error) {
+      handleSilentError('fetchPublicCredentials', error);
     }
   }, [providerId]);
 
@@ -362,10 +372,10 @@ export default function ProviderDetailPage() {
   }, [providerId]);
 
   useEffect(() => {
-    Promise.all([fetchProvider(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles(), fetchLicensePackages(), fetchOrgLicenses()]).finally(() =>
+    Promise.all([fetchProvider(), fetchPublicCredentials(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles(), fetchLicensePackages(), fetchOrgLicenses()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles, fetchLicensePackages, fetchOrgLicenses]);
+  }, [fetchProvider, fetchPublicCredentials, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles, fetchLicensePackages, fetchOrgLicenses]);
 
   const handleSync = async () => {
     if (!provider || isManual) return;
@@ -2151,8 +2161,10 @@ export default function ProviderDetailPage() {
                         {getProviderFields(provider.name).map((field) => (
                           <div key={field} className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-0">
                             <span className="text-sm font-medium">{getFieldLabel(field, t)}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {isSecretField(field) ? '••••••••' : t('configured')}
+                            <span className="text-sm text-muted-foreground font-mono">
+                              {isSecretField(field)
+                                ? '••••••••'
+                                : publicCredentials[field] || t('configured')}
                             </span>
                           </div>
                         ))}

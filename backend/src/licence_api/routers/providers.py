@@ -90,6 +90,27 @@ class TestConnectionRequest(BaseModel):
         return v
 
 
+class PublicCredentialsResponse(BaseModel):
+    """Response with non-secret credential values."""
+
+    credentials: dict[str, str]
+
+
+# Fields that contain secrets and should never be exposed
+SECRET_CREDENTIAL_FIELDS = {
+    'access_token',
+    'admin_api_key',
+    'api_key',
+    'api_secret',
+    'api_token',
+    'auth_token',
+    'bot_token',
+    'client_secret',
+    'user_token',
+    'service_account_json',
+}
+
+
 class TestConnectionResponse(BaseModel):
     """Response from connection test."""
 
@@ -128,6 +149,43 @@ async def get_provider(
             detail="Provider not found",
         )
     return provider
+
+
+@router.get("/{provider_id}/public-credentials", response_model=PublicCredentialsResponse)
+async def get_provider_public_credentials(
+    provider_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+) -> PublicCredentialsResponse:
+    """Get non-secret credential values for a provider.
+
+    Returns values like base_url, org_id, domain etc. that are not secrets.
+    Secret fields (tokens, keys, passwords) are excluded.
+
+    Requires providers.view permission.
+    """
+    provider = await provider_repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Decrypt credentials
+    encryption = get_encryption_service()
+    try:
+        credentials = encryption.decrypt(provider.credentials_encrypted)
+    except Exception:
+        return PublicCredentialsResponse(credentials={})
+
+    # Filter out secret fields
+    public_credentials = {
+        key: str(value) if value is not None else ""
+        for key, value in credentials.items()
+        if key not in SECRET_CREDENTIAL_FIELDS and value is not None
+    }
+
+    return PublicCredentialsResponse(credentials=public_credentials)
 
 
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
