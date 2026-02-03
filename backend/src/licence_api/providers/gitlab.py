@@ -25,8 +25,13 @@ class GitLabProvider(BaseProvider):
         super().__init__(credentials)
         self.access_token = credentials.get("access_token")
         self.group_id = credentials.get("group_id")
-        base_url = credentials.get("base_url", "").rstrip("/")
-        self.base_url = f"{base_url}/api/v4" if base_url else self.DEFAULT_BASE_URL
+        base_url = credentials.get("base_url", "").strip().rstrip("/")
+        # Normalize: ensure https:// prefix, handle user input with/without protocol
+        if base_url:
+            base_url = base_url.removeprefix("https://").removeprefix("http://")
+            self.base_url = f"https://{base_url}/api/v4"
+        else:
+            self.base_url = self.DEFAULT_BASE_URL
 
     def _get_headers(self) -> dict[str, str]:
         """Get request headers with authentication."""
