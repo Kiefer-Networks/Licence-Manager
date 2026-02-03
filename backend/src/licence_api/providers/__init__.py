@@ -11,6 +11,7 @@ from licence_api.providers.github import GitHubProvider
 from licence_api.providers.gitlab import GitLabProvider
 from licence_api.providers.google_workspace import GoogleWorkspaceProvider
 from licence_api.providers.hibob import HiBobProvider
+from licence_api.providers.huggingface import HuggingFaceProvider
 from licence_api.providers.jetbrains import JetBrainsProvider
 from licence_api.providers.mailjet import MailjetProvider
 from licence_api.providers.mattermost import MattermostProvider
@@ -34,6 +35,7 @@ __all__ = [
     "GitLabProvider",
     "GoogleWorkspaceProvider",
     "HiBobProvider",
+    "HuggingFaceProvider",
     "JetBrainsProvider",
     "MailjetProvider",
     "MattermostProvider",

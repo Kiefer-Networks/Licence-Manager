@@ -21,6 +21,7 @@ class ProviderName(StrEnum):
     GITHUB = "github"
     GITLAB = "gitlab"
     GOOGLE_WORKSPACE = "google_workspace"
+    HUGGINGFACE = "huggingface"
     JETBRAINS = "jetbrains"
     MAILJET = "mailjet"
     MANUAL = "manual"

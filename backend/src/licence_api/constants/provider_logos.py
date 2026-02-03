@@ -59,9 +59,10 @@ BUILT_IN_LOGOS: dict[str, str] = {
     "monday": "https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg",
     "miro": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Miro_2019.svg",
 
-    # AI
+    # AI / ML
     "openai": "https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg",
     "anthropic": "https://upload.wikimedia.org/wikipedia/commons/7/78/Anthropic_logo.svg",
+    "huggingface": "https://huggingface.co/front/assets/huggingface_logo-noborder.svg",
 
     # Identity / Auth
     "auth0": "https://cdn.auth0.com/styleguide/latest/lib/logos/img/logo-blue.svg",
