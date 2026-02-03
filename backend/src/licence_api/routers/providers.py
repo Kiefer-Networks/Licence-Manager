@@ -137,6 +137,7 @@ async def create_provider(
     body: ProviderCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
     try:
@@ -163,6 +164,7 @@ async def update_provider(
     body: ProviderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ProviderResponse:
     """Update a provider. Requires providers.edit permission."""
     result = await provider_service.update_provider(
@@ -348,6 +350,7 @@ async def delete_provider_logo(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a provider's logo. Requires providers.edit permission."""
     try:
@@ -370,6 +373,7 @@ async def delete_provider(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a provider. Requires providers.delete permission."""
     deleted = await provider_service.delete_provider(
@@ -390,6 +394,7 @@ async def test_provider_connection(
     request: Request,
     body: TestConnectionRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> TestConnectionResponse:
     """Test provider connection with given credentials. Requires providers.create permission.
 
@@ -471,6 +476,7 @@ async def trigger_sync(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     provider_id: UUID | None = None,
 ) -> SyncResponse:
     """Trigger a sync operation. Requires providers.sync permission."""
@@ -535,6 +541,7 @@ async def sync_provider(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> SyncResponse:
     """Sync a specific provider. Requires providers.sync permission."""
     try:
@@ -738,6 +745,7 @@ async def update_provider_pricing(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
     provider = await provider_repo.get_by_id(provider_id)
@@ -869,6 +877,7 @@ async def update_provider_individual_pricing(
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> IndividualLicenseTypesResponse:
     """Update individual license type pricing.
 
@@ -920,6 +929,7 @@ async def resync_avatars(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     force: bool = False,
 ) -> SyncResponse:
     """Resync all employee avatars from HiBob.

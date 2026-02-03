@@ -15,6 +15,7 @@ from licence_api.models.dto.organization_license import (
     OrganizationLicenseUpdate,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.organization_license_service import OrganizationLicenseService
 
@@ -52,6 +53,7 @@ async def create_organization_license(
     data: OrganizationLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> OrganizationLicenseResponse:
     """Create a new organization license."""
     try:
@@ -77,6 +79,7 @@ async def update_organization_license(
     data: OrganizationLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> OrganizationLicenseResponse:
     """Update an organization license."""
     try:
@@ -102,6 +105,7 @@ async def delete_organization_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete an organization license."""
     try:

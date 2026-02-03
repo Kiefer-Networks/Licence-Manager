@@ -39,7 +39,7 @@ class PasswordResetRequest(BaseModel):
     """Password reset request (admin only)."""
 
     user_id: UUID
-    new_password: str = Field(min_length=12)
+    new_password: str = Field(min_length=12, max_length=128)
     require_change: bool = True
 
 

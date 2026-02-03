@@ -36,6 +36,7 @@ from licence_api.security.auth import (
     require_permission,
     require_superadmin,
 )
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter
 from licence_api.services.rbac_service import RbacService
 
@@ -79,6 +80,7 @@ async def create_user(
     body: UserCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> UserInfo:
     """Create a new user with local authentication."""
@@ -116,6 +118,7 @@ async def update_user(
     body: UserUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserInfo:
     """Update user details."""
     # Check role management permission
@@ -145,6 +148,7 @@ async def delete_user(
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_superadmin)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> None:
     """Delete a user. Superadmin only - user deletion is a critical operation."""
@@ -169,6 +173,7 @@ async def reset_user_password(
     body: PasswordResetRequest,
     current_user: Annotated[AdminUser, Depends(require_superadmin)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Reset a user's password (superadmin only). Rate limited."""
@@ -194,6 +199,7 @@ async def unlock_user(
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, str]:
     """Unlock a locked user account."""
     try:
@@ -281,6 +287,7 @@ async def create_role(
     body: RoleCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RoleResponse:
     """Create a custom role."""
     try:
@@ -312,6 +319,7 @@ async def update_role(
     body: RoleUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RoleResponse:
     """Update a role."""
     try:
@@ -333,6 +341,7 @@ async def delete_role(
     role_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_DELETE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a custom role."""
     try:

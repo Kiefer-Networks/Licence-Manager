@@ -11,6 +11,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
@@ -181,6 +182,7 @@ async def set_company_domains(
     body: CompanyDomainsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CompanyDomainsResponse:
     """Set company domains. Requires settings.edit permission."""
     domains = await service.set_company_domains(
@@ -210,6 +212,7 @@ async def update_threshold_settings(
     body: ThresholdSettings,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ThresholdSettings:
     """Update threshold settings."""
     await service.set_thresholds(
@@ -237,6 +240,7 @@ async def set_setting(
     body: SettingValue,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$"),
 ) -> dict[str, Any]:
     """Set a setting value. Requires settings.edit permission."""
@@ -255,6 +259,7 @@ async def delete_setting(
     key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a setting. Requires settings.edit permission."""
     deleted = await service.delete(
@@ -299,6 +304,7 @@ async def create_notification_rule(
     body: NotificationRuleCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> NotificationRuleResponse:
     """Create a notification rule. Requires settings.edit permission."""
     rule = await service.create_notification_rule(
@@ -325,6 +331,7 @@ async def update_notification_rule(
     body: NotificationRuleUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> NotificationRuleResponse:
     """Update a notification rule. Requires settings.edit permission."""
     rule = await service.update_notification_rule(
@@ -356,6 +363,7 @@ async def delete_notification_rule(
     rule_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a notification rule. Requires settings.edit permission."""
     deleted = await service.delete_notification_rule(
@@ -378,6 +386,7 @@ async def test_slack_notification(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
     notification_service: Annotated[NotificationService, Depends(get_notification_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> TestNotificationResponse:
     """Send a test notification to Slack. Requires settings.edit permission."""
     slack_config = await settings_service.get("slack")

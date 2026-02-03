@@ -65,7 +65,7 @@ class EmployeeCreate(BaseModel):
     status: EmployeeStatus = Field(default=EmployeeStatus.ACTIVE, description="Employment status")
     start_date: date | None = Field(default=None, description="Employment start date")
     termination_date: date | None = Field(default=None, description="Employment termination date")
-    manager_email: str | None = Field(default=None, max_length=255, description="Manager's email address")
+    manager_email: EmailStr | None = Field(default=None, description="Manager's email address")
 
 
 class EmployeeUpdate(BaseModel):
@@ -77,7 +77,7 @@ class EmployeeUpdate(BaseModel):
     status: EmployeeStatus | None = Field(default=None, description="Employment status")
     start_date: date | None = Field(default=None, description="Employment start date")
     termination_date: date | None = Field(default=None, description="Employment termination date")
-    manager_email: str | None = Field(default=None, max_length=255, description="Manager's email address")
+    manager_email: EmailStr | None = Field(default=None, description="Manager's email address")
 
 
 class EmployeeBulkImportItem(BaseModel):
@@ -88,7 +88,7 @@ class EmployeeBulkImportItem(BaseModel):
     department: str | None = Field(default=None, max_length=255, description="Department name")
     status: EmployeeStatus = Field(default=EmployeeStatus.ACTIVE, description="Employment status")
     start_date: date | None = Field(default=None, description="Employment start date")
-    manager_email: str | None = Field(default=None, max_length=255, description="Manager's email address")
+    manager_email: EmailStr | None = Field(default=None, description="Manager's email address")
 
 
 class EmployeeBulkImport(BaseModel):

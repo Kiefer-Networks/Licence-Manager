@@ -15,6 +15,7 @@ from licence_api.models.dto.payment_method import (
     PaymentMethodUpdate,
 )
 from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.payment_method_service import PaymentMethodService
 
@@ -44,6 +45,7 @@ async def create_payment_method(
     data: PaymentMethodCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_CREATE))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
     """Create a new payment method. Requires payment_methods.create permission."""
     try:
@@ -83,6 +85,7 @@ async def update_payment_method(
     data: PaymentMethodUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_EDIT))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
     """Update a payment method. Requires payment_methods.edit permission."""
     try:
@@ -106,6 +109,7 @@ async def delete_payment_method(
     payment_method_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_DELETE))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a payment method. Requires payment_methods.delete permission."""
     try:

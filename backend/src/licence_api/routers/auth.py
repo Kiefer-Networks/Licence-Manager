@@ -346,6 +346,7 @@ async def change_password(
     body: PasswordChangeRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Change current user's password."""
@@ -370,6 +371,7 @@ async def update_profile(
     body: ProfileUpdateRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserInfo:
     """Update current user's profile (name and locale preferences)."""
     return await auth_service.update_profile(
@@ -448,6 +450,7 @@ async def delete_avatar(
     request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, str]:
     """Delete current user's avatar."""
     await auth_service.delete_avatar(current_user.id)
@@ -494,6 +497,7 @@ async def update_notification_preferences(
     body: UserNotificationPreferenceBulkUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserNotificationPreferencesResponse:
     """Update current user's notification preferences (bulk)."""
     # Convert to list of dicts for bulk upsert
@@ -539,6 +543,7 @@ async def update_single_notification_preference(
     body: UserNotificationPreferenceUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserNotificationPreferenceResponse:
     """Update a single notification preference."""
     if event_type not in EVENT_TYPE_MAP:
