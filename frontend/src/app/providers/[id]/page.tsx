@@ -29,6 +29,7 @@ import { EmployeeAutocomplete } from '@/components/ui/employee-autocomplete';
 import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
+import { getProviderFields, getFieldLabel, TEXTAREA_FIELDS, isSecretField } from '@/lib/provider-fields';
 import { useLocale } from '@/components/locale-provider';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
@@ -113,6 +114,11 @@ export default function ProviderDetailPage() {
     license_model: 'license_based',
   });
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Credentials Form
+  const [credentialsForm, setCredentialsForm] = useState<Record<string, string>>({});
+  const [savingCredentials, setSavingCredentials] = useState(false);
+  const [showCredentialsEdit, setShowCredentialsEdit] = useState(false);
 
   // Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<License | null>(null);
@@ -791,6 +797,36 @@ export default function ProviderDetailPage() {
       showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!provider) return;
+
+    // Filter out empty values - only send fields that have been filled in
+    const credentials: Record<string, string> = {};
+    for (const [key, value] of Object.entries(credentialsForm)) {
+      if (value && value.trim()) {
+        credentials[key] = value.trim();
+      }
+    }
+
+    if (Object.keys(credentials).length === 0) {
+      showToast('error', t('enterAtLeastOneCredential'));
+      return;
+    }
+
+    setSavingCredentials(true);
+    try {
+      await api.updateProvider(provider.id, { credentials });
+      await fetchProvider();
+      setCredentialsForm({});
+      setShowCredentialsEdit(false);
+      showToast('success', t('credentialsSaved'));
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
+    } finally {
+      setSavingCredentials(false);
     }
   };
 
@@ -2093,6 +2129,82 @@ export default function ProviderDetailPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Credentials */}
+            {provider && provider.name !== 'manual' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    {t('credentials')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!showCredentialsEdit ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {t('credentialsDescription')}
+                      </p>
+                      <div className="space-y-2">
+                        {getProviderFields(provider.name).map((field) => (
+                          <div key={field} className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-0">
+                            <span className="text-sm font-medium">{getFieldLabel(field, t)}</span>
+                            <span className="text-sm text-muted-foreground">
+                              {isSecretField(field) ? '••••••••' : t('configured')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <Button variant="outline" onClick={() => setShowCredentialsEdit(true)}>
+                        <Settings className="h-4 w-4 mr-1.5" />
+                        {t('editCredentials')}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {t('editCredentialsDescription')}
+                      </p>
+                      <div className="space-y-3">
+                        {getProviderFields(provider.name).map((field) => (
+                          <div key={field} className="space-y-1">
+                            <Label className="text-xs font-medium">{getFieldLabel(field, t)}</Label>
+                            {TEXTAREA_FIELDS.includes(field) ? (
+                              <Textarea
+                                value={credentialsForm[field] || ''}
+                                onChange={(e) => setCredentialsForm({ ...credentialsForm, [field]: e.target.value })}
+                                placeholder={t('leaveEmptyToKeep')}
+                                rows={4}
+                                className="font-mono text-xs"
+                              />
+                            ) : (
+                              <Input
+                                type={isSecretField(field) ? 'password' : 'text'}
+                                value={credentialsForm[field] || ''}
+                                onChange={(e) => setCredentialsForm({ ...credentialsForm, [field]: e.target.value })}
+                                placeholder={t('leaveEmptyToKeep')}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveCredentials} disabled={savingCredentials}>
+                          {savingCredentials ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                          {t('saveCredentials')}
+                        </Button>
+                        <Button variant="ghost" onClick={() => {
+                          setShowCredentialsEdit(false);
+                          setCredentialsForm({});
+                        }}>
+                          {tCommon('cancel')}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Danger Zone */}
             <Card className="border-red-200">
