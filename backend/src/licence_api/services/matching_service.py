@@ -1,5 +1,19 @@
 """License-to-employee matching service with multi-level matching logic.
 
+Architecture Note (MVC-08):
+    This service implements complex matching algorithms that associate licenses with
+    employees based on email patterns, fuzzy name matching, and domain analysis.
+    While it uses repositories for standard CRUD operations, some methods use direct
+    SQLAlchemy queries because:
+    1. Match suggestion queries require complex filtering by match status and method
+    2. Batch operations need to update multiple licenses with calculated match data
+    3. Fuzzy matching algorithms operate on in-memory collections after initial fetch
+    4. Performance-critical sync operations process potentially thousands of records
+    5. Some queries require specific column selection not available in generic repos
+
+    The service balances repository usage for standard operations with direct queries
+    for matching-specific analytics and batch updates.
+
 GDPR Note: This service does NOT store private email addresses.
 It only creates temporary suggestions for manual review.
 Admins decide what to do with each suggestion.

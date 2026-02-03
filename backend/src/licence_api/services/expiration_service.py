@@ -1,4 +1,18 @@
-"""Expiration service for tracking and updating expired licenses."""
+"""Expiration service for tracking and updating expired licenses.
+
+Architecture Note (MVC-07):
+    This service handles automated expiration detection and status updates across
+    multiple entity types. While it uses repositories for standard operations, some
+    methods use direct SQLAlchemy queries because:
+    1. Expiration checks require complex date-based filtering with multiple conditions
+    2. Batch status updates need to modify multiple records efficiently
+    3. Queries join licenses with providers and employees for notification context
+    4. Performance-critical scheduled task that runs periodically
+    5. Read operations for analytics don't require repository abstraction
+
+    The service combines repository usage (where appropriate) with direct queries
+    (for complex analytics) following the patterns established in report_service.py.
+"""
 
 from datetime import date, timedelta
 from uuid import UUID

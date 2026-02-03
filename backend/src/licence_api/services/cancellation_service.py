@@ -1,4 +1,18 @@
-"""Cancellation service for managing license cancellations and renewals."""
+"""Cancellation service for managing license cancellations and renewals.
+
+Architecture Note (MVC-06):
+    This service manages the lifecycle state transitions for licenses, packages, and
+    organization licenses. It uses direct SQLAlchemy access because:
+    1. Cancellation/renewal operations modify multiple related fields atomically
+    2. State transitions require immediate consistency (status + dates + metadata)
+    3. Operations span multiple entity types (License, Package, OrgLicense) with
+       similar but distinct field sets that don't fit a generic repository pattern
+    4. Each operation is a single-entity update with business-specific field logic
+    5. Transaction commit is done here to ensure atomic state changes
+
+    The service is intentionally thin and focused on state management rather than
+    complex queries, keeping the cancellation business logic in one place.
+"""
 
 from datetime import date, datetime, timezone
 from uuid import UUID

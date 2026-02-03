@@ -1,5 +1,20 @@
 """Backup service for system export and restore functionality.
 
+Architecture Note (MVC-05):
+    This service performs bulk data export and import operations that require direct
+    database access for efficiency and transactional integrity. The operations include:
+    1. Full database export with relationship preservation
+    2. Bulk deletion for restore operations (cascading deletes)
+    3. Bulk insertion with foreign key ordering
+    4. Binary file handling with base64 encoding
+
+    Direct SQLAlchemy access is justified because:
+    1. Bulk operations require transaction-level control across multiple tables
+    2. Export needs to serialize all entities in dependency order
+    3. Restore needs atomic delete-then-insert across all tables
+    4. Standard repository patterns would require N+1 queries for relationships
+    5. These operations are admin-only and not part of normal request flow
+
 Security Note (INJ-04): This service uses JSON for data serialization, NOT pickle or
 other unsafe deserialization methods. All data is validated against a schema before
 import. Binary file content is base64-encoded within the JSON structure.
