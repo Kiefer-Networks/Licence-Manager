@@ -187,9 +187,17 @@ class HuggingFaceProvider(BaseProvider):
 
                     # Get email if available (verified email)
                     email = member.get("verifiedEmail") or member.get("email")
+                    user_id = member.get("_id") or username
+
+                    # Use email as external_user_id if available, otherwise fall back to user ID
+                    # This allows matching to HRIS employees
+                    external_user_id = email if email else user_id
+
+                    # Store original user_id in metadata for reference
+                    metadata["hf_user_id"] = user_id
 
                     licenses.append({
-                        "external_user_id": member.get("_id") or username,
+                        "external_user_id": external_user_id,
                         "email": email,
                         "license_type": license_type,
                         "status": "active",
