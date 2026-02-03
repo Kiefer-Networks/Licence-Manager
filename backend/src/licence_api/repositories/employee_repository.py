@@ -5,12 +5,14 @@ from uuid import UUID
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from licence_api.models.orm.employee import EmployeeORM
+from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.base import BaseRepository
 
 # Whitelist of valid sort columns to prevent column injection
-VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email", "source"}
+VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email", "source", "license_count"}
 
 
 class EmployeeRepository(BaseRepository[EmployeeORM]):
@@ -124,9 +126,29 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         # Validated sorting - only allow whitelisted columns
         if sort_by not in VALID_SORT_COLUMNS:
             sort_by = "full_name"
-        sort_column = getattr(EmployeeORM, sort_by, EmployeeORM.full_name)
         if sort_dir not in ("asc", "desc"):
             sort_dir = "asc"
+
+        # Special handling for license_count sorting (computed field)
+        if sort_by == "license_count":
+            # Create subquery for license count
+            license_count_subq = (
+                select(
+                    LicenseORM.employee_id,
+                    func.count(LicenseORM.id).label("license_count")
+                )
+                .group_by(LicenseORM.employee_id)
+                .subquery()
+            )
+            # Join with subquery and sort by count
+            query = query.outerjoin(
+                license_count_subq,
+                EmployeeORM.id == license_count_subq.c.employee_id
+            )
+            sort_column = func.coalesce(license_count_subq.c.license_count, 0)
+        else:
+            sort_column = getattr(EmployeeORM, sort_by, EmployeeORM.full_name)
+
         if sort_dir == "desc":
             query = query.order_by(sort_column.desc().nulls_last())
         else:

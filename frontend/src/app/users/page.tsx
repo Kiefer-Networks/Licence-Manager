@@ -250,7 +250,11 @@ export default function UsersPage() {
                           {tCommon('status')} <SortIcon column="status" />
                         </button>
                       </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('licenseCount')}</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                        <button onClick={() => handleSort('license_count')} className="flex items-center gap-1.5 hover:text-foreground">
+                          {t('licenseCount')} <SortIcon column="license_count" />
+                        </button>
+                      </th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                         <button onClick={() => handleSort('start_date')} className="flex items-center gap-1.5 hover:text-foreground">
                           {t('startDate')} <SortIcon column="start_date" />
