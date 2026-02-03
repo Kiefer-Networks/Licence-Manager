@@ -396,6 +396,8 @@ sessions/
 # Backup files
 *.backup
 *_backup
-backup/
-backups/
+/backup/
+/backups/
+# But include frontend components
+!frontend/src/components/backup/
 

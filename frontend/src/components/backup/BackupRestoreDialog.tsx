@@ -1,0 +1,312 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
+import { Upload, Loader2, AlertTriangle, Eye, EyeOff, CheckCircle2, XCircle, FileArchive } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { api, BackupRestoreResponse } from '@/lib/api';
+
+interface BackupRestoreDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: (result: BackupRestoreResponse) => void;
+  onError?: (error: string) => void;
+}
+
+export function BackupRestoreDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  onError,
+}: BackupRestoreDialogProps) {
+  const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
+  const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<BackupRestoreResponse | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const canSubmit = file && password.length >= 8 && confirmed && !result;
+
+  const handleFileSelect = (selectedFile: File) => {
+    if (selectedFile.name.endsWith('.lcbak')) {
+      setFile(selectedFile);
+      setError(null);
+    } else {
+      setError(t('selectBackupFile'));
+      setFile(null);
+    }
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      handleFileSelect(droppedFile);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleRestore = async () => {
+    if (!file || !canSubmit) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.restoreBackup(file, password);
+      setResult(response);
+
+      if (response.success) {
+        onSuccess?.(response);
+      } else {
+        setError(response.error || t('restoreFailed'));
+        onError?.(response.error || t('restoreFailed'));
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('restoreFailed');
+      setError(message);
+      onError?.(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isLoading) {
+      setFile(null);
+      setPassword('');
+      setConfirmed(false);
+      setError(null);
+      setResult(null);
+      onOpenChange(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            {t('importBackup')}
+          </DialogTitle>
+          <DialogDescription>
+            {t('importBackupDescription')}
+          </DialogDescription>
+        </DialogHeader>
+
+        {result?.success ? (
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 text-green-700">
+              <CheckCircle2 className="h-6 w-6 flex-shrink-0" />
+              <div>
+                <p className="font-medium">{t('importSuccessful')}</p>
+                <p className="text-sm mt-1">{t('allDataRestored')}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-zinc-700">{t('importedData')}</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{t('providers')}</span>
+                  <span className="font-medium">{result.imported.providers}</span>
+                </div>
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{t('licenses')}</span>
+                  <span className="font-medium">{result.imported.licenses}</span>
+                </div>
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{t('employees')}</span>
+                  <span className="font-medium">{result.imported.employees}</span>
+                </div>
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{t('packages')}</span>
+                  <span className="font-medium">{result.imported.license_packages}</span>
+                </div>
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{t('files')}</span>
+                  <span className="font-medium">{result.imported.provider_files}</span>
+                </div>
+                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
+                  <span className="text-zinc-600">{tCommon('settings')}</span>
+                  <span className="font-medium">{result.imported.settings}</span>
+                </div>
+              </div>
+            </div>
+
+            {result.validation.providers_failed.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-amber-700">
+                  {t('providerValidation')} ({result.validation.providers_valid}/{result.validation.providers_tested} {t('valid')}):
+                </p>
+                <div className="bg-amber-50 rounded-lg p-3">
+                  <ul className="text-sm text-amber-700 space-y-1">
+                    {result.validation.providers_failed.map((error, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span>{error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button onClick={handleClose}>{tCommon('close')}</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4 py-2">
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* File Drop Zone */}
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50'
+                    : file
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-zinc-300 hover:border-zinc-400'
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".lcbak"
+                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={isLoading}
+                />
+                {file ? (
+                  <div className="flex items-center justify-center gap-2 text-green-700">
+                    <FileArchive className="h-8 w-8" />
+                    <div className="text-left">
+                      <p className="font-medium">{file.name}</p>
+                      <p className="text-xs text-green-600">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-zinc-500">
+                    <FileArchive className="h-10 w-10 mx-auto mb-2" />
+                    <p className="font-medium">{t('dropFileHere')}</p>
+                    <p className="text-xs mt-1">{t('clickToSelect')} (.lcbak)</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-2">
+                <Label htmlFor="restorePassword" className="text-sm font-medium">
+                  {t('backupPassword')}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="restorePassword"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('backupPasswordInput')}
+                    disabled={isLoading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">{t('dataLossWarning')}</p>
+                  <p className="text-xs mt-1">
+                    {t('dataLossDescription')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Confirmation Checkbox */}
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  disabled={isLoading}
+                  className="mt-1 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-zinc-700">
+                  {t('confirmDataLoss')}
+                </span>
+              </label>
+            </div>
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={handleClose} disabled={isLoading}>
+                {tCommon('cancel')}
+              </Button>
+              <Button
+                onClick={handleRestore}
+                disabled={!canSubmit || isLoading}
+                variant="destructive"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('importing')}
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    {t('import')}
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
