@@ -458,8 +458,8 @@ export default function ProvidersPage() {
                                 {provider.license_stats.external > 0 && (
                                   <span className="text-orange-600"> + {provider.license_stats.external} {tLicenses('ext')}</span>
                                 )}
-                                {provider.license_stats.unassigned > 0 && (
-                                  <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.unassigned} <AlertTriangle className="h-3 w-3" /> {tLicenses('unassignedShort')}</span>
+                                {provider.license_stats.not_in_hris > 0 && (
+                                  <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.not_in_hris} <AlertTriangle className="h-3 w-3" /> {tLicenses('notInHRISShort')}</span>
                                 )}
                               </>
                             ) : (

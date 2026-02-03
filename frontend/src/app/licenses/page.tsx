@@ -385,7 +385,7 @@ function LicensesContent() {
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
     { id: 'assigned', label: t('assigned'), count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
-    { id: 'unassigned', label: t('unassigned'), count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
+    { id: 'unassigned', label: t('notInHRIS'), count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
     { id: 'external', label: t('external'), count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
   ];
 

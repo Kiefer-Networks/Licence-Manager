@@ -389,7 +389,7 @@ export interface ProviderLicenseStats {
   active: number;
   assigned: number;  // Internal assigned (matched to HRIS)
   external: number;  // External email domains
-  unassigned: number;  // Internal but not assigned to any employee
+  not_in_hris: number;  // Internal but not matched to HRIS
   service_accounts: number;  // Service accounts (intentionally not linked to HRIS)
 }
 
