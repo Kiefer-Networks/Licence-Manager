@@ -57,7 +57,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              `img-src 'self' ${apiUrl} https://lh3.googleusercontent.com https://upload.wikimedia.org https://raw.githubusercontent.com https://resources.jetbrains.com https://cdn.hibob.com https://cdn.auth0.com https://www.mailjet.com https://cursor.com https://www.cursor.com data: blob:`,
+              `img-src 'self' ${apiUrl} https://lh3.googleusercontent.com https://upload.wikimedia.org https://raw.githubusercontent.com https://resources.jetbrains.com https://cdn.hibob.com https://cdn.auth0.com https://www.mailjet.com https://cursor.com https://www.cursor.com https://huggingface.co data: blob:`,
               "font-src 'self' data:",
               `connect-src 'self' ${apiUrl}`,
               "frame-ancestors 'none'",
