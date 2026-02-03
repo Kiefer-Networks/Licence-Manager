@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 class AdminAccountPatternCreate(BaseModel):
     """Create a new admin account pattern."""
 
-    email_pattern: str = Field(max_length=255)
+    email_pattern: str = Field(
+        max_length=255,
+        min_length=1,
+        pattern=r"^[a-zA-Z0-9.*@_+-]+$",  # Safe pattern chars: alphanumeric, wildcards, email chars
+    )
     name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)

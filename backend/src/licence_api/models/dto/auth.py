@@ -158,7 +158,11 @@ class UserNotificationPreferenceResponse(BaseModel):
     event_description: str
     enabled: bool
     slack_dm: bool
-    slack_channel: str | None = Field(default=None, max_length=255)
+    slack_channel: str | None = Field(
+        default=None,
+        max_length=80,  # Slack channel name limit
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format: optional #, alphanumeric with - _
+    )
 
 
 class UserNotificationPreferenceUpdate(BaseModel):
@@ -167,7 +171,11 @@ class UserNotificationPreferenceUpdate(BaseModel):
     event_type: str = Field(max_length=100)
     enabled: bool = True
     slack_dm: bool = False
-    slack_channel: str | None = Field(default=None, max_length=255)
+    slack_channel: str | None = Field(
+        default=None,
+        max_length=80,  # Slack channel name limit
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format: optional #, alphanumeric with - _
+    )
 
 
 class UserNotificationPreferenceBulkUpdate(BaseModel):
@@ -187,10 +195,23 @@ class ProfileUpdateRequest(BaseModel):
     """Profile update request for the current user."""
 
     name: str | None = Field(default=None, max_length=255)
-    # Locale preferences
-    date_format: str | None = Field(default=None, max_length=20)
-    number_format: str | None = Field(default=None, max_length=20)
-    currency: str | None = Field(default=None, max_length=10)
+    # Locale preferences with validation patterns
+    date_format: str | None = Field(
+        default=None,
+        max_length=20,
+        pattern=r"^[DMYdmy.\-/\s]+$",  # Allow common date format chars: D, M, Y, separators
+    )
+    number_format: str | None = Field(
+        default=None,
+        max_length=20,
+        pattern=r"^[a-z]{2}-[A-Z]{2}$",  # BCP 47 locale format: xx-XX (e.g., de-DE, en-US)
+    )
+    currency: str | None = Field(
+        default=None,
+        max_length=3,
+        min_length=3,
+        pattern=r"^[A-Z]{3}$",  # ISO 4217 currency codes: exactly 3 uppercase letters
+    )
 
 
 class AvatarUploadResponse(BaseModel):

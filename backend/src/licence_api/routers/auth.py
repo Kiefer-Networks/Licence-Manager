@@ -179,7 +179,8 @@ class CsrfTokenResponse(BaseModel):
 
 
 @router.get("/csrf-token", response_model=CsrfTokenResponse)
-async def get_csrf_token(response: Response) -> CsrfTokenResponse:
+@limiter.limit(AUTH_REFRESH_LIMIT)
+async def get_csrf_token(request: Request, response: Response) -> CsrfTokenResponse:
     """Get a CSRF token for state-changing requests.
 
     The token is returned in the response body and also set as a cookie.
