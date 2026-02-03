@@ -19,7 +19,6 @@ from licence_api.security.auth import (
     create_access_token,
     create_refresh_token,
     hash_refresh_token,
-    verify_google_token,
 )
 from licence_api.security.password import get_password_service
 from licence_api.utils.file_validation import (
@@ -161,126 +160,6 @@ class AuthService:
             resource_id=user.id,
             admin_user_id=user.id,
             changes={"method": "local", "email": user.email},
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-
-        await self.session.commit()
-
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=raw_refresh,
-            expires_in=settings.jwt_expiration_hours * 3600,
-        )
-
-    async def authenticate_google(
-        self,
-        id_token: str,
-        user_agent: str | None = None,
-        ip_address: str | None = None,
-    ) -> TokenResponse:
-        """Authenticate with Google OAuth.
-
-        Args:
-            id_token: Google ID token
-            user_agent: User agent string
-            ip_address: IP address
-
-        Returns:
-            TokenResponse with access and refresh tokens
-
-        Raises:
-            HTTPException: If authentication fails
-        """
-        # Verify Google token
-        google_info = await verify_google_token(id_token)
-
-        # Get or create user
-        user = await self.user_repo.get_by_email(google_info.email.lower())
-
-        if user is None:
-            # Check if this is the first user (becomes superadmin)
-            active_users = await self.user_repo.count_active_users()
-            is_first_user = active_users == 0
-
-            user = await self.user_repo.create_user(
-                email=google_info.email.lower(),
-                name=google_info.name,
-                picture_url=google_info.picture,
-                auth_provider="google",
-            )
-
-            # Assign appropriate role
-            if is_first_user:
-                role = await self.role_repo.get_by_code("superadmin")
-            else:
-                role = await self.role_repo.get_by_code("auditor")
-
-            if role:
-                await self.user_repo.add_role(user.id, role.id)
-
-            # Refresh user to get roles
-            user = await self.user_repo.get_with_roles(user.id)
-
-            # Log user creation
-            log_security_event(
-                SecurityEventType.USER_CREATED,
-                user_id=user.id,
-                user_email=user.email,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                details={
-                    "auth_provider": "google",
-                    "role_assigned": role.code if role else None,
-                    "is_first_user": is_first_user,
-                },
-            )
-        else:
-            # Update user info from Google
-            user.name = google_info.name
-            user.picture_url = google_info.picture
-            await self.session.flush()
-
-            # Check if account is active
-            if not user.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Account is disabled",
-                )
-
-        # Record successful login
-        await self.user_repo.record_successful_login(user.id)
-
-        # Get user permissions
-        roles, permissions = self._aggregate_permissions(user)
-
-        # Create tokens
-        settings = get_settings()
-        access_token = create_access_token(
-            user_id=user.id,
-            email=user.email,
-            roles=roles,
-            permissions=permissions,
-        )
-
-        raw_refresh, refresh_hash = create_refresh_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
-
-        await self.token_repo.create_token(
-            user_id=user.id,
-            token_hash=refresh_hash,
-            expires_at=expires_at,
-            user_agent=user_agent,
-            ip_address=ip_address,
-        )
-
-        # Audit log
-        await self.audit_repo.log(
-            action="login",
-            resource_type="admin_user",
-            resource_id=user.id,
-            admin_user_id=user.id,
-            changes={"method": "google", "email": user.email},
             ip_address=ip_address,
             user_agent=user_agent,
         )

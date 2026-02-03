@@ -55,13 +55,6 @@ class Settings(BaseSettings):
     max_login_attempts: int = 5
     lockout_duration_minutes: int = 30
 
-    # Google OAuth (optional for local-only auth)
-    google_client_id: str = ""
-    google_client_secret: str = ""
-
-    # Optional domain restriction
-    allowed_email_domain: str | None = None
-
     # Sync settings
     sync_interval_minutes: int = 60
 
@@ -133,11 +126,6 @@ class Settings(BaseSettings):
         """Get async database URL for SQLAlchemy."""
         url = str(self.database_url)
         return url.replace("postgresql://", "postgresql+asyncpg://")
-
-    @property
-    def google_oauth_enabled(self) -> bool:
-        """Check if Google OAuth is configured."""
-        return bool(self.google_client_id and self.google_client_secret)
 
     @property
     def cors_origins_list(self) -> list[str]:

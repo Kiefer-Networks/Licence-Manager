@@ -5,7 +5,6 @@ from licence_api.security.auth import (
     get_current_user,
     require_admin,
     create_access_token,
-    verify_google_token,
 )
 
 __all__ = [
@@ -13,5 +12,4 @@ __all__ = [
     "get_current_user",
     "require_admin",
     "create_access_token",
-    "verify_google_token",
 ]

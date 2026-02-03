@@ -7,91 +7,14 @@ from functools import wraps
 from typing import Annotated, Callable
 from uuid import UUID
 
-import httpx
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from licence_api.config import get_settings
-from licence_api.models.domain.admin_user import AdminUser, AuthProvider
+from licence_api.models.domain.admin_user import AdminUser
 
 security = HTTPBearer(auto_error=False)
-
-
-class GoogleTokenInfo:
-    """Google OAuth token info."""
-
-    def __init__(self, email: str, name: str | None, picture: str | None) -> None:
-        self.email = email
-        self.name = name
-        self.picture = picture
-
-
-async def verify_google_token(token: str) -> GoogleTokenInfo:
-    """Verify a Google OAuth ID token.
-
-    Args:
-        token: Google ID token
-
-    Returns:
-        GoogleTokenInfo with user details
-
-    Raises:
-        HTTPException: If token is invalid
-    """
-    settings = get_settings()
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
-            timeout=10.0,
-        )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Google token",
-        )
-
-    data = response.json()
-
-    # Verify audience matches our client ID
-    if data.get("aud") != settings.google_client_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token was not issued for this application",
-        )
-
-    # Verify token expiration (defense in depth - Google's API validates this too)
-    exp = data.get("exp")
-    if exp:
-        try:
-            exp_time = int(exp)
-            if exp_time < datetime.now(timezone.utc).timestamp():
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token has expired",
-                )
-        except (ValueError, TypeError):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token expiration",
-            )
-
-    # Verify email domain if configured
-    email = data.get("email")
-    if settings.allowed_email_domain:
-        if not email or not email.endswith(f"@{settings.allowed_email_domain}"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Email domain not allowed",
-            )
-
-    return GoogleTokenInfo(
-        email=email,
-        name=data.get("name"),
-        picture=data.get("picture"),
-    )
 
 
 def create_access_token(
