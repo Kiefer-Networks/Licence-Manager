@@ -751,7 +751,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             Dict mapping provider_id to stats dict with:
             - active: count of active licenses
             - assigned: count of active licenses with employee_id
-            - not_in_hris: count of active internal licenses without employee_id
+            - unassigned: count of active internal licenses without employee_id
             - external: count of active external licenses
         """
         from sqlalchemy import func, case
@@ -779,11 +779,11 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             stats[row.provider_id] = {
                 "active": row.active or 0,
                 "assigned": row.assigned or 0,
-                "not_in_hris": 0,
+                "unassigned": 0,
                 "external": 0,
             }
 
-        # For external/not_in_hris detection, we need to check each license's email
+        # For external/unassigned detection, we need to check each license's email
         # This is a bit expensive but necessary for accurate stats
         # Only fetch active licenses without employee_id, excluding service accounts
         # (service accounts are intentionally unassigned and should not count as problems)
@@ -806,7 +806,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             match_status = row.match_status
 
             if provider_id not in stats:
-                stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "external": 0}
+                stats[provider_id] = {"active": 0, "assigned": 0, "unassigned": 0, "external": 0}
 
             # Check if external - either by match_status or by domain check
             is_external = match_status in ("external_review", "external_guest")
@@ -818,7 +818,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             if is_external:
                 stats[provider_id]["external"] += 1
             else:
-                stats[provider_id]["not_in_hris"] += 1
+                stats[provider_id]["unassigned"] += 1
 
         return stats
 

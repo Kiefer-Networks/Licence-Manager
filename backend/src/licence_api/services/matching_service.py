@@ -274,7 +274,7 @@ class MatchingService:
             # Non-email identifiers (license keys, server IDs, etc.) are internal unassigned
             return MatchResult(
                 is_external=False,
-                status=None,  # No status - treat as "not_in_hris" / unassigned
+                status=None,  # No status - treat as unassigned
             )
 
         local = email.split("@")[0]
@@ -331,7 +331,7 @@ class MatchingService:
             # Internal email but no match - "unknown internal"
             return MatchResult(
                 is_external=False,
-                status=None,  # Will be handled as "not_in_hris"
+                status=None,  # Will be handled as unassigned
             )
 
     async def process_license_matches(

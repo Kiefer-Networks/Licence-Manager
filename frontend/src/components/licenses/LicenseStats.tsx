@@ -46,7 +46,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
               <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">({t('svc')})</span></span>
             )}
             {hasNotInHris && (
-              <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
+              <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ {t('unassignedShort')})</span></span>
             )}
           </div>
         </CardContent>
