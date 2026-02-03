@@ -532,11 +532,11 @@ class LicenseService:
                 external_review.append(license_response)
             elif is_assigned:
                 assigned.append(license_response)
-            elif license_orm.external_user_id:
-                # Has a user (external_user_id set) but not matched to HRIS
+            elif license_orm.external_user_id and "@" in license_orm.external_user_id:
+                # Has a user email (external_user_id contains @) but not matched to HRIS
                 not_in_hris.append(license_response)
             else:
-                # No user assigned (external_user_id is empty)
+                # No user assigned: empty external_user_id or not an email (e.g., license keys)
                 unassigned.append(license_response)
 
         # For backward compatibility, also populate the external list

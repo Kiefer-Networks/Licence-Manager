@@ -810,14 +810,17 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             if provider_id not in stats:
                 stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "unassigned": 0, "external": 0}
 
-            # Check if license has no user assigned (empty external_user_id)
-            if not email:
+            # Check if license has no user assigned:
+            # - empty external_user_id, OR
+            # - external_user_id is not an email (no @ sign) - e.g., license keys
+            if not email or "@" not in email:
                 stats[provider_id]["unassigned"] += 1
                 continue
 
+            # At this point, email contains @, so it's an actual email address
             # Check if external - either by match_status or by domain check
             is_external = match_status in ("external_review", "external_guest")
-            if not is_external and "@" in email:
+            if not is_external:
                 domain = email.split("@")[1]
                 if not any(domain == d or domain.endswith("." + d) for d in company_domains):
                     is_external = True
