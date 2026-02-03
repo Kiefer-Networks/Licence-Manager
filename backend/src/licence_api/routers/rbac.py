@@ -209,14 +209,33 @@ async def get_user_sessions(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> list[SessionInfo]:
-    """Get active sessions for a user."""
-    # Users can only view their own sessions unless they have permission
-    if user_id != current_user.id:
-        if not current_user.has_permission(Permissions.USERS_VIEW):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
-            )
+    """Get active sessions for a user.
+
+    Permission requirements:
+    - Users can always view their own sessions (user_id == current_user.id)
+    - Viewing other users' sessions requires users.view permission
+
+    Args:
+        user_id: The UUID of the user whose sessions to retrieve
+        current_user: The authenticated user making the request
+        service: The RBAC service instance
+
+    Returns:
+        List of active sessions for the specified user
+
+    Raises:
+        HTTPException 403: If attempting to view another user's sessions without
+            the required users.view permission
+    """
+    # Verify permission: users can view own sessions, others require users.view
+    is_own_sessions = user_id == current_user.id
+    has_view_permission = current_user.has_permission(Permissions.USERS_VIEW)
+
+    if not is_own_sessions and not has_view_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewing other users' sessions requires users.view permission",
+        )
 
     sessions = await service.get_user_sessions(user_id)
 

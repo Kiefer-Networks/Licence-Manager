@@ -14,7 +14,7 @@ from licence_api.models.dto.payment_method import (
     PaymentMethodResponse,
     PaymentMethodUpdate,
 )
-from licence_api.security.auth import require_permission, require_admin, Permissions
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.payment_method_service import PaymentMethodService
 
@@ -30,7 +30,7 @@ def get_payment_method_service(
 
 @router.get("", response_model=PaymentMethodListResponse)
 async def list_payment_methods(
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodListResponse:
     """List all payment methods."""
@@ -42,10 +42,10 @@ async def list_payment_methods(
 async def create_payment_method(
     request: Request,
     data: PaymentMethodCreate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_CREATE))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodResponse:
-    """Create a new payment method. Admin only."""
+    """Create a new payment method. Requires payment_methods.create permission."""
     try:
         return await service.create_payment_method(
             data=data,
@@ -62,7 +62,7 @@ async def create_payment_method(
 @router.get("/{payment_method_id}", response_model=PaymentMethodResponse)
 async def get_payment_method(
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodResponse:
     """Get a payment method by ID."""
@@ -81,10 +81,10 @@ async def update_payment_method(
     request: Request,
     payment_method_id: UUID,
     data: PaymentMethodUpdate,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_EDIT))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodResponse:
-    """Update a payment method. Admin only."""
+    """Update a payment method. Requires payment_methods.edit permission."""
     try:
         return await service.update_payment_method(
             payment_method_id=payment_method_id,
@@ -104,10 +104,10 @@ async def update_payment_method(
 async def delete_payment_method(
     request: Request,
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_DELETE))],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> None:
-    """Delete a payment method. Admin only."""
+    """Delete a payment method. Requires payment_methods.delete permission."""
     try:
         await service.delete_payment_method(
             payment_method_id=payment_method_id,
