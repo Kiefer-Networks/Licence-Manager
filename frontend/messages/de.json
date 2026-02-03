@@ -1522,16 +1522,17 @@
     },
     "huggingface": {
       "permissions": [
-        "Access Token mit Leseberechtigungen",
-        "Organisationsmitgliedschaft"
+        "Access Token mit Schreibberechtigungen (für Rollenverwaltung)",
+        "Organisation-Admin-Rolle (für E-Mail-Zugriff mit SSO)"
       ],
       "steps": [
-        "1. Melden Sie sich bei Hugging Face an",
+        "1. Melden Sie sich bei Hugging Face als Organisations-Admin an",
         "2. Gehen Sie zu Settings → Access Tokens",
         "3. Klicken Sie auf 'New token'",
-        "4. Name: 'License Management', Typ: Read",
+        "4. Name: 'License Management', Typ: Write",
         "5. Kopieren Sie den Token (beginnt mit hf_)",
-        "6. Organisation: Ihr Org-Name aus der URL (huggingface.co/ihre-org)"
+        "6. Organisation: Ihr Org-Name aus der URL (huggingface.co/ihre-org)",
+        "Hinweis: E-Mail-Adressen erfordern Team/Enterprise-Plan mit konfiguriertem SSO"
       ]
     },
     "hibob": {

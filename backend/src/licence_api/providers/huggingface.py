@@ -19,7 +19,14 @@ class HuggingFaceProvider(BaseProvider):
 
     Credentials required:
         - access_token: Hugging Face access token (from Settings > Access Tokens)
+          - For read-only: Token with read permissions
+          - For role management: Token with write permissions from an admin user
         - organization: Organization name/slug
+
+    Notes:
+        - Email addresses (verifiedEmail) require Team/Enterprise plan with SSO configured
+        - Member removal is not supported via API (web interface only)
+        - Role changes require write permissions on the token
     """
 
     BASE_URL = "https://huggingface.co/api"
@@ -74,10 +81,11 @@ class HuggingFaceProvider(BaseProvider):
 
         try:
             async with httpx.AsyncClient() as client:
+                # Hugging Face API requires limit >= 10
                 response = await client.get(
                     f"{self.BASE_URL}/organizations/{self.organization}/members",
                     headers=self._get_headers(),
-                    params={"limit": 1},
+                    params={"limit": 10},
                     timeout=10.0,
                 )
                 return response.status_code == 200
@@ -213,6 +221,54 @@ class HuggingFaceProvider(BaseProvider):
 
         return licenses
 
+    async def change_member_role(
+        self, username: str, role: str, resource_groups: list[dict[str, str]] | None = None
+    ) -> bool:
+        """Change a member's role in the organization.
+
+        Args:
+            username: Hugging Face username of the member
+            role: New role (admin, write, contributor, read)
+            resource_groups: Optional list of resource group assignments
+                             [{"id": "group-id", "role": "write"}, ...]
+
+        Returns:
+            True if role change was successful
+        """
+        if not self.organization:
+            logger.error("Organization name is required")
+            return False
+
+        if role not in self.ROLE_LICENSE_MAP:
+            logger.error(f"Invalid role: {role}. Must be one of: {list(self.ROLE_LICENSE_MAP.keys())}")
+            return False
+
+        try:
+            async with httpx.AsyncClient() as client:
+                payload: dict[str, Any] = {"role": role}
+                if resource_groups:
+                    payload["resourceGroups"] = resource_groups
+
+                response = await client.put(
+                    f"{self.BASE_URL}/organizations/{self.organization}/members/{username}/role",
+                    headers=self._get_headers(),
+                    json=payload,
+                    timeout=30.0,
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Changed role for {username} to {role}")
+                    return True
+                else:
+                    logger.error(
+                        f"Failed to change role for {username}: {response.status_code} - {response.text}"
+                    )
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error changing member role: {e}")
+            return False
+
     def get_provider_metadata(self) -> dict[str, Any] | None:
         """Get Hugging Face organization metadata.
 
@@ -222,4 +278,6 @@ class HuggingFaceProvider(BaseProvider):
         return {
             "provider_type": "ml_platform",
             "organization": self.organization,
+            "supports_role_change": True,
+            "supports_member_removal": False,
         }
