@@ -40,7 +40,7 @@ const licenseProviderTypes = [
   { value: 'atlassian', label: 'Atlassian (Confluence/Jira)', fields: ['api_token', 'org_id', 'admin_email'], type: 'api' },
   { value: 'auth0', label: 'Auth0', fields: ['domain', 'client_id', 'client_secret'], type: 'api' },
   { value: 'cursor', label: 'Cursor', fields: ['api_key'], type: 'api' },
-  { value: 'figma', label: 'Figma', fields: ['access_token', 'org_id'], type: 'api' },
+  { value: 'figma', label: 'Figma', fields: ['scim_token', 'tenant_id'], type: 'api' },
   { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
   { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'base_url'], type: 'api' },
   { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api' },

@@ -97,7 +97,13 @@ class FigmaProvider(BaseProvider):
                     },
                     timeout=30.0,
                 )
-                response.raise_for_status()
+                if response.status_code != 200:
+                    error_detail = response.text
+                    raise httpx.HTTPStatusError(
+                        f"Figma SCIM API error: {response.status_code} - {error_detail}",
+                        request=response.request,
+                        response=response,
+                    )
                 data = response.json()
 
                 resources = data.get("Resources", [])
@@ -116,15 +122,21 @@ class FigmaProvider(BaseProvider):
                         if not email and emails:
                             email = emails[0].get("value", "")
 
-                    # Determine seat type from roles
-                    seat_type = "view"
+                    # Determine seat type from roles array
+                    # Note: roles/seatType is only available on Figma Enterprise plans
+                    seat_type = None
                     roles = user.get("roles", [])
                     for role in roles:
                         if role.get("type") == "seatType":
-                            seat_type = role.get("value", "view").lower()
+                            seat_type = role.get("value", "").lower()
                             break
 
-                    license_type = SEAT_TYPE_MAP.get(seat_type, "Figma Viewer")
+                    # Map seat type to license type
+                    if seat_type:
+                        license_type = SEAT_TYPE_MAP.get(seat_type, f"Figma {seat_type.title()}")
+                    else:
+                        # No seat type available (Business plan) - use generic license type
+                        license_type = "Figma User"
 
                     # Build display name
                     display_name = user.get("displayName", "")
@@ -133,6 +145,11 @@ class FigmaProvider(BaseProvider):
                         given = name_obj.get("givenName", "")
                         family = name_obj.get("familyName", "")
                         display_name = f"{given} {family}".strip()
+
+                    # Extract enterprise extension data
+                    enterprise_ext = user.get(
+                        "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User", {}
+                    )
 
                     licenses.append({
                         "external_user_id": user.get("id"),
@@ -143,7 +160,7 @@ class FigmaProvider(BaseProvider):
                             "name": display_name,
                             "seat_type": seat_type,
                             "figma_admin": user.get("figmaAdmin", False),
-                            "department": user.get("department"),
+                            "department": enterprise_ext.get("department") or user.get("department"),
                             "title": user.get("title"),
                         },
                     })

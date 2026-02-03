@@ -57,6 +57,8 @@ Figma has different seat types that are mapped to license types:
 | Collab | Figma Collaborator |
 | View/Viewer | Figma Viewer |
 
+**Note:** Seat type information (`roles`) is only available on **Figma Enterprise** plans. On Business plans, all users will be imported as "Figma User" without specific seat type differentiation.
+
 ## Troubleshooting
 
 ### "Unauthorized" or 401 error

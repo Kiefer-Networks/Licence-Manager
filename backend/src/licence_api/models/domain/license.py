@@ -13,6 +13,7 @@ class LicenseStatus(StrEnum):
     """License status enum."""
 
     ACTIVE = "active"
+    INACTIVE = "inactive"
     SUSPENDED = "suspended"
     PENDING = "pending"
     UNASSIGNED = "unassigned"

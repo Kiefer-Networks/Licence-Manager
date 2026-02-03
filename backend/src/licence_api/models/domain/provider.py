@@ -82,9 +82,9 @@ class ProviderConfig(BaseModel):
     openai_admin_api_key: str | None = None
     openai_org_id: str | None = None
 
-    # Figma
-    figma_access_token: str | None = None
-    figma_org_id: str | None = None
+    # Figma (SCIM API)
+    figma_scim_token: str | None = None
+    figma_tenant_id: str | None = None
 
     # Cursor
     cursor_api_key: str | None = None
