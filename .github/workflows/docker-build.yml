@@ -119,6 +119,7 @@ jobs:
       contents: read
       packages: read
       security-events: write
+      actions: read
 
     steps:
       - name: Checkout repository
@@ -148,14 +149,14 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Backend scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-backend-results.sarif'
           category: 'trivy-backend'
 
       - name: Upload Frontend scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-frontend-results.sarif'
