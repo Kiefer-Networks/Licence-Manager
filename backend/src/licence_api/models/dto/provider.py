@@ -74,7 +74,8 @@ class ProviderLicenseStats(BaseModel):
     active: int = 0
     assigned: int = 0  # Internal assigned (matched to HRIS)
     external: int = 0  # External email domains
-    not_in_hris: int = 0  # Internal but not matched to HRIS
+    not_in_hris: int = 0  # Has user (internal email) but not found in HRIS
+    unassigned: int = 0  # No user assigned (empty external_user_id)
     service_accounts: int = 0  # Service accounts (intentionally not linked to HRIS)
 
 

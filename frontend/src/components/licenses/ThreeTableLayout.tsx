@@ -9,7 +9,8 @@ import { Users, Package, Globe, AlertTriangle, Bot } from 'lucide-react';
 
 interface ThreeTableLayoutProps {
   assigned: License[];
-  unassigned: License[];
+  unassigned: License[];  // Licenses with no user assigned (empty external_user_id)
+  notInHris?: License[];  // Has user (internal email) but not found in HRIS
   external: License[];
   serviceAccounts?: License[];
   stats: LicenseStats;
@@ -22,7 +23,7 @@ interface ThreeTableLayoutProps {
   onDeleteClick?: (license: License) => void;
 }
 
-type Tab = 'assigned' | 'unassigned' | 'external' | 'service_accounts';
+type Tab = 'assigned' | 'unassigned' | 'not_in_hris' | 'external' | 'service_accounts';
 
 // Sort by email alphabetically
 // Use metadata.email if available (e.g., JetBrains), otherwise external_user_id
@@ -35,6 +36,7 @@ const sortByEmail = (a: License, b: License) => {
 export function ThreeTableLayout({
   assigned,
   unassigned,
+  notInHris = [],
   external,
   serviceAccounts = [],
   stats,
@@ -53,9 +55,10 @@ export function ThreeTableLayout({
   const activeStats = useMemo(() => {
     const activeAssigned = assigned.filter(l => l.status === 'active').length;
     const activeUnassigned = unassigned.filter(l => l.status === 'active').length;
+    const activeNotInHris = notInHris.filter(l => l.status === 'active').length;
     const activeExternal = external.filter(l => l.status === 'active').length;
     const activeServiceAccounts = serviceAccounts.filter(l => l.status === 'active').length;
-    const totalActive = activeAssigned + activeUnassigned + activeExternal + activeServiceAccounts;
+    const totalActive = activeAssigned + activeUnassigned + activeNotInHris + activeExternal + activeServiceAccounts;
 
     // For package providers: available = max_users - total_active
     const available = maxUsers ? Math.max(0, maxUsers - totalActive) : null;
@@ -65,11 +68,12 @@ export function ThreeTableLayout({
       total_active: totalActive,
       total_assigned: activeAssigned,
       total_unassigned: activeUnassigned,
+      total_not_in_hris: activeNotInHris,
       total_external: activeExternal,
       total_service_accounts: activeServiceAccounts,
       available_seats: available,
     };
-  }, [assigned, unassigned, external, serviceAccounts, stats, maxUsers]);
+  }, [assigned, unassigned, notInHris, external, serviceAccounts, stats, maxUsers]);
 
   // Split unassigned into active and inactive, sorted alphabetically
   const unassignedActive = useMemo(() =>
@@ -79,6 +83,16 @@ export function ThreeTableLayout({
   const unassignedInactive = useMemo(() =>
     unassigned.filter(l => l.status !== 'active').sort(sortByEmail),
     [unassigned]
+  );
+
+  // Split notInHris into active and inactive, sorted alphabetically
+  const notInHrisActive = useMemo(() =>
+    notInHris.filter(l => l.status === 'active').sort(sortByEmail),
+    [notInHris]
+  );
+  const notInHrisInactive = useMemo(() =>
+    notInHris.filter(l => l.status !== 'active').sort(sortByEmail),
+    [notInHris]
   );
 
   // Split external into active and inactive, sorted alphabetically
@@ -103,7 +117,8 @@ export function ThreeTableLayout({
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
     { id: 'assigned', label: t('assigned'), count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
-    { id: 'unassigned', label: t('notInHRIS'), count: unassignedActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActive.length > 0 },
+    ...(notInHrisActive.length > 0 ? [{ id: 'not_in_hris' as Tab, label: t('notInHRIS'), count: notInHrisActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: true }] : []),
+    ...(unassignedActive.length > 0 ? [{ id: 'unassigned' as Tab, label: t('unassigned'), count: unassignedActive.length, icon: <Package className="h-4 w-4" />, warning: true }] : []),
     { id: 'external', label: t('external'), count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
     ...(serviceAccounts.length > 0 ? [{ id: 'service_accounts' as Tab, label: t('serviceAccount'), count: serviceAccountsActive.length, icon: <Bot className="h-4 w-4" /> }] : []),
   ];
@@ -112,6 +127,8 @@ export function ThreeTableLayout({
     switch (activeTab) {
       case 'assigned':
         return assigned.sort(sortByEmail);
+      case 'not_in_hris':
+        return notInHris; // Handled separately with two tables
       case 'unassigned':
         return unassigned; // Handled separately with two tables
       case 'external':
@@ -125,8 +142,10 @@ export function ThreeTableLayout({
     switch (activeTab) {
       case 'assigned':
         return t('noAssignedLicenses');
-      case 'unassigned':
+      case 'not_in_hris':
         return t('noLicensesNotInHRIS');
+      case 'unassigned':
+        return t('noUnassignedLicenses');
       case 'external':
         return t('noExternalLicenses');
       case 'service_accounts':

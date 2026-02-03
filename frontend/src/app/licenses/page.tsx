@@ -47,6 +47,7 @@ import {
   MoreHorizontal,
   Check,
   User,
+  Package,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -69,7 +70,7 @@ function useDebounce<T>(value: T, delay: number): T {
 // Providers that support remote member removal
 const REMOVABLE_PROVIDERS = ['cursor'];
 
-type Tab = 'assigned' | 'unassigned' | 'external';
+type Tab = 'assigned' | 'not_in_hris' | 'unassigned' | 'external';
 
 function LicensesContent() {
   const t = useTranslations('licenses');
@@ -159,6 +160,8 @@ function LicensesContent() {
     switch (activeTab) {
       case 'assigned':
         return categorizedData.assigned;
+      case 'not_in_hris':
+        return categorizedData.not_in_hris || [];
       case 'unassigned':
         return categorizedData.unassigned;
       case 'external':
@@ -200,7 +203,7 @@ function LicensesContent() {
   const inactiveLicenses = filteredLicenses.filter(l => l.status !== 'active');
 
   // For tabs that show split tables, we don't paginate the same way
-  const showSplitTables = activeTab === 'unassigned' || activeTab === 'external';
+  const showSplitTables = activeTab === 'not_in_hris' || activeTab === 'unassigned' || activeTab === 'external';
 
   const totalPages = showSplitTables ? 1 : Math.ceil(filteredLicenses.length / pageSize);
   const paginatedLicenses = showSplitTables ? filteredLicenses : filteredLicenses.slice((page - 1) * pageSize, page * pageSize);
@@ -380,12 +383,14 @@ function LicensesContent() {
 
   // Count only active licenses for tab badges (to match provider detail page)
   const assignedActiveCount = categorizedData?.assigned.filter(l => l.status === 'active').length || 0;
+  const notInHrisActiveCount = categorizedData?.not_in_hris?.filter(l => l.status === 'active').length || 0;
   const unassignedActiveCount = categorizedData?.unassigned.filter(l => l.status === 'active').length || 0;
   const externalActiveCount = categorizedData?.external.filter(l => l.status === 'active').length || 0;
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
     { id: 'assigned', label: t('assigned'), count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
-    { id: 'unassigned', label: t('notInHRIS'), count: unassignedActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: unassignedActiveCount > 0 },
+    ...(notInHrisActiveCount > 0 ? [{ id: 'not_in_hris' as Tab, label: t('notInHRIS'), count: notInHrisActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: true }] : []),
+    ...(unassignedActiveCount > 0 ? [{ id: 'unassigned' as Tab, label: t('unassigned'), count: unassignedActiveCount, icon: <Package className="h-4 w-4" />, warning: true }] : []),
     { id: 'external', label: t('external'), count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
   ];
 

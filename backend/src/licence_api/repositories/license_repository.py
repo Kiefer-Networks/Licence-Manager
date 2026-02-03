@@ -751,7 +751,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             Dict mapping provider_id to stats dict with:
             - active: count of active licenses
             - assigned: count of active licenses with employee_id
-            - not_in_hris: count of active internal licenses without employee_id
+            - not_in_hris: count of active licenses with internal user not found in HRIS
+            - unassigned: count of active licenses with no user assigned
             - external: count of active external licenses
         """
         from sqlalchemy import func, case
@@ -780,6 +781,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
                 "active": row.active or 0,
                 "assigned": row.assigned or 0,
                 "not_in_hris": 0,
+                "unassigned": 0,
                 "external": 0,
             }
 
@@ -806,11 +808,16 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             match_status = row.match_status
 
             if provider_id not in stats:
-                stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "external": 0}
+                stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "unassigned": 0, "external": 0}
+
+            # Check if license has no user assigned (empty external_user_id)
+            if not email:
+                stats[provider_id]["unassigned"] += 1
+                continue
 
             # Check if external - either by match_status or by domain check
             is_external = match_status in ("external_review", "external_guest")
-            if not is_external and email and "@" in email:
+            if not is_external and "@" in email:
                 domain = email.split("@")[1]
                 if not any(domain == d or domain.endswith("." + d) for d in company_domains):
                     is_external = True

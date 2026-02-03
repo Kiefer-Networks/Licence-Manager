@@ -282,6 +282,8 @@
     "ext": "ext",
     "svc": "svc",
     "notInHRISShort": "nicht im HRIS",
+    "unassignedShort": "nicht zugewiesen",
+    "noUnassignedLicenses": "Keine nicht zugewiesenen Lizenzen",
     "externalGuest": "Externer Gast",
     "suggestedMatch": "Vorschlag: {name} ({percent}%)",
     "externalReview": "Extern (Prüfung)",

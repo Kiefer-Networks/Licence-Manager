@@ -389,7 +389,8 @@ export interface ProviderLicenseStats {
   active: number;
   assigned: number;  // Internal assigned (matched to HRIS)
   external: number;  // External email domains
-  not_in_hris: number;  // Internal but not matched to HRIS
+  not_in_hris: number;  // Has user (internal email) but not found in HRIS
+  unassigned: number;  // No user assigned (empty external_user_id)
   service_accounts: number;  // Service accounts (intentionally not linked to HRIS)
 }
 
@@ -472,7 +473,8 @@ export interface LicenseListResponse {
 export interface LicenseStats {
   total_active: number;
   total_assigned: number;
-  total_unassigned: number;
+  total_unassigned: number;  // Licenses with no user assigned (empty external_user_id)
+  total_not_in_hris: number;  // Has user (internal email) but not found in HRIS
   total_inactive: number;
   total_external: number;
   total_service_accounts: number;
@@ -488,7 +490,8 @@ export interface LicenseStats {
 
 export interface CategorizedLicensesResponse {
   assigned: License[];
-  unassigned: License[];
+  unassigned: License[];  // Licenses with no user assigned (empty external_user_id)
+  not_in_hris: License[];  // Has user (internal email) but not found in HRIS
   external: License[];
   service_accounts: License[];
   // New categories for match workflow

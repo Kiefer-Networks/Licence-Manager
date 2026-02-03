@@ -461,6 +461,9 @@ export default function ProvidersPage() {
                                 {provider.license_stats.not_in_hris > 0 && (
                                   <span className="text-red-600 inline-flex items-center gap-0.5"> + {provider.license_stats.not_in_hris} <AlertTriangle className="h-3 w-3" /> {tLicenses('notInHRISShort')}</span>
                                 )}
+                                {provider.license_stats.unassigned > 0 && (
+                                  <span className="text-amber-600 inline-flex items-center gap-0.5"> + {provider.license_stats.unassigned} {tLicenses('unassignedShort')}</span>
+                                )}
                               </>
                             ) : (
                               <>{tLicenses('licenseCount', { count: provider.license_count })}</>

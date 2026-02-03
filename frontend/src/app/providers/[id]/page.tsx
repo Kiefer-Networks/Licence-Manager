@@ -838,10 +838,11 @@ export default function ProviderDetailPage() {
     ?? licenses.filter((l) => l.status === 'active' && l.employee_id).length;
   // Count only ACTIVE external licenses
   const externalLicenses = categorizedLicenses?.external.filter((l) => l.status === 'active').length ?? 0;
-  // "Not in HRIS" = active internal licenses without employee match (CRITICAL for seat-based providers!)
-  const notInHrisLicenses = categorizedLicenses?.unassigned.filter((l) => l.status === 'active').length ?? 0;
+  // "Not in HRIS" = has user (internal email) but not found in HRIS
+  const notInHrisLicenses = categorizedLicenses?.not_in_hris?.filter((l) => l.status === 'active').length ?? 0;
+  // "Unassigned" = no user assigned (empty external_user_id)
+  const unassignedLicenses = categorizedLicenses?.unassigned.filter((l) => l.status === 'active').length ?? 0;
   // For package providers: available = max_users - active_users (unused seats)
-  // For other providers: this is the same as notInHrisLicenses
   const maxUsers = provider?.config?.provider_license_info?.max_users;
   const availableSeats = maxUsers ? Math.max(0, maxUsers - totalLicenses) : null;
   const inactiveLicenses = stats?.total_inactive ?? licenses.filter((l) => l.status !== 'active').length;
@@ -991,7 +992,7 @@ export default function ProviderDetailPage() {
                       <p className="text-2xl font-semibold">{totalLicenses}</p>
                     </CardContent>
                   </Card>
-                  <Card className={notInHrisLicenses > 0 ? 'border-red-200 bg-red-50/30' : ''}>
+                  <Card className={notInHrisLicenses > 0 || unassignedLicenses > 0 ? 'border-red-200 bg-red-50/30' : ''}>
                     <CardContent className="pt-5 pb-4">
                       <div className="flex items-center gap-2 text-muted-foreground mb-1">
                         <Users className="h-4 w-4" />
@@ -1003,7 +1004,10 @@ export default function ProviderDetailPage() {
                           <span className="text-sm text-muted-foreground">+ {externalLicenses} <span className="text-xs">(ext)</span></span>
                         )}
                         {notInHrisLicenses > 0 && (
-                          <span className="text-sm text-red-600 font-medium">+ {notInHrisLicenses} <span className="text-xs">(⚠ not in HRIS)</span></span>
+                          <span className="text-sm text-red-600 font-medium">+ {notInHrisLicenses} <span className="text-xs">(⚠ {tLicenses('notInHRISShort')})</span></span>
+                        )}
+                        {unassignedLicenses > 0 && (
+                          <span className="text-sm text-amber-600 font-medium">+ {unassignedLicenses} <span className="text-xs">({tLicenses('unassignedShort')})</span></span>
                         )}
                       </div>
                     </CardContent>
@@ -1209,6 +1213,7 @@ export default function ProviderDetailPage() {
               <ThreeTableLayout
                 assigned={categorizedLicenses.assigned}
                 unassigned={categorizedLicenses.unassigned}
+                notInHris={categorizedLicenses.not_in_hris}
                 external={categorizedLicenses.external}
                 serviceAccounts={categorizedLicenses.service_accounts}
                 stats={categorizedLicenses.stats}

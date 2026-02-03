@@ -78,7 +78,8 @@ class LicenseStats(BaseModel):
 
     total_active: int
     total_assigned: int
-    total_unassigned: int
+    total_unassigned: int  # Licenses with no user assigned (empty external_user_id)
+    total_not_in_hris: int = 0  # Has user (internal email) but not found in HRIS
     total_inactive: int
     total_external: int
     total_service_accounts: int = 0
@@ -98,7 +99,8 @@ class CategorizedLicensesResponse(BaseModel):
     """Response with licenses categorized into assigned/unassigned/external/service_accounts."""
 
     assigned: list[LicenseResponse]
-    unassigned: list[LicenseResponse]
+    unassigned: list[LicenseResponse]  # Licenses with no user assigned (empty external_user_id)
+    not_in_hris: list[LicenseResponse] = []  # Has user (internal email) but not found in HRIS
     external: list[LicenseResponse]
     service_accounts: list[LicenseResponse]
     admin_accounts: list[LicenseResponse] = []  # Personal admin accounts

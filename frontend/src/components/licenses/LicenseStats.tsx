@@ -16,7 +16,8 @@ interface LicenseStatsProps {
 
 export function LicenseStatsCards({ stats }: LicenseStatsProps) {
   const t = useTranslations('licenses');
-  const hasNotInHris = stats.total_unassigned > 0;
+  const hasNotInHris = (stats.total_not_in_hris ?? 0) > 0;
+  const hasUnassigned = stats.total_unassigned > 0;
   const hasAvailableSeats = stats.available_seats !== undefined && stats.available_seats !== null;
 
   return (
@@ -31,7 +32,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         </CardContent>
       </Card>
 
-      <Card className={hasNotInHris ? 'border-red-200 bg-red-50/30' : ''}>
+      <Card className={hasNotInHris || hasUnassigned ? 'border-red-200 bg-red-50/30' : ''}>
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Users className="h-4 w-4" />
@@ -46,7 +47,10 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
               <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">({t('svc')})</span></span>
             )}
             {hasNotInHris && (
-              <span className="text-sm text-red-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
+              <span className="text-sm text-red-600 font-medium">+ {stats.total_not_in_hris} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
+            )}
+            {hasUnassigned && (
+              <span className="text-sm text-amber-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">({t('unassignedShort')})</span></span>
             )}
           </div>
         </CardContent>

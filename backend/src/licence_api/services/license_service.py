@@ -404,7 +404,8 @@ class LicenseService:
         )
 
         assigned: list[LicenseResponse] = []
-        unassigned: list[LicenseResponse] = []
+        unassigned: list[LicenseResponse] = []  # No user assigned (empty external_user_id)
+        not_in_hris: list[LicenseResponse] = []  # Has user but not found in HRIS
         external: list[LicenseResponse] = []
         service_accounts: list[LicenseResponse] = []
         suggested: list[LicenseResponse] = []
@@ -517,7 +518,8 @@ class LicenseService:
             # 3. Suggested matches (any license with suggestion, needs review)
             # 4. External review (external email without suggestion, needs decision)
             # 5. Assigned (confirmed or auto-matched)
-            # 6. Unassigned (internal, no match found)
+            # 6. Not in HRIS (has user with internal email, but not found in HRIS)
+            # 7. Unassigned (no user assigned - empty external_user_id)
             if is_service_account:
                 service_accounts.append(license_response)
             elif match_status == "external_guest":
@@ -530,7 +532,11 @@ class LicenseService:
                 external_review.append(license_response)
             elif is_assigned:
                 assigned.append(license_response)
+            elif license_orm.external_user_id:
+                # Has a user (external_user_id set) but not matched to HRIS
+                not_in_hris.append(license_response)
             else:
+                # No user assigned (external_user_id is empty)
                 unassigned.append(license_response)
 
         # For backward compatibility, also populate the external list
@@ -544,6 +550,7 @@ class LicenseService:
             total_active=total_active,
             total_assigned=len(assigned),
             total_unassigned=len(unassigned),
+            total_not_in_hris=len(not_in_hris),
             total_inactive=total_inactive,
             total_external=len(external),
             total_service_accounts=len(service_accounts),
@@ -560,6 +567,7 @@ class LicenseService:
         return CategorizedLicensesResponse(
             assigned=assigned,
             unassigned=unassigned,
+            not_in_hris=not_in_hris,
             external=external,
             service_accounts=service_accounts,
             suggested=suggested,

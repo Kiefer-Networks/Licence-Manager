@@ -85,6 +85,7 @@ class ProviderService:
                 assigned=stats.get("assigned", 0),
                 external=stats.get("external", 0),
                 not_in_hris=stats.get("not_in_hris", 0),
+                unassigned=stats.get("unassigned", 0),
             )
 
             items.append(
