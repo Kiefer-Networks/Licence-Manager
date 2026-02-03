@@ -594,24 +594,24 @@ async def sync_provider(
 class LicenseTypePricing(BaseModel):
     """License type pricing configuration."""
 
-    license_type: str
-    display_name: str | None = None  # Custom display name (e.g., "Microsoft 365 E5" instead of "SKU_E5")
-    cost: str  # Cost per billing cycle
-    currency: str = "EUR"
-    billing_cycle: str = "yearly"  # yearly, monthly, perpetual, one_time
-    payment_frequency: str = "yearly"  # yearly, monthly, one_time (how often you pay)
-    next_billing_date: str | None = None  # ISO date string
-    notes: str | None = None  # e.g., "Includes support", "Volume discount"
+    license_type: str = Field(max_length=500)
+    display_name: str | None = Field(default=None, max_length=255)
+    cost: str = Field(max_length=50)  # Cost per billing cycle
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
+    billing_cycle: str = Field(default="yearly", max_length=20)  # yearly, monthly, perpetual, one_time
+    payment_frequency: str = Field(default="yearly", max_length=20)  # yearly, monthly, one_time
+    next_billing_date: str | None = Field(default=None, max_length=10)  # ISO date string
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class PackagePricing(BaseModel):
     """Package pricing for providers with bulk/package licenses (e.g., Mattermost)."""
 
-    cost: str  # Total package cost
-    currency: str = "EUR"
-    billing_cycle: str = "yearly"  # yearly, monthly
-    next_billing_date: str | None = None
-    notes: str | None = None
+    cost: str = Field(max_length=50)  # Total package cost
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
+    billing_cycle: str = Field(default="yearly", max_length=20)  # yearly, monthly
+    next_billing_date: str | None = Field(default=None, max_length=10)
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class LicenseTypePricingResponse(BaseModel):
@@ -624,7 +624,7 @@ class LicenseTypePricingResponse(BaseModel):
 class LicenseTypePricingRequest(BaseModel):
     """Request to update license type pricing."""
 
-    pricing: list[LicenseTypePricing]
+    pricing: list[LicenseTypePricing] = Field(max_length=500)
     package_pricing: PackagePricing | None = None
 
 
@@ -803,7 +803,7 @@ class IndividualLicenseTypesResponse(BaseModel):
 class IndividualLicenseTypePricingRequest(BaseModel):
     """Request to update individual license type pricing."""
 
-    pricing: list[LicenseTypePricing]
+    pricing: list[LicenseTypePricing] = Field(max_length=500)
 
 
 @router.get("/{provider_id}/individual-license-types", response_model=IndividualLicenseTypesResponse)

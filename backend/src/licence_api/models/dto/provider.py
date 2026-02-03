@@ -4,9 +4,23 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from licence_api.models.domain.provider import ProviderName, SyncStatus
+
+
+def validate_dict_size(v: dict[str, Any] | None, max_keys: int = 50) -> dict[str, Any] | None:
+    """Validate dict size and content."""
+    if v is None:
+        return v
+    if len(v) > max_keys:
+        raise ValueError(f"Too many fields (max {max_keys})")
+    for key, value in v.items():
+        if len(key) > 100:
+            raise ValueError("Key too long (max 100)")
+        if isinstance(value, str) and len(value) > 10000:
+            raise ValueError("Value too long (max 10000)")
+    return v
 
 
 class ProviderCreate(BaseModel):
@@ -14,8 +28,14 @@ class ProviderCreate(BaseModel):
 
     name: str = Field(max_length=100)  # Allow any provider name including 'manual'
     display_name: str = Field(max_length=255)
-    credentials: dict[str, Any] = {}  # Optional for manual providers
+    credentials: dict[str, Any] = Field(default_factory=dict)  # Optional for manual providers
     config: dict[str, Any] | None = None
+
+    @field_validator("credentials", "config")
+    @classmethod
+    def validate_dicts(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Validate dict size and content."""
+        return validate_dict_size(v)
 
 
 class ProviderUpdate(BaseModel):
@@ -31,6 +51,12 @@ class ProviderUpdate(BaseModel):
     credentials: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
     payment_method_id: UUID | None = None
+
+    @field_validator("credentials", "config")
+    @classmethod
+    def validate_dicts(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Validate dict size and content."""
+        return validate_dict_size(v)
 
 
 class PaymentMethodSummary(BaseModel):

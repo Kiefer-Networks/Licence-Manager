@@ -182,7 +182,7 @@ async def export_audit_logs(
     date_to: datetime | None = Query(None),
     search: str | None = Query(None, min_length=2, max_length=200),
 ) -> StreamingResponse:
-    """Export audit logs as CSV or JSON. Requires audit.view permission.
+    """Export audit logs as CSV or JSON. Requires audit.export permission.
 
     Args:
         limit: Number of records to export (1-10000, default 10000)

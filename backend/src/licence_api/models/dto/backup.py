@@ -65,7 +65,7 @@ class RestoreValidation(BaseModel):
 
     providers_tested: int
     providers_valid: int
-    providers_failed: list[str]  # List of "ProviderName: Error message"
+    providers_failed: list[str] = Field(max_length=100)  # List of "ProviderName: Error message"
 
 
 class RestoreResponse(BaseModel):
