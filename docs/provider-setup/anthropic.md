@@ -1,6 +1,6 @@
 # Anthropic Integration Setup
 
-Track Anthropic (Claude) API usage and workspace members.
+Track Anthropic (Claude) API users and API keys in your organization.
 
 ## Prerequisites
 
@@ -28,22 +28,48 @@ In the Settings page, add Anthropic provider:
 
 ## Data Synced
 
+### Users
+
 | Field | Description |
 |-------|-------------|
 | User ID | Anthropic user ID |
 | Email | User's email address |
 | Name | User's full name |
-| Role | Admin or member |
-| Status | Active or invited |
-| Workspaces | Workspace memberships |
+| Role | User role (see below) |
+| Added At | When user joined the organization |
 
-## API Access
+### API Keys
 
-The Admin API provides:
+| Field | Description |
+|-------|-------------|
+| Key ID | API key identifier |
+| Key Name | Name of the API key |
+| Status | Active or disabled |
+| Created At | When the key was created |
+| Last Used | Last usage timestamp |
+| Workspace | Associated workspace ID |
 
-- Organization member listing
-- Workspace information
-- User role management
+## License Types
+
+The integration maps Anthropic roles to license types:
+
+| Anthropic Role | License Type |
+|----------------|--------------|
+| `admin` | Admin |
+| `developer` | Developer |
+| `billing` | Billing |
+| `user` | User |
+| `claude_code_user` | Claude Code User |
+| API Key (no user) | API Key |
+
+## API Endpoints Used
+
+The integration uses the following Admin API endpoints:
+
+- `GET /v1/organizations/users` - List organization users
+- `GET /v1/organizations/api_keys` - List API keys
+
+Both endpoints support pagination for large organizations.
 
 ## Troubleshooting
 
@@ -56,9 +82,16 @@ The Admin API provides:
 ### "403 Forbidden" error
 
 - Your account may not have organization admin permissions
+- Only organization admins can create Admin API keys
 - Contact your organization admin to grant access
 
-### Missing workspace members
+### Missing users
 
-- Members must accept their invitation to appear
-- Check if members are in different workspaces
+- Users must accept their invitation to appear
+- Check if users are in different workspaces
+- Ensure the Admin API key has organization-level access
+
+### API keys not showing
+
+- API key listing requires admin permissions
+- Some API keys may be workspace-specific
