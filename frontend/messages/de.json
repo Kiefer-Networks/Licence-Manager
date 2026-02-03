@@ -606,6 +606,7 @@
     "orgId": "Organisations-ID",
     "orgName": "Organisationsname",
     "organization": "Organisation",
+    "scimToken": "SCIM-Token",
     "serverUrl": "Server-URL",
     "serviceAccountJson": "Service-Account-JSON",
     "signInAddress": "Anmeldeadresse",
@@ -1470,16 +1471,16 @@
     },
     "figma": {
       "permissions": [
-        "org:read - Organisations- und Teaminformationen lesen",
-        "file:read - Optional für Aktivitätsverfolgung"
+        "SCIM API-Zugriff (erfordert Business oder Enterprise Plan)",
+        "SCIM-Token aus den Admin-Einstellungen"
       ],
       "steps": [
-        "1. Gehen Sie zu Figma → Kontoeinstellungen → Persönliche Zugriffstokens",
-        "2. Klicken Sie auf \"Neuen Token erstellen\"",
-        "3. Benennen Sie ihn (z.B. \"Lizenzverwaltung\")",
-        "4. Wählen Sie den org:read Bereich (mindestens erforderlich)",
-        "5. Kopieren Sie den Token sofort - er wird nicht erneut angezeigt",
-        "6. Organisations-ID finden: Admin → Einstellungen → Organisations-ID"
+        "1. Melden Sie sich bei Figma als Organisations-Admin an",
+        "2. Gehen Sie zu Admin-Einstellungen → Login und Bereitstellung → SCIM-Bereitstellung",
+        "3. Klicken Sie auf 'SCIM-Token generieren'",
+        "4. Kopieren Sie den Token sofort - er kann nicht erneut angezeigt werden",
+        "5. Gehen Sie zu Admin-Einstellungen → SAML SSO für Ihre Mandanten-ID",
+        "6. Hinweis: SCIM erfordert Figma Business oder Enterprise Plan"
       ]
     },
     "github": {

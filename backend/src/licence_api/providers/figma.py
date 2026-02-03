@@ -1,6 +1,16 @@
-"""Figma provider integration."""
+"""Figma provider integration using SCIM API.
 
-from datetime import datetime
+Figma's REST API does not provide endpoints for organization/team members.
+The SCIM API is the only way to retrieve user information.
+
+Requirements:
+- Figma Business or Enterprise plan (SCIM not available on Starter/Professional)
+- SCIM token generated from Admin Settings > SCIM Provisioning
+- Tenant ID from Admin Settings > SAML SSO
+
+See: https://developers.figma.com/docs/rest-api/scim/
+"""
+
 from typing import Any
 
 import httpx
@@ -8,43 +18,58 @@ import httpx
 from licence_api.providers.base import BaseProvider
 
 
-class FigmaProvider(BaseProvider):
-    """Figma organization integration for design licenses."""
+# Map Figma seat types to license type names
+SEAT_TYPE_MAP = {
+    "full": "Figma Full Seat",
+    "dev": "Figma Dev Mode",
+    "collab": "Figma Collaborator",
+    "view": "Figma Viewer",
+    "viewer": "Figma Viewer",
+}
 
-    BASE_URL = "https://api.figma.com/v1"
+
+class FigmaProvider(BaseProvider):
+    """Figma organization integration using SCIM API.
+
+    Note: Requires Figma Business or Enterprise plan.
+    """
 
     def __init__(self, credentials: dict[str, Any]) -> None:
         """Initialize Figma provider.
 
         Args:
             credentials: Dict with keys:
-                - access_token: Figma personal access token or OAuth token
-                - org_id: Organization ID (for enterprise)
+                - scim_token: SCIM API token from Admin Settings
+                - tenant_id: Tenant ID from Admin Settings > SAML SSO
         """
         super().__init__(credentials)
-        self.access_token = credentials.get("access_token") or credentials.get(
-            "figma_access_token"
-        )
-        self.org_id = credentials.get("org_id") or credentials.get("figma_org_id")
+        self.scim_token = credentials.get("scim_token")
+        self.tenant_id = credentials.get("tenant_id")
+        self.base_url = f"https://www.figma.com/scim/v2/{self.tenant_id}"
 
     def _get_headers(self) -> dict[str, str]:
-        """Get API request headers."""
+        """Get API request headers for SCIM API."""
         return {
-            "X-Figma-Token": self.access_token,
+            "Authorization": f"Bearer {self.scim_token}",
             "Content-Type": "application/json",
         }
 
     async def test_connection(self) -> bool:
-        """Test Figma API connection.
+        """Test Figma SCIM API connection.
 
         Returns:
             True if connection is successful
         """
+        if not self.scim_token or not self.tenant_id:
+            return False
+
         try:
             async with httpx.AsyncClient() as client:
+                # Try to fetch users with count=1 to test connection
                 response = await client.get(
-                    f"{self.BASE_URL}/me",
+                    f"{self.base_url}/Users",
                     headers=self._get_headers(),
+                    params={"count": 1},
                     timeout=10.0,
                 )
                 return response.status_code == 200
@@ -52,61 +77,82 @@ class FigmaProvider(BaseProvider):
             return False
 
     async def fetch_licenses(self) -> list[dict[str, Any]]:
-        """Fetch all organization members from Figma.
+        """Fetch all organization members from Figma via SCIM API.
 
         Returns:
             List of license data dicts
         """
         licenses = []
+        start_index = 1  # SCIM uses 1-based indexing
+        page_size = 100
 
         async with httpx.AsyncClient() as client:
-            if self.org_id:
-                # Enterprise: fetch org members
+            while True:
                 response = await client.get(
-                    f"{self.BASE_URL}/organizations/{self.org_id}/members",
+                    f"{self.base_url}/Users",
                     headers=self._get_headers(),
+                    params={
+                        "startIndex": start_index,
+                        "count": page_size,
+                    },
                     timeout=30.0,
                 )
                 response.raise_for_status()
                 data = response.json()
 
-                for member in data.get("members", []):
-                    # Determine license type based on role
-                    role = member.get("role", "viewer")
-                    license_type = "Figma Viewer"
-                    if role in ["owner", "admin", "editor"]:
-                        license_type = "Figma Professional"
+                resources = data.get("Resources", [])
+                if not resources:
+                    break
+
+                for user in resources:
+                    # Extract email from userName or emails array
+                    email = user.get("userName", "")
+                    if not email:
+                        emails = user.get("emails", [])
+                        for email_obj in emails:
+                            if email_obj.get("primary"):
+                                email = email_obj.get("value", "")
+                                break
+                        if not email and emails:
+                            email = emails[0].get("value", "")
+
+                    # Determine seat type from roles
+                    seat_type = "view"
+                    roles = user.get("roles", [])
+                    for role in roles:
+                        if role.get("type") == "seatType":
+                            seat_type = role.get("value", "view").lower()
+                            break
+
+                    license_type = SEAT_TYPE_MAP.get(seat_type, "Figma Viewer")
+
+                    # Build display name
+                    display_name = user.get("displayName", "")
+                    if not display_name:
+                        name_obj = user.get("name", {})
+                        given = name_obj.get("givenName", "")
+                        family = name_obj.get("familyName", "")
+                        display_name = f"{given} {family}".strip()
 
                     licenses.append({
-                        "external_user_id": member.get("id"),
-                        "email": member.get("email", "").lower(),
+                        "external_user_id": user.get("id"),
+                        "email": email.lower() if email else "",
                         "license_type": license_type,
-                        "status": "active",
+                        "status": "active" if user.get("active", True) else "inactive",
                         "metadata": {
-                            "name": member.get("handle") or member.get("name"),
-                            "role": role,
+                            "name": display_name,
+                            "seat_type": seat_type,
+                            "figma_admin": user.get("figmaAdmin", False),
+                            "department": user.get("department"),
+                            "title": user.get("title"),
                         },
                     })
-            else:
-                # Team-based: fetch team members (fallback)
-                # First get teams
-                me_response = await client.get(
-                    f"{self.BASE_URL}/me",
-                    headers=self._get_headers(),
-                    timeout=10.0,
-                )
-                me_response.raise_for_status()
-                me_data = me_response.json()
 
-                # Add current user
-                licenses.append({
-                    "external_user_id": me_data.get("id"),
-                    "email": me_data.get("email", "").lower(),
-                    "license_type": "Figma Professional",
-                    "status": "active",
-                    "metadata": {
-                        "name": me_data.get("handle"),
-                    },
-                })
+                # Check if we've fetched all users
+                total_results = data.get("totalResults", 0)
+                if start_index + len(resources) > total_results:
+                    break
+
+                start_index += page_size
 
         return licenses

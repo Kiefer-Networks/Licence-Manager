@@ -1,64 +1,82 @@
 # Figma Integration Setup
 
-Track Figma organization or team members.
+Track Figma organization members using the SCIM API.
 
 ## Prerequisites
 
-- Figma organization or team
-- Admin access
+- **Figma Business or Enterprise plan** (SCIM is not available on Starter/Professional)
+- Organization Admin access
+
+## Important Note
+
+Figma's REST API does not provide endpoints for listing organization or team members. The only way to retrieve user information is through the SCIM API, which requires a Business or Enterprise plan.
 
 ## Setup Steps
 
-### 1. Generate Access Token
+### 1. Generate SCIM Token
 
-1. Log in to [Figma](https://www.figma.com/)
-2. Go to **Account Settings**
-3. Scroll to **Personal access tokens**
-4. Click **Create new token**
-5. Name: "License Management"
-6. Copy the token
+1. Log in to [Figma](https://www.figma.com/) as an **Organization Admin**
+2. Go to **Admin Settings**
+3. Navigate to **Login and provisioning** → **SCIM provisioning**
+4. Click **Generate SCIM token**
+5. Copy the token immediately - it cannot be viewed again
 
-### 2. Get Organization ID (Enterprise)
+### 2. Get Tenant ID
 
-For Figma Enterprise:
-
-1. Go to your organization settings
-2. Find the Organization ID in the URL or settings
+1. In **Admin Settings**, go to **SAML SSO**
+2. Your **Tenant ID** is displayed in the SCIM URL format: `https://www.figma.com/scim/v2/{tenant_id}`
 
 ### 3. Configure in License Management
 
 In the Settings page, add Figma provider:
 
-- **Access Token**: Your Figma personal access token
-- **Organization ID**: (Optional) Your organization ID for Enterprise
+- **SCIM Token**: Your SCIM API token
+- **Tenant ID**: Your organization's tenant ID
 
 ## Data Synced
 
 | Field | Description |
 |-------|-------------|
 | User ID | Figma user ID |
-| Email | User's email |
-| Handle | Figma username |
-| Role | Owner, admin, editor, or viewer |
-| License Type | Professional or Viewer |
+| Email | User's email (from userName or emails) |
+| Display Name | User's display name |
+| Seat Type | Full, Dev, Collab, or Viewer |
+| Active | Whether the user is active |
+| Department | User's department (if set) |
+| Title | User's job title (if set) |
+| Figma Admin | Whether user is an admin |
 
 ## License Types
 
-Figma has different license types:
+Figma has different seat types that are mapped to license types:
 
-- **Professional**: Full editing access
-- **Viewer**: View and comment only
-
-The integration determines license type based on user role.
+| Seat Type | License Type |
+|-----------|-------------|
+| Full | Figma Full Seat |
+| Dev | Figma Dev Mode |
+| Collab | Figma Collaborator |
+| View/Viewer | Figma Viewer |
 
 ## Troubleshooting
 
-### "Unauthorized" error
+### "Unauthorized" or 401 error
 
-- Verify the access token is correct
-- Check if the token has expired
+- Verify the SCIM token is correct and not expired
+- Ensure you have Organization Admin access
+- Check if SCIM provisioning is enabled in Admin Settings
 
-### Limited member list
+### Empty user list
 
-- Personal tokens may have limited org access
-- For full org access, Enterprise features may be required
+- Verify your Tenant ID is correct
+- Ensure your organization has users provisioned via SCIM
+
+### "SCIM not available" error
+
+- SCIM requires Figma Business or Enterprise plan
+- Starter and Professional plans do not support SCIM API
+
+## API Reference
+
+- SCIM Base URL: `https://www.figma.com/scim/v2/{tenant_id}`
+- Authentication: Bearer token in Authorization header
+- Documentation: [Figma SCIM API](https://developers.figma.com/docs/rest-api/scim/)
