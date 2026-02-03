@@ -84,6 +84,7 @@ async def create_backup(
     body: BackupExportRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> Response:
     """Create an encrypted backup of all system data.
 

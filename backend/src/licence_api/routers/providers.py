@@ -278,6 +278,7 @@ async def get_provider_logo_file(
     provider_id: UUID,
     filename: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
+    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
 ) -> FileResponse:
     """Get a provider's logo file."""
     # Sanitize filename
@@ -286,6 +287,22 @@ async def get_provider_logo_file(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid filename",
+        )
+
+    # Verify the logo belongs to the specified provider
+    provider = await provider_repo.get_by_id(provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    # Check that the requested filename matches the provider's logo_url
+    expected_logo_url = f"/api/v1/providers/{provider_id}/logo/{safe_filename}"
+    if provider.logo_url != expected_logo_url:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
         )
 
     file_path = LOGOS_DIR / safe_filename

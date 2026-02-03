@@ -127,12 +127,12 @@ def get_notification_service(db: AsyncSession = Depends(get_db)) -> Notification
 @limiter.limit("30/minute")
 async def get_setup_status(
     request: Request,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusResponse:
     """Get basic setup status.
 
-    This is a public endpoint - no authentication required.
-    Rate limited to prevent abuse.
+    Requires authentication. Rate limited to prevent abuse.
     """
     status = await service.get_setup_status()
     return SetupStatusResponse(is_complete=status.is_complete)

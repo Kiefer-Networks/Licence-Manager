@@ -143,11 +143,11 @@ async def update_user(
 async def delete_user(
     request: Request,
     user_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_DELETE))],
+    current_user: Annotated[AdminUser, Depends(require_superadmin)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
     user_agent: str | None = Header(default=None),
 ) -> None:
-    """Delete a user."""
+    """Delete a user. Superadmin only - user deletion is a critical operation."""
     try:
         await service.delete_user(
             user_id=user_id,

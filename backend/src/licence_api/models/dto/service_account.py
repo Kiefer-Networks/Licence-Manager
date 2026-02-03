@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 class ServiceAccountPatternCreate(BaseModel):
     """DTO for creating a new service account pattern."""
 
-    email_pattern: str = Field(max_length=255)
+    email_pattern: str = Field(
+        max_length=255,
+        min_length=1,
+        pattern=r"^[a-zA-Z0-9.*@_+-]+$",  # Safe pattern chars: alphanumeric, wildcards, email chars
+    )
     name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)
@@ -62,7 +66,7 @@ class ApplyPatternsResponse(BaseModel):
 class ServiceAccountLicenseTypeCreate(BaseModel):
     """DTO for creating a new service account license type."""
 
-    license_type: str = Field(max_length=500)
+    license_type: str = Field(min_length=1, max_length=500)
     name: str | None = Field(default=None, max_length=255)
     owner_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)

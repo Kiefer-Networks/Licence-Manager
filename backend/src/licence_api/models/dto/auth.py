@@ -18,7 +18,7 @@ class TokenResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Refresh token request."""
 
-    refresh_token: str = Field(max_length=2000)
+    refresh_token: str = Field(max_length=500)  # Tokens are typically ~86 bytes base64
 
 
 class LocalLoginRequest(BaseModel):
@@ -31,8 +31,8 @@ class LocalLoginRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     """Password change request."""
 
-    current_password: str
-    new_password: str = Field(min_length=12)
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
 
 
 class PasswordResetRequest(BaseModel):

@@ -422,15 +422,13 @@ class ServiceAccountService:
         Returns:
             Created ServiceAccountLicenseTypeResponse
         """
-        entry = ServiceAccountLicenseTypeORM(
+        entry = await self.license_type_repo.create(
             license_type=data.license_type,
             name=data.name,
             owner_id=data.owner_id,
             notes=data.notes,
             created_by=created_by,
         )
-        self.session.add(entry)
-        await self.session.flush()
 
         # Audit log the creation
         await self.audit_service.log(

@@ -80,6 +80,7 @@ async def get_pattern(
 
 
 @router.post("/patterns", response_model=ServiceAccountPatternResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_pattern(
     http_request: Request,
     data: ServiceAccountPatternCreate,
