@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { EmployeeAutocomplete } from '@/components/ui/employee-autocomplete';
 import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
@@ -2310,22 +2311,13 @@ export default function ProviderDetailPage() {
 
                 <div>
                   <Label className="text-xs font-medium mb-2 block">{t('ownerOptional')}</Label>
-                  <Select
+                  <EmployeeAutocomplete
+                    employees={employees}
                     value={serviceAccountForm.service_account_owner_id}
-                    onValueChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v === '__none__' ? '' : v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('selectResponsibleEmployee')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t('noOwner')}</SelectItem>
-                      {employees.map((emp) => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.full_name} ({emp.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(v) => setServiceAccountForm(prev => ({ ...prev, service_account_owner_id: v }))}
+                    placeholder={t('selectResponsibleEmployee')}
+                    noOwnerLabel={t('noOwner')}
+                  />
                   <p className="text-xs text-muted-foreground mt-1">
                     {t('responsiblePersonDescription')}
                   </p>
@@ -2403,22 +2395,13 @@ export default function ProviderDetailPage() {
 
                 <div>
                   <Label className="text-xs font-medium mb-2 block">{t('ownerLinkedEmployee')}</Label>
-                  <Select
+                  <EmployeeAutocomplete
+                    employees={employees}
                     value={adminAccountForm.admin_account_owner_id}
-                    onValueChange={(v) => setAdminAccountForm(prev => ({ ...prev, admin_account_owner_id: v === '__none__' ? '' : v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('selectEmployee')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t('noOwner')}</SelectItem>
-                      {employees.map((emp) => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.full_name} ({emp.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(v) => setAdminAccountForm(prev => ({ ...prev, admin_account_owner_id: v }))}
+                    placeholder={t('selectEmployee')}
+                    noOwnerLabel={t('noOwner')}
+                  />
                   <p className="text-xs text-muted-foreground mt-1">
                     {t('adminResponsibleDescription')}
                   </p>

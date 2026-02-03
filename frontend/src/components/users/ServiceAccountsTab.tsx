@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { EmployeeAutocomplete } from '@/components/ui/employee-autocomplete';
 import {
   api,
   ServiceAccountPattern,
@@ -900,19 +901,13 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
             </div>
             <div className="space-y-2">
               <Label htmlFor="owner">{t('owner')} ({tCommon('optional')})</Label>
-              <Select value={newPattern.owner_id || '__none__'} onValueChange={(v) => setNewPattern({ ...newPattern, owner_id: v === '__none__' ? '' : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tCommon('selectOption')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EmployeeAutocomplete
+                employees={employees}
+                value={newPattern.owner_id}
+                onChange={(v) => setNewPattern({ ...newPattern, owner_id: v })}
+                placeholder={tCommon('selectOption')}
+                noOwnerLabel={tCommon('none')}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">{t('notes')}</Label>
@@ -973,19 +968,13 @@ export function ServiceAccountsTab({ providers, showToast }: ServiceAccountsTabP
             </div>
             <div className="space-y-2">
               <Label htmlFor="license_type_owner">{t('owner')} ({tCommon('optional')})</Label>
-              <Select value={newLicenseType.owner_id || '__none__'} onValueChange={(v) => setNewLicenseType({ ...newLicenseType, owner_id: v === '__none__' ? '' : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tCommon('selectOption')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{tCommon('none')}</SelectItem>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EmployeeAutocomplete
+                employees={employees}
+                value={newLicenseType.owner_id}
+                onChange={(v) => setNewLicenseType({ ...newLicenseType, owner_id: v })}
+                placeholder={tCommon('selectOption')}
+                noOwnerLabel={tCommon('none')}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="license_type_notes">{t('notes')}</Label>
