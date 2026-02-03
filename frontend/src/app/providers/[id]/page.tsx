@@ -372,9 +372,11 @@ export default function ProviderDetailPage() {
     setSyncing(true);
     try {
       const result = await api.syncProvider(provider.id);
-      await fetchProvider();
-      await fetchLicenses();
       showToast(result.success ? 'success' : 'error', result.success ? t('syncCompleted') : t('syncFailed'));
+      // Reload page after successful sync to refresh all data
+      if (result.success) {
+        setTimeout(() => window.location.reload(), 500);
+      }
     } catch (error) {
       showToast('error', error instanceof Error ? error.message : t('syncFailed'));
     } finally {
