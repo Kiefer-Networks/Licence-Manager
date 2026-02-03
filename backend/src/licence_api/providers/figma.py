@@ -135,8 +135,9 @@ class FigmaProvider(BaseProvider):
                     if seat_type:
                         license_type = SEAT_TYPE_MAP.get(seat_type, f"Figma {seat_type.title()}")
                     else:
-                        # No seat type available (Business plan) - use generic license type
-                        license_type = "Figma User"
+                        # No seat type available (Business plan) - default to Viewer
+                        # Admins can manually adjust license types in the UI
+                        license_type = "Figma Viewer"
 
                     # Build display name
                     display_name = user.get("displayName", "")

@@ -128,3 +128,9 @@ class AdminAccountUpdate(BaseModel):
     admin_account_name: str | None = Field(default=None, max_length=255)
     admin_account_owner_id: UUID | None = None
     apply_globally: bool = False  # Add email to global admin account patterns
+
+
+class LicenseTypeUpdate(BaseModel):
+    """Update license type for a license."""
+
+    license_type: str = Field(max_length=100)

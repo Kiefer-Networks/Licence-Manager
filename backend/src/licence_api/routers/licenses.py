@@ -15,6 +15,7 @@ from licence_api.models.dto.license import (
     CategorizedLicensesResponse,
     ServiceAccountUpdate,
     AdminAccountUpdate,
+    LicenseTypeUpdate,
 )
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
@@ -491,6 +492,37 @@ async def update_admin_account_status(
 
     license_response, _ = result
     return license_response
+
+
+@router.put("/{license_id}/license-type", response_model=LicenseResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def update_license_type(
+    request: Request,
+    license_id: UUID,
+    data: LicenseTypeUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    license_service: Annotated[LicenseService, Depends(get_license_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> LicenseResponse:
+    """Update the license type for a license. Requires licenses.edit permission.
+
+    This is useful for providers like Figma where the license type cannot be
+    automatically detected (Business plan without Enterprise roles).
+    """
+    result = await license_service.update_license_type_with_commit(
+        license_id=license_id,
+        license_type=data.license_type,
+        user=current_user,
+        request=request,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="License not found",
+        )
+
+    return result
 
 
 # Match management endpoints

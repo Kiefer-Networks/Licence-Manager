@@ -144,6 +144,19 @@ export default function ProviderDetailPage() {
   });
   const [savingAdminAccount, setSavingAdminAccount] = useState(false);
 
+  // License Type Dialog (for providers like Figma where type can't be auto-detected)
+  const [licenseTypeDialog, setLicenseTypeDialog] = useState<License | null>(null);
+  const [selectedLicenseType, setSelectedLicenseType] = useState('');
+  const [savingLicenseType, setSavingLicenseType] = useState(false);
+
+  // Figma license types (used when provider is Figma)
+  const figmaLicenseTypes = [
+    'Figma Viewer',
+    'Figma Collaborator',
+    'Figma Dev Mode',
+    'Figma Full Seat',
+  ];
+
   // Pricing
   const [licenseTypes, setLicenseTypes] = useState<LicenseTypeInfo[]>([]);
   const [pricingEdits, setPricingEdits] = useState<Record<string, {
@@ -545,6 +558,26 @@ export default function ProviderDetailPage() {
       showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
     } finally {
       setSavingAdminAccount(false);
+    }
+  };
+
+  const handleOpenLicenseTypeDialog = (license: License) => {
+    setSelectedLicenseType(license.license_type || '');
+    setLicenseTypeDialog(license);
+  };
+
+  const handleSaveLicenseType = async () => {
+    if (!licenseTypeDialog || !selectedLicenseType) return;
+    setSavingLicenseType(true);
+    try {
+      await api.updateLicenseType(licenseTypeDialog.id, selectedLicenseType);
+      showToast('success', tLicenses('licenseTypeUpdated'));
+      setLicenseTypeDialog(null);
+      await fetchCategorizedLicenses();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
+    } finally {
+      setSavingLicenseType(false);
     }
   };
 
@@ -1124,6 +1157,8 @@ export default function ProviderDetailPage() {
                       const cost = parseFloat(pricing.cost);
                       if (pricing.billing_cycle === 'yearly') {
                         configuredMonthlyCost += cost / 12;
+                      } else if (pricing.billing_cycle === 'quarterly') {
+                        configuredMonthlyCost += cost / 3;
                       } else if (pricing.billing_cycle === 'monthly') {
                         configuredMonthlyCost += cost;
                       }
@@ -1139,7 +1174,7 @@ export default function ProviderDetailPage() {
                       {firstPricing?.cost && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">{t('costPerLicense')}</span>
-                          <span>{firstPricing.currency || 'EUR'} {firstPricing.cost}/{firstPricing.billing_cycle === 'yearly' ? t('perYear') : t('perMonth')}</span>
+                          <span>{firstPricing.currency || 'EUR'} {firstPricing.cost}/{firstPricing.billing_cycle === 'yearly' ? t('perYear') : firstPricing.billing_cycle === 'quarterly' ? t('perQuarter') : t('perMonth')}</span>
                         </div>
                       )}
                     </>
@@ -1271,6 +1306,7 @@ export default function ProviderDetailPage() {
                 maxUsers={provider?.config?.provider_license_info?.max_users}
                 onServiceAccountClick={handleOpenServiceAccountDialog}
                 onAdminAccountClick={handleOpenAdminAccountDialog}
+                onLicenseTypeClick={provider?.name === 'figma' ? handleOpenLicenseTypeDialog : undefined}
                 onAssignClick={(license) => setAssignDialog(license)}
                 onDeleteClick={(license) => setDeleteDialog(license)}
               />
@@ -1319,6 +1355,7 @@ export default function ProviderDetailPage() {
                     const packageCost = parseFloat(packageEdit.cost) || 0;
                     const maxUsers = licenseInfo?.max_users || 0;
                     const isYearly = packageEdit.billing_cycle === 'yearly';
+                    const isQuarterly = packageEdit.billing_cycle === 'quarterly';
 
                     // Get expiration date from license info
                     const expiresAt = licenseInfo?.expires_at ? new Date(licenseInfo.expires_at) : null;
@@ -1328,9 +1365,9 @@ export default function ProviderDetailPage() {
                     const nextBillingDate = packageEdit.next_billing_date || expiresAtStr;
 
                     // Cost per user based on package size (not active users)
-                    // If yearly: show yearly cost per user, if monthly: show monthly cost per user
+                    // Convert to monthly based on billing cycle
                     const costPerUser = maxUsers > 0 ? packageCost / maxUsers : 0;
-                    const monthlyCostPerUser = isYearly ? costPerUser / 12 : costPerUser;
+                    const monthlyCostPerUser = isYearly ? costPerUser / 12 : isQuarterly ? costPerUser / 3 : costPerUser;
 
                     return (
                       <>
@@ -1344,15 +1381,15 @@ export default function ProviderDetailPage() {
                             <p className="text-xl font-semibold">{totalLicenses}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground uppercase">{isYearly ? t('yearly') : t('monthly')} {t('cost')}</p>
+                            <p className="text-xs text-muted-foreground uppercase">{isYearly ? t('yearly') : isQuarterly ? t('quarterly') : t('monthly')} {t('cost')}</p>
                             <p className="text-xl font-semibold">{formatCurrency(packageCost, packageEdit.currency)}</p>
                           </div>
                           <div className="text-center">
                             <p className="text-xs text-muted-foreground uppercase">{t('costPerUser')}</p>
                             <p className="text-xl font-semibold text-emerald-600">
-                              {packageEdit.currency} {costPerUser.toFixed(2)}{isYearly ? t('perYearShort') : t('perMonthShort')}
+                              {packageEdit.currency} {costPerUser.toFixed(2)}{isYearly ? t('perYearShort') : isQuarterly ? t('perQuarterShort') : t('perMonthShort')}
                             </p>
-                            {isYearly && (
+                            {(isYearly || isQuarterly) && (
                               <p className="text-xs text-muted-foreground">({packageEdit.currency} {monthlyCostPerUser.toFixed(2)}{t('perMonthShort')})</p>
                             )}
                           </div>
@@ -1397,8 +1434,9 @@ export default function ProviderDetailPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                 <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                <SelectItem value="quarterly">{t('quarterly')}</SelectItem>
+                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1474,6 +1512,8 @@ export default function ProviderDetailPage() {
                       const cost = parseFloat(edit.cost);
                       if (edit.billing_cycle === 'yearly') {
                         monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
+                      } else if (edit.billing_cycle === 'quarterly') {
+                        monthlyEquivalent = `≈ ${(cost / 3).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                       } else if (edit.billing_cycle === 'monthly') {
                         monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                       }
@@ -1539,8 +1579,9 @@ export default function ProviderDetailPage() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                   <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                  <SelectItem value="quarterly">{t('quarterly')}</SelectItem>
+                                  <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1619,6 +1660,8 @@ export default function ProviderDetailPage() {
                     const cost = parseFloat(edit.cost);
                     if (edit.billing_cycle === 'yearly') {
                       monthlyEquivalent = `≈ ${(cost / 12).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
+                    } else if (edit.billing_cycle === 'quarterly') {
+                      monthlyEquivalent = `≈ ${(cost / 3).toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                     } else if (edit.billing_cycle === 'monthly') {
                       monthlyEquivalent = `${cost.toFixed(2)} ${edit.currency}${t('perMonthSuffix')}`;
                     }
@@ -1700,8 +1743,9 @@ export default function ProviderDetailPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                 <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                                <SelectItem value="quarterly">{t('quarterly')}</SelectItem>
+                                <SelectItem value="yearly">{t('yearly')}</SelectItem>
                                 <SelectItem value="perpetual">{t('perpetual')}</SelectItem>
                                 <SelectItem value="one_time">{t('oneTime')}</SelectItem>
                               </SelectContent>
@@ -2563,6 +2607,43 @@ export default function ProviderDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* License Type Dialog (for Figma and similar providers) */}
+      <Dialog open={!!licenseTypeDialog} onOpenChange={() => setLicenseTypeDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-blue-500" />
+              {tLicenses('changeLicenseType')}
+            </DialogTitle>
+            <DialogDescription>
+              {licenseTypeDialog?.external_user_id || licenseTypeDialog?.metadata?.name || ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label className="text-xs font-medium mb-2 block">{tLicenses('selectLicenseType')}</Label>
+              <Select value={selectedLicenseType} onValueChange={setSelectedLicenseType}>
+                <SelectTrigger>
+                  <SelectValue placeholder={tLicenses('selectLicenseType')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {figmaLicenseTypes.map((type) => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLicenseTypeDialog(null)}>{tCommon('cancel')}</Button>
+            <Button onClick={handleSaveLicenseType} disabled={savingLicenseType || !selectedLicenseType}>
+              {savingLicenseType && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {tCommon('save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* License Package Dialog */}
       <Dialog open={packageDialogOpen} onOpenChange={setPackageDialogOpen}>
         <DialogContent className="max-w-lg">
@@ -2635,6 +2716,7 @@ export default function ProviderDetailPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                    <SelectItem value="quarterly">{t('quarterly')}</SelectItem>
                     <SelectItem value="yearly">{t('yearly')}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2765,7 +2847,9 @@ export default function ProviderDetailPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="monthly">{t('monthly')}</SelectItem>
+                    <SelectItem value="quarterly">{t('quarterly')}</SelectItem>
                     <SelectItem value="yearly">{t('yearly')}</SelectItem>
+                    <SelectItem value="perpetual">{t('perpetual')}</SelectItem>
                     <SelectItem value="one_time">{t('oneTime')}</SelectItem>
                   </SelectContent>
                 </Select>

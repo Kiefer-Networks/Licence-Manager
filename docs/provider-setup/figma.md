@@ -57,7 +57,18 @@ Figma has different seat types that are mapped to license types:
 | Collab | Figma Collaborator |
 | View/Viewer | Figma Viewer |
 
-**Note:** Seat type information (`roles`) is only available on **Figma Enterprise** plans. On Business plans, all users will be imported as "Figma User" without specific seat type differentiation.
+**Note:** Seat type information (`roles`) is only available on **Figma Enterprise** plans. On Business plans, all users will be imported as "Figma Viewer" by default.
+
+### Manual License Type Adjustment (Business Plan)
+
+If you have a Figma Business plan (not Enterprise), the seat type cannot be automatically detected from the API. In this case:
+
+1. Go to the Figma provider detail page
+2. Click the menu (three dots) next to any user
+3. Select "Change License Type"
+4. Choose the correct license type from the dropdown
+
+This allows you to manually track the correct seat type for each user for cost allocation purposes.
 
 ## Troubleshooting
 

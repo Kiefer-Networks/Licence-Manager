@@ -911,7 +911,7 @@ export interface LicenseTypePricing {
   display_name?: string | null;  // Custom display name
   cost: string;
   currency: string;
-  billing_cycle: string;  // yearly, monthly, perpetual, one_time
+  billing_cycle: string;  // yearly, quarterly, monthly, perpetual, one_time
   payment_frequency: string;  // yearly, monthly, one_time
   next_billing_date?: string | null;  // ISO date
   notes?: string | null;
@@ -920,7 +920,7 @@ export interface LicenseTypePricing {
 export interface PackagePricing {
   cost: string;
   currency: string;
-  billing_cycle: string;  // yearly, monthly
+  billing_cycle: string;  // yearly, quarterly, monthly
   next_billing_date?: string | null;
   notes?: string | null;
 }
@@ -1788,6 +1788,13 @@ export const api = {
     return fetchApi<License>(`/licenses/${licenseId}/admin-account`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  async updateLicenseType(licenseId: string, licenseType: string): Promise<License> {
+    return fetchApi<License>(`/licenses/${licenseId}/license-type`, {
+      method: 'PUT',
+      body: JSON.stringify({ license_type: licenseType }),
     });
   },
 

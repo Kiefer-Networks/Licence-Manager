@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +28,7 @@ interface LicenseTableProps {
   onToggleSelectAll?: () => void;
   onServiceAccountClick?: (license: License) => void;
   onAdminAccountClick?: (license: License) => void;
+  onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
 }
@@ -44,13 +45,14 @@ export function LicenseTable({
   onToggleSelectAll,
   onServiceAccountClick,
   onAdminAccountClick,
+  onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
 }: LicenseTableProps) {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const displayEmptyMessage = emptyMessage || tCommon('noResults');
-  const hasActions = onServiceAccountClick || onAdminAccountClick || onAssignClick || onDeleteClick;
+  const hasActions = onServiceAccountClick || onAdminAccountClick || onLicenseTypeClick || onAssignClick || onDeleteClick;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -309,6 +311,12 @@ export function LicenseTable({
                             <DropdownMenuItem onClick={() => onAdminAccountClick(license)}>
                               <ShieldCheck className="h-4 w-4 mr-2" />
                               {license.is_admin_account ? t('editAdminAccount') : t('markAsAdminAccount')}
+                            </DropdownMenuItem>
+                          )}
+                          {onLicenseTypeClick && (
+                            <DropdownMenuItem onClick={() => onLicenseTypeClick(license)}>
+                              <Tags className="h-4 w-4 mr-2" />
+                              {t('changeLicenseType')}
                             </DropdownMenuItem>
                           )}
                           {onAssignClick && !license.is_service_account && (

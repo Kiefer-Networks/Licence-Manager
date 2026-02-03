@@ -700,6 +700,17 @@ class LicenseTypesResponse(BaseModel):
     license_types: list[LicenseTypeInfo]
 
 
+# Default license types for providers where types are known but may not be auto-detected
+PROVIDER_DEFAULT_LICENSE_TYPES: dict[str, list[str]] = {
+    "figma": [
+        "Figma Viewer",
+        "Figma Collaborator",
+        "Figma Dev Mode",
+        "Figma Full Seat",
+    ],
+}
+
+
 @router.get("/{provider_id}/license-types", response_model=LicenseTypesResponse)
 async def get_provider_license_types(
     provider_id: UUID,
@@ -720,6 +731,13 @@ async def get_provider_license_types(
 
     # Get current pricing from config
     pricing_config = (provider.config or {}).get("license_pricing", {})
+
+    # Add default license types for providers with known types (e.g., Figma)
+    # This ensures all license types show up in pricing even if no licenses have that type yet
+    default_types = PROVIDER_DEFAULT_LICENSE_TYPES.get(provider.name, [])
+    for default_type in default_types:
+        if default_type not in type_counts:
+            type_counts[default_type] = 0
 
     license_types = []
     for license_type, count in type_counts.items():

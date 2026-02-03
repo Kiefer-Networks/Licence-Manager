@@ -836,6 +836,54 @@ class LicenseService:
         license_response = await self.get_license(license_id)
         return (license_response, pattern_created) if license_response else None
 
+    async def update_license_type_with_commit(
+        self,
+        license_id: UUID,
+        license_type: str,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> LicenseResponse | None:
+        """Update license type with full side effects.
+
+        Args:
+            license_id: License UUID
+            license_type: New license type
+            user: Admin user making the change
+            request: HTTP request for audit logging
+
+        Returns:
+            License response or None if not found
+        """
+        license_orm = await self.license_repo.get(license_id)
+        if license_orm is None:
+            return None
+
+        old_license_type = license_orm.license_type
+
+        # Update the license type
+        await self.license_repo.update(license_id, license_type=license_type)
+
+        # Audit log the change
+        await self.audit_service.log(
+            action=AuditAction.LICENSE_UPDATE,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            admin_user_id=user.id,
+            changes={
+                "old": {"license_type": old_license_type},
+                "new": {"license_type": license_type},
+            },
+            request=request,
+        )
+
+        # Invalidate dashboard cache
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
+        await self.session.commit()
+
+        return await self.get_license(license_id)
+
     async def bulk_delete(
         self,
         license_ids: list[UUID],

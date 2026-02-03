@@ -19,6 +19,7 @@ interface ThreeTableLayoutProps {
   maxUsers?: number | null; // For package providers
   onServiceAccountClick?: (license: License) => void;
   onAdminAccountClick?: (license: License) => void;
+  onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
 }
@@ -45,6 +46,7 @@ export function ThreeTableLayout({
   maxUsers = null,
   onServiceAccountClick,
   onAdminAccountClick,
+  onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
 }: ThreeTableLayoutProps) {
@@ -208,6 +210,7 @@ export function ThreeTableLayout({
                   emptyMessage={t('noLicensesNotInHRIS')}
                   onServiceAccountClick={onServiceAccountClick}
                   onAdminAccountClick={onAdminAccountClick}
+                  onLicenseTypeClick={onLicenseTypeClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
                 />
@@ -232,6 +235,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noInactiveLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -258,6 +262,7 @@ export function ThreeTableLayout({
                   emptyMessage={t('noUnassignedLicenses')}
                   onServiceAccountClick={onServiceAccountClick}
                   onAdminAccountClick={onAdminAccountClick}
+                  onLicenseTypeClick={onLicenseTypeClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
                 />
@@ -282,6 +287,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noInactiveLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -307,6 +313,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noActiveExternalLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -330,6 +337,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noInactiveExternalLicenses')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
               />
@@ -355,6 +363,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noActiveServiceAccounts')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onDeleteClick={onDeleteClick}
               />
             ) : (
@@ -377,6 +386,7 @@ export function ThreeTableLayout({
                 emptyMessage={t('noInactiveServiceAccounts')}
                 onServiceAccountClick={onServiceAccountClick}
                 onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
                 onDeleteClick={onDeleteClick}
               />
             </div>
@@ -391,6 +401,7 @@ export function ThreeTableLayout({
           emptyMessage={getEmptyMessage()}
           onServiceAccountClick={onServiceAccountClick}
           onAdminAccountClick={onAdminAccountClick}
+          onLicenseTypeClick={onLicenseTypeClick}
           onAssignClick={onAssignClick}
           onDeleteClick={onDeleteClick}
         />
