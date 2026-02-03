@@ -440,6 +440,8 @@ class SyncService:
             # Convert to monthly cost
             if billing_cycle == "yearly":
                 monthly_total = total_cost / 12
+            elif billing_cycle == "quarterly":
+                monthly_total = total_cost / 3
             elif billing_cycle == "monthly":
                 monthly_total = total_cost
             else:
@@ -495,6 +497,8 @@ class SyncService:
                 # Calculate monthly equivalent
                 if billing_cycle == "yearly":
                     monthly_cost = cost / 12
+                elif billing_cycle == "quarterly":
+                    monthly_cost = cost / 3
                 elif billing_cycle == "monthly":
                     monthly_cost = cost
                 else:

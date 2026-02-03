@@ -53,6 +53,7 @@ class BillingCycle(StrEnum):
     """Billing cycle for licenses."""
 
     MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
     YEARLY = "yearly"
     PERPETUAL = "perpetual"  # One-time purchase, no renewal
     ONE_TIME = "one_time"  # One-time with possible upgrade fees

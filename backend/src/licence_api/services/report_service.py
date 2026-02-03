@@ -629,6 +629,8 @@ class ReportService:
                         cost_per_seat = pkg.cost_per_seat
                         if pkg.billing_cycle == "yearly":
                             cost_per_seat = cost_per_seat / 12
+                        elif pkg.billing_cycle == "quarterly":
+                            cost_per_seat = cost_per_seat / 3
                     currency = pkg.currency
                     license_type = pkg.display_name or pkg.license_type
             else:
@@ -649,6 +651,8 @@ class ReportService:
                         billing_cycle = package_pricing.get("billing_cycle", "yearly")
                         if billing_cycle == "yearly":
                             pkg_cost = pkg_cost / 12
+                        elif billing_cycle == "quarterly":
+                            pkg_cost = pkg_cost / 3
                         if purchased > 0:
                             cost_per_seat = pkg_cost / purchased
                         currency = package_pricing.get("currency", "EUR")

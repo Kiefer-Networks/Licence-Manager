@@ -59,6 +59,8 @@ class PricingService:
             billing_cycle = package_pricing.get("billing_cycle", "yearly")
             if billing_cycle == "yearly":
                 monthly_package_cost = package_cost / 12
+            elif billing_cycle == "quarterly":
+                monthly_package_cost = package_cost / 3
             else:
                 monthly_package_cost = package_cost
 
@@ -90,6 +92,8 @@ class PricingService:
                 billing_cycle = price_info.get("billing_cycle", "yearly")
                 if billing_cycle == "yearly":
                     monthly_cost = cost / 12
+                elif billing_cycle == "quarterly":
+                    monthly_cost = cost / 3
                 elif billing_cycle == "monthly":
                     monthly_cost = cost
                 else:
@@ -159,6 +163,8 @@ class PricingService:
                 billing_cycle = price_info.get("billing_cycle", "monthly")
                 if billing_cycle == "yearly":
                     monthly_cost = cost / 12
+                elif billing_cycle == "quarterly":
+                    monthly_cost = cost / 3
                 elif billing_cycle == "monthly":
                     monthly_cost = cost
                 else:
@@ -199,13 +205,15 @@ class PricingService:
 
         Args:
             cost: Raw cost amount
-            billing_cycle: Billing cycle (yearly, monthly, perpetual, one_time)
+            billing_cycle: Billing cycle (yearly, quarterly, monthly, perpetual, one_time)
 
         Returns:
             Monthly equivalent cost
         """
         if billing_cycle == "yearly":
             return cost / 12
+        elif billing_cycle == "quarterly":
+            return cost / 3
         elif billing_cycle == "monthly":
             return cost
         else:
