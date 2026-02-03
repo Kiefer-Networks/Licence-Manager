@@ -69,6 +69,7 @@ export default function UsersPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   const handleSort = (column: string) => {
+    setPage(1); // Reset to first page when sorting changes
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -86,6 +87,11 @@ export default function UsersPage() {
     api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
     api.getProviders().then((data) => setProviders(data.items)).catch((e) => handleSilentError('getProviders', e));
   }, []);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedStatus, selectedDepartment, selectedSource]);
 
   const loadEmployees = () => {
     setLoading(true);
