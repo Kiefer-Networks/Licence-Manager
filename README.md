@@ -47,8 +47,8 @@ A comprehensive SaaS license management platform for enterprises to track, manag
 - **Pydantic** for data validation
 
 ### Frontend
-- **Next.js 14** with App Router
-- **React 18** with Server Components
+- **Next.js 16** with App Router
+- **React 19** with Server Components
 - **TypeScript** for type safety
 - **Tailwind CSS** for styling
 - **shadcn/ui** component library
@@ -73,8 +73,8 @@ A comprehensive SaaS license management platform for enterprises to track, manag
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-org/licence.git
-   cd licence
+   git clone git@github.com:Kiefer-Networks/Licence-Manager.git
+   cd Licence-Manager
    ```
 
 2. **Start infrastructure services**
@@ -182,8 +182,8 @@ Images are automatically built and pushed to GitHub Container Registry:
 
 ```bash
 # Pull latest images
-docker pull ghcr.io/your-org/licence/backend:latest
-docker pull ghcr.io/your-org/licence/frontend:latest
+docker pull ghcr.io/kiefer-networks/licence-manager/backend:latest
+docker pull ghcr.io/kiefer-networks/licence-manager/frontend:latest
 ```
 
 ### Security Considerations
@@ -199,7 +199,7 @@ docker pull ghcr.io/your-org/licence/frontend:latest
 ## Project Structure
 
 ```
-licence/
+Licence-Manager/
 ├── backend/
 │   ├── alembic/              # Database migrations
 │   ├── src/licence_api/
@@ -218,6 +218,8 @@ licence/
 │   ├── messages/             # i18n translations
 │   ├── Dockerfile
 │   └── package.json
+├── docs/                     # Documentation
+│   └── provider-setup/       # Provider integration guides
 ├── docker-compose.yml        # Development
 ├── docker-compose.prod.yml   # Production
 └── .github/workflows/        # CI/CD
