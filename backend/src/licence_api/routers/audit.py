@@ -170,7 +170,7 @@ async def list_audit_logs(
 
 @router.get("/export")
 async def export_audit_logs(
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_EXPORT))],
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     format: str = Query("csv", pattern="^(csv|json)$"),

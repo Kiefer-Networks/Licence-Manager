@@ -285,6 +285,7 @@ async def logout(
     auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     user_agent: str | None = Header(default=None),
+    _csrf: Annotated[None, Depends(CSRFProtected())] = None,
 ) -> dict[str, str]:
     """Logout and revoke refresh token.
 
@@ -312,6 +313,7 @@ async def logout_all_sessions(
     response: Response,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, int]:
     """Logout all sessions for the current user."""
     count = await auth_service.logout_all_sessions(current_user.id)

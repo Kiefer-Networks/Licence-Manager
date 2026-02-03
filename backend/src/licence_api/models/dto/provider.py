@@ -22,7 +22,11 @@ class ProviderUpdate(BaseModel):
     """Provider update DTO."""
 
     display_name: str | None = Field(default=None, max_length=255)
-    logo_url: str | None = Field(default=None, max_length=500)
+    logo_url: str | None = Field(
+        default=None,
+        max_length=500,
+        pattern=r"^/[a-zA-Z0-9/_.-]+$",  # Only allow internal paths starting with /
+    )
     enabled: bool | None = None
     credentials: dict[str, Any] | None = None
     config: dict[str, Any] | None = None

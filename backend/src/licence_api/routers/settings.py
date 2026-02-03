@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.settings_repository import SettingsRepository
-from licence_api.security.auth import get_current_user, require_admin, require_permission, Permissions
+from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.services.notification_service import NotificationService
@@ -63,14 +63,21 @@ class NotificationRuleCreate(BaseModel):
     """Create notification rule request."""
 
     event_type: str = Field(max_length=100)
-    slack_channel: str = Field(max_length=255)
+    slack_channel: str = Field(
+        max_length=80,
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",
+    )
     template: str | None = Field(default=None, max_length=5000)
 
 
 class NotificationRuleUpdate(BaseModel):
     """Update notification rule request."""
 
-    slack_channel: str | None = Field(default=None, max_length=255)
+    slack_channel: str | None = Field(
+        default=None,
+        max_length=80,
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",
+    )
     template: str | None = Field(default=None, max_length=5000)
     enabled: bool | None = None
 
@@ -103,7 +110,10 @@ class SetupStatusDetailedResponse(BaseModel):
 class TestNotificationRequest(BaseModel):
     """Test notification request."""
 
-    channel: str = Field(max_length=255)
+    channel: str = Field(
+        max_length=80,
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",
+    )
 
 
 class TestNotificationResponse(BaseModel):
@@ -141,7 +151,7 @@ async def get_setup_status(
 
 @router.get("/status/detailed", response_model=SetupStatusDetailedResponse)
 async def get_setup_status_detailed(
-    current_user: Annotated[AdminUser, Depends(require_admin)],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusDetailedResponse:
     """Get detailed setup status. Admin only."""
