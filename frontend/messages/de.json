@@ -1499,17 +1499,17 @@
     },
     "gitlab": {
       "permissions": [
-        "read_api - Lesezugriff auf die API",
-        "read_user - Benutzerinformationen lesen"
+        "Admin-Zugriffstoken mit read_api und read_user Bereichen",
+        "Für Self-Hosted: Alle Instanz-Benutzer werden automatisch synchronisiert"
       ],
       "steps": [
-        "1. Gehen Sie zu GitLab → Benutzereinstellungen → Zugriffstokens",
-        "2. Erstellen Sie einen neuen persönlichen Zugriffstoken",
+        "1. Gehen Sie zu GitLab → Admin-Bereich → Einstellungen → Zugriffstokens",
+        "2. Erstellen Sie einen neuen Admin-Zugriffstoken",
         "3. Wählen Sie Bereiche: read_api, read_user",
         "4. Legen Sie ein Ablaufdatum fest (empfohlen: 1 Jahr)",
         "5. Kopieren Sie den Token sofort",
-        "6. Gruppen-ID: Gehen Sie zu Ihrer Gruppe → Einstellungen → Allgemein → Gruppen-ID",
-        "7. Für Self-Hosted: Geben Sie Ihre GitLab-Server-URL ein"
+        "6. Server-URL: Geben Sie Ihren GitLab-Server ein (z.B. gitlab.firma.de)",
+        "Hinweis: Für Self-Hosted GitLab werden alle Instanz-Benutzer automatisch synchronisiert"
       ]
     },
     "google_workspace": {

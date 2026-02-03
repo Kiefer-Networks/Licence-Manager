@@ -24,7 +24,7 @@ export const licenseProviderTypes: ProviderTypeDefinition[] = [
   { value: 'cursor', label: 'Cursor', fields: ['api_key'], type: 'api' },
   { value: 'figma', label: 'Figma', fields: ['access_token', 'org_id'], type: 'api' },
   { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
-  { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'group_id', 'base_url'], type: 'api' },
+  { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'base_url'], type: 'api' },
   { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api' },
   { value: 'huggingface', label: 'Hugging Face', fields: ['access_token', 'organization'], type: 'api' },
   { value: 'jetbrains', label: 'JetBrains', fields: ['api_key', 'customer_code'], type: 'api' },

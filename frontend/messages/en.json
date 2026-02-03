@@ -1499,17 +1499,17 @@
     },
     "gitlab": {
       "permissions": [
-        "read_api - Read access to the API",
-        "read_user - Read user information"
+        "Admin access token with read_api and read_user scopes",
+        "For self-hosted: Fetches all instance users automatically"
       ],
       "steps": [
-        "1. Go to GitLab → User Settings → Access Tokens",
-        "2. Create a new Personal Access Token",
+        "1. Go to GitLab → Admin Area → Settings → Access Tokens",
+        "2. Create a new Admin Access Token",
         "3. Select scopes: read_api, read_user",
         "4. Set expiration date (recommended: 1 year)",
         "5. Copy the token immediately",
-        "6. Group ID: Go to your group → Settings → General → Group ID",
-        "7. For self-hosted: Enter your GitLab server URL"
+        "6. Server URL: Enter your GitLab server (e.g., gitlab.company.com)",
+        "Note: For self-hosted GitLab, all instance users are synced automatically"
       ]
     },
     "google_workspace": {
