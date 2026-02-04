@@ -325,10 +325,18 @@ class BackupService:
         return list(result.scalars().all())
 
     def _orm_to_dict(self, obj: Any) -> dict[str, Any]:
-        """Convert ORM object to dict, including all columns."""
+        """Convert ORM object to dict, including all columns.
+
+        Uses column.key (Python attribute name) to get values, but stores
+        with column.name (database column name) for accurate restore.
+        This handles cases where the Python attribute differs from the DB column,
+        like 'extra_data' mapped to 'metadata' column.
+        """
         result = {}
         for column in obj.__table__.columns:
-            value = getattr(obj, column.name)
+            # Use column.key to get the Python attribute value
+            value = getattr(obj, column.key)
+            # Store with the database column name for restore compatibility
             result[column.name] = value
         return result
 
@@ -336,7 +344,7 @@ class BackupService:
         """Convert junction table ORM object to dict."""
         result = {}
         for column in obj.__table__.columns:
-            value = getattr(obj, column.name)
+            value = getattr(obj, column.key)
             result[column.name] = value
         return result
 
