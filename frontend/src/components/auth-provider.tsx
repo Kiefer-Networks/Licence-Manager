@@ -77,13 +77,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { totpRequired: true };
     }
 
-    // Login successful - refresh CSRF token after login (new session)
-    await api.refreshCsrfToken();
-    await refreshUser();
-    router.push('/dashboard');
+    // Login successful - fetch user info to verify authentication worked
+    // Note: Cookies are set by the server response, should be available immediately
+    try {
+      const userInfo = await api.getCurrentUser();
+      setUser(userInfo);
+      // Refresh CSRF token after login (new session)
+      await api.refreshCsrfToken();
+    } catch (error) {
+      // If we can't fetch user info after successful login, something is wrong
+      // Clear any partial state and report the error
+      setUser(null);
+      api.clearAuth();
+      throw new Error('Login succeeded but failed to establish session. Please try again.');
+    }
 
+    router.push('/dashboard');
     return { totpRequired: false };
-  }, [refreshUser, router]);
+  }, [router]);
 
   const logout = useCallback(async () => {
     try {
