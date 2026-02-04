@@ -2861,4 +2861,28 @@ export const api = {
 
     return response.json();
   },
+
+  /**
+   * Restore system from backup during initial setup.
+   * Only works when no admin users exist.
+   * WARNING: This deletes ALL existing data!
+   */
+  async setupRestoreBackup(file: File, password: string): Promise<BackupRestoreResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('password', password);
+
+    const response = await fetch(`${API_BASE}/api/v1/backup/setup-restore`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Restore failed' }));
+      throw new Error(error.detail || 'Restore failed');
+    }
+
+    return response.json();
+  },
 };

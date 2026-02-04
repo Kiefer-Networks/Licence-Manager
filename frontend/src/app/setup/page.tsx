@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
-import { CheckCircle, Circle, ArrowRight } from 'lucide-react';
+import { api, BackupRestoreResponse } from '@/lib/api';
+import { CheckCircle, Circle, ArrowRight, Upload, FileArchive, Eye, EyeOff, AlertTriangle, Loader2 } from 'lucide-react';
 
-// Skip auth step in dev mode
-type SetupStep = 'welcome' | 'hibob' | 'providers' | 'complete';
+type SetupStep = 'restore' | 'welcome' | 'hibob' | 'providers' | 'complete';
 
 interface SetupStatus {
   is_complete: boolean;
@@ -20,8 +19,9 @@ interface SetupStatus {
 export default function SetupPage() {
   const t = useTranslations('setup');
   const tProviders = useTranslations('providers');
+  const tSettings = useTranslations('settings');
   const router = useRouter();
-  const [step, setStep] = useState<SetupStep>('welcome');
+  const [step, setStep] = useState<SetupStep>('restore');
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,10 +29,18 @@ export default function SetupPage() {
   // HiBob credentials - cleared on unmount for security
   const [hibobAuthToken, setHibobAuthToken] = useState('');
 
+  // Backup restore state
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<BackupRestoreResponse | null>(null);
+
   // Clear sensitive data on unmount to prevent memory exposure
   useEffect(() => {
     return () => {
       setHibobAuthToken('');
+      setBackupPassword('');
     };
   }, []);
 
@@ -50,6 +58,65 @@ export default function SetupPage() {
     }
     checkStatus();
   }, [router]);
+
+  const handleFileSelect = (selectedFile: File) => {
+    if (selectedFile.name.endsWith('.lcbak')) {
+      setBackupFile(selectedFile);
+      setError(null);
+    } else {
+      setError(tSettings('selectBackupFile'));
+      setBackupFile(null);
+    }
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      handleFileSelect(droppedFile);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleRestore = async () => {
+    if (!backupFile || backupPassword.length < 8) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await api.setupRestoreBackup(backupFile, backupPassword);
+      setRestoreResult(result);
+
+      if (result.success) {
+        // Redirect to dashboard after successful restore
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+      } else {
+        setError(result.error || tSettings('restoreFailed'));
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : tSettings('restoreFailed');
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkipRestore = () => {
+    setStep('welcome');
+  };
 
   const handleHibobSetup = async () => {
     setLoading(true);
@@ -105,6 +172,7 @@ export default function SetupPage() {
   };
 
   const steps = [
+    { id: 'restore', label: t('restoreBackup') },
     { id: 'welcome', label: t('welcome') },
     { id: 'hibob', label: tProviders('hibob') },
     { id: 'providers', label: tProviders('title') },
@@ -128,7 +196,7 @@ export default function SetupPage() {
                 )}
                 {i < steps.length - 1 && (
                   <div
-                    className={`h-0.5 w-12 mx-2 ${
+                    className={`h-0.5 w-8 mx-1 ${
                       i < currentStepIndex ? 'bg-primary' : 'bg-muted-foreground/30'
                     }`}
                   />
@@ -139,6 +207,145 @@ export default function SetupPage() {
         </div>
 
         {/* Step Content */}
+        {step === 'restore' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                {t('restoreFromBackup')}
+              </CardTitle>
+              <CardDescription>
+                {t('restoreDescription')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {restoreResult?.success ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 text-green-700">
+                    <CheckCircle className="h-6 w-6 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">{tSettings('importSuccessful')}</p>
+                      <p className="text-sm mt-1">{t('redirectingToDashboard')}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {error && (
+                    <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* Info Banner */}
+                  <div className="flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
+                    <FileArchive className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <p>{t('hasBackupQuestion')}</p>
+                  </div>
+
+                  {/* File Drop Zone */}
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                      isDragging
+                        ? 'border-blue-500 bg-blue-50'
+                        : backupFile
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-zinc-300 hover:border-zinc-400'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      accept=".lcbak"
+                      onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={loading}
+                    />
+                    {backupFile ? (
+                      <div className="flex items-center justify-center gap-2 text-green-700">
+                        <FileArchive className="h-8 w-8" />
+                        <div className="text-left">
+                          <p className="font-medium">{backupFile.name}</p>
+                          <p className="text-xs text-green-600">
+                            {(backupFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-zinc-500">
+                        <FileArchive className="h-10 w-10 mx-auto mb-2" />
+                        <p className="font-medium">{tSettings('dropFileHere')}</p>
+                        <p className="text-xs mt-1">{tSettings('clickToSelect')} (.lcbak)</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Password Input */}
+                  {backupFile && (
+                    <div className="space-y-2">
+                      <Label htmlFor="restorePassword" className="text-sm font-medium">
+                        {tSettings('backupPassword')}
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="restorePassword"
+                          type={showPassword ? 'text' : 'password'}
+                          value={backupPassword}
+                          onChange={(e) => setBackupPassword(e.target.value)}
+                          placeholder={tSettings('backupPasswordInput')}
+                          disabled={loading}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipRestore}
+                      className="flex-1"
+                      disabled={loading}
+                    >
+                      {t('noBackupContinue')}
+                    </Button>
+                    <Button
+                      onClick={handleRestore}
+                      disabled={!backupFile || backupPassword.length < 8 || loading}
+                      className="flex-1"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {tSettings('importing')}
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          {t('restoreAndContinue')}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {step === 'welcome' && (
           <Card>
             <CardHeader className="text-center">

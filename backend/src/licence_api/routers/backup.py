@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -14,6 +15,7 @@ from licence_api.models.dto.backup import (
     BackupInfoResponse,
     RestoreResponse,
 )
+from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
@@ -218,3 +220,65 @@ async def get_backup_info(
         )
 
     return service.get_backup_info(content)
+
+
+# Rate limit for setup restore (stricter since no auth)
+SETUP_RESTORE_LIMIT = "3/hour"
+
+
+@router.post("/setup-restore", response_model=RestoreResponse)
+@limiter.limit(SETUP_RESTORE_LIMIT)
+async def setup_restore_backup(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+    file: UploadFile = File(...),
+    password: str = Form(..., min_length=8, max_length=256),
+) -> RestoreResponse:
+    """Restore system from backup during initial setup.
+
+    This endpoint is ONLY available when no admin users exist in the system.
+    It allows restoring from a backup before creating the first admin account.
+
+    WARNING: This deletes ALL existing data!
+
+    No authentication required, but only works on fresh installations.
+    """
+    # Security check: Only allow if no admin users exist
+    result = await db.execute(select(func.count(AdminUserORM.id)))
+    admin_count = result.scalar() or 0
+
+    if admin_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setup restore is only available on fresh installations with no existing users",
+        )
+
+    # Validate file
+    if file.filename is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No filename provided",
+        )
+
+    if not file.filename.endswith(".lcbak"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Expected .lcbak file",
+        )
+
+    # Read file with streaming size check
+    content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
+
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file",
+        )
+
+    return await service.restore_backup(
+        file_data=content,
+        password=password,
+        user=None,  # No user during setup
+        request=request,
+    )
