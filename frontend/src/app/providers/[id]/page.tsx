@@ -74,7 +74,7 @@ export default function ProviderDetailPage() {
   const t = useTranslations('providers');
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
-  const { formatDate, formatCurrency, formatNumber } = useLocale();
+  const { formatDate, formatDateTimeWithSeconds, formatCurrency, formatNumber } = useLocale();
 
   const licenseModelOptions = [
     { value: 'seat_based', label: t('seatBased') },
@@ -1183,7 +1183,7 @@ export default function ProviderDetailPage() {
                 {!isManual && provider.last_sync_at && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('lastSync')}</span>
-                    <span>{formatDate(provider.last_sync_at)}</span>
+                    <span>{formatDateTimeWithSeconds(provider.last_sync_at)}</span>
                   </div>
                 )}
               </CardContent>

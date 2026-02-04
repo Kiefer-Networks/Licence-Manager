@@ -27,6 +27,7 @@ interface LocaleContextValue {
   currency: string;
   currencySymbol: string;
   formatDate: (date: Date | string | null | undefined) => string;
+  formatDateTimeWithSeconds: (date: Date | string | null | undefined) => string;
   formatNumber: (value: number | string | null | undefined, decimals?: number) => string;
   formatCurrency: (value: number | string | null | undefined, currencyOverride?: string) => string;
 }
@@ -61,6 +62,32 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       case 'DD.MM.YYYY':
       default:
         return `${day}.${month}.${year}`;
+    }
+  }, [dateFormat]);
+
+  // Format date with time including seconds
+  const formatDateTimeWithSeconds = useCallback((date: Date | string | null | undefined): string => {
+    if (!date) return '-';
+
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '-';
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    const time = `${hours}:${minutes}:${seconds}`;
+
+    switch (dateFormat) {
+      case 'MM/DD/YYYY':
+        return `${month}/${day}/${year} ${time}`;
+      case 'YYYY-MM-DD':
+        return `${year}-${month}-${day} ${time}`;
+      case 'DD.MM.YYYY':
+      default:
+        return `${day}.${month}.${year} ${time}`;
     }
   }, [dateFormat]);
 
@@ -107,9 +134,10 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     currency,
     currencySymbol,
     formatDate,
+    formatDateTimeWithSeconds,
     formatNumber,
     formatCurrency,
-  }), [dateFormat, numberFormat, currency, currencySymbol, formatDate, formatNumber, formatCurrency]);
+  }), [dateFormat, numberFormat, currency, currencySymbol, formatDate, formatDateTimeWithSeconds, formatNumber, formatCurrency]);
 
   return (
     <LocaleContext.Provider value={value}>
@@ -145,6 +173,18 @@ export function useLocaleFormatters() {
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
         return `${day}.${month}.${year}`;
+      },
+      formatDateTimeWithSeconds: (date: Date | string | null | undefined): string => {
+        if (!date) return '-';
+        const d = typeof date === 'string' ? new Date(date) : date;
+        if (isNaN(d.getTime())) return '-';
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
       },
       formatNumber: (value: number | string | null | undefined, decimals = 2): string => {
         if (value === null || value === undefined || value === '') return '-';
