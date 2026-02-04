@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.config import get_settings
 from licence_api.constants.paths import ADMIN_AVATAR_DIR
-from licence_api.models.dto.auth import TokenResponse, UserInfo
+from licence_api.models.dto.auth import (
+    LoginResponse,
+    TokenResponse,
+    TotpBackupCodesResponse,
+    TotpEnableResponse,
+    TotpSetupResponse,
+    TotpStatusResponse,
+    UserInfo,
+)
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
@@ -21,6 +29,7 @@ from licence_api.security.auth import (
     hash_refresh_token,
 )
 from licence_api.security.password import get_password_service
+from licence_api.services.totp_service import get_totp_service
 from licence_api.utils.file_validation import (
     validate_image_signature,
     get_extension_from_content_type,
@@ -51,19 +60,21 @@ class AuthService:
         self,
         email: str,
         password: str,
+        totp_code: str | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> TokenResponse:
-        """Authenticate with email and password.
+    ) -> LoginResponse:
+        """Authenticate with email and password, optionally with TOTP.
 
         Args:
             email: User email
             password: User password
+            totp_code: TOTP code if 2FA is enabled
             user_agent: User agent string
             ip_address: IP address
 
         Returns:
-            TokenResponse with access and refresh tokens
+            LoginResponse with tokens or totp_required flag
 
         Raises:
             HTTPException: If authentication fails
@@ -119,6 +130,33 @@ class AuthService:
                 detail="Invalid credentials",
             )
 
+        # Check if TOTP is enabled
+        if user.totp_enabled:
+            if not totp_code:
+                # TOTP required but not provided
+                return LoginResponse(
+                    totp_required=True,
+                )
+
+            # Verify TOTP code
+            totp_valid = await self._verify_totp_code(user.id, totp_code)
+            if not totp_valid:
+                await self.user_repo.record_failed_login(user.id)
+                await self.session.commit()
+                log_security_event(
+                    SecurityEventType.LOGIN_FAILED,
+                    user_id=user.id,
+                    user_email=email,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    success=False,
+                    details={"reason": "invalid_totp"},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid two-factor authentication code",
+                )
+
         # Successful login
         await self.user_repo.record_successful_login(user.id)
         # Log successful login
@@ -159,18 +197,60 @@ class AuthService:
             resource_type="admin_user",
             resource_id=user.id,
             admin_user_id=user.id,
-            changes={"method": "local", "email": user.email},
+            changes={"method": "local", "email": user.email, "totp_used": user.totp_enabled},
             ip_address=ip_address,
             user_agent=user_agent,
         )
 
         await self.session.commit()
 
-        return TokenResponse(
+        return LoginResponse(
             access_token=access_token,
             refresh_token=raw_refresh,
             expires_in=settings.jwt_expiration_hours * 3600,
+            totp_required=False,
         )
+
+    async def _verify_totp_code(self, user_id: UUID, code: str) -> bool:
+        """Verify a TOTP code or backup code.
+
+        Args:
+            user_id: User UUID
+            code: TOTP code or backup code
+
+        Returns:
+            True if code is valid
+        """
+        totp_data = await self.user_repo.get_totp_data(user_id)
+        if totp_data is None:
+            return False
+
+        secret_encrypted, backup_codes_encrypted, enabled = totp_data
+        if not enabled or not secret_encrypted:
+            return False
+
+        totp_service = get_totp_service()
+
+        # Normalize code: remove dashes for backup codes
+        normalized_code = code.replace("-", "")
+
+        # Check if it's a 6-digit TOTP code
+        if len(normalized_code) == 6 and normalized_code.isdigit():
+            secret = totp_service.decrypt_secret(secret_encrypted)
+            return totp_service.verify_totp(secret, normalized_code)
+
+        # Check if it's a backup code
+        if backup_codes_encrypted and len(normalized_code) == 8:
+            is_valid, updated_codes = totp_service.verify_backup_code(
+                code, backup_codes_encrypted
+            )
+            if is_valid and updated_codes:
+                # Remove used backup code
+                await self.user_repo.update_backup_codes(user_id, updated_codes)
+                await self.session.commit()
+            return is_valid
+
+        return False
 
     async def refresh_access_token(
         self,
@@ -319,6 +399,7 @@ class AuthService:
             auth_provider=user.auth_provider,
             is_active=user.is_active,
             require_password_change=user.require_password_change,
+            totp_enabled=user.totp_enabled,
             roles=roles,
             permissions=permissions,
             is_superadmin="superadmin" in roles,
@@ -618,3 +699,296 @@ class AuthService:
         )
         await self.session.commit()
         return pref
+
+    # TOTP Two-Factor Authentication Methods
+
+    async def setup_totp(self, user_id: UUID) -> TotpSetupResponse:
+        """Initialize TOTP setup for a user.
+
+        Generates a new secret but does not enable TOTP yet.
+        User must verify with a code before TOTP is enabled.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            TotpSetupResponse with QR code and secret
+
+        Raises:
+            HTTPException: If user not found or TOTP already enabled
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Two-factor authentication is already enabled",
+            )
+
+        totp_service = get_totp_service()
+
+        # Generate new secret
+        secret = totp_service.generate_secret()
+        secret_encrypted = totp_service.encrypt_secret(secret)
+
+        # Store encrypted secret (not enabled yet)
+        await self.user_repo.setup_totp(user_id, secret_encrypted)
+        await self.session.commit()
+
+        # Generate provisioning URI and QR code
+        provisioning_uri = totp_service.get_provisioning_uri(secret, user.email)
+        qr_code = totp_service.generate_qr_code_data_uri(provisioning_uri)
+
+        return TotpSetupResponse(
+            secret=secret,
+            qr_code_data_uri=qr_code,
+            provisioning_uri=provisioning_uri,
+        )
+
+    async def verify_and_enable_totp(
+        self,
+        user_id: UUID,
+        code: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> TotpEnableResponse:
+        """Verify TOTP code and enable 2FA.
+
+        Args:
+            user_id: User UUID
+            code: 6-digit TOTP code
+            ip_address: Client IP
+            user_agent: Client user agent
+
+        Returns:
+            TotpEnableResponse with backup codes
+
+        Raises:
+            HTTPException: If verification fails
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Two-factor authentication is already enabled",
+            )
+
+        if not user.totp_secret_encrypted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="TOTP setup not initiated. Please start setup first.",
+            )
+
+        totp_service = get_totp_service()
+
+        # Decrypt and verify
+        secret = totp_service.decrypt_secret(user.totp_secret_encrypted)
+        if not totp_service.verify_totp(secret, code):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid verification code",
+            )
+
+        # Generate backup codes
+        backup_codes = totp_service.generate_backup_codes()
+        backup_codes_encrypted = totp_service.encrypt_backup_codes(backup_codes)
+
+        # Enable TOTP
+        await self.user_repo.enable_totp(user_id, backup_codes_encrypted)
+
+        # Audit log
+        await self.audit_repo.log(
+            action="totp_enabled",
+            resource_type="admin_user",
+            resource_id=user_id,
+            admin_user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Security event
+        log_security_event(
+            SecurityEventType.TOTP_ENABLED,
+            user_id=user_id,
+            user_email=user.email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        await self.session.commit()
+
+        return TotpEnableResponse(
+            enabled=True,
+            backup_codes=backup_codes,
+        )
+
+    async def disable_totp(
+        self,
+        user_id: UUID,
+        password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        """Disable TOTP (requires password verification).
+
+        Args:
+            user_id: User UUID
+            password: Current password for verification
+            ip_address: Client IP
+            user_agent: Client user agent
+
+        Raises:
+            HTTPException: If password is wrong or TOTP not enabled
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if not user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Two-factor authentication is not enabled",
+            )
+
+        # Verify password
+        if not user.password_hash or not self.password_service.verify_password(
+            password, user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password",
+            )
+
+        # Disable TOTP
+        await self.user_repo.disable_totp(user_id)
+
+        # Audit log
+        await self.audit_repo.log(
+            action="totp_disabled",
+            resource_type="admin_user",
+            resource_id=user_id,
+            admin_user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Security event
+        log_security_event(
+            SecurityEventType.TOTP_DISABLED,
+            user_id=user_id,
+            user_email=user.email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        await self.session.commit()
+
+    async def get_totp_status(self, user_id: UUID) -> TotpStatusResponse:
+        """Get TOTP status for a user.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            TotpStatusResponse
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        backup_codes_remaining = 0
+        if user.totp_enabled and user.totp_backup_codes_encrypted:
+            totp_service = get_totp_service()
+            hashed_codes = totp_service.decrypt_backup_codes(
+                user.totp_backup_codes_encrypted
+            )
+            backup_codes_remaining = len(hashed_codes)
+
+        return TotpStatusResponse(
+            enabled=user.totp_enabled,
+            verified_at=user.totp_verified_at,
+            backup_codes_remaining=backup_codes_remaining,
+        )
+
+    async def regenerate_backup_codes(
+        self,
+        user_id: UUID,
+        password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> TotpBackupCodesResponse:
+        """Regenerate backup codes (requires password verification).
+
+        Args:
+            user_id: User UUID
+            password: Current password
+            ip_address: Client IP
+            user_agent: Client user agent
+
+        Returns:
+            TotpBackupCodesResponse with new codes
+
+        Raises:
+            HTTPException: If verification fails
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if not user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Two-factor authentication is not enabled",
+            )
+
+        # Verify password
+        if not user.password_hash or not self.password_service.verify_password(
+            password, user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password",
+            )
+
+        totp_service = get_totp_service()
+
+        # Generate new backup codes
+        backup_codes = totp_service.generate_backup_codes()
+        backup_codes_encrypted = totp_service.encrypt_backup_codes(backup_codes)
+
+        # Update backup codes
+        await self.user_repo.update_backup_codes(user_id, backup_codes_encrypted)
+
+        # Audit log
+        await self.audit_repo.log(
+            action="totp_backup_codes_regenerated",
+            resource_type="admin_user",
+            resource_id=user_id,
+            admin_user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        await self.session.commit()
+
+        return TotpBackupCodesResponse(backup_codes=backup_codes)

@@ -46,6 +46,11 @@ class SecurityEventType(str, Enum):
     SESSION_REVOKED = "session_revoked"
     ALL_SESSIONS_REVOKED = "all_sessions_revoked"
 
+    # Two-factor authentication events
+    TOTP_ENABLED = "totp_enabled"
+    TOTP_DISABLED = "totp_disabled"
+    TOTP_BACKUP_CODES_REGENERATED = "totp_backup_codes_regenerated"
+
 
 # Create a dedicated security logger with its own handler
 security_logger = logging.getLogger("security")

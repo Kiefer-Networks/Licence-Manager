@@ -418,6 +418,11 @@ class BackupService:
             "locked_until": user.locked_until,
             "password_changed_at": user.password_changed_at,
             "require_password_change": user.require_password_change,
+            # TOTP fields - encrypted secrets are preserved as-is
+            "totp_secret_encrypted": user.totp_secret_encrypted,
+            "totp_enabled": user.totp_enabled,
+            "totp_verified_at": user.totp_verified_at,
+            "totp_backup_codes_encrypted": user.totp_backup_codes_encrypted,
             "last_login_at": user.last_login_at,
             "date_format": user.date_format,
             "number_format": user.number_format,
@@ -771,6 +776,15 @@ class BackupService:
 
         # 5. Admin users (no dependencies)
         for u in data.get("admin_users", []):
+            # Decode TOTP encrypted bytes from base64 if present
+            totp_secret = u.get("totp_secret_encrypted")
+            if isinstance(totp_secret, str):
+                totp_secret = base64.b64decode(totp_secret)
+
+            totp_backup_codes = u.get("totp_backup_codes_encrypted")
+            if isinstance(totp_backup_codes, str):
+                totp_backup_codes = base64.b64decode(totp_backup_codes)
+
             user_orm = AdminUserORM(
                 id=UUID(u["id"]) if isinstance(u["id"], str) else u["id"],
                 email=u["email"],
@@ -784,6 +798,10 @@ class BackupService:
                 locked_until=self._parse_datetime(u.get("locked_until")),
                 password_changed_at=self._parse_datetime(u.get("password_changed_at")),
                 require_password_change=u.get("require_password_change", False),
+                totp_secret_encrypted=totp_secret,
+                totp_enabled=u.get("totp_enabled", False),
+                totp_verified_at=self._parse_datetime(u.get("totp_verified_at")),
+                totp_backup_codes_encrypted=totp_backup_codes,
                 last_login_at=self._parse_datetime(u.get("last_login_at")),
                 date_format=u.get("date_format", "DD.MM.YYYY"),
                 number_format=u.get("number_format", "de-DE"),

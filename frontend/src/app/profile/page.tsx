@@ -12,7 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check, Globe, Calendar, Hash, DollarSign } from 'lucide-react';
+import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check, Globe, Calendar, Hash, DollarSign, ShieldCheck, ShieldOff, RefreshCw } from 'lucide-react';
+import { TotpSetupDialog, TotpBackupCodesDialog, TotpDisableDialog, TotpRegenerateDialog } from '@/components/totp';
+import { TotpStatusResponse } from '@/lib/api';
 import { useTheme } from '@/components/theme-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -55,6 +57,15 @@ export default function ProfilePage() {
   const [notifError, setNotifError] = useState('');
   const [notifSuccess, setNotifSuccess] = useState('');
 
+  // TOTP state
+  const [totpStatus, setTotpStatus] = useState<TotpStatusResponse | null>(null);
+  const [totpLoading, setTotpLoading] = useState(true);
+  const [showTotpSetup, setShowTotpSetup] = useState(false);
+  const [showTotpDisable, setShowTotpDisable] = useState(false);
+  const [showTotpRegenerate, setShowTotpRegenerate] = useState(false);
+  const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+
   // Initialize name from user
   useEffect(() => {
     if (user?.name) {
@@ -85,6 +96,22 @@ export default function ProfilePage() {
       }
     };
     fetchNotificationPreferences();
+  }, []);
+
+  // Fetch TOTP status
+  useEffect(() => {
+    const fetchTotpStatus = async () => {
+      try {
+        const status = await api.getTotpStatus();
+        setTotpStatus(status);
+      } catch {
+        // Error handled silently - TOTP will show as disabled
+        setTotpStatus({ enabled: false, has_backup_codes: false });
+      } finally {
+        setTotpLoading(false);
+      }
+    };
+    fetchTotpStatus();
   }, []);
 
   // Get preference for an event type
@@ -285,6 +312,27 @@ export default function ProfilePage() {
       const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setSecurityError(errorMessage);
     }
+  };
+
+  // TOTP handlers
+  const handleTotpSetupSuccess = (codes: string[]) => {
+    setBackupCodes(codes);
+    setShowBackupCodes(true);
+    setTotpStatus({ enabled: true, has_backup_codes: true, verified_at: new Date().toISOString() });
+    setSecuritySuccess(t('totpSetupSuccess'));
+    refreshUser?.();
+  };
+
+  const handleTotpDisableSuccess = () => {
+    setTotpStatus({ enabled: false, has_backup_codes: false });
+    setSecuritySuccess(t('totpDisableSuccess'));
+    refreshUser?.();
+  };
+
+  const handleTotpRegenerateSuccess = (codes: string[]) => {
+    setBackupCodes(codes);
+    setShowBackupCodes(true);
+    setTotpStatus(prev => prev ? { ...prev, has_backup_codes: true } : prev);
   };
 
   // Handle locale settings save
@@ -727,6 +775,78 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
+            {/* Two-Factor Authentication */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {totpStatus?.enabled ? (
+                    <ShieldCheck className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Shield className="h-5 w-5" />
+                  )}
+                  {t('twoFactorAuth')}
+                </CardTitle>
+                <CardDescription>{t('twoFactorAuthDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {totpLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : totpStatus?.enabled ? (
+                  <div className="space-y-4">
+                    {/* Status Badge */}
+                    <div className="flex items-center gap-3">
+                      <Badge variant="default" className="bg-green-600">
+                        {t('totpEnabled')}
+                      </Badge>
+                      {totpStatus.verified_at && (
+                        <span className="text-sm text-muted-foreground">
+                          {t('totpEnabledAt', { date: new Date(totpStatus.verified_at).toLocaleDateString() })}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowTotpRegenerate(true)}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        {t('totpManage')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowTotpDisable(true)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <ShieldOff className="h-4 w-4 mr-2" />
+                        {t('totpDisable')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Status Badge */}
+                    <div className="flex items-center gap-3">
+                      <Badge variant="secondary">
+                        {t('totpDisabled')}
+                      </Badge>
+                    </div>
+
+                    {/* Setup Button */}
+                    <Button onClick={() => setShowTotpSetup(true)}>
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                      {t('totpSetup')}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Session Management */}
             <Card>
               <CardHeader>
@@ -854,6 +974,28 @@ export default function ProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* TOTP Dialogs */}
+      <TotpSetupDialog
+        open={showTotpSetup}
+        onOpenChange={setShowTotpSetup}
+        onSuccess={handleTotpSetupSuccess}
+      />
+      <TotpBackupCodesDialog
+        open={showBackupCodes}
+        onOpenChange={setShowBackupCodes}
+        backupCodes={backupCodes}
+      />
+      <TotpDisableDialog
+        open={showTotpDisable}
+        onOpenChange={setShowTotpDisable}
+        onSuccess={handleTotpDisableSuccess}
+      />
+      <TotpRegenerateDialog
+        open={showTotpRegenerate}
+        onOpenChange={setShowTotpRegenerate}
+        onSuccess={handleTotpRegenerateSuccess}
+      />
     </AppLayout>
   );
 }

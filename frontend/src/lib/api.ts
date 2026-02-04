@@ -1303,6 +1303,8 @@ export interface CurrentUserInfo {
   date_format?: string;
   number_format?: string;
   currency?: string;
+  // TOTP two-factor authentication
+  totp_enabled: boolean;
 }
 
 export interface ProfileUpdateRequest {
@@ -1317,6 +1319,34 @@ export interface LoginResponse {
   refresh_token?: string;
   token_type: string;
   expires_in: number;
+  // TOTP two-factor authentication
+  totp_required?: boolean;
+}
+
+// ============================================================================
+// TOTP Two-Factor Authentication Types
+// ============================================================================
+
+export interface TotpSetupResponse {
+  secret: string;
+  qr_code_data_uri: string;
+  issuer: string;
+  account_name: string;
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean;
+  verified_at?: string;
+  has_backup_codes: boolean;
+}
+
+export interface TotpEnableResponse {
+  enabled: boolean;
+  backup_codes: string[];
+}
+
+export interface TotpBackupCodesResponse {
+  backup_codes: string[];
 }
 
 export interface PasswordChangeRequest {
@@ -2293,9 +2323,12 @@ export const api = {
   // Authentication
   // ============================================================================
 
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(email: string, password: string, totpCode?: string): Promise<LoginResponse> {
     // First get CSRF token for the login request
     const csrfTokenValue = await getCsrfToken();
+
+    const body: Record<string, string> = { email, password };
+    if (totpCode) body.totp_code = totpCode;
 
     const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
       method: 'POST',
@@ -2304,7 +2337,7 @@ export const api = {
         'X-CSRF-Token': csrfTokenValue,
       },
       credentials: 'include', // Receive httpOnly cookies
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -2417,6 +2450,41 @@ export const api = {
     return fetchApi<UserNotificationPreference>(`/auth/me/notification-preferences/${eventType}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  },
+
+  // ============================================================================
+  // TOTP Two-Factor Authentication
+  // ============================================================================
+
+  async getTotpStatus(): Promise<TotpStatusResponse> {
+    return fetchApi<TotpStatusResponse>('/auth/totp/status');
+  },
+
+  async setupTotp(): Promise<TotpSetupResponse> {
+    return fetchApi<TotpSetupResponse>('/auth/totp/setup', {
+      method: 'POST',
+    });
+  },
+
+  async verifyAndEnableTotp(code: string): Promise<TotpEnableResponse> {
+    return fetchApi<TotpEnableResponse>('/auth/totp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  async disableTotp(password: string): Promise<void> {
+    await fetchApi('/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  async regenerateBackupCodes(password: string): Promise<TotpBackupCodesResponse> {
+    return fetchApi<TotpBackupCodesResponse>('/auth/totp/backup-codes', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
     });
   },
 

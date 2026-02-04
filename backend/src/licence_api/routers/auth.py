@@ -13,11 +13,19 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     AvatarUploadResponse,
     LocalLoginRequest,
+    LoginResponse,
     NotificationEventType,
     PasswordChangeRequest,
     ProfileUpdateRequest,
     RefreshTokenRequest,
     TokenResponse,
+    TotpBackupCodesResponse,
+    TotpDisableRequest,
+    TotpEnableResponse,
+    TotpLoginRequest,
+    TotpSetupResponse,
+    TotpStatusResponse,
+    TotpVerifyRequest,
     UserInfo,
     UserNotificationPreferenceBulkUpdate,
     UserNotificationPreferenceResponse,
@@ -208,33 +216,36 @@ async def get_csrf_token(request: Request, response: Response) -> CsrfTokenRespo
     return CsrfTokenResponse(csrf_token=signed_token)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 async def login_local(
     request: Request,
     response: Response,
-    body: LocalLoginRequest,
+    body: TotpLoginRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     user_agent: str | None = Header(default=None),
-) -> TokenResponse:
-    """Authenticate with email and password.
+) -> LoginResponse:
+    """Authenticate with email, password, and optional TOTP code.
 
-    Returns JWT access token and refresh token.
+    If 2FA is enabled and no TOTP code is provided, returns totp_required=true.
+    If authentication succeeds, returns JWT tokens.
     Tokens are also set as httpOnly cookies for enhanced security.
     """
     ip_address = request.client.host if request.client else None
 
-    token_response = await auth_service.authenticate_local(
+    login_response = await auth_service.authenticate_local(
         email=body.email,
         password=body.password,
+        totp_code=body.totp_code,
         user_agent=user_agent,
         ip_address=ip_address,
     )
 
-    # Set httpOnly cookies for XSS protection
-    _set_auth_cookies(response, token_response.access_token, token_response.refresh_token)
+    # Set httpOnly cookies for XSS protection (only if tokens were issued)
+    if login_response.access_token:
+        _set_auth_cookies(response, login_response.access_token, login_response.refresh_token)
 
-    return token_response
+    return login_response
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -361,6 +372,109 @@ async def change_password(
         user_agent=user_agent,
     )
     return {"message": "Password changed successfully"}
+
+
+# TOTP Two-Factor Authentication Endpoints
+
+# Rate limit for TOTP operations (stricter due to security sensitivity)
+AUTH_TOTP_LIMIT = "10/minute"
+
+
+@router.get("/totp/status", response_model=TotpStatusResponse)
+async def get_totp_status(
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> TotpStatusResponse:
+    """Get current TOTP status including backup codes remaining."""
+    return await auth_service.get_totp_status(current_user.id)
+
+
+@router.post("/totp/setup", response_model=TotpSetupResponse)
+@limiter.limit(AUTH_TOTP_LIMIT)
+async def setup_totp(
+    request: Request,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> TotpSetupResponse:
+    """Initialize TOTP setup and get QR code.
+
+    Returns a QR code and secret for the authenticator app.
+    TOTP is not enabled until verified with /totp/verify.
+    """
+    return await auth_service.setup_totp(current_user.id)
+
+
+@router.post("/totp/verify", response_model=TotpEnableResponse)
+@limiter.limit(AUTH_TOTP_LIMIT)
+async def verify_and_enable_totp(
+    request: Request,
+    body: TotpVerifyRequest,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+    user_agent: str | None = Header(default=None),
+) -> TotpEnableResponse:
+    """Verify TOTP code and enable two-factor authentication.
+
+    Must be called after /totp/setup with a valid code from the authenticator app.
+    Returns backup codes that should be stored securely.
+    """
+    ip_address = request.client.host if request.client else None
+    return await auth_service.verify_and_enable_totp(
+        user_id=current_user.id,
+        code=body.code,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+
+
+@router.post("/totp/disable")
+@limiter.limit(AUTH_TOTP_LIMIT)
+async def disable_totp(
+    request: Request,
+    body: TotpDisableRequest,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+    user_agent: str | None = Header(default=None),
+) -> dict[str, str]:
+    """Disable two-factor authentication.
+
+    Requires password verification for security.
+    """
+    ip_address = request.client.host if request.client else None
+    await auth_service.disable_totp(
+        user_id=current_user.id,
+        password=body.password,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    return {"message": "Two-factor authentication disabled successfully"}
+
+
+@router.post("/totp/backup-codes", response_model=TotpBackupCodesResponse)
+@limiter.limit(AUTH_TOTP_LIMIT)
+async def regenerate_backup_codes(
+    request: Request,
+    body: TotpDisableRequest,  # Re-use password request
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+    user_agent: str | None = Header(default=None),
+) -> TotpBackupCodesResponse:
+    """Regenerate backup codes.
+
+    Requires password verification for security.
+    Previous backup codes will be invalidated.
+    """
+    ip_address = request.client.host if request.client else None
+    return await auth_service.regenerate_backup_codes(
+        user_id=current_user.id,
+        password=body.password,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
 
 
 # Profile Update Endpoints

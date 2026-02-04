@@ -466,6 +466,122 @@ class UserRepository(BaseRepository[AdminUserORM]):
         await self.session.flush()
         return True
 
+    # TOTP Two-Factor Authentication Methods
+
+    async def setup_totp(
+        self,
+        user_id: UUID,
+        secret_encrypted: bytes,
+    ) -> AdminUserORM | None:
+        """Store TOTP secret for setup (not yet enabled).
+
+        Args:
+            user_id: User UUID
+            secret_encrypted: Encrypted TOTP secret
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.totp_secret_encrypted = secret_encrypted
+        # Don't enable yet - requires verification
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def enable_totp(
+        self,
+        user_id: UUID,
+        backup_codes_encrypted: bytes,
+    ) -> AdminUserORM | None:
+        """Enable TOTP after successful verification.
+
+        Args:
+            user_id: User UUID
+            backup_codes_encrypted: Encrypted backup codes
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.totp_enabled = True
+        user.totp_verified_at = datetime.now(timezone.utc)
+        user.totp_backup_codes_encrypted = backup_codes_encrypted
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def disable_totp(self, user_id: UUID) -> AdminUserORM | None:
+        """Disable TOTP and clear secret.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.totp_enabled = False
+        user.totp_secret_encrypted = None
+        user.totp_verified_at = None
+        user.totp_backup_codes_encrypted = None
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def update_backup_codes(
+        self,
+        user_id: UUID,
+        backup_codes_encrypted: bytes,
+    ) -> AdminUserORM | None:
+        """Update backup codes (after using one or regenerating).
+
+        Args:
+            user_id: User UUID
+            backup_codes_encrypted: New encrypted backup codes
+
+        Returns:
+            Updated AdminUserORM or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+
+        user.totp_backup_codes_encrypted = backup_codes_encrypted
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def get_totp_data(self, user_id: UUID) -> tuple[bytes | None, bytes | None, bool] | None:
+        """Get TOTP data for a user.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Tuple of (secret_encrypted, backup_codes_encrypted, enabled) or None
+        """
+        result = await self.session.execute(
+            select(
+                AdminUserORM.totp_secret_encrypted,
+                AdminUserORM.totp_backup_codes_encrypted,
+                AdminUserORM.totp_enabled,
+            ).where(AdminUserORM.id == user_id)
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row.totp_secret_encrypted, row.totp_backup_codes_encrypted, row.totp_enabled
+
 
 class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
     """Repository for refresh token operations."""

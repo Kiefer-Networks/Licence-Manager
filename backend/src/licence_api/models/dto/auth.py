@@ -53,6 +53,7 @@ class UserInfo(BaseModel):
     auth_provider: str
     is_active: bool
     require_password_change: bool
+    totp_enabled: bool = False
     roles: list[str]
     permissions: list[str]
     is_superadmin: bool = False
@@ -220,3 +221,84 @@ class AvatarUploadResponse(BaseModel):
 
     picture_url: str
     message: str = "Avatar uploaded successfully"
+
+
+# TOTP Two-Factor Authentication DTOs
+
+
+class TotpSetupResponse(BaseModel):
+    """TOTP setup response with QR code and secret."""
+
+    secret: str = Field(description="Base32-encoded TOTP secret for manual entry")
+    qr_code_data_uri: str = Field(description="QR code as data URI for display")
+    provisioning_uri: str = Field(description="OTPAuth URI for authenticator apps")
+
+
+class TotpVerifyRequest(BaseModel):
+    """TOTP verification request."""
+
+    code: str = Field(
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        description="6-digit TOTP code from authenticator app",
+    )
+
+
+class TotpEnableResponse(BaseModel):
+    """Response after successfully enabling TOTP."""
+
+    enabled: bool = True
+    backup_codes: list[str] = Field(description="Single-use backup codes for recovery")
+    message: str = "Two-factor authentication enabled successfully"
+
+
+class TotpDisableRequest(BaseModel):
+    """Request to disable TOTP (requires current password)."""
+
+    password: str = Field(min_length=1, max_length=128, description="Current password for verification")
+
+
+class TotpStatusResponse(BaseModel):
+    """TOTP status for current user."""
+
+    enabled: bool
+    verified_at: datetime | None = None
+    backup_codes_remaining: int = 0
+
+
+class TotpLoginRequest(BaseModel):
+    """Login request with TOTP code."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    totp_code: str | None = Field(
+        default=None,
+        min_length=6,
+        max_length=10,  # Allow backup codes (8 chars + dash)
+        description="6-digit TOTP code or backup code",
+    )
+
+
+class TotpRequiredResponse(BaseModel):
+    """Response indicating TOTP verification is required."""
+
+    totp_required: bool = True
+    message: str = "Two-factor authentication required"
+
+
+class TotpBackupCodesResponse(BaseModel):
+    """Response with regenerated backup codes."""
+
+    backup_codes: list[str] = Field(description="New single-use backup codes")
+    message: str = "Backup codes regenerated successfully"
+
+
+class LoginResponse(BaseModel):
+    """Extended login response that may require TOTP."""
+
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+    totp_required: bool = False

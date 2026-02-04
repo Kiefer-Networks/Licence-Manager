@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
@@ -30,6 +30,12 @@ class AdminUserORM(Base, UUIDMixin, TimestampMixin):
     # Password management
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     require_password_change: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # TOTP two-factor authentication
+    totp_secret_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    totp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    totp_backup_codes_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     # Login tracking
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

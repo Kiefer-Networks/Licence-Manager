@@ -4,11 +4,21 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { useRouter } from 'next/navigation';
 import { api, CurrentUserInfo } from '@/lib/api';
 
+export interface TotpRequiredResult {
+  totpRequired: true;
+}
+
+export interface LoginSuccessResult {
+  totpRequired: false;
+}
+
+export type LoginResult = TotpRequiredResult | LoginSuccessResult;
+
 interface AuthContextType {
   user: CurrentUserInfo | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, totpCode?: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -51,18 +61,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    // Clear any existing session state before logging in
+  const login = useCallback(async (email: string, password: string, totpCode?: string): Promise<LoginResult> => {
+    // Clear any existing session state before logging in (only on first attempt, not TOTP verification)
     // This ensures old tokens/state don't persist across logins
-    api.clearAuth();
+    if (!totpCode) {
+      api.clearAuth();
+    }
 
     // Get CSRF token first for the login request
     await api.refreshCsrfToken();
-    await api.login(email, password);
-    // Refresh CSRF token after login (new session)
+    const response = await api.login(email, password, totpCode);
+
+    // Check if TOTP verification is required
+    if (response.totp_required) {
+      return { totpRequired: true };
+    }
+
+    // Login successful - refresh CSRF token after login (new session)
     await api.refreshCsrfToken();
     await refreshUser();
     router.push('/dashboard');
+
+    return { totpRequired: false };
   }, [refreshUser, router]);
 
   const logout = useCallback(async () => {
