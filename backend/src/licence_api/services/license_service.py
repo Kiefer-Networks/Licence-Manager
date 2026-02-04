@@ -718,6 +718,9 @@ class LicenseService:
 
         old_values, new_values = result
 
+        # Get license info for audit log
+        license_orm = await self.license_repo.get(license_id)
+
         # If apply_globally is set, add to global patterns
         pattern_created = False
         if is_service_account and apply_globally:
@@ -732,13 +735,16 @@ class LicenseService:
                 )
                 pattern_created = pattern is not None
 
-        # Audit log the change
+        # Audit log the change with license user info
         await self.audit_service.log(
             action=AuditAction.LICENSE_UPDATE,
             resource_type=ResourceType.LICENSE,
             resource_id=license_id,
             admin_user_id=user.id,
             changes={
+                "license_user": license_orm.external_user_id if license_orm else None,
+                "employee_id": str(license_orm.employee_id) if license_orm and license_orm.employee_id else None,
+                "provider_id": str(license_orm.provider_id) if license_orm else None,
                 "old": old_values,
                 "new": {
                     **new_values,
@@ -796,6 +802,9 @@ class LicenseService:
 
         old_values, new_values = result
 
+        # Get license info for audit log
+        license_orm = await self.license_repo.get(license_id)
+
         # If apply_globally is set, add to global patterns
         pattern_created = False
         if is_admin_account and apply_globally:
@@ -810,13 +819,16 @@ class LicenseService:
                 )
                 pattern_created = pattern is not None
 
-        # Audit log the change
+        # Audit log the change with license user info
         await self.audit_service.log(
             action=AuditAction.LICENSE_UPDATE,
             resource_type=ResourceType.LICENSE,
             resource_id=license_id,
             admin_user_id=user.id,
             changes={
+                "license_user": license_orm.external_user_id if license_orm else None,
+                "employee_id": str(license_orm.employee_id) if license_orm and license_orm.employee_id else None,
+                "provider_id": str(license_orm.provider_id) if license_orm else None,
                 "old": old_values,
                 "new": {
                     **new_values,
@@ -888,13 +900,16 @@ class LicenseService:
             currency=currency,
         )
 
-        # Audit log the change
+        # Audit log the change with license user info
         await self.audit_service.log(
             action=AuditAction.LICENSE_UPDATE,
             resource_type=ResourceType.LICENSE,
             resource_id=license_id,
             admin_user_id=user.id,
             changes={
+                "license_user": license_orm.external_user_id,
+                "employee_id": str(license_orm.employee_id) if license_orm.employee_id else None,
+                "provider_id": str(license_orm.provider_id),
                 "old": {"license_type": old_license_type, "monthly_cost": str(old_monthly_cost) if old_monthly_cost else None},
                 "new": {"license_type": license_type, "monthly_cost": str(monthly_cost) if monthly_cost else None},
             },
