@@ -213,7 +213,8 @@ class BackupService:
             await self.audit_service.log(
                 action=AuditAction.EXPORT,
                 resource_type=ResourceType.SYSTEM,
-                user_id=user.id,
+                user=user,
+                request=request,
                 details={"action": "backup_created", "version": BACKUP_VERSION},
             )
             await self.session.commit()
@@ -601,7 +602,8 @@ class BackupService:
             await self.audit_service.log(
                 action=AuditAction.IMPORT,
                 resource_type=ResourceType.SYSTEM,
-                user_id=user.id,
+                user=user,
+                request=request,
                 details={
                     "action": "backup_restored",
                     "imported": counts.model_dump(),
