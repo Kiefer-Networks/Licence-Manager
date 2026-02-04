@@ -109,6 +109,7 @@ class ResourceType:
     SERVICE_ACCOUNT_PATTERN = "service_account_pattern"
     ADMIN_ACCOUNT_PATTERN = "admin_account_pattern"
     SERVICE_ACCOUNT_LICENSE_TYPE = "service_account_license_type"
+    SYSTEM = "system"
 
 
 class AuditService:
