@@ -56,8 +56,8 @@ A comprehensive SaaS license management platform for enterprises to track, manag
 - **NextAuth.js** for authentication
 
 ### Infrastructure
-- **Docker** with multi-stage builds
-- **GitHub Actions** for CI/CD
+- **Docker** with multi-stage builds (linux/amd64)
+- **GitHub Actions** for CI/CD (builds on version tags)
 - **GitHub Container Registry** for images
 
 ## Quick Start
@@ -178,12 +178,22 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 ### Docker Images
 
-Images are automatically built and pushed to GitHub Container Registry:
+Images are automatically built and pushed to GitHub Container Registry when a new version tag is created (e.g., `v1.0.0`).
 
 ```bash
-# Pull latest images
+# Pull latest release
 docker pull ghcr.io/kiefer-networks/licence-manager/backend:latest
 docker pull ghcr.io/kiefer-networks/licence-manager/frontend:latest
+
+# Pull specific version
+docker pull ghcr.io/kiefer-networks/licence-manager/backend:1.0.0
+docker pull ghcr.io/kiefer-networks/licence-manager/frontend:1.0.0
+```
+
+To create a new release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ### Security Considerations
