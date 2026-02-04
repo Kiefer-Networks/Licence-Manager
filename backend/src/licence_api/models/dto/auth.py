@@ -75,6 +75,7 @@ class UserCreateRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     """User update request."""
 
+    email: EmailStr | None = None
     name: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     role_codes: list[str] | None = Field(default=None, max_length=50)  # Max 50 roles per user

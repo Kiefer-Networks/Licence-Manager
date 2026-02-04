@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MoreVertical } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 
 export default function AdminUsersPage() {
@@ -188,6 +189,7 @@ export default function AdminUsersPage() {
         .filter((id): id is string => !!id);
 
       await api.updateAdminUser(selectedUser.id, {
+        email: formData.email !== selectedUser.email ? formData.email : undefined,
         name: formData.name || undefined,
         role_ids: roleIds,
       });
@@ -329,8 +331,9 @@ export default function AdminUsersPage() {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          {tCommon('actions')}
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                          <span className="sr-only">{tCommon('actions')}</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">

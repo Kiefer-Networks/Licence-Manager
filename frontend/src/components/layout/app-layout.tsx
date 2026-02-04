@@ -48,13 +48,13 @@ const mainNavigation: NavItem[] = [
   { nameKey: 'employees', href: '/users', icon: Users, permission: Permissions.USERS_VIEW },
   { nameKey: 'providers', href: '/providers', icon: Package, permission: Permissions.PROVIDERS_VIEW },
   { nameKey: 'reports', href: '/reports', icon: FileText, permission: Permissions.REPORTS_VIEW },
-  { nameKey: 'settings', href: '/settings', icon: Settings, permission: Permissions.SETTINGS_VIEW },
 ];
 
 const adminNavigation: NavItem[] = [
   { nameKey: 'adminUsers', href: '/admin/users', icon: UserCog, permission: Permissions.ADMIN_USERS_VIEW },
   { nameKey: 'roles', href: '/admin/roles', icon: Shield, permission: Permissions.ROLES_VIEW },
   { nameKey: 'auditLog', href: '/admin/audit', icon: ScrollText, permission: Permissions.AUDIT_VIEW },
+  { nameKey: 'settings', href: '/settings', icon: Settings, permission: Permissions.SETTINGS_VIEW },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

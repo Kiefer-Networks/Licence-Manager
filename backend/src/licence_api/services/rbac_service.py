@@ -174,6 +174,13 @@ class RbacService:
             raise ValidationError("Cannot deactivate your own account")
 
         # Update fields
+        if request.email is not None and request.email != user.email:
+            # Check if email is already taken
+            existing = await self.user_repo.get_by_email(request.email)
+            if existing is not None:
+                raise UserAlreadyExistsError(request.email)
+            user.email = request.email
+
         if request.name is not None:
             user.name = request.name
 

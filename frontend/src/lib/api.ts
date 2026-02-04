@@ -1275,6 +1275,7 @@ export interface AdminUserCreateRequest {
 }
 
 export interface AdminUserUpdateRequest {
+  email?: string;
   name?: string;
   is_active?: boolean;
   role_codes?: string[];
@@ -2484,6 +2485,7 @@ export const api = {
   },
 
   async updateAdminUser(userId: string, data: {
+    email?: string;
     name?: string;
     is_active?: boolean;
     role_ids?: string[];
@@ -2500,6 +2502,7 @@ export const api = {
     return fetchApi<AdminUser>(`/rbac/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify({
+        email: data.email,
         name: data.name,
         is_active: data.is_active,
         role_codes: roleCodes,
