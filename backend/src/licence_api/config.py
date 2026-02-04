@@ -1,10 +1,20 @@
 """Application configuration."""
 
+import base64
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Minimum entropy for secrets (measured by character diversity)
+MIN_SECRET_UNIQUE_CHARS = 16
+
+# Key generation command for documentation (split for line length)
+KEY_GEN_CMD = (
+    'python -c "import secrets,base64;'
+    'print(base64.b64encode(secrets.token_bytes(32)).decode())"'
+)
 
 
 class Settings(BaseSettings):
@@ -119,6 +129,30 @@ class Settings(BaseSettings):
                 "DATABASE_URL must include sslmode parameter in production "
                 "(e.g., sslmode=require or sslmode=verify-full)"
             )
+
+        # Security: Validate JWT secret has sufficient entropy
+        if self.environment == "production":
+            if len(set(self.jwt_secret)) < MIN_SECRET_UNIQUE_CHARS:
+                raise ValueError(
+                    f"JWT_SECRET must contain at least {MIN_SECRET_UNIQUE_CHARS} unique characters "
+                    "for sufficient entropy. Use a cryptographically random value."
+                )
+
+            # Validate encryption key format (should be base64-encoded 32 bytes)
+            try:
+                decoded_key = base64.b64decode(self.encryption_key)
+                if len(decoded_key) < 32:
+                    raise ValueError(
+                        "ENCRYPTION_KEY must be at least 32 bytes (256 bits) when decoded. "
+                        f"Generate with: {KEY_GEN_CMD}"
+                    )
+            except Exception:
+                # If not valid base64 or decoding fails, check raw length
+                if len(self.encryption_key) < 32:
+                    raise ValueError(
+                        "ENCRYPTION_KEY must be at least 32 characters or "
+                        f"a base64-encoded 32-byte key. Generate with: {KEY_GEN_CMD}"
+                    )
 
         return self
 

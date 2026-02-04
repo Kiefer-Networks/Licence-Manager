@@ -8,10 +8,11 @@ from uuid import UUID
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.employee import EmployeeORM
+from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.provider import ProviderORM
 from licence_api.repositories.base import BaseRepository
+from licence_api.utils.validation import escape_like_wildcards
 
 
 class LicenseRepository(BaseRepository[LicenseORM]):
@@ -144,13 +145,14 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             # Must have @ sign (be an email-like identifier)
             email_condition = LicenseORM.external_user_id.like("%@%")
             # Must NOT match any company domain
+            # Escape SQL wildcards in domains to prevent injection
             domain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@{domain}")
+                ~LicenseORM.external_user_id.ilike(f"%@{escape_like_wildcards(domain)}")
                 for domain in company_domains
             ]
             # Also exclude subdomain matches (e.g., @sub.company.com)
             subdomain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@%.{domain}")
+                ~LicenseORM.external_user_id.ilike(f"%@%.{escape_like_wildcards(domain)}")
                 for domain in company_domains
             ]
             external_filter = and_(
@@ -923,9 +925,11 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         query = query.where(LicenseORM.external_user_id.like("%@%"))
 
         # Must NOT match any company domain
+        # Escape SQL wildcards in domains to prevent injection
         for domain in company_domains:
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{domain}"))
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{domain}"))
+            escaped_domain = escape_like_wildcards(domain)
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{escaped_domain}"))
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{escaped_domain}"))
 
         result = await self.session.execute(query)
         return result.scalar_one()

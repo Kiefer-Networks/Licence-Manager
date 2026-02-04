@@ -1,12 +1,10 @@
 """Backup router for system export and restore."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-
-logger = logging.getLogger(__name__)
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,15 +17,17 @@ from licence_api.models.dto.backup import (
     RestoreResponse,
 )
 from licence_api.models.orm.admin_user import AdminUserORM
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
-    limiter,
     BACKUP_EXPORT_LIMIT,
-    BACKUP_RESTORE_LIMIT,
     BACKUP_INFO_LIMIT,
+    BACKUP_RESTORE_LIMIT,
+    limiter,
 )
 from licence_api.services.backup_service import BackupService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -83,7 +83,7 @@ def get_backup_service(
 
 
 @router.post("/export")
-# @limiter.limit(BACKUP_EXPORT_LIMIT)  # Disabled for local testing
+@limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
     request: Request,
     body: BackupExportRequest,
@@ -112,9 +112,9 @@ async def create_backup(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid backup configuration",
         )
-    except (IOError, OSError) as e:
+    except OSError as e:
         # File system errors
-        logger.error(f"Backup failed with IOError/OSError: {e}", exc_info=True)
+        logger.error(f"Backup failed with OSError: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create backup due to storage error",
@@ -128,7 +128,7 @@ async def create_backup(
         )
 
     # Generate filename with timestamp
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     filename = f"licence-backup-{timestamp}.lcbak"
 
     return Response(
@@ -142,14 +142,14 @@ async def create_backup(
 
 
 @router.post("/restore", response_model=RestoreResponse)
-# @limiter.limit(BACKUP_RESTORE_LIMIT)  # Disabled for local testing
+@limiter.limit(BACKUP_RESTORE_LIMIT)
 async def restore_backup(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    # _csrf: Annotated[None, Depends(CSRFProtected())],  # Disabled for local testing
+    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
-    password: str = Form(..., min_length=8, max_length=256),
+    password: str = Form(..., min_length=12, max_length=256),
 ) -> RestoreResponse:
     """Restore system from an encrypted backup.
 
@@ -231,6 +231,7 @@ async def get_backup_info(
 
 
 # Rate limit for setup restore (stricter since no auth)
+# Uses IP-based rate limiting via slowapi to prevent brute-force attacks
 SETUP_RESTORE_LIMIT = "3/hour"
 
 
@@ -241,7 +242,7 @@ async def setup_restore_backup(
     db: Annotated[AsyncSession, Depends(get_db)],
     service: Annotated[BackupService, Depends(get_backup_service)],
     file: UploadFile = File(...),
-    password: str = Form(..., min_length=8, max_length=256),
+    password: str = Form(..., min_length=12, max_length=256),
 ) -> RestoreResponse:
     """Restore system from backup during initial setup.
 
@@ -249,6 +250,12 @@ async def setup_restore_backup(
     It allows restoring from a backup before creating the first admin account.
 
     WARNING: This deletes ALL existing data!
+
+    Security measures:
+    - Only works on fresh installations (no existing admin users)
+    - Rate limited to 3 requests per hour per IP address
+    - Requires minimum 12 character password (same as user passwords)
+    - Backup file must be encrypted with AES-256-GCM
 
     No authentication required, but only works on fresh installations.
     """
