@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
 # ORM models
 from licence_api.models.orm.admin_user import AdminUserORM
+from licence_api.models.orm.audit_log import AuditLogORM
 from licence_api.models.orm.role import RoleORM
 from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.user_role import UserRoleORM
@@ -75,9 +76,8 @@ from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
 
-# Backup format headers
-BACKUP_HEADER_V1 = b"LICENCE_BACKUP_V1"
-BACKUP_HEADER_V2 = b"LICENCE_BACKUP_V2"
+# Backup format header
+BACKUP_HEADER = b"LICENCE_BACKUP_V2"
 BACKUP_VERSION = "2.0"
 
 # Encryption parameters
@@ -113,7 +113,7 @@ class BackupService:
     def _encrypt(self, data: bytes, password: str) -> bytes:
         """Encrypt data with AES-256-GCM using password-derived key.
 
-        Format V2: header(17B) + content_hash(32B) + salt(16B) + nonce(12B) + ciphertext
+        Format: header(17B) + content_hash(32B) + salt(16B) + nonce(12B) + ciphertext
 
         The content_hash is SHA-256 of the uncompressed data, allowing integrity
         verification without decryption.
@@ -131,12 +131,10 @@ class BackupService:
         aesgcm = AESGCM(key)
         ciphertext = aesgcm.encrypt(nonce, compressed, None)
 
-        return BACKUP_HEADER_V2 + content_hash + salt + nonce + ciphertext
+        return BACKUP_HEADER + content_hash + salt + nonce + ciphertext
 
     def _decrypt(self, encrypted_data: bytes, password: str) -> bytes:
         """Decrypt backup data.
-
-        Supports both V1 (uncompressed) and V2 (gzip compressed) formats.
 
         Args:
             encrypted_data: Full backup file data
@@ -148,40 +146,10 @@ class BackupService:
         Raises:
             ValueError: If decryption fails (wrong password or corrupted data)
         """
-        # Check for V2 format first
-        if encrypted_data.startswith(BACKUP_HEADER_V2):
-            return self._decrypt_v2(encrypted_data, password)
-        elif encrypted_data.startswith(BACKUP_HEADER_V1):
-            return self._decrypt_v1(encrypted_data, password)
-        else:
-            raise ValueError("Invalid backup format: missing header")
+        if not encrypted_data.startswith(BACKUP_HEADER):
+            raise ValueError("Invalid backup format: missing or wrong header")
 
-    def _decrypt_v1(self, encrypted_data: bytes, password: str) -> bytes:
-        """Decrypt V1 format backup (uncompressed)."""
-        header_len = len(BACKUP_HEADER_V1)
-        min_size = header_len + SALT_SIZE + NONCE_SIZE + 16
-
-        if len(encrypted_data) < min_size:
-            raise ValueError("Invalid backup format: file too short")
-
-        offset = header_len
-        salt = encrypted_data[offset : offset + SALT_SIZE]
-        offset += SALT_SIZE
-        nonce = encrypted_data[offset : offset + NONCE_SIZE]
-        offset += NONCE_SIZE
-        ciphertext = encrypted_data[offset:]
-
-        key = self._derive_key(password, salt)
-        aesgcm = AESGCM(key)
-
-        try:
-            return aesgcm.decrypt(nonce, ciphertext, None)
-        except Exception as e:
-            raise ValueError("Decryption failed: wrong password or corrupted data") from e
-
-    def _decrypt_v2(self, encrypted_data: bytes, password: str) -> bytes:
-        """Decrypt V2 format backup (gzip compressed with integrity hash)."""
-        header_len = len(BACKUP_HEADER_V2)
+        header_len = len(BACKUP_HEADER)
         min_size = header_len + HASH_SIZE + SALT_SIZE + NONCE_SIZE + 16
 
         if len(encrypted_data) < min_size:
@@ -288,6 +256,7 @@ class BackupService:
         service_account_patterns = await self._fetch_all(ServiceAccountPatternORM)
         admin_account_patterns = await self._fetch_all(AdminAccountPatternORM)
         service_account_license_types = await self._fetch_all(ServiceAccountLicenseTypeORM)
+        audit_logs = await self._fetch_all(AuditLogORM)
 
         # Convert to dicts and collect file data
         provider_files_data = await self._collect_files(provider_files)
@@ -318,6 +287,7 @@ class BackupService:
                 "service_account_pattern_count": len(service_account_patterns),
                 "admin_account_pattern_count": len(admin_account_patterns),
                 "service_account_license_type_count": len(service_account_license_types),
+                "audit_log_count": len(audit_logs),
             },
             "data": {
                 "admin_users": admin_users_data,
@@ -339,6 +309,7 @@ class BackupService:
                 "service_account_patterns": [self._orm_to_dict(sap) for sap in service_account_patterns],
                 "admin_account_patterns": [self._orm_to_dict(aap) for aap in admin_account_patterns],
                 "service_account_license_types": [self._orm_to_dict(salt) for salt in service_account_license_types],
+                "audit_logs": [self._audit_log_to_dict(al) for al in audit_logs],
             },
         }
 
@@ -401,6 +372,20 @@ class BackupService:
             "updated_at": settings.updated_at,
         }
 
+    def _audit_log_to_dict(self, audit_log: AuditLogORM) -> dict[str, Any]:
+        """Convert audit log ORM to dict."""
+        return {
+            "id": audit_log.id,
+            "admin_user_id": audit_log.admin_user_id,
+            "action": audit_log.action,
+            "resource_type": audit_log.resource_type,
+            "resource_id": audit_log.resource_id,
+            "changes": audit_log.changes,
+            "ip_address": str(audit_log.ip_address) if audit_log.ip_address else None,
+            "user_agent": audit_log.user_agent,
+            "created_at": audit_log.created_at,
+        }
+
     async def _collect_files(self, provider_files: list[ProviderFileORM]) -> list[dict[str, Any]]:
         """Collect provider files with their binary content."""
         files_data = []
@@ -436,49 +421,30 @@ class BackupService:
         Returns:
             Backup info response with format validation and integrity hash
         """
-        # Check for V2 format first
-        if file_data.startswith(BACKUP_HEADER_V2):
-            header_len = len(BACKUP_HEADER_V2)
-            min_size = header_len + HASH_SIZE + SALT_SIZE + NONCE_SIZE + 16
-
-            if len(file_data) < min_size:
-                return BackupInfoResponse(
-                    valid_format=False,
-                    error="Invalid backup format: file too short",
-                )
-
-            # Extract integrity hash for display
-            content_hash = file_data[header_len : header_len + HASH_SIZE]
-
+        if not file_data.startswith(BACKUP_HEADER):
             return BackupInfoResponse(
-                valid_format=True,
-                version="2.0",
-                requires_password=True,
-                compressed=True,
-                integrity_hash=content_hash.hex(),
+                valid_format=False,
+                error="Invalid backup format: missing or wrong header",
             )
 
-        # Check for V1 format
-        if file_data.startswith(BACKUP_HEADER_V1):
-            header_len = len(BACKUP_HEADER_V1)
-            min_size = header_len + SALT_SIZE + NONCE_SIZE + 16
+        header_len = len(BACKUP_HEADER)
+        min_size = header_len + HASH_SIZE + SALT_SIZE + NONCE_SIZE + 16
 
-            if len(file_data) < min_size:
-                return BackupInfoResponse(
-                    valid_format=False,
-                    error="Invalid backup format: file too short",
-                )
-
+        if len(file_data) < min_size:
             return BackupInfoResponse(
-                valid_format=True,
-                version="1.0",
-                requires_password=True,
-                compressed=False,
+                valid_format=False,
+                error="Invalid backup format: file too short",
             )
+
+        # Extract integrity hash for display
+        content_hash = file_data[header_len : header_len + HASH_SIZE]
 
         return BackupInfoResponse(
-            valid_format=False,
-            error="Invalid backup format: missing or wrong header",
+            valid_format=True,
+            version=BACKUP_VERSION,
+            requires_password=True,
+            compressed=True,
+            integrity_hash=content_hash.hex(),
         )
 
     # =========================================================================
@@ -667,6 +633,9 @@ class BackupService:
         # 12. Independent tables
         await self.session.execute(delete(NotificationRuleORM))
         await self.session.execute(delete(SettingsORM))
+
+        # 13. Audit logs (immutable but included for full restore)
+        await self.session.execute(delete(AuditLogORM))
 
         # Delete all provider files from disk
         if FILES_DIR.exists():
@@ -1048,6 +1017,22 @@ class BackupService:
             )
             self.session.add(salt_orm)
             counts.service_account_license_types += 1
+
+        # 20. Audit logs (depends on admin_users)
+        for al in data.get("audit_logs", []):
+            al_orm = AuditLogORM(
+                id=UUID(al["id"]) if isinstance(al["id"], str) else al["id"],
+                admin_user_id=UUID(al["admin_user_id"]) if al.get("admin_user_id") else None,
+                action=al["action"],
+                resource_type=al["resource_type"],
+                resource_id=UUID(al["resource_id"]) if al.get("resource_id") else None,
+                changes=al.get("changes"),
+                ip_address=al.get("ip_address"),
+                user_agent=al.get("user_agent"),
+                created_at=self._parse_datetime(al.get("created_at")),
+            )
+            self.session.add(al_orm)
+            counts.audit_logs += 1
 
         await self.session.flush()
         return counts

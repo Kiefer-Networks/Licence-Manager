@@ -1431,6 +1431,9 @@ export interface BackupRestoreImportCounts {
   service_account_patterns: number;
   admin_account_patterns: number;
   service_account_license_types: number;
+
+  // Audit
+  audit_logs: number;
 }
 
 export interface BackupRestoreValidation {

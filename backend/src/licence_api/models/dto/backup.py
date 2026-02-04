@@ -87,6 +87,9 @@ class RestoreImportCounts(BaseModel):
     admin_account_patterns: int = 0
     service_account_license_types: int = 0
 
+    # Audit
+    audit_logs: int = 0
+
 
 class RestoreValidation(BaseModel):
     """Validation results for providers after restore."""

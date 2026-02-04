@@ -1178,6 +1178,7 @@
     "configuration": "Konfiguration",
     "accountPatterns": "Konto-Muster",
     "costSnapshots": "Kosten-Snapshots",
+    "auditLogs": "Audit-Protokolle",
     "providerValidation": "Provider-Validierung",
     "valid": "gültig",
     "dropFileHere": "Datei hierher ziehen",

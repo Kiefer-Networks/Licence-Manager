@@ -207,6 +207,10 @@ export function BackupRestoreDialog({
                     <span className="text-zinc-600">{t('costSnapshots')}</span>
                     <span className="font-medium">{result.imported.cost_snapshots}</span>
                   </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('auditLogs')}</span>
+                    <span className="font-medium">{result.imported.audit_logs}</span>
+                  </div>
                 </div>
               </div>
             </div>
