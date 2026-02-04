@@ -25,6 +25,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/csrf-token",  # CSRF token endpoint
         "/api/v1/auth/login",  # Login needs CSRF but we handle it specially
         "/api/v1/auth/refresh",  # Token refresh uses httpOnly cookies for security
+        "/api/v1/backup/setup-restore",  # Setup restore is unauthenticated
         "/health",  # Health check
     })
 
