@@ -17,15 +17,19 @@ COPY alembic/ ./alembic/
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install .
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
 
-# Create data directories for file storage (avatars, logos, etc.)
-RUN mkdir -p /app/data/admin_avatars /app/data/avatars /app/data/provider_logos /app/data/files /app/data/logos \
-    && chown -R app:app /app/data
+# Create data directory base (will be mounted as volume)
+RUN mkdir -p /app/data && chown app:app /app/data
 
 USER app
 
 EXPOSE 8000
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "licence_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

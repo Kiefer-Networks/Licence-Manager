@@ -12,8 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
-import { Slider } from '@/components/ui/slider';
+import { Loader2 } from 'lucide-react';
 
 interface ImageCropDialogProps {
   open: boolean;
@@ -55,8 +54,6 @@ export function ImageCropDialog({
   const t = useTranslations('profile');
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
-  const [rotation, setRotation] = useState(0);
-  const [scale, setScale] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -67,10 +64,6 @@ export function ImageCropDialog({
     },
     [aspectRatio]
   );
-
-  const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
-  };
 
   const getCroppedImg = useCallback(async (): Promise<Blob | null> => {
     if (!completedCrop || !imgRef.current) {
@@ -88,46 +81,34 @@ export function ImageCropDialog({
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
 
-    // Calculate output size (max 512px for avatars)
-    const outputSize = Math.min(512, completedCrop.width * scaleX, completedCrop.height * scaleY);
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-
-    // Calculate center point for rotation
+    // Calculate crop area in natural image coordinates
     const cropX = completedCrop.x * scaleX;
     const cropY = completedCrop.y * scaleY;
     const cropWidth = completedCrop.width * scaleX;
     const cropHeight = completedCrop.height * scaleY;
 
-    // Apply transformations
-    ctx.save();
+    // Output size (max 512px for avatars)
+    const outputSize = Math.min(512, Math.max(cropWidth, cropHeight));
+    canvas.width = outputSize;
+    canvas.height = outputSize;
 
-    // Move to center of canvas
-    ctx.translate(outputSize / 2, outputSize / 2);
+    // Fill with white background for transparency
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outputSize, outputSize);
 
-    // Rotate around center
-    ctx.rotate((rotation * Math.PI) / 180);
-
-    // Scale
-    ctx.scale(scale, scale);
-
-    // Draw the image centered
-    const drawX = -cropWidth / 2;
-    const drawY = -cropHeight / 2;
-
+    // Simple crop without rotation/scale complications
+    // Draw the cropped portion scaled to fit the output size
     ctx.drawImage(
       image,
       cropX,
       cropY,
       cropWidth,
       cropHeight,
-      drawX,
-      drawY,
-      cropWidth,
-      cropHeight
+      0,
+      0,
+      outputSize,
+      outputSize
     );
-
-    ctx.restore();
 
     // If circular crop, apply circular mask
     if (circularCrop) {
@@ -144,7 +125,7 @@ export function ImageCropDialog({
         1
       );
     });
-  }, [completedCrop, rotation, scale, circularCrop]);
+  }, [completedCrop, circularCrop]);
 
   const handleSave = async () => {
     setIsProcessing(true);
@@ -162,8 +143,6 @@ export function ImageCropDialog({
   const handleCancel = () => {
     setCrop(undefined);
     setCompletedCrop(undefined);
-    setRotation(0);
-    setScale(1);
     onOpenChange(false);
   };
 
@@ -190,43 +169,9 @@ export function ImageCropDialog({
                 src={imageSrc}
                 alt="Crop preview"
                 onLoad={onImageLoad}
-                style={{
-                  transform: `rotate(${rotation}deg) scale(${scale})`,
-                  maxHeight: '400px',
-                  transition: 'transform 0.2s ease',
-                }}
+                style={{ maxHeight: '400px' }}
               />
             </ReactCrop>
-          </div>
-
-          {/* Controls */}
-          <div className="space-y-4">
-            {/* Rotation */}
-            <div className="flex items-center gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleRotate}
-              >
-                <RotateCw className="h-4 w-4 mr-2" />
-                {t('rotate')}
-              </Button>
-            </div>
-
-            {/* Zoom */}
-            <div className="flex items-center gap-4">
-              <ZoomOut className="h-4 w-4 text-muted-foreground" />
-              <Slider
-                value={[scale]}
-                onValueChange={([value]) => setScale(value)}
-                min={0.5}
-                max={3}
-                step={0.1}
-                className="flex-1"
-              />
-              <ZoomIn className="h-4 w-4 text-muted-foreground" />
-            </div>
           </div>
         </div>
 

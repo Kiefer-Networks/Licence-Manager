@@ -171,10 +171,18 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="w-full justify-start h-auto py-2 px-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                        {displayName.charAt(0).toUpperCase()}
-                      </span>
+                    <div className="h-7 w-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {user?.picture_url ? (
+                        <img
+                          src={user.picture_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                          {displayName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div className="text-left min-w-0">
                       <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">{displayName}</p>
