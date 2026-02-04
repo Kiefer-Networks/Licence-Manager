@@ -2885,21 +2885,19 @@ export const api = {
   },
 
   /**
-   * Restore system from an encrypted backup.
+   * Restore system from an encrypted backup during initial setup.
+   * This endpoint is ONLY available when no admin users exist.
    * WARNING: This deletes ALL existing data!
    */
   async restoreBackup(file: File, password: string): Promise<BackupRestoreResponse> {
-    const csrfTokenValue = await getCsrfToken();
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('password', password);
 
-    const response = await fetch(`${API_BASE}/api/v1/backup/restore`, {
+    // No CSRF token needed - this endpoint is only available during setup
+    // when no admin users exist (unauthenticated endpoint)
+    const response = await fetch(`${API_BASE}/api/v1/backup/setup-restore`, {
       method: 'POST',
-      headers: {
-        'X-CSRF-Token': csrfTokenValue,
-      },
       credentials: 'include',
       body: formData,
     });

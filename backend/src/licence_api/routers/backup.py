@@ -22,7 +22,6 @@ from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
     BACKUP_EXPORT_LIMIT,
     BACKUP_INFO_LIMIT,
-    BACKUP_RESTORE_LIMIT,
     limiter,
 )
 from licence_api.services.backup_service import BackupService
@@ -138,58 +137,6 @@ async def create_backup(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(backup_data)),
         },
-    )
-
-
-@router.post("/restore", response_model=RestoreResponse)
-@limiter.limit(BACKUP_RESTORE_LIMIT)
-async def restore_backup(
-    request: Request,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
-    service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    file: UploadFile = File(...),
-    password: str = Form(..., min_length=12, max_length=256),
-) -> RestoreResponse:
-    """Restore system from an encrypted backup.
-
-    WARNING: This deletes ALL existing data!
-
-    Requires system.admin permission.
-
-    Args:
-        file: Encrypted backup file (.lcbak)
-        password: Password for decryption
-
-    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
-    """
-    # Validate file
-    if file.filename is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No filename provided",
-        )
-
-    if not file.filename.endswith(".lcbak"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type. Expected .lcbak file",
-        )
-
-    # Read file with streaming size check to prevent memory exhaustion
-    content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
-
-    if len(content) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file",
-        )
-
-    return await service.restore_backup(
-        file_data=content,
-        password=password,
-        user=current_user,
-        request=request,
     )
 
 

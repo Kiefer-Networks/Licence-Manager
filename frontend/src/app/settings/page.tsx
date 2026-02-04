@@ -24,8 +24,8 @@ import {
 } from '@/components/ui/select';
 import { api, PaymentMethod, PaymentMethodCreate, PaymentMethodDetails, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, Upload, HardDrive, Info } from 'lucide-react';
-import { BackupExportDialog, BackupRestoreDialog } from '@/components/backup';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info } from 'lucide-react';
+import { BackupExportDialog } from '@/components/backup';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function SettingsPage() {
@@ -86,7 +86,6 @@ export default function SettingsPage() {
 
   // Backup state
   const [backupExportDialogOpen, setBackupExportDialogOpen] = useState(false);
-  const [backupRestoreDialogOpen, setBackupRestoreDialogOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -833,46 +832,21 @@ export default function SettingsPage() {
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                className="flex-1"
                 onClick={() => setBackupExportDialogOpen(true)}
               >
                 <Download className="h-4 w-4 mr-2" />
                 {t('createBackupButton')}
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setBackupRestoreDialogOpen(true)}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {t('importBackupButton')}
               </Button>
             </div>
           </div>
         </section>
       </div>
 
-      {/* Backup Dialogs */}
+      {/* Backup Dialog */}
       <BackupExportDialog
         open={backupExportDialogOpen}
         onOpenChange={setBackupExportDialogOpen}
         onSuccess={() => showToast('success', t('backupCreatedSuccess'))}
-        onError={(error) => showToast('error', error)}
-      />
-      <BackupRestoreDialog
-        open={backupRestoreDialogOpen}
-        onOpenChange={setBackupRestoreDialogOpen}
-        onSuccess={() => {
-          showToast('success', t('backupImportedSuccess'));
-          // Refresh data after restore
-          Promise.all([
-            fetchCompanyDomains(),
-            fetchPaymentMethods(),
-            fetchSlackConfig(),
-            fetchNotificationRules(),
-            fetchThresholdSettings(),
-          ]);
-        }}
         onError={(error) => showToast('error', error)}
       />
 
