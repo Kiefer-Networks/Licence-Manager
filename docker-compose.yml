@@ -49,6 +49,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/src:/app/src:ro
+      - backend_data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -74,3 +75,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backend_data:

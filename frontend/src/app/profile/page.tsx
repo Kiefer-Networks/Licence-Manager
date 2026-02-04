@@ -17,6 +17,7 @@ import { TotpSetupDialog, TotpBackupCodesDialog, TotpDisableDialog, TotpRegenera
 import { TotpStatusResponse } from '@/lib/api';
 import { useTheme } from '@/components/theme-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ImageCropDialog } from '@/components/ui/image-crop-dialog';
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
@@ -40,6 +41,8 @@ export default function ProfilePage() {
   const [generalSuccess, setGeneralSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
 
   // Security tab state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -215,8 +218,8 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle avatar upload
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle avatar file selection - opens crop dialog
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -233,11 +236,28 @@ export default function ProfilePage() {
       return;
     }
 
+    setGeneralError('');
+
+    // Create object URL for the image and open crop dialog
+    const imageUrl = URL.createObjectURL(file);
+    setSelectedImageSrc(imageUrl);
+    setCropDialogOpen(true);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle cropped image upload
+  const handleCroppedImageUpload = async (croppedBlob: Blob) => {
     setAvatarUploading(true);
     setGeneralError('');
     setGeneralSuccess('');
 
     try {
+      // Convert blob to file
+      const file = new File([croppedBlob], 'avatar.png', { type: 'image/png' });
       await api.uploadAvatar(file);
       await refreshUser?.();
       setGeneralSuccess(t('avatarUploaded'));
@@ -247,8 +267,10 @@ export default function ProfilePage() {
       setGeneralError(errorMessage);
     } finally {
       setAvatarUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      // Clean up object URL
+      if (selectedImageSrc) {
+        URL.revokeObjectURL(selectedImageSrc);
+        setSelectedImageSrc(null);
       }
     }
   };
@@ -437,7 +459,7 @@ export default function ProfilePage() {
                     <input
                       type="file"
                       ref={fileInputRef}
-                      onChange={handleAvatarUpload}
+                      onChange={handleAvatarSelect}
                       accept="image/jpeg,image/png,image/gif,image/webp"
                       className="hidden"
                     />
@@ -996,6 +1018,24 @@ export default function ProfilePage() {
         onOpenChange={setShowTotpRegenerate}
         onSuccess={handleTotpRegenerateSuccess}
       />
+
+      {/* Image Crop Dialog */}
+      {selectedImageSrc && (
+        <ImageCropDialog
+          open={cropDialogOpen}
+          onOpenChange={(open) => {
+            setCropDialogOpen(open);
+            if (!open && selectedImageSrc) {
+              URL.revokeObjectURL(selectedImageSrc);
+              setSelectedImageSrc(null);
+            }
+          }}
+          imageSrc={selectedImageSrc}
+          onCropComplete={handleCroppedImageUpload}
+          aspectRatio={1}
+          circularCrop={true}
+        />
+      )}
     </AppLayout>
   );
 }

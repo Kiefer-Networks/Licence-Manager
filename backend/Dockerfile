@@ -19,6 +19,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
+
+# Create data directories for file storage (avatars, logos, etc.)
+RUN mkdir -p /app/data/admin_avatars /app/data/avatars /app/data/provider_logos /app/data/files /app/data/logos \
+    && chown -R app:app /app/data
+
 USER app
 
 EXPOSE 8000

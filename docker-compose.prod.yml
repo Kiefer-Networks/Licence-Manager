@@ -105,6 +105,8 @@ services:
       ENVIRONMENT: production
       LOG_LEVEL: WARNING
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      - backend_data:/app/data
     networks:
       - backend_network
       - frontend_network
@@ -230,3 +232,4 @@ volumes:
   postgres_data:
   redis_data:
   backup_data:
+  backend_data:
