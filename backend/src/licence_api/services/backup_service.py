@@ -794,10 +794,19 @@ class BackupService:
             self.session.add(user_orm)
             counts.admin_users += 1
 
-        # 6. Employees (no dependencies)
+        # 6. Employees (self-referential FK: manager_id -> employees.id)
+        # Insert in two passes to handle manager_id references
+        # Pass 1: Insert all employees WITHOUT manager_id
+        employee_manager_map: dict[UUID, UUID] = {}  # employee_id -> manager_id
         for e in data["employees"]:
+            emp_id = UUID(e["id"]) if isinstance(e["id"], str) else e["id"]
+            # Store manager_id for second pass
+            if e.get("manager_id"):
+                manager_id = UUID(e["manager_id"]) if isinstance(e["manager_id"], str) else e["manager_id"]
+                employee_manager_map[emp_id] = manager_id
+
             emp_orm = EmployeeORM(
-                id=UUID(e["id"]) if isinstance(e["id"], str) else e["id"],
+                id=emp_id,
                 hibob_id=e["hibob_id"],
                 email=e["email"],
                 full_name=e["full_name"],
@@ -808,7 +817,7 @@ class BackupService:
                 termination_date=self._parse_date(e.get("termination_date")),
                 avatar_url=e.get("avatar_url"),
                 manager_email=e.get("manager_email"),
-                manager_id=UUID(e["manager_id"]) if e.get("manager_id") else None,
+                manager_id=None,  # Set to None initially, will update in pass 2
                 synced_at=self._parse_datetime(e["synced_at"]),
                 created_at=self._parse_datetime(e.get("created_at")),
                 updated_at=self._parse_datetime(e.get("updated_at")),
@@ -817,6 +826,17 @@ class BackupService:
             counts.employees += 1
 
         await self.session.flush()
+
+        # Pass 2: Update employees with their manager_id references
+        if employee_manager_map:
+            from sqlalchemy import update
+            for emp_id, manager_id in employee_manager_map.items():
+                await self.session.execute(
+                    update(EmployeeORM)
+                    .where(EmployeeORM.id == emp_id)
+                    .values(manager_id=manager_id)
+                )
+            await self.session.flush()
 
         # 7. Role permissions (depends on roles and permissions)
         for rp in data.get("role_permissions", []):
