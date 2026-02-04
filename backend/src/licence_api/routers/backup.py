@@ -83,7 +83,7 @@ def get_backup_service(
 
 
 @router.post("/export")
-# @limiter.limit(BACKUP_EXPORT_LIMIT)  # Temporarily disabled for testing
+@limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
     request: Request,
     body: BackupExportRequest,

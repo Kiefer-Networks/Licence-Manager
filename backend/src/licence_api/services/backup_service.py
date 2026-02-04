@@ -222,6 +222,8 @@ class BackupService:
 
     def _json_serializer(self, obj: Any) -> Any:
         """Custom JSON serializer for special types."""
+        from sqlalchemy import MetaData
+
         if isinstance(obj, datetime):
             return obj.isoformat()
         if isinstance(obj, date):
@@ -232,6 +234,9 @@ class BackupService:
             return str(obj)
         if isinstance(obj, bytes):
             return base64.b64encode(obj).decode("utf-8")
+        # Skip SQLAlchemy internal objects that may leak through
+        if isinstance(obj, MetaData):
+            return None
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     async def _collect_data(self) -> dict[str, Any]:
@@ -327,24 +332,72 @@ class BackupService:
     def _orm_to_dict(self, obj: Any) -> dict[str, Any]:
         """Convert ORM object to dict, including all columns.
 
-        Uses column.key (Python attribute name) to get values, but stores
-        with column.name (database column name) for accurate restore.
-        This handles cases where the Python attribute differs from the DB column,
-        like 'extra_data' mapped to 'metadata' column.
+        Uses the mapper to get the correct Python attribute name for each column,
+        handling cases where the Python attribute differs from the DB column name.
         """
+        from sqlalchemy import inspect
+        from sqlalchemy import MetaData
+
         result = {}
+        mapper = inspect(obj.__class__)
+
         for column in obj.__table__.columns:
-            # Use column.key to get the Python attribute value
-            value = getattr(obj, column.key)
+            # Find the attribute name from the mapper
+            attr_name = None
+            for prop in mapper.iterate_properties:
+                if hasattr(prop, 'columns'):
+                    for col in prop.columns:
+                        if col.name == column.name:
+                            attr_name = prop.key
+                            break
+                if attr_name:
+                    break
+
+            # Fallback to column name if no mapping found
+            if attr_name is None:
+                attr_name = column.name
+
+            # Get the value using the correct attribute name
+            value = getattr(obj, attr_name, None)
+
+            # Skip SQLAlchemy internal MetaData objects
+            if isinstance(value, MetaData):
+                value = None
+
             # Store with the database column name for restore compatibility
             result[column.name] = value
         return result
 
     def _junction_to_dict(self, obj: Any) -> dict[str, Any]:
         """Convert junction table ORM object to dict."""
+        from sqlalchemy import inspect
+        from sqlalchemy import MetaData
+
         result = {}
+        mapper = inspect(obj.__class__)
+
         for column in obj.__table__.columns:
-            value = getattr(obj, column.key)
+            # Find the attribute name from the mapper
+            attr_name = None
+            for prop in mapper.iterate_properties:
+                if hasattr(prop, 'columns'):
+                    for col in prop.columns:
+                        if col.name == column.name:
+                            attr_name = prop.key
+                            break
+                if attr_name:
+                    break
+
+            # Fallback to column name if no mapping found
+            if attr_name is None:
+                attr_name = column.name
+
+            value = getattr(obj, attr_name, None)
+
+            # Skip SQLAlchemy internal MetaData objects
+            if isinstance(value, MetaData):
+                value = None
+
             result[column.name] = value
         return result
 
