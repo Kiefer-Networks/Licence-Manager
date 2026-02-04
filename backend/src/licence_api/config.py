@@ -112,8 +112,9 @@ class Settings(BaseSettings):
                 "DATABASE_URL must be a PostgreSQL URL starting with 'postgresql://' or 'postgres://'"
             )
 
-        # In production, require SSL/TLS connection
-        if self.environment == "production" and "sslmode=" not in url:
+        # In production, require SSL/TLS connection (unless connecting to Docker internal network)
+        is_docker_internal = "@postgres:" in url or "@localhost:" in url or "@127.0.0.1:" in url
+        if self.environment == "production" and not is_docker_internal and "sslmode=" not in url:
             raise ValueError(
                 "DATABASE_URL must include sslmode parameter in production "
                 "(e.g., sslmode=require or sslmode=verify-full)"
@@ -123,9 +124,17 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """Get async database URL for SQLAlchemy."""
+        """Get async database URL for SQLAlchemy with asyncpg.
+
+        Converts sslmode parameter to ssl for asyncpg compatibility:
+        - sslmode=disable -> ssl=disable
+        - sslmode=require -> ssl=require
+        """
         url = str(self.database_url)
-        return url.replace("postgresql://", "postgresql+asyncpg://")
+        url = url.replace("postgresql://", "postgresql+asyncpg://")
+        # Convert sslmode to ssl for asyncpg compatibility
+        url = url.replace("sslmode=", "ssl=")
+        return url
 
     @property
     def cors_origins_list(self) -> list[str]:
