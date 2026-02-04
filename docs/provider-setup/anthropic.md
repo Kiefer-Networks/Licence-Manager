@@ -4,9 +4,11 @@ Track Anthropic (Claude) API users and API keys in your organization.
 
 ## Prerequisites
 
-- Anthropic organization account
+- **Anthropic Enterprise plan** (required for Admin API access)
 - Admin access to your organization
 - Admin API key
+
+> **Note:** This integration requires an Anthropic Enterprise plan. Team plans do not have access to the Admin API or Admin Console. If you have a Team plan, you cannot use this integration to sync users automatically.
 
 ## Setup Steps
 
