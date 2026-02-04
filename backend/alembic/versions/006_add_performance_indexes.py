@@ -152,13 +152,8 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # Refresh tokens index for fast lookup
-    op.create_index(
-        "ix_refresh_tokens_token_hash",
-        "refresh_tokens",
-        ["token_hash"],
-        unique=True,
-    )
+    # Refresh tokens indexes for fast lookup
+    # Note: ix_refresh_tokens_token_hash is already created by table definition in 004
     op.create_index(
         "ix_refresh_tokens_user_id",
         "refresh_tokens",
@@ -175,10 +170,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove performance indexes."""
-    # Refresh tokens
+    # Refresh tokens (token_hash index is managed by table definition in 004)
     op.drop_index("ix_refresh_tokens_expires_at", table_name="refresh_tokens")
     op.drop_index("ix_refresh_tokens_user_id", table_name="refresh_tokens")
-    op.drop_index("ix_refresh_tokens_token_hash", table_name="refresh_tokens")
 
     # Audit logs
     op.drop_index("ix_audit_logs_action", table_name="audit_logs")
