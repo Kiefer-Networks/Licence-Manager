@@ -854,14 +854,39 @@ class LicenseService:
         Returns:
             License response or None if not found
         """
+        from decimal import Decimal
+        from licence_api.services.pricing_service import PricingService
+
         license_orm = await self.license_repo.get(license_id)
         if license_orm is None:
             return None
 
         old_license_type = license_orm.license_type
+        old_monthly_cost = license_orm.monthly_cost
 
-        # Update the license type
-        await self.license_repo.update(license_id, license_type=license_type)
+        # Get provider config for pricing
+        provider_repo = ProviderRepository(self.session)
+        provider = await provider_repo.get(license_orm.provider_id)
+
+        # Calculate new monthly cost based on license type pricing
+        monthly_cost = None
+        currency = license_orm.currency or "EUR"
+        if provider and provider.config:
+            pricing_config = provider.config.get("license_pricing", {})
+            price_info = pricing_config.get(license_type)
+            if price_info and price_info.get("cost"):
+                cost = Decimal(str(price_info["cost"]))
+                billing_cycle = price_info.get("billing_cycle", "yearly")
+                currency = price_info.get("currency", "EUR")
+                monthly_cost = PricingService.calculate_monthly_cost(cost, billing_cycle)
+
+        # Update the license type and monthly cost
+        await self.license_repo.update(
+            license_id,
+            license_type=license_type,
+            monthly_cost=monthly_cost,
+            currency=currency,
+        )
 
         # Audit log the change
         await self.audit_service.log(
@@ -870,8 +895,8 @@ class LicenseService:
             resource_id=license_id,
             admin_user_id=user.id,
             changes={
-                "old": {"license_type": old_license_type},
-                "new": {"license_type": license_type},
+                "old": {"license_type": old_license_type, "monthly_cost": str(old_monthly_cost) if old_monthly_cost else None},
+                "new": {"license_type": license_type, "monthly_cost": str(monthly_cost) if monthly_cost else None},
             },
             request=request,
         )
