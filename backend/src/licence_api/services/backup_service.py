@@ -21,6 +21,8 @@ import. Binary file content is base64-encoded within the JSON structure.
 """
 
 import base64
+import gzip
+import hashlib
 import json
 import logging
 import os
@@ -33,22 +35,29 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from fastapi import Request
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import FILES_DIR
 from licence_api.models.dto.backup import (
     BackupInfoResponse,
-    BackupMetadata,
-    ProviderValidation,
     RestoreImportCounts,
     RestoreResponse,
     RestoreValidation,
+    ProviderValidation,
 )
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
 if TYPE_CHECKING:
     from licence_api.models.domain.admin_user import AdminUser
+
+# ORM models
+from licence_api.models.orm.admin_user import AdminUserORM
+from licence_api.models.orm.role import RoleORM
+from licence_api.models.orm.permission import PermissionORM
+from licence_api.models.orm.user_role import UserRoleORM
+from licence_api.models.orm.role_permission import RolePermissionORM
+from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -60,18 +69,21 @@ from licence_api.models.orm.provider import ProviderORM
 from licence_api.models.orm.provider_file import ProviderFileORM
 from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
 from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
+from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
 from licence_api.models.orm.settings import SettingsORM
 from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
 
-# Backup format header
-BACKUP_HEADER = b"LICENCE_BACKUP_V1"
-BACKUP_VERSION = "1.0"
+# Backup format headers
+BACKUP_HEADER_V1 = b"LICENCE_BACKUP_V1"
+BACKUP_HEADER_V2 = b"LICENCE_BACKUP_V2"
+BACKUP_VERSION = "2.0"
 
 # Encryption parameters
 SALT_SIZE = 16
 NONCE_SIZE = 12
+HASH_SIZE = 32  # SHA-256
 PBKDF2_ITERATIONS = 600000
 
 
@@ -101,19 +113,30 @@ class BackupService:
     def _encrypt(self, data: bytes, password: str) -> bytes:
         """Encrypt data with AES-256-GCM using password-derived key.
 
-        Returns: header + salt + nonce + ciphertext (with auth tag)
+        Format V2: header(17B) + content_hash(32B) + salt(16B) + nonce(12B) + ciphertext
+
+        The content_hash is SHA-256 of the uncompressed data, allowing integrity
+        verification without decryption.
         """
+        # Compress data with gzip
+        compressed = gzip.compress(data, compresslevel=6)
+
+        # Calculate hash of original (uncompressed) data for integrity check
+        content_hash = hashlib.sha256(data).digest()
+
         salt = os.urandom(SALT_SIZE)
         nonce = os.urandom(NONCE_SIZE)
         key = self._derive_key(password, salt)
 
         aesgcm = AESGCM(key)
-        ciphertext = aesgcm.encrypt(nonce, data, None)
+        ciphertext = aesgcm.encrypt(nonce, compressed, None)
 
-        return BACKUP_HEADER + salt + nonce + ciphertext
+        return BACKUP_HEADER_V2 + content_hash + salt + nonce + ciphertext
 
     def _decrypt(self, encrypted_data: bytes, password: str) -> bytes:
         """Decrypt backup data.
+
+        Supports both V1 (uncompressed) and V2 (gzip compressed) formats.
 
         Args:
             encrypted_data: Full backup file data
@@ -125,16 +148,22 @@ class BackupService:
         Raises:
             ValueError: If decryption fails (wrong password or corrupted data)
         """
-        header_len = len(BACKUP_HEADER)
-
-        # Verify header
-        if not encrypted_data.startswith(BACKUP_HEADER):
+        # Check for V2 format first
+        if encrypted_data.startswith(BACKUP_HEADER_V2):
+            return self._decrypt_v2(encrypted_data, password)
+        elif encrypted_data.startswith(BACKUP_HEADER_V1):
+            return self._decrypt_v1(encrypted_data, password)
+        else:
             raise ValueError("Invalid backup format: missing header")
 
-        if len(encrypted_data) < header_len + SALT_SIZE + NONCE_SIZE + 16:
+    def _decrypt_v1(self, encrypted_data: bytes, password: str) -> bytes:
+        """Decrypt V1 format backup (uncompressed)."""
+        header_len = len(BACKUP_HEADER_V1)
+        min_size = header_len + SALT_SIZE + NONCE_SIZE + 16
+
+        if len(encrypted_data) < min_size:
             raise ValueError("Invalid backup format: file too short")
 
-        # Extract components
         offset = header_len
         salt = encrypted_data[offset : offset + SALT_SIZE]
         offset += SALT_SIZE
@@ -142,13 +171,49 @@ class BackupService:
         offset += NONCE_SIZE
         ciphertext = encrypted_data[offset:]
 
-        # Derive key and decrypt
         key = self._derive_key(password, salt)
         aesgcm = AESGCM(key)
 
         try:
             return aesgcm.decrypt(nonce, ciphertext, None)
         except Exception as e:
+            raise ValueError("Decryption failed: wrong password or corrupted data") from e
+
+    def _decrypt_v2(self, encrypted_data: bytes, password: str) -> bytes:
+        """Decrypt V2 format backup (gzip compressed with integrity hash)."""
+        header_len = len(BACKUP_HEADER_V2)
+        min_size = header_len + HASH_SIZE + SALT_SIZE + NONCE_SIZE + 16
+
+        if len(encrypted_data) < min_size:
+            raise ValueError("Invalid backup format: file too short")
+
+        offset = header_len
+        stored_hash = encrypted_data[offset : offset + HASH_SIZE]
+        offset += HASH_SIZE
+        salt = encrypted_data[offset : offset + SALT_SIZE]
+        offset += SALT_SIZE
+        nonce = encrypted_data[offset : offset + NONCE_SIZE]
+        offset += NONCE_SIZE
+        ciphertext = encrypted_data[offset:]
+
+        key = self._derive_key(password, salt)
+        aesgcm = AESGCM(key)
+
+        try:
+            compressed = aesgcm.decrypt(nonce, ciphertext, None)
+            data = gzip.decompress(compressed)
+
+            # Verify integrity
+            computed_hash = hashlib.sha256(data).digest()
+            if computed_hash != stored_hash:
+                raise ValueError("Integrity check failed: data may be corrupted")
+
+            return data
+        except gzip.BadGzipFile as e:
+            raise ValueError("Decompression failed: corrupted data") from e
+        except Exception as e:
+            if "Integrity check failed" in str(e):
+                raise
             raise ValueError("Decryption failed: wrong password or corrupted data") from e
 
     # =========================================================================
@@ -181,7 +246,7 @@ class BackupService:
                 action=AuditAction.EXPORT,
                 resource_type=ResourceType.SYSTEM,
                 user_id=user.id,
-                details={"action": "backup_created"},
+                details={"action": "backup_created", "version": BACKUP_VERSION},
             )
             await self.session.commit()
 
@@ -204,6 +269,12 @@ class BackupService:
     async def _collect_data(self) -> dict[str, Any]:
         """Collect all exportable data from database."""
         # Fetch all entities
+        admin_users = await self._fetch_all(AdminUserORM)
+        roles = await self._fetch_all(RoleORM)
+        permissions = await self._fetch_all(PermissionORM)
+        user_roles = await self._fetch_all(UserRoleORM)
+        role_permissions = await self._fetch_all(RolePermissionORM)
+        user_notification_preferences = await self._fetch_all(UserNotificationPreferenceORM)
         providers = await self._fetch_all(ProviderORM)
         licenses = await self._fetch_all(LicenseORM)
         employees = await self._fetch_all(EmployeeORM)
@@ -216,14 +287,24 @@ class BackupService:
         notification_rules = await self._fetch_all(NotificationRuleORM)
         service_account_patterns = await self._fetch_all(ServiceAccountPatternORM)
         admin_account_patterns = await self._fetch_all(AdminAccountPatternORM)
+        service_account_license_types = await self._fetch_all(ServiceAccountLicenseTypeORM)
 
         # Convert to dicts and collect file data
         provider_files_data = await self._collect_files(provider_files)
+
+        # Convert admin users but exclude sensitive auth data
+        admin_users_data = [self._admin_user_to_dict(u) for u in admin_users]
 
         return {
             "version": BACKUP_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "metadata": {
+                "admin_user_count": len(admin_users),
+                "role_count": len(roles),
+                "permission_count": len(permissions),
+                "user_role_count": len(user_roles),
+                "role_permission_count": len(role_permissions),
+                "user_notification_preference_count": len(user_notification_preferences),
                 "provider_count": len(providers),
                 "license_count": len(licenses),
                 "employee_count": len(employees),
@@ -236,8 +317,15 @@ class BackupService:
                 "notification_rule_count": len(notification_rules),
                 "service_account_pattern_count": len(service_account_patterns),
                 "admin_account_pattern_count": len(admin_account_patterns),
+                "service_account_license_type_count": len(service_account_license_types),
             },
             "data": {
+                "admin_users": admin_users_data,
+                "roles": [self._orm_to_dict(r) for r in roles],
+                "permissions": [self._orm_to_dict(p) for p in permissions],
+                "user_roles": [self._junction_to_dict(ur) for ur in user_roles],
+                "role_permissions": [self._junction_to_dict(rp) for rp in role_permissions],
+                "user_notification_preferences": [self._orm_to_dict(unp) for unp in user_notification_preferences],
                 "providers": [self._orm_to_dict(p) for p in providers],
                 "licenses": [self._orm_to_dict(lic) for lic in licenses],
                 "employees": [self._orm_to_dict(e) for e in employees],
@@ -250,6 +338,7 @@ class BackupService:
                 "notification_rules": [self._orm_to_dict(nr) for nr in notification_rules],
                 "service_account_patterns": [self._orm_to_dict(sap) for sap in service_account_patterns],
                 "admin_account_patterns": [self._orm_to_dict(aap) for aap in admin_account_patterns],
+                "service_account_license_types": [self._orm_to_dict(salt) for salt in service_account_license_types],
             },
         }
 
@@ -271,6 +360,38 @@ class BackupService:
             value = getattr(obj, column.name)
             result[column.name] = value
         return result
+
+    def _junction_to_dict(self, obj: Any) -> dict[str, Any]:
+        """Convert junction table ORM object to dict."""
+        result = {}
+        for column in obj.__table__.columns:
+            value = getattr(obj, column.name)
+            result[column.name] = value
+        return result
+
+    def _admin_user_to_dict(self, user: AdminUserORM) -> dict[str, Any]:
+        """Convert admin user to dict, excluding sensitive fields."""
+        return {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "picture_url": user.picture_url,
+            # Include password_hash for restore - it's already hashed
+            "password_hash": user.password_hash,
+            "auth_provider": user.auth_provider,
+            "is_active": user.is_active,
+            "is_locked": user.is_locked,
+            "failed_login_attempts": user.failed_login_attempts,
+            "locked_until": user.locked_until,
+            "password_changed_at": user.password_changed_at,
+            "require_password_change": user.require_password_change,
+            "last_login_at": user.last_login_at,
+            "date_format": user.date_format,
+            "number_format": user.number_format,
+            "currency": user.currency,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
 
     def _settings_to_dict(self, settings: SettingsORM) -> dict[str, Any]:
         """Convert settings ORM to dict."""
@@ -313,29 +434,51 @@ class BackupService:
             file_data: Backup file bytes
 
         Returns:
-            Backup info response
+            Backup info response with format validation and integrity hash
         """
-        # Check header
-        if not file_data.startswith(BACKUP_HEADER):
+        # Check for V2 format first
+        if file_data.startswith(BACKUP_HEADER_V2):
+            header_len = len(BACKUP_HEADER_V2)
+            min_size = header_len + HASH_SIZE + SALT_SIZE + NONCE_SIZE + 16
+
+            if len(file_data) < min_size:
+                return BackupInfoResponse(
+                    valid_format=False,
+                    error="Invalid backup format: file too short",
+                )
+
+            # Extract integrity hash for display
+            content_hash = file_data[header_len : header_len + HASH_SIZE]
+
             return BackupInfoResponse(
-                valid_format=False,
-                error="Invalid backup format: missing or wrong header",
+                valid_format=True,
+                version="2.0",
+                requires_password=True,
+                compressed=True,
+                integrity_hash=content_hash.hex(),
             )
 
-        header_len = len(BACKUP_HEADER)
-        min_size = header_len + SALT_SIZE + NONCE_SIZE + 16
+        # Check for V1 format
+        if file_data.startswith(BACKUP_HEADER_V1):
+            header_len = len(BACKUP_HEADER_V1)
+            min_size = header_len + SALT_SIZE + NONCE_SIZE + 16
 
-        if len(file_data) < min_size:
+            if len(file_data) < min_size:
+                return BackupInfoResponse(
+                    valid_format=False,
+                    error="Invalid backup format: file too short",
+                )
+
             return BackupInfoResponse(
-                valid_format=False,
-                error="Invalid backup format: file too short",
+                valid_format=True,
+                version="1.0",
+                requires_password=True,
+                compressed=False,
             )
 
-        # Valid format, but we can't read metadata without password
         return BackupInfoResponse(
-            valid_format=True,
-            version=BACKUP_VERSION,
-            requires_password=True,
+            valid_format=False,
+            error="Invalid backup format: missing or wrong header",
         )
 
     # =========================================================================
@@ -454,7 +597,8 @@ class BackupService:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
 
-        required_data_keys = [
+        # Required data keys for V1 backups
+        required_data_keys_v1 = [
             "providers",
             "licenses",
             "employees",
@@ -465,10 +609,9 @@ class BackupService:
             "cost_snapshots",
             "settings",
             "notification_rules",
-            # Optional keys for backward compatibility:
-            # "service_account_patterns",
         ]
-        for key in required_data_keys:
+
+        for key in required_data_keys_v1:
             if key not in data["data"]:
                 raise ValueError(f"Missing data key: {key}")
 
@@ -481,22 +624,47 @@ class BackupService:
         a system-level operation that doesn't fit the standard repository pattern.
         """
         # Delete in reverse dependency order
-        # Licenses reference providers and employees
+
+        # 1. User notification preferences (depends on admin_users)
+        await self.session.execute(delete(UserNotificationPreferenceORM))
+
+        # 2. User roles (depends on admin_users and roles)
+        await self.session.execute(delete(UserRoleORM))
+
+        # 3. Role permissions (depends on roles and permissions)
+        await self.session.execute(delete(RolePermissionORM))
+
+        # 4. Licenses (depends on providers, employees, admin_users)
         await self.session.execute(delete(LicenseORM))
-        # License packages, org licenses, provider files, cost snapshots reference providers
+
+        # 5. License packages, org licenses, provider files, cost snapshots (depend on providers)
         await self.session.execute(delete(LicensePackageORM))
         await self.session.execute(delete(OrganizationLicenseORM))
         await self.session.execute(delete(ProviderFileORM))
         await self.session.execute(delete(CostSnapshotORM))
-        # Service account patterns reference employees
+
+        # 6. Service account patterns and license types (depend on employees and admin_users)
         await self.session.execute(delete(ServiceAccountPatternORM))
-        # Providers reference payment methods
+        await self.session.execute(delete(AdminAccountPatternORM))
+        await self.session.execute(delete(ServiceAccountLicenseTypeORM))
+
+        # 7. Providers (depends on payment_methods)
         await self.session.execute(delete(ProviderORM))
-        # Employees (no FK dependencies from above after licenses cleared)
+
+        # 8. Employees (no FK dependencies after above cleared)
         await self.session.execute(delete(EmployeeORM))
-        # Payment methods (providers cleared above)
+
+        # 9. Payment methods
         await self.session.execute(delete(PaymentMethodORM))
-        # Independent tables
+
+        # 10. Admin users (after all dependencies cleared)
+        await self.session.execute(delete(AdminUserORM))
+
+        # 11. Roles and permissions
+        await self.session.execute(delete(RoleORM))
+        await self.session.execute(delete(PermissionORM))
+
+        # 12. Independent tables
         await self.session.execute(delete(NotificationRuleORM))
         await self.session.execute(delete(SettingsORM))
 
@@ -540,7 +708,61 @@ class BackupService:
             self.session.add(pm_orm)
             counts.payment_methods += 1
 
-        # 3. Employees (no dependencies)
+        # 3. Permissions (no dependencies)
+        for p in data.get("permissions", []):
+            perm_orm = PermissionORM(
+                id=UUID(p["id"]) if isinstance(p["id"], str) else p["id"],
+                code=p["code"],
+                name=p["name"],
+                description=p.get("description"),
+                category=p["category"],
+                created_at=self._parse_datetime(p.get("created_at")),
+                updated_at=self._parse_datetime(p.get("updated_at")),
+            )
+            self.session.add(perm_orm)
+            counts.permissions += 1
+
+        # 4. Roles (no dependencies)
+        for r in data.get("roles", []):
+            role_orm = RoleORM(
+                id=UUID(r["id"]) if isinstance(r["id"], str) else r["id"],
+                code=r["code"],
+                name=r["name"],
+                description=r.get("description"),
+                is_system=r.get("is_system", False),
+                priority=r.get("priority", 0),
+                created_at=self._parse_datetime(r.get("created_at")),
+                updated_at=self._parse_datetime(r.get("updated_at")),
+            )
+            self.session.add(role_orm)
+            counts.roles += 1
+
+        # 5. Admin users (no dependencies)
+        for u in data.get("admin_users", []):
+            user_orm = AdminUserORM(
+                id=UUID(u["id"]) if isinstance(u["id"], str) else u["id"],
+                email=u["email"],
+                name=u.get("name"),
+                picture_url=u.get("picture_url"),
+                password_hash=u.get("password_hash"),
+                auth_provider=u.get("auth_provider", "local"),
+                is_active=u.get("is_active", True),
+                is_locked=u.get("is_locked", False),
+                failed_login_attempts=u.get("failed_login_attempts", 0),
+                locked_until=self._parse_datetime(u.get("locked_until")),
+                password_changed_at=self._parse_datetime(u.get("password_changed_at")),
+                require_password_change=u.get("require_password_change", False),
+                last_login_at=self._parse_datetime(u.get("last_login_at")),
+                date_format=u.get("date_format", "DD.MM.YYYY"),
+                number_format=u.get("number_format", "de-DE"),
+                currency=u.get("currency", "EUR"),
+                created_at=self._parse_datetime(u.get("created_at")),
+                updated_at=self._parse_datetime(u.get("updated_at")),
+            )
+            self.session.add(user_orm)
+            counts.admin_users += 1
+
+        # 6. Employees (no dependencies)
         for e in data["employees"]:
             emp_orm = EmployeeORM(
                 id=UUID(e["id"]) if isinstance(e["id"], str) else e["id"],
@@ -549,7 +771,7 @@ class BackupService:
                 full_name=e["full_name"],
                 department=e.get("department"),
                 status=e["status"],
-                source=e.get("source", "hibob"),  # Default to hibob for backwards compatibility
+                source=e.get("source", "hibob"),
                 start_date=self._parse_date(e.get("start_date")),
                 termination_date=self._parse_date(e.get("termination_date")),
                 avatar_url=e.get("avatar_url"),
@@ -562,9 +784,46 @@ class BackupService:
             self.session.add(emp_orm)
             counts.employees += 1
 
-        # 4. Providers (depends on payment_methods)
+        await self.session.flush()
+
+        # 7. Role permissions (depends on roles and permissions)
+        for rp in data.get("role_permissions", []):
+            rp_orm = RolePermissionORM(
+                role_id=UUID(rp["role_id"]) if isinstance(rp["role_id"], str) else rp["role_id"],
+                permission_id=UUID(rp["permission_id"]) if isinstance(rp["permission_id"], str) else rp["permission_id"],
+                created_at=self._parse_datetime(rp.get("created_at")),
+            )
+            self.session.add(rp_orm)
+            counts.role_permissions += 1
+
+        # 8. User roles (depends on admin_users and roles)
+        for ur in data.get("user_roles", []):
+            ur_orm = UserRoleORM(
+                user_id=UUID(ur["user_id"]) if isinstance(ur["user_id"], str) else ur["user_id"],
+                role_id=UUID(ur["role_id"]) if isinstance(ur["role_id"], str) else ur["role_id"],
+                assigned_at=self._parse_datetime(ur.get("assigned_at")),
+                assigned_by=UUID(ur["assigned_by"]) if ur.get("assigned_by") else None,
+            )
+            self.session.add(ur_orm)
+            counts.user_roles += 1
+
+        # 9. User notification preferences (depends on admin_users)
+        for unp in data.get("user_notification_preferences", []):
+            unp_orm = UserNotificationPreferenceORM(
+                id=UUID(unp["id"]) if isinstance(unp["id"], str) else unp["id"],
+                user_id=UUID(unp["user_id"]) if isinstance(unp["user_id"], str) else unp["user_id"],
+                event_type=unp["event_type"],
+                enabled=unp.get("enabled", True),
+                slack_dm=unp.get("slack_dm", False),
+                slack_channel=unp.get("slack_channel"),
+                created_at=self._parse_datetime(unp.get("created_at")),
+                updated_at=self._parse_datetime(unp.get("updated_at")),
+            )
+            self.session.add(unp_orm)
+            counts.user_notification_preferences += 1
+
+        # 10. Providers (depends on payment_methods)
         for p in data["providers"]:
-            # Decode credentials from base64 if stored as string
             credentials = p["credentials_encrypted"]
             if isinstance(credentials, str):
                 credentials = base64.b64decode(credentials)
@@ -586,7 +845,7 @@ class BackupService:
             self.session.add(provider_orm)
             counts.providers += 1
 
-        # 5. Notification rules (no dependencies)
+        # 11. Notification rules (no dependencies)
         for nr in data["notification_rules"]:
             nr_orm = NotificationRuleORM(
                 id=UUID(nr["id"]) if isinstance(nr["id"], str) else nr["id"],
@@ -602,7 +861,7 @@ class BackupService:
 
         await self.session.flush()
 
-        # 6. License packages (depends on providers)
+        # 12. License packages (depends on providers)
         for lp in data["license_packages"]:
             lp_orm = LicensePackageORM(
                 id=UUID(lp["id"]) if isinstance(lp["id"], str) else lp["id"],
@@ -618,7 +877,6 @@ class BackupService:
                 contract_end=self._parse_date(lp.get("contract_end")),
                 auto_renew=lp.get("auto_renew", True),
                 notes=lp.get("notes"),
-                # Cancellation and expiration tracking
                 cancelled_at=self._parse_datetime(lp.get("cancelled_at")),
                 cancellation_effective_date=self._parse_date(lp.get("cancellation_effective_date")),
                 cancellation_reason=lp.get("cancellation_reason"),
@@ -631,7 +889,7 @@ class BackupService:
             self.session.add(lp_orm)
             counts.license_packages += 1
 
-        # 7. Organization licenses (depends on providers)
+        # 13. Organization licenses (depends on providers)
         for ol in data["organization_licenses"]:
             ol_orm = OrganizationLicenseORM(
                 id=UUID(ol["id"]) if isinstance(ol["id"], str) else ol["id"],
@@ -645,7 +903,6 @@ class BackupService:
                 billing_cycle=ol.get("billing_cycle"),
                 renewal_date=self._parse_date(ol.get("renewal_date")),
                 notes=ol.get("notes"),
-                # Cancellation and expiration tracking
                 expires_at=self._parse_date(ol.get("expires_at")),
                 cancelled_at=self._parse_datetime(ol.get("cancelled_at")),
                 cancellation_effective_date=self._parse_date(ol.get("cancellation_effective_date")),
@@ -659,7 +916,7 @@ class BackupService:
             self.session.add(ol_orm)
             counts.organization_licenses += 1
 
-        # 8. Cost snapshots (depends on providers)
+        # 14. Cost snapshots (depends on providers)
         for cs in data["cost_snapshots"]:
             cs_orm = CostSnapshotORM(
                 id=UUID(cs["id"]) if isinstance(cs["id"], str) else cs["id"],
@@ -677,7 +934,7 @@ class BackupService:
             self.session.add(cs_orm)
             counts.cost_snapshots += 1
 
-        # 9. Licenses (depends on providers and employees)
+        # 15. Licenses (depends on providers and employees)
         for lic in data["licenses"]:
             lic_orm = LicenseORM(
                 id=UUID(lic["id"]) if isinstance(lic["id"], str) else lic["id"],
@@ -695,13 +952,15 @@ class BackupService:
                 is_service_account=lic.get("is_service_account", False),
                 service_account_name=lic.get("service_account_name"),
                 service_account_owner_id=UUID(lic["service_account_owner_id"]) if lic.get("service_account_owner_id") else None,
+                is_admin_account=lic.get("is_admin_account", False),
+                admin_account_name=lic.get("admin_account_name"),
+                admin_account_owner_id=UUID(lic["admin_account_owner_id"]) if lic.get("admin_account_owner_id") else None,
                 suggested_employee_id=UUID(lic["suggested_employee_id"]) if lic.get("suggested_employee_id") else None,
                 match_confidence=lic.get("match_confidence"),
                 match_status=lic.get("match_status"),
                 match_method=lic.get("match_method"),
                 match_reviewed_at=self._parse_datetime(lic.get("match_reviewed_at")),
                 match_reviewed_by=UUID(lic["match_reviewed_by"]) if lic.get("match_reviewed_by") else None,
-                # Cancellation and expiration tracking
                 expires_at=self._parse_date(lic.get("expires_at")),
                 needs_reorder=lic.get("needs_reorder", False),
                 cancelled_at=self._parse_datetime(lic.get("cancelled_at")),
@@ -714,7 +973,7 @@ class BackupService:
             self.session.add(lic_orm)
             counts.licenses += 1
 
-        # 10. Provider files (depends on providers) - also restore files to disk
+        # 16. Provider files (depends on providers) - also restore files to disk
         for pf in data["provider_files"]:
             pf_orm = ProviderFileORM(
                 id=UUID(pf["id"]) if isinstance(pf["id"], str) else pf["id"],
@@ -745,7 +1004,7 @@ class BackupService:
                 except Exception as e:
                     logger.warning(f"Failed to restore file {pf['filename']}: {e}")
 
-        # 11. Service account patterns (depends on employees for owner_id)
+        # 17. Service account patterns (depends on employees for owner_id)
         for sap in data.get("service_account_patterns", []):
             sap_orm = ServiceAccountPatternORM(
                 id=UUID(sap["id"]) if isinstance(sap["id"], str) else sap["id"],
@@ -760,7 +1019,7 @@ class BackupService:
             self.session.add(sap_orm)
             counts.service_account_patterns += 1
 
-        # 12. Admin account patterns (depends on employees for owner_id)
+        # 18. Admin account patterns (depends on employees for owner_id)
         for aap in data.get("admin_account_patterns", []):
             aap_orm = AdminAccountPatternORM(
                 id=UUID(aap["id"]) if isinstance(aap["id"], str) else aap["id"],
@@ -774,6 +1033,21 @@ class BackupService:
             )
             self.session.add(aap_orm)
             counts.admin_account_patterns += 1
+
+        # 19. Service account license types (depends on employees and admin_users)
+        for salt in data.get("service_account_license_types", []):
+            salt_orm = ServiceAccountLicenseTypeORM(
+                id=UUID(salt["id"]) if isinstance(salt["id"], str) else salt["id"],
+                license_type=salt["license_type"],
+                name=salt.get("name"),
+                owner_id=UUID(salt["owner_id"]) if salt.get("owner_id") else None,
+                notes=salt.get("notes"),
+                created_by=UUID(salt["created_by"]) if salt.get("created_by") else None,
+                created_at=self._parse_datetime(salt.get("created_at")),
+                updated_at=self._parse_datetime(salt.get("updated_at")),
+            )
+            self.session.add(salt_orm)
+            counts.service_account_license_types += 1
 
         await self.session.flush()
         return counts

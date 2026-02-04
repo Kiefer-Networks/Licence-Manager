@@ -130,32 +130,83 @@ export function BackupRestoreDialog({
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm font-medium text-zinc-700">{t('importedData')}</p>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{t('providers')}</span>
-                  <span className="font-medium">{result.imported.providers}</span>
+
+              {/* User & Access Control */}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{t('usersAndAccess')}</p>
+                <div className="grid grid-cols-2 gap-1.5 text-sm">
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('adminUsers')}</span>
+                    <span className="font-medium">{result.imported.admin_users}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('roles')}</span>
+                    <span className="font-medium">{result.imported.roles}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('permissions')}</span>
+                    <span className="font-medium">{result.imported.permissions}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('userRoles')}</span>
+                    <span className="font-medium">{result.imported.user_roles}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{t('licenses')}</span>
-                  <span className="font-medium">{result.imported.licenses}</span>
+              </div>
+
+              {/* Core Data */}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{t('coreData')}</p>
+                <div className="grid grid-cols-2 gap-1.5 text-sm">
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('providers')}</span>
+                    <span className="font-medium">{result.imported.providers}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('licenses')}</span>
+                    <span className="font-medium">{result.imported.licenses}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('employees')}</span>
+                    <span className="font-medium">{result.imported.employees}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('packages')}</span>
+                    <span className="font-medium">{result.imported.license_packages}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('files')}</span>
+                    <span className="font-medium">{result.imported.provider_files}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('paymentMethods')}</span>
+                    <span className="font-medium">{result.imported.payment_methods}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{t('employees')}</span>
-                  <span className="font-medium">{result.imported.employees}</span>
-                </div>
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{t('packages')}</span>
-                  <span className="font-medium">{result.imported.license_packages}</span>
-                </div>
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{t('files')}</span>
-                  <span className="font-medium">{result.imported.provider_files}</span>
-                </div>
-                <div className="flex justify-between bg-zinc-50 rounded px-3 py-1.5">
-                  <span className="text-zinc-600">{tCommon('settings')}</span>
-                  <span className="font-medium">{result.imported.settings}</span>
+              </div>
+
+              {/* Configuration */}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{t('configuration')}</p>
+                <div className="grid grid-cols-2 gap-1.5 text-sm">
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{tCommon('settings')}</span>
+                    <span className="font-medium">{result.imported.settings}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('notificationRules')}</span>
+                    <span className="font-medium">{result.imported.notification_rules}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('accountPatterns')}</span>
+                    <span className="font-medium">{result.imported.service_account_patterns + result.imported.admin_account_patterns}</span>
+                  </div>
+                  <div className="flex justify-between bg-zinc-50 rounded px-3 py-1">
+                    <span className="text-zinc-600">{t('costSnapshots')}</span>
+                    <span className="font-medium">{result.imported.cost_snapshots}</span>
+                  </div>
                 </div>
               </div>
             </div>

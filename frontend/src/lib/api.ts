@@ -1401,10 +1401,21 @@ export interface BackupInfoResponse {
   version?: string;
   created_at?: string;
   requires_password: boolean;
+  compressed?: boolean;
+  integrity_hash?: string;
   error?: string;
 }
 
 export interface BackupRestoreImportCounts {
+  // User and access control
+  admin_users: number;
+  roles: number;
+  permissions: number;
+  user_roles: number;
+  role_permissions: number;
+  user_notification_preferences: number;
+
+  // Core business data
   providers: number;
   licenses: number;
   employees: number;
@@ -1413,8 +1424,13 @@ export interface BackupRestoreImportCounts {
   payment_methods: number;
   provider_files: number;
   cost_snapshots: number;
+
+  // Configuration
   settings: number;
   notification_rules: number;
+  service_account_patterns: number;
+  admin_account_patterns: number;
+  service_account_license_types: number;
 }
 
 export interface BackupRestoreValidation {
