@@ -7,14 +7,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy application code first (required for package installation)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
-
-# Copy application code
 COPY src/ ./src/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
+
+# Install Python package with dependencies
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install .
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
