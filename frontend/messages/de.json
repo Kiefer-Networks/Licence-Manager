@@ -124,6 +124,7 @@
     "totpManualEntry": "Manuelle Eingabe",
     "totpSecretKey": "Geheimer Schlüssel",
     "totpVerify": "Code verifizieren",
+    "totpVerifying": "Wird verifiziert...",
     "totpVerifyDescription": "Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein",
     "totpVerifyPlaceholder": "000000",
     "totpEnabled": "2FA aktiviert",
