@@ -302,7 +302,7 @@ class BackupService:
                 "user_roles": [self._junction_to_dict(ur) for ur in user_roles],
                 "role_permissions": [self._junction_to_dict(rp) for rp in role_permissions],
                 "user_notification_preferences": [self._orm_to_dict(unp) for unp in user_notification_preferences],
-                "providers": [self._orm_to_dict(p) for p in providers],
+                "providers": [self._provider_to_dict(p) for p in providers],
                 "licenses": [self._orm_to_dict(lic) for lic in licenses],
                 "employees": [self._orm_to_dict(e) for e in employees],
                 "license_packages": [self._orm_to_dict(lp) for lp in license_packages],
@@ -403,7 +403,28 @@ class BackupService:
         return result
 
     def _admin_user_to_dict(self, user: AdminUserORM) -> dict[str, Any]:
-        """Convert admin user to dict, excluding sensitive fields."""
+        """Convert admin user to dict, decrypting TOTP secrets for portability.
+
+        TOTP secrets are stored decrypted in the backup since the backup itself
+        is password-encrypted. This allows backups to be restored on servers
+        with different ENCRYPTION_KEYs.
+        """
+        # Decrypt TOTP secret if present
+        totp_secret = None
+        if user.totp_secret_encrypted:
+            try:
+                totp_secret = self.encryption.decrypt_string(user.totp_secret_encrypted)
+            except ValueError:
+                logger.warning(f"Failed to decrypt TOTP secret for user {user.id}")
+
+        # Decrypt TOTP backup codes if present
+        totp_backup_codes = None
+        if user.totp_backup_codes_encrypted:
+            try:
+                totp_backup_codes = self.encryption.decrypt(user.totp_backup_codes_encrypted)
+            except ValueError:
+                logger.warning(f"Failed to decrypt TOTP backup codes for user {user.id}")
+
         return {
             "id": user.id,
             "email": user.email,
@@ -418,17 +439,47 @@ class BackupService:
             "locked_until": user.locked_until,
             "password_changed_at": user.password_changed_at,
             "require_password_change": user.require_password_change,
-            # TOTP fields - encrypted secrets are preserved as-is
-            "totp_secret_encrypted": user.totp_secret_encrypted,
+            # TOTP fields - decrypted for portable backup
+            "totp_secret": totp_secret,  # Decrypted, will be re-encrypted on import
             "totp_enabled": user.totp_enabled,
             "totp_verified_at": user.totp_verified_at,
-            "totp_backup_codes_encrypted": user.totp_backup_codes_encrypted,
+            "totp_backup_codes": totp_backup_codes,  # Decrypted, will be re-encrypted on import
             "last_login_at": user.last_login_at,
             "date_format": user.date_format,
             "number_format": user.number_format,
             "currency": user.currency,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
+        }
+
+    def _provider_to_dict(self, provider: ProviderORM) -> dict[str, Any]:
+        """Convert provider ORM to dict, decrypting credentials for portability.
+
+        Credentials are stored decrypted in the backup since the backup itself
+        is password-encrypted. This allows backups to be restored on servers
+        with different ENCRYPTION_KEYs.
+        """
+        # Decrypt credentials for portable backup
+        try:
+            credentials = self.encryption.decrypt(provider.credentials_encrypted)
+        except ValueError:
+            # If decryption fails, store as None - credentials will need to be re-entered
+            logger.warning(f"Failed to decrypt credentials for provider {provider.id}")
+            credentials = None
+
+        return {
+            "id": provider.id,
+            "name": provider.name,
+            "display_name": provider.display_name,
+            "logo_url": provider.logo_url,
+            "enabled": provider.enabled,
+            "credentials": credentials,  # Decrypted, will be re-encrypted on import
+            "config": provider.config,
+            "last_sync_at": provider.last_sync_at,
+            "last_sync_status": provider.last_sync_status,
+            "payment_method_id": provider.payment_method_id,
+            "created_at": provider.created_at,
+            "updated_at": provider.updated_at,
         }
 
     def _settings_to_dict(self, settings: SettingsORM) -> dict[str, Any]:
@@ -776,14 +827,31 @@ class BackupService:
 
         # 5. Admin users (no dependencies)
         for u in data.get("admin_users", []):
-            # Decode TOTP encrypted bytes from base64 if present
-            totp_secret = u.get("totp_secret_encrypted")
-            if isinstance(totp_secret, str):
-                totp_secret = base64.b64decode(totp_secret)
+            # Handle TOTP secret: new format (plaintext) or old format (encrypted bytes)
+            totp_secret_encrypted = None
+            if u.get("totp_secret"):
+                # New format: plaintext secret, encrypt with current key
+                totp_secret_encrypted = self.encryption.encrypt_string(u["totp_secret"])
+            elif u.get("totp_secret_encrypted"):
+                # Old format: already encrypted (backward compatibility)
+                totp_secret = u["totp_secret_encrypted"]
+                if isinstance(totp_secret, str):
+                    totp_secret_encrypted = base64.b64decode(totp_secret)
+                else:
+                    totp_secret_encrypted = totp_secret
 
-            totp_backup_codes = u.get("totp_backup_codes_encrypted")
-            if isinstance(totp_backup_codes, str):
-                totp_backup_codes = base64.b64decode(totp_backup_codes)
+            # Handle TOTP backup codes: new format (plaintext) or old format (encrypted bytes)
+            totp_backup_codes_encrypted = None
+            if u.get("totp_backup_codes"):
+                # New format: plaintext codes, encrypt with current key
+                totp_backup_codes_encrypted = self.encryption.encrypt(u["totp_backup_codes"])
+            elif u.get("totp_backup_codes_encrypted"):
+                # Old format: already encrypted (backward compatibility)
+                totp_backup_codes = u["totp_backup_codes_encrypted"]
+                if isinstance(totp_backup_codes, str):
+                    totp_backup_codes_encrypted = base64.b64decode(totp_backup_codes)
+                else:
+                    totp_backup_codes_encrypted = totp_backup_codes
 
             user_orm = AdminUserORM(
                 id=UUID(u["id"]) if isinstance(u["id"], str) else u["id"],
@@ -798,10 +866,10 @@ class BackupService:
                 locked_until=self._parse_datetime(u.get("locked_until")),
                 password_changed_at=self._parse_datetime(u.get("password_changed_at")),
                 require_password_change=u.get("require_password_change", False),
-                totp_secret_encrypted=totp_secret,
+                totp_secret_encrypted=totp_secret_encrypted,
                 totp_enabled=u.get("totp_enabled", False),
                 totp_verified_at=self._parse_datetime(u.get("totp_verified_at")),
-                totp_backup_codes_encrypted=totp_backup_codes,
+                totp_backup_codes_encrypted=totp_backup_codes_encrypted,
                 last_login_at=self._parse_datetime(u.get("last_login_at")),
                 date_format=u.get("date_format", "DD.MM.YYYY"),
                 number_format=u.get("number_format", "de-DE"),
@@ -894,9 +962,20 @@ class BackupService:
 
         # 10. Providers (depends on payment_methods)
         for p in data["providers"]:
-            credentials = p["credentials_encrypted"]
-            if isinstance(credentials, str):
-                credentials = base64.b64decode(credentials)
+            # Handle credentials: new format (plaintext dict) or old format (encrypted bytes)
+            if p.get("credentials") is not None:
+                # New format: plaintext credentials, encrypt with current key
+                credentials_encrypted = self.encryption.encrypt(p["credentials"])
+            elif p.get("credentials_encrypted"):
+                # Old format: already encrypted (backward compatibility)
+                credentials = p["credentials_encrypted"]
+                if isinstance(credentials, str):
+                    credentials_encrypted = base64.b64decode(credentials)
+                else:
+                    credentials_encrypted = credentials
+            else:
+                # No credentials - encrypt empty dict
+                credentials_encrypted = self.encryption.encrypt({})
 
             provider_orm = ProviderORM(
                 id=UUID(p["id"]) if isinstance(p["id"], str) else p["id"],
@@ -904,7 +983,7 @@ class BackupService:
                 display_name=p["display_name"],
                 logo_url=p.get("logo_url"),
                 enabled=p.get("enabled", True),
-                credentials_encrypted=credentials,
+                credentials_encrypted=credentials_encrypted,
                 config=p.get("config"),
                 last_sync_at=self._parse_datetime(p.get("last_sync_at")),
                 last_sync_status=p.get("last_sync_status"),
