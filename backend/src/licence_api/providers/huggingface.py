@@ -299,9 +299,10 @@ class HuggingFaceProvider(BaseProvider):
 
                     user_id = member.get("_id") or username
 
-                    # Use email as external_user_id if available, otherwise use username
-                    # This allows matching via email or manual username linking
-                    external_user_id = email if email else username
+                    # Use email as external_user_id if available, otherwise use HF user ID
+                    # This ensures consistent identification across syncs
+                    # Username is stored in metadata for display and manual linking
+                    external_user_id = email if email else user_id
 
                     # Store original user_id and username in metadata for reference
                     metadata["hf_user_id"] = user_id
