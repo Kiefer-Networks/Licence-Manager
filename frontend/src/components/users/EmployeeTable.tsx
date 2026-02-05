@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronUp, ChevronDown, ChevronRight, Skull, Loader2, Users } from 'lucide-react';
 import { useLocale } from '@/components/locale-provider';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Base employee type that all employee data should conform to
 export interface EmployeeTableData {
@@ -109,7 +111,7 @@ interface EmployeeTableProps {
   compact?: boolean;
 }
 
-export function EmployeeTable({
+function EmployeeTableComponent({
   employees,
   columns,
   loading = false,
@@ -134,13 +136,13 @@ export function EmployeeTable({
   const router = useRouter();
   const { formatDate, formatCurrency } = useLocale();
 
-  const handleRowClick = (employee: EmployeeTableData) => {
+  const handleRowClick = useCallback((employee: EmployeeTableData) => {
     if (onRowClick) {
       onRowClick(employee);
     } else if (linkToEmployee) {
       router.push(`/users/${employee.id}`);
     }
-  };
+  }, [onRowClick, linkToEmployee, router]);
 
   const isClickable = !!onRowClick || linkToEmployee;
 
@@ -183,10 +185,12 @@ export function EmployeeTable({
           <div className="flex items-center gap-2">
             {showAvatar && (
               employee.avatar ? (
-                <img
+                <Image
                   src={employee.avatar}
                   alt=""
-                  className={`rounded-full object-cover flex-shrink-0 ${compact ? 'h-6 w-6' : 'h-7 w-7'}`}
+                  width={compact ? 24 : 28}
+                  height={compact ? 24 : 28}
+                  className="rounded-full object-cover flex-shrink-0"
                 />
               ) : (
                 <div className={`rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -432,6 +436,9 @@ export function EmployeeTable({
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent state changes
+export const EmployeeTable = memo(EmployeeTableComponent);
 
 // Helper function to convert API employee data to table format
 export function mapEmployeeToTableData(employee: any): EmployeeTableData {

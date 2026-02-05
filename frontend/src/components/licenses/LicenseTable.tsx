@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
@@ -36,7 +36,7 @@ interface LicenseTableProps {
 
 type SortColumn = 'external_user_id' | 'employee_name' | 'license_type' | 'monthly_cost' | 'provider_name';
 
-export function LicenseTable({
+function LicenseTableComponent({
   licenses,
   showProvider = true,
   showEmployee = true,
@@ -60,14 +60,17 @@ export function LicenseTable({
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
+  const handleSort = useCallback((column: SortColumn) => {
+    setSortColumn((prevColumn) => {
+      if (prevColumn === column) {
+        setSortDirection((prevDir) => prevDir === 'asc' ? 'desc' : 'asc');
+        return prevColumn;
+      } else {
+        setSortDirection('asc');
+        return column;
+      }
+    });
+  }, []);
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
@@ -356,3 +359,6 @@ export function LicenseTable({
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent state changes
+export const LicenseTable = memo(LicenseTableComponent);

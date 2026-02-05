@@ -16,6 +16,16 @@ const nextConfig = {
         hostname: 'lh3.googleusercontent.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.hibob.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.auth0.com',
+        pathname: '/**',
+      },
     ],
   },
   async headers() {

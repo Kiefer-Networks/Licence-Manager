@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -94,10 +94,16 @@ export default function DashboardPage() {
     }
   };
 
-  const hrisProviders = dashboard?.providers.filter((p) => p.name === 'hibob') || [];
-  const licenseProviders = dashboard?.providers
-    .filter((p) => p.name !== 'hibob')
-    .sort((a, b) => a.display_name.localeCompare(b.display_name)) || [];
+  const hrisProviders = useMemo(
+    () => dashboard?.providers.filter((p) => p.name === 'hibob') || [],
+    [dashboard?.providers]
+  );
+  const licenseProviders = useMemo(
+    () => dashboard?.providers
+      ?.filter((p) => p.name !== 'hibob')
+      .sort((a, b) => a.display_name.localeCompare(b.display_name)) || [],
+    [dashboard?.providers]
+  );
 
   const totalLicenses = dashboard?.total_licenses || 0;
   const unassignedCount = dashboard?.unassigned_licenses || 0;

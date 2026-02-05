@@ -3,10 +3,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
+from licence_api.utils.errors import raise_not_found
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.organization_license import (
     OrganizationLicenseCreate,
@@ -39,10 +40,7 @@ async def list_organization_licenses(
     try:
         return await service.list_licenses(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
+        raise_not_found("Provider")
 
 
 @router.post("/{provider_id}/org-licenses", response_model=OrganizationLicenseResponse)
@@ -64,10 +62,7 @@ async def create_organization_license(
             request=request,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
+        raise_not_found("Provider")
 
 
 @router.put("/{provider_id}/org-licenses/{license_id}", response_model=OrganizationLicenseResponse)
@@ -91,10 +86,7 @@ async def update_organization_license(
             request=request,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License or provider not found",
-        )
+        raise_not_found("License or provider")
 
 
 @router.delete("/{provider_id}/org-licenses/{license_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -116,7 +108,4 @@ async def delete_organization_license(
             request=request,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="License or provider not found",
-        )
+        raise_not_found("License or provider")
