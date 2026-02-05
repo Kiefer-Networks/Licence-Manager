@@ -91,6 +91,7 @@ function LicenseTableComponent({
     // Search filter
     if (search) {
       const searchLower = search.toLowerCase();
+      const metaStr = (val: unknown) => typeof val === 'string' ? val.toLowerCase() : '';
       result = result.filter(
         (l) =>
           l.external_user_id.toLowerCase().includes(searchLower) ||
@@ -100,9 +101,15 @@ function LicenseTableComponent({
           l.license_type?.toLowerCase().includes(searchLower) ||
           l.service_account_name?.toLowerCase().includes(searchLower) ||
           l.service_account_owner_name?.toLowerCase().includes(searchLower) ||
-          // Search in metadata (e.g., JetBrains email/assignee_name)
-          l.metadata?.email?.toLowerCase().includes(searchLower) ||
-          l.metadata?.assignee_name?.toLowerCase().includes(searchLower)
+          // Search in metadata (names, usernames, emails)
+          metaStr(l.metadata?.email).includes(searchLower) ||
+          metaStr(l.metadata?.assignee_name).includes(searchLower) ||
+          metaStr(l.metadata?.fullName).includes(searchLower) ||
+          metaStr(l.metadata?.fullname).includes(searchLower) ||
+          metaStr(l.metadata?.displayName).includes(searchLower) ||
+          metaStr(l.metadata?.display_name).includes(searchLower) ||
+          metaStr(l.metadata?.username).includes(searchLower) ||
+          metaStr(l.metadata?.hf_username).includes(searchLower)
       );
     }
 
@@ -248,16 +255,40 @@ function LicenseTableComponent({
                   )}
                   <td className="px-4 py-3">
                     <div>
-                      {/* Show email from metadata if available (e.g., JetBrains), otherwise external_user_id */}
-                      <span className="text-muted-foreground">
-                        {license.metadata?.email || license.external_user_id}
-                      </span>
-                      {/* Show assignee name if available and different from email */}
-                      {license.metadata?.assignee_name && license.metadata?.email && (
-                        <span className="block text-xs text-muted-foreground/60">
-                          {license.metadata.assignee_name}
-                        </span>
-                      )}
+                      {(() => {
+                        // Get display name from various metadata fields (ensure string type)
+                        const str = (v: unknown) => typeof v === 'string' ? v : undefined;
+                        const displayName = str(license.metadata?.fullName)
+                          || str(license.metadata?.fullname)
+                          || str(license.metadata?.displayName)
+                          || str(license.metadata?.display_name)
+                          || str(license.metadata?.assignee_name);
+                        const username = str(license.metadata?.username) || str(license.metadata?.hf_username);
+                        const email = str(license.metadata?.email);
+                        const externalId = license.external_user_id;
+                        const isEmailLike = externalId?.includes('@');
+
+                        return (
+                          <>
+                            {/* Show name prominently if available */}
+                            {displayName && (
+                              <span className="font-medium block">
+                                {displayName}
+                              </span>
+                            )}
+                            {/* Show email or external_user_id */}
+                            <span className={`text-muted-foreground ${displayName ? 'text-xs' : ''}`}>
+                              {email || (isEmailLike ? externalId : null) || (username ? `@${username}` : externalId)}
+                            </span>
+                            {/* Show username if we have a name but username is different */}
+                            {displayName && username && !email && (
+                              <span className="block text-xs text-muted-foreground/60">
+                                @{username}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   {showEmployee && (
