@@ -241,3 +241,59 @@ async def cancel_org_license(
         )
     except ValueError:
         raise HTTPException(status_code=404, detail="Organization license not found")
+
+
+@router.post("/org-licenses/{org_license_id}/renew")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def renew_org_license(
+    request: Request,
+    org_license_id: UUID,
+    body: RenewRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> dict:
+    """Renew an organization license by setting new renewal/expiration dates.
+
+    Optionally clears any pending cancellation.
+    """
+    try:
+        org_license = await service.renew_org_license(
+            org_license_id=org_license_id,
+            new_renewal_date=body.new_expiration_date,
+            new_expires_at=body.new_expiration_date,
+            clear_cancellation=body.clear_cancellation,
+        )
+        return {
+            "success": True,
+            "message": "Organization license renewed successfully",
+            "renewal_date": org_license.renewal_date.isoformat() if org_license.renewal_date else None,
+            "expires_at": org_license.expires_at.isoformat() if org_license.expires_at else None,
+            "status": org_license.status,
+        }
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Organization license not found")
+
+
+@router.patch("/org-licenses/{org_license_id}/needs-reorder")
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def set_org_license_needs_reorder(
+    request: Request,
+    org_license_id: UUID,
+    body: NeedsReorderUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
+    service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> dict:
+    """Set the needs_reorder flag for an organization license."""
+    try:
+        org_license = await service.set_org_license_needs_reorder(
+            org_license_id=org_license_id,
+            needs_reorder=body.needs_reorder,
+        )
+        return {
+            "success": True,
+            "needs_reorder": org_license.needs_reorder,
+        }
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Organization license not found")

@@ -317,3 +317,87 @@ class CancellationService:
         await self.session.commit()
         await self.session.refresh(package)
         return package
+
+    async def renew_org_license(
+        self,
+        org_license_id: UUID,
+        new_renewal_date: date | None = None,
+        new_expires_at: date | None = None,
+        clear_cancellation: bool = True,
+    ) -> OrganizationLicenseORM:
+        """Renew an organization license by setting new renewal/expiration dates.
+
+        Args:
+            org_license_id: Organization license UUID
+            new_renewal_date: New renewal date (optional)
+            new_expires_at: New expiration date (optional)
+            clear_cancellation: Whether to clear cancellation data
+
+        Returns:
+            Updated OrganizationLicenseORM
+
+        Raises:
+            ValueError: If org license not found
+        """
+        result = await self.session.execute(
+            select(OrganizationLicenseORM)
+            .options(selectinload(OrganizationLicenseORM.provider))
+            .where(OrganizationLicenseORM.id == org_license_id)
+        )
+        org_license = result.scalar_one_or_none()
+
+        if org_license is None:
+            raise ValueError(f"Organization license {org_license_id} not found")
+
+        if new_renewal_date is not None:
+            org_license.renewal_date = new_renewal_date
+        if new_expires_at is not None:
+            org_license.expires_at = new_expires_at
+        org_license.needs_reorder = False
+
+        if clear_cancellation:
+            org_license.cancelled_at = None
+            org_license.cancellation_effective_date = None
+            org_license.cancellation_reason = None
+            org_license.cancelled_by = None
+
+            # Reset status if it was cancelled or expired
+            if org_license.status in (OrgLicenseStatus.CANCELLED, OrgLicenseStatus.EXPIRED):
+                org_license.status = OrgLicenseStatus.ACTIVE
+
+        await self.session.commit()
+        await self.session.refresh(org_license)
+        return org_license
+
+    async def set_org_license_needs_reorder(
+        self,
+        org_license_id: UUID,
+        needs_reorder: bool,
+    ) -> OrganizationLicenseORM:
+        """Set the needs_reorder flag for an organization license.
+
+        Args:
+            org_license_id: Organization license UUID
+            needs_reorder: Whether org license needs reorder
+
+        Returns:
+            Updated OrganizationLicenseORM
+
+        Raises:
+            ValueError: If org license not found
+        """
+        result = await self.session.execute(
+            select(OrganizationLicenseORM)
+            .options(selectinload(OrganizationLicenseORM.provider))
+            .where(OrganizationLicenseORM.id == org_license_id)
+        )
+        org_license = result.scalar_one_or_none()
+
+        if org_license is None:
+            raise ValueError(f"Organization license {org_license_id} not found")
+
+        org_license.needs_reorder = needs_reorder
+
+        await self.session.commit()
+        await self.session.refresh(org_license)
+        return org_license
