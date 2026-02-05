@@ -2404,18 +2404,12 @@ export default function ProviderDetailPage() {
           </DialogHeader>
           <div className="py-4">
             <Label className="text-xs font-medium mb-2 block">{t('selectEmployee')}</Label>
-            <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-              <SelectTrigger>
-                <SelectValue placeholder={t('chooseEmployee')} />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.full_name} ({emp.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EmployeeAutocomplete
+              employees={employees}
+              value={selectedEmployeeId}
+              onChange={setSelectedEmployeeId}
+              placeholder={t('chooseEmployee')}
+            />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAssignDialog(null)}>{tCommon('cancel')}</Button>
