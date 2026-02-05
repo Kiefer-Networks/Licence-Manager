@@ -299,7 +299,7 @@ async def get_audit_log(
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> AuditLogResponse:
     """Get a single audit log entry. Requires audit.view permission."""
-    log = await audit_repo.get(log_id)
+    log = await audit_repo.get_by_id(log_id)
 
     if not log:
         raise HTTPException(

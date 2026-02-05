@@ -738,7 +738,7 @@ class LicenseService:
         old_values, new_values = result
 
         # Get license info for audit log
-        license_orm = await self.license_repo.get(license_id)
+        license_orm = await self.license_repo.get_by_id(license_id)
 
         # If apply_globally is set, add to global patterns
         pattern_created = False
@@ -854,7 +854,7 @@ class LicenseService:
         from decimal import Decimal
         from licence_api.services.pricing_service import PricingService
 
-        license_orm = await self.license_repo.get(license_id)
+        license_orm = await self.license_repo.get_by_id(license_id)
         if license_orm is None:
             return None
 
@@ -863,7 +863,7 @@ class LicenseService:
 
         # Get provider config for pricing
         provider_repo = ProviderRepository(self.session)
-        provider = await provider_repo.get(license_orm.provider_id)
+        provider = await provider_repo.get_by_id(license_orm.provider_id)
 
         # Calculate new monthly cost based on license type pricing
         monthly_cost = None

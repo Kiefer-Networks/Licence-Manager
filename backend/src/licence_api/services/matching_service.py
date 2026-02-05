@@ -439,7 +439,7 @@ class MatchingService:
         Returns:
             Updated license or None if not found
         """
-        license = await self.license_repo.get(license_id)
+        license = await self.license_repo.get_by_id(license_id)
         if not license or not license.suggested_employee_id:
             return None
 
@@ -468,7 +468,7 @@ class MatchingService:
         Returns:
             Updated license or None if not found
         """
-        license = await self.license_repo.get(license_id)
+        license = await self.license_repo.get_by_id(license_id)
         if not license:
             return None
 
@@ -495,7 +495,7 @@ class MatchingService:
         Returns:
             Updated license or None if not found
         """
-        license = await self.license_repo.get(license_id)
+        license = await self.license_repo.get_by_id(license_id)
         if not license:
             return None
 
@@ -525,7 +525,7 @@ class MatchingService:
         Returns:
             Updated license or None if not found
         """
-        license = await self.license_repo.get(license_id)
+        license = await self.license_repo.get_by_id(license_id)
         if not license:
             return None
 

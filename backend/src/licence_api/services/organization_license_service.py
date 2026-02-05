@@ -60,7 +60,7 @@ class OrganizationLicenseService:
         Raises:
             ValueError: If provider not found
         """
-        provider = await self.provider_repo.get(provider_id)
+        provider = await self.provider_repo.get_by_id(provider_id)
         if not provider:
             raise ValueError("Provider not found")
 
@@ -96,7 +96,7 @@ class OrganizationLicenseService:
         Raises:
             ValueError: If provider not found
         """
-        provider = await self.provider_repo.get(provider_id)
+        provider = await self.provider_repo.get_by_id(provider_id)
         if not provider:
             raise ValueError("Provider not found")
 

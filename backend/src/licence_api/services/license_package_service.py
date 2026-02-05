@@ -78,7 +78,7 @@ class LicensePackageService:
         Raises:
             ValueError: If provider not found
         """
-        provider = await self.provider_repo.get(provider_id)
+        provider = await self.provider_repo.get_by_id(provider_id)
         if not provider:
             raise ValueError("Provider not found")
 
@@ -113,7 +113,7 @@ class LicensePackageService:
         Raises:
             ValueError: If provider not found or package already exists
         """
-        provider = await self.provider_repo.get(provider_id)
+        provider = await self.provider_repo.get_by_id(provider_id)
         if not provider:
             raise ValueError("Provider not found")
 

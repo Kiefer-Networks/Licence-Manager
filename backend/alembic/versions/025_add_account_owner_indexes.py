@@ -24,53 +24,48 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add indexes for account owner lookups."""
-    # Index for service account owner FK lookups
-    op.create_index(
-        "ix_licenses_service_account_owner_id",
-        "licenses",
-        ["service_account_owner_id"],
-        unique=False,
-    )
-
-    # Index for admin account owner FK lookups
-    op.create_index(
-        "ix_licenses_admin_account_owner_id",
-        "licenses",
-        ["admin_account_owner_id"],
-        unique=False,
-    )
-
-    # Index for admin account filtering (matching is_service_account index)
-    op.create_index(
-        "ix_licenses_is_admin_account",
-        "licenses",
-        ["is_admin_account"],
-        unique=False,
-    )
-
-    # Partial index for active admin accounts (common dashboard query)
+    # Use raw SQL with IF NOT EXISTS to make migration idempotent
     op.execute(
         """
-        CREATE INDEX ix_licenses_active_admin_accounts
+        CREATE INDEX IF NOT EXISTS ix_licenses_service_account_owner_id
+        ON licenses (service_account_owner_id)
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_licenses_admin_account_owner_id
+        ON licenses (admin_account_owner_id)
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_licenses_is_admin_account
+        ON licenses (is_admin_account)
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_licenses_active_admin_accounts
         ON licenses (provider_id, admin_account_owner_id)
         WHERE is_admin_account = true AND status = 'active'
         """
     )
 
-    # Index for employee hibob_id lookups (used in upsert during sync)
-    op.create_index(
-        "ix_employees_hibob_id",
-        "employees",
-        ["hibob_id"],
-        unique=False,
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_employees_hibob_id
+        ON employees (hibob_id)
+        """
     )
 
-    # Index for employee manager_id FK lookups
-    op.create_index(
-        "ix_employees_manager_id",
-        "employees",
-        ["manager_id"],
-        unique=False,
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_employees_manager_id
+        ON employees (manager_id)
+        """
     )
 
 
