@@ -51,6 +51,14 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
         lazy="select",
     )
 
+    # External accounts (provider usernames linked to this employee)
+    external_accounts: Mapped[list["EmployeeExternalAccountORM"]] = relationship(
+        "EmployeeExternalAccountORM",
+        back_populates="employee",
+        lazy="select",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
         Index("idx_employees_email", "email"),
         Index("idx_employees_status", "status"),
@@ -61,3 +69,4 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
 
 # Import here to avoid circular import
 from licence_api.models.orm.license import LicenseORM  # noqa: E402, F401
+from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM  # noqa: E402, F401

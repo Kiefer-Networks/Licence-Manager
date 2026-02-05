@@ -1,0 +1,235 @@
+"""External accounts router - Manage employee external provider links."""
+
+import logging
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from licence_api.database import get_db
+from licence_api.models.domain.admin_user import AdminUser
+from licence_api.models.dto.external_account import (
+    BulkLinkRequest,
+    BulkLinkResponse,
+    ExternalAccountCreate,
+    ExternalAccountListResponse,
+    ExternalAccountResponse,
+    SuggestionsRequest,
+    SuggestionsResponse,
+    UsernameMatchingSettingResponse,
+    UsernameMatchingSettingUpdate,
+    EmployeeSuggestion,
+)
+from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.csrf import CSRFProtected
+from licence_api.services.external_account_service import ExternalAccountService
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+def get_external_account_service(
+    db: AsyncSession = Depends(get_db),
+) -> ExternalAccountService:
+    """Get ExternalAccountService instance."""
+    return ExternalAccountService(db)
+
+
+# Settings endpoint
+@router.get("/settings/username-matching", response_model=UsernameMatchingSettingResponse)
+async def get_username_matching_setting(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+) -> UsernameMatchingSettingResponse:
+    """Get username matching feature setting."""
+    enabled = await service.is_username_matching_enabled()
+    return UsernameMatchingSettingResponse(enabled=enabled)
+
+
+@router.put("/settings/username-matching", response_model=UsernameMatchingSettingResponse)
+async def update_username_matching_setting(
+    request: Request,
+    data: UsernameMatchingSettingUpdate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_MANAGE))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> UsernameMatchingSettingResponse:
+    """Update username matching feature setting."""
+    enabled = await service.set_username_matching_enabled(
+        enabled=data.enabled,
+        user=current_user,
+        request=request,
+    )
+    return UsernameMatchingSettingResponse(enabled=enabled)
+
+
+# External accounts for a specific employee
+@router.get(
+    "/employees/{employee_id}/external-accounts",
+    response_model=ExternalAccountListResponse,
+)
+async def get_employee_external_accounts(
+    employee_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+) -> ExternalAccountListResponse:
+    """Get all external accounts linked to an employee."""
+    accounts = await service.get_employee_external_accounts(employee_id)
+    return ExternalAccountListResponse(
+        accounts=[
+            ExternalAccountResponse(
+                id=acc.id,
+                employee_id=acc.employee_id,
+                provider_type=acc.provider_type,
+                external_username=acc.external_username,
+                external_user_id=acc.external_user_id,
+                display_name=acc.display_name,
+                linked_at=acc.linked_at,
+                linked_by_id=acc.linked_by_id,
+                created_at=acc.created_at,
+                updated_at=acc.updated_at,
+            )
+            for acc in accounts
+        ],
+        total=len(accounts),
+    )
+
+
+# Link an external account
+@router.post("/external-accounts", response_model=ExternalAccountResponse, status_code=status.HTTP_201_CREATED)
+async def link_external_account(
+    request: Request,
+    data: ExternalAccountCreate,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> ExternalAccountResponse:
+    """Link an external account to an employee."""
+    try:
+        account = await service.link_account(
+            employee_id=data.employee_id,
+            provider_type=data.provider_type,
+            external_username=data.external_username,
+            external_user_id=data.external_user_id,
+            display_name=data.display_name,
+            user=current_user,
+            request=request,
+        )
+        return ExternalAccountResponse(
+            id=account.id,
+            employee_id=account.employee_id,
+            provider_type=account.provider_type,
+            external_username=account.external_username,
+            external_user_id=account.external_user_id,
+            display_name=account.display_name,
+            linked_at=account.linked_at,
+            linked_by_id=account.linked_by_id,
+            created_at=account.created_at,
+            updated_at=account.updated_at,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+# Unlink an external account
+@router.delete("/external-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_external_account(
+    request: Request,
+    account_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> None:
+    """Unlink an external account."""
+    deleted = await service.unlink_account_by_id(
+        account_id=account_id,
+        user=current_user,
+        request=request,
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="External account not found",
+        )
+
+
+# Get suggestions for linking
+@router.post("/external-accounts/suggestions", response_model=SuggestionsResponse)
+async def get_employee_suggestions(
+    data: SuggestionsRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+) -> SuggestionsResponse:
+    """Get employee suggestions for linking based on name similarity."""
+    suggestions = await service.find_employee_suggestions(
+        display_name=data.display_name,
+        provider_type=data.provider_type,
+        limit=data.limit,
+    )
+    return SuggestionsResponse(
+        suggestions=[
+            EmployeeSuggestion(**s) for s in suggestions
+        ]
+    )
+
+
+# Bulk link accounts
+@router.post("/external-accounts/bulk", response_model=BulkLinkResponse)
+async def bulk_link_accounts(
+    request: Request,
+    data: BulkLinkRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> BulkLinkResponse:
+    """Bulk link multiple external accounts."""
+    linked = 0
+    skipped = 0
+    errors = []
+
+    for link in data.links:
+        try:
+            await service.link_account(
+                employee_id=link.employee_id,
+                provider_type=link.provider_type,
+                external_username=link.external_username,
+                external_user_id=link.external_user_id,
+                display_name=link.display_name,
+                user=current_user,
+                request=request,
+            )
+            linked += 1
+        except ValueError as e:
+            if "already linked" in str(e).lower():
+                skipped += 1
+            else:
+                errors.append(f"{link.external_username}: {str(e)}")
+
+    return BulkLinkResponse(linked=linked, skipped=skipped, errors=errors)
+
+
+# Lookup by external username
+@router.get("/external-accounts/lookup/{provider_type}/{username}")
+async def lookup_by_external_username(
+    provider_type: str,
+    username: str,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
+    service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+) -> dict:
+    """Lookup an employee by their external username."""
+    employee = await service.get_employee_by_external_username(provider_type, username)
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No employee linked to this username",
+        )
+    return {
+        "employee_id": str(employee.id),
+        "email": employee.email,
+        "full_name": employee.full_name,
+        "department": employee.department,
+    }

@@ -509,9 +509,17 @@ class SyncService:
             # Use email field if available (e.g., JetBrains provides email separately from license ID)
             # Fall back to external_user_id (which is typically an email for most providers)
             match_identifier = lic_data.get("email") or lic_data["external_user_id"]
+
+            # Get username from metadata for external account matching
+            # This enables matching by linked external accounts (e.g., HuggingFace username)
+            metadata = lic_data.get("metadata", {})
+            username_for_matching = metadata.get("username") or metadata.get("hf_username")
+
             match_result = await matching_service.match_license(
                 match_identifier,
                 company_domains,
+                provider_type=provider_orm.name if provider_orm else None,
+                username=username_for_matching,
             )
 
             # Determine employee_id and match fields

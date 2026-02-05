@@ -33,6 +33,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.repositories.employee_external_account_repository import EmployeeExternalAccountRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
@@ -50,6 +51,7 @@ MATCH_STATUS_EXTERNAL_REVIEW = "external_review"  # External email, needs review
 MATCH_METHOD_EXACT = "exact_email"
 MATCH_METHOD_LOCAL_PART = "local_part"
 MATCH_METHOD_FUZZY_NAME = "fuzzy_name"
+MATCH_METHOD_EXTERNAL_ACCOUNT = "external_account"
 
 # Confidence thresholds
 CONFIDENCE_AUTO_ASSIGN = 0.95  # Auto-assign if confidence >= this
@@ -59,7 +61,7 @@ MatchStatus = Literal[
     "auto_matched", "suggested", "confirmed", "rejected",
     "external_guest", "external_review"
 ]
-MatchMethod = Literal["exact_email", "local_part", "fuzzy_name"]
+MatchMethod = Literal["exact_email", "local_part", "fuzzy_name", "external_account"]
 
 
 @dataclass
@@ -99,6 +101,7 @@ class MatchingService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.employee_repo = EmployeeRepository(session)
+        self.external_account_repo = EmployeeExternalAccountRepository(session)
         self.license_repo = LicenseRepository(session)
         self.audit_service = AuditService(session)
 
@@ -106,6 +109,7 @@ class MatchingService:
         self._email_to_employee: dict[str, EmployeeORM] = {}
         self._local_to_employees: dict[str, list[EmployeeORM]] = {}
         self._employees_by_id: dict[UUID, EmployeeORM] = {}
+        self._external_accounts: dict[str, dict[str, UUID]] = {}  # provider -> username -> employee_id
 
     async def _build_caches(self) -> None:
         """Build lookup caches for efficient matching."""
@@ -232,21 +236,38 @@ class MatchingService:
 
         return best_match, confidence
 
+    async def _build_external_accounts_cache(self, provider_type: str) -> None:
+        """Build cache of external account mappings for a provider.
+
+        Args:
+            provider_type: Provider type to load mappings for
+        """
+        if provider_type not in self._external_accounts:
+            mappings = await self.external_account_repo.get_all_for_provider(provider_type)
+            self._external_accounts[provider_type] = {
+                username: emp_id for username, emp_id in mappings.items()
+            }
+
     async def match_license(
         self,
         external_user_id: str,
         company_domains: list[str],
+        provider_type: str | None = None,
+        username: str | None = None,
     ) -> MatchResult:
         """Match a license to an employee using multi-level matching.
 
         Matching levels (in order of priority):
-        1. Exact email match (company email)
-        2. Local part match (e.g., john.doe@ matches john.doe@company.com)
-        3. Fuzzy name match (e.g., "john.doe" matches employee "John Doe")
+        1. External account match (if provider_type and username provided)
+        2. Exact email match (company email)
+        3. Local part match (e.g., john.doe@ matches john.doe@company.com)
+        4. Fuzzy name match (e.g., "john.doe" matches employee "John Doe")
 
         Args:
             external_user_id: The license's external user ID (usually email)
             company_domains: List of company email domains
+            provider_type: Optional provider type for external account matching
+            username: Optional username for external account matching
 
         Returns:
             MatchResult with match details
@@ -257,6 +278,21 @@ class MatchingService:
         # Build caches if not done
         if not self._email_to_employee:
             await self._build_caches()
+
+        # Level 0: External account match (if provider and username provided)
+        if provider_type and username:
+            await self._build_external_accounts_cache(provider_type)
+            provider_accounts = self._external_accounts.get(provider_type, {})
+            if username in provider_accounts:
+                employee_id = provider_accounts[username]
+                if employee_id in self._employees_by_id:
+                    return MatchResult(
+                        employee_id=employee_id,
+                        confidence=1.0,
+                        method=MATCH_METHOD_EXTERNAL_ACCOUNT,
+                        status=MATCH_STATUS_AUTO_MATCHED,
+                        is_external=False,
+                    )
 
         # Level 1: Exact email match (only for company emails)
         if email in self._email_to_employee:

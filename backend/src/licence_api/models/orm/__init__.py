@@ -21,6 +21,7 @@ from licence_api.models.orm.organization_license import OrganizationLicenseORM
 from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
+from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
 
 __all__ = [
     "Base",
@@ -44,4 +45,5 @@ __all__ = [
     "UserNotificationPreferenceORM",
     "CostSnapshotORM",
     "ServiceAccountLicenseTypeORM",
+    "EmployeeExternalAccountORM",
 ]

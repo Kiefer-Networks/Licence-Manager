@@ -23,7 +23,7 @@ from licence_api.middleware.error_handler import (
     sqlalchemy_exception_handler,
     validation_exception_handler,
 )
-from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, exports, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, providers, rbac, reports, service_accounts, settings, users
+from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, exports, external_accounts, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, providers, rbac, reports, service_accounts, settings, users
 from licence_api.security.rate_limit import limiter
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
@@ -165,6 +165,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
     app.include_router(exports.router, prefix="/api/v1/exports", tags=["Exports"])
     app.include_router(backup.router, prefix="/api/v1/backup", tags=["Backup"])
+    app.include_router(external_accounts.router, prefix="/api/v1", tags=["External Accounts"])
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:

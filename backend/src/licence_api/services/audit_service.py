@@ -71,6 +71,10 @@ class AuditAction:
     EMPLOYEE_DELETE = "employee_delete"
     EMPLOYEE_BULK_IMPORT = "employee_bulk_import"
 
+    # External Accounts
+    EXTERNAL_ACCOUNT_LINK = "external_account_link"
+    EXTERNAL_ACCOUNT_UNLINK = "external_account_unlink"
+
     # Service Account Patterns
     SERVICE_ACCOUNT_PATTERN_CREATE = "service_account_pattern_create"
     SERVICE_ACCOUNT_PATTERN_DELETE = "service_account_pattern_delete"

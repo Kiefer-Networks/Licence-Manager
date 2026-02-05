@@ -106,6 +106,7 @@ SECRET_CREDENTIAL_FIELDS = {
     'auth_token',
     'bot_token',
     'client_secret',
+    'scim_token',
     'user_token',
     'service_account_json',
 }
