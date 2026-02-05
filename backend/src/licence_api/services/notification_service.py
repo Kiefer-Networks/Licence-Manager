@@ -270,6 +270,265 @@ Please review and renew these licenses if needed.
 
         return True
 
+    async def notify_license_expired(
+        self,
+        provider_name: str,
+        license_type: str | None,
+        user_email: str,
+        expired_count: int,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for expired licenses.
+
+        Args:
+            provider_name: Provider name
+            license_type: License type (optional)
+            user_email: User email (or "Multiple users")
+            expired_count: Number of expired licenses
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("license_expired")
+        if not rules:
+            return False
+
+        type_str = f" ({license_type})" if license_type else ""
+        user_str = user_email if expired_count == 1 else f"{expired_count} licenses"
+
+        message = f"""
+:no_entry: *License Expired Alert*
+
+*Provider:* {provider_name}{type_str}
+*Affected:* {user_str}
+
+These licenses have expired and require immediate attention.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_license_cancelled(
+        self,
+        provider_name: str,
+        license_type: str | None,
+        user_email: str,
+        cancelled_by: str,
+        cancellation_reason: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for cancelled licenses.
+
+        Args:
+            provider_name: Provider name
+            license_type: License type (optional)
+            user_email: User email
+            cancelled_by: User who cancelled
+            cancellation_reason: Reason for cancellation (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("license_cancelled")
+        if not rules:
+            return False
+
+        type_str = f" ({license_type})" if license_type else ""
+        reason_str = f"\n*Reason:* {cancellation_reason}" if cancellation_reason else ""
+
+        message = f"""
+:x: *License Cancelled*
+
+*Provider:* {provider_name}{type_str}
+*User:* {user_email}
+*Cancelled by:* {cancelled_by}{reason_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_package_expired(
+        self,
+        provider_name: str,
+        package_name: str,
+        seat_count: int,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for expired package.
+
+        Args:
+            provider_name: Provider name
+            package_name: Package/license type name
+            seat_count: Number of seats in package
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("package_expired")
+        if not rules:
+            return False
+
+        message = f"""
+:no_entry: *Package Expired Alert*
+
+*Provider:* {provider_name}
+*Package:* {package_name}
+*Seats:* {seat_count}
+
+This package has expired and requires renewal or removal.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_package_cancelled(
+        self,
+        provider_name: str,
+        package_name: str,
+        seat_count: int,
+        cancelled_by: str,
+        cancellation_reason: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for cancelled package.
+
+        Args:
+            provider_name: Provider name
+            package_name: Package/license type name
+            seat_count: Number of seats in package
+            cancelled_by: User who cancelled
+            cancellation_reason: Reason for cancellation (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("package_cancelled")
+        if not rules:
+            return False
+
+        reason_str = f"\n*Reason:* {cancellation_reason}" if cancellation_reason else ""
+
+        message = f"""
+:x: *Package Cancelled*
+
+*Provider:* {provider_name}
+*Package:* {package_name}
+*Seats:* {seat_count}
+*Cancelled by:* {cancelled_by}{reason_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_org_license_expired(
+        self,
+        provider_name: str,
+        org_license_name: str,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for expired organization license.
+
+        Args:
+            provider_name: Provider name
+            org_license_name: Organization license name
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("org_license_expired")
+        if not rules:
+            return False
+
+        message = f"""
+:no_entry: *Organization License Expired Alert*
+
+*Provider:* {provider_name}
+*License:* {org_license_name}
+
+This organization license has expired and requires renewal.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_org_license_cancelled(
+        self,
+        provider_name: str,
+        org_license_name: str,
+        cancelled_by: str,
+        cancellation_reason: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for cancelled organization license.
+
+        Args:
+            provider_name: Provider name
+            org_license_name: Organization license name
+            cancelled_by: User who cancelled
+            cancellation_reason: Reason for cancellation (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("org_license_cancelled")
+        if not rules:
+            return False
+
+        reason_str = f"\n*Reason:* {cancellation_reason}" if cancellation_reason else ""
+
+        message = f"""
+:x: *Organization License Cancelled*
+
+*Provider:* {provider_name}
+*License:* {org_license_name}
+*Cancelled by:* {cancelled_by}{reason_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
     async def _send_slack_message(
         self,
         channel: str,

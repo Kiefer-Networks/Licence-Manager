@@ -127,13 +127,37 @@ async def check_expiring_licenses_job() -> None:
             update_counts = await expiration_service.check_and_update_expired_licenses()
             logger.info(f"Updated expired/cancelled items: {update_counts}")
 
+            # Get Slack token from settings (needed for notifications)
+            slack_config = await settings_repo.get("slack_config")
+            slack_token = slack_config.get("bot_token") if slack_config else None
+
+            # Send notifications for items that just expired/cancelled
+            if slack_token:
+                if update_counts.get("licenses_expired", 0) > 0:
+                    await notification_service.notify_license_expired(
+                        provider_name="Multiple providers",
+                        license_type=None,
+                        user_email="Multiple users",
+                        expired_count=update_counts["licenses_expired"],
+                        slack_token=slack_token,
+                    )
+                if update_counts.get("packages_expired", 0) > 0:
+                    await notification_service.notify_package_expired(
+                        provider_name="Multiple providers",
+                        package_name="Multiple packages",
+                        seat_count=update_counts["packages_expired"],
+                        slack_token=slack_token,
+                    )
+                if update_counts.get("org_licenses_expired", 0) > 0:
+                    await notification_service.notify_org_license_expired(
+                        provider_name="Multiple providers",
+                        org_license_name=f"{update_counts['org_licenses_expired']} organization license(s)",
+                        slack_token=slack_token,
+                    )
+
             # Get threshold settings
             thresholds = await settings_repo.get("thresholds")
             expiring_days = thresholds.get("expiring_days", 30) if thresholds else 30
-
-            # Get Slack token from settings
-            slack_config = await settings_repo.get("slack_config")
-            slack_token = slack_config.get("bot_token") if slack_config else None
 
             total_expiring = 0
 
