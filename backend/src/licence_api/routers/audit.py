@@ -35,6 +35,10 @@ ALLOWED_ACTIONS = {
     AuditAction.PROVIDER_SYNC, AuditAction.LICENSE_ASSIGN, AuditAction.LICENSE_UNASSIGN,
     AuditAction.LICENSE_UPDATE, AuditAction.SETTINGS_UPDATE, AuditAction.EXPORT,
     AuditAction.IMPORT,
+    # Lifecycle actions
+    AuditAction.LICENSE_CANCEL, AuditAction.LICENSE_RENEW, AuditAction.LICENSE_NEEDS_REORDER,
+    AuditAction.PACKAGE_CANCEL, AuditAction.PACKAGE_RENEW, AuditAction.PACKAGE_NEEDS_REORDER,
+    AuditAction.ORG_LICENSE_CANCEL, AuditAction.ORG_LICENSE_RENEW, AuditAction.ORG_LICENSE_NEEDS_REORDER,
 }
 ALLOWED_RESOURCE_TYPES = {
     ResourceType.USER, ResourceType.ROLE, ResourceType.PERMISSION,
@@ -42,6 +46,7 @@ ALLOWED_RESOURCE_TYPES = {
     ResourceType.SETTINGS, ResourceType.SETTING, ResourceType.NOTIFICATION_RULE,
     ResourceType.PAYMENT_METHOD, ResourceType.FILE, ResourceType.SESSION,
     ResourceType.SERVICE_ACCOUNT_PATTERN, ResourceType.ADMIN_ACCOUNT_PATTERN,
+    ResourceType.LICENSE_PACKAGE, ResourceType.ORG_LICENSE,
 }
 
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -48,12 +49,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
 import { LicenseStatusBadge } from '@/components/licenses';
-import { CostTrendChart } from '@/components/charts';
 import { ExportButton } from '@/components/exports';
 import { LicenseRecommendations } from '@/components/reports';
 import { EmployeeTable, EmployeeTableData } from '@/components/users/EmployeeTable';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
+
+// Lazy load the chart component to reduce initial bundle size (recharts is ~600KB)
+const CostTrendChart = dynamic(
+  () => import('@/components/charts/CostTrendChart').then((mod) => mod.CostTrendChart),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    ),
+    ssr: false,
+  }
+);
 
 export default function ReportsPage() {
   const t = useTranslations('reports');

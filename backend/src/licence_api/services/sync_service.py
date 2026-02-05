@@ -40,6 +40,55 @@ class SyncService:
         self.admin_account_pattern_repo = AdminAccountPatternRepository(session)
         self.encryption = get_encryption_service()
 
+    def _update_match_fields_if_better(
+        self,
+        license_orm: Any,
+        suggested_employee_id: UUID | None,
+        match_confidence: float | None,
+        match_method: str | None,
+        match_status: str | None,
+    ) -> None:
+        """Update match fields only if the new match is better than existing.
+
+        Preserves existing suggestions if:
+        - The user has manually reviewed the match (match_reviewed_at is set)
+        - The existing confidence is higher than the new one
+        - There's an existing suggestion but no new one
+
+        Args:
+            license_orm: The license ORM object to update
+            suggested_employee_id: New suggested employee ID
+            match_confidence: New match confidence
+            match_method: New match method
+            match_status: New match status
+        """
+        # If user has manually reviewed this match, don't overwrite
+        if license_orm.match_reviewed_at is not None:
+            return
+
+        # If there's no new suggestion
+        if suggested_employee_id is None:
+            # Keep existing suggestion if present, but update confidence/status
+            # to reflect that we tried to match again
+            if license_orm.suggested_employee_id is None:
+                # No existing suggestion either, update all fields
+                license_orm.match_confidence = match_confidence
+                license_orm.match_method = match_method
+                license_orm.match_status = match_status
+            # else: keep existing suggestion unchanged
+            return
+
+        # There's a new suggestion - check if it's better than existing
+        existing_confidence = license_orm.match_confidence or 0.0
+        new_confidence = match_confidence or 0.0
+
+        # Update if: no existing suggestion, or new confidence is higher
+        if license_orm.suggested_employee_id is None or new_confidence > existing_confidence:
+            license_orm.suggested_employee_id = suggested_employee_id
+            license_orm.match_confidence = match_confidence
+            license_orm.match_method = match_method
+            license_orm.match_status = match_status
+
     async def sync_all_providers(self) -> dict[str, Any]:
         """Sync all enabled providers.
 
@@ -602,17 +651,15 @@ class SyncService:
                 license_orm.is_admin_account = True
                 license_orm.admin_account_name = admin_account_name
                 license_orm.admin_account_owner_id = admin_account_owner_id
-                # Update match fields normally
-                license_orm.suggested_employee_id = suggested_employee_id
-                license_orm.match_confidence = match_confidence
-                license_orm.match_method = match_method
-                license_orm.match_status = match_status
+                # Update match fields, preserving existing suggestions
+                self._update_match_fields_if_better(
+                    license_orm, suggested_employee_id, match_confidence, match_method, match_status
+                )
             else:
-                # Update match fields
-                license_orm.suggested_employee_id = suggested_employee_id
-                license_orm.match_confidence = match_confidence
-                license_orm.match_method = match_method
-                license_orm.match_status = match_status
+                # Update match fields, preserving existing suggestions
+                self._update_match_fields_if_better(
+                    license_orm, suggested_employee_id, match_confidence, match_method, match_status
+                )
 
             if existing:
                 updated += 1

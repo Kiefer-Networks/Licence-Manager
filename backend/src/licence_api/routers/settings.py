@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
