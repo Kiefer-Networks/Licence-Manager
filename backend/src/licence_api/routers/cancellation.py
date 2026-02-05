@@ -100,6 +100,7 @@ async def renew_license(
         license_orm = await service.renew_license(
             license_id=license_id,
             new_expiration_date=body.new_expiration_date,
+            renewed_by=current_user.id,
             clear_cancellation=body.clear_cancellation,
         )
         await audit_service.log(
@@ -139,6 +140,7 @@ async def set_license_needs_reorder(
         license_orm = await service.set_license_needs_reorder(
             license_id=license_id,
             needs_reorder=body.needs_reorder,
+            flagged_by=current_user.id if body.needs_reorder else None,
         )
         await audit_service.log(
             action=AuditAction.LICENSE_NEEDS_REORDER,
@@ -223,6 +225,7 @@ async def renew_package(
         package = await service.renew_package(
             package_id=package_id,
             new_contract_end=body.new_expiration_date,
+            renewed_by=current_user.id,
             clear_cancellation=body.clear_cancellation,
         )
         await audit_service.log(
@@ -262,6 +265,7 @@ async def set_package_needs_reorder(
         package = await service.set_package_needs_reorder(
             package_id=package_id,
             needs_reorder=body.needs_reorder,
+            flagged_by=current_user.id if body.needs_reorder else None,
         )
         await audit_service.log(
             action=AuditAction.PACKAGE_NEEDS_REORDER,
@@ -345,6 +349,7 @@ async def renew_org_license(
     try:
         org_license = await service.renew_org_license(
             org_license_id=org_license_id,
+            renewed_by=current_user.id,
             new_renewal_date=body.new_expiration_date,
             new_expires_at=body.new_expiration_date,
             clear_cancellation=body.clear_cancellation,
@@ -387,6 +392,7 @@ async def set_org_license_needs_reorder(
         org_license = await service.set_org_license_needs_reorder(
             org_license_id=org_license_id,
             needs_reorder=body.needs_reorder,
+            flagged_by=current_user.id if body.needs_reorder else None,
         )
         await audit_service.log(
             action=AuditAction.ORG_LICENSE_NEEDS_REORDER,

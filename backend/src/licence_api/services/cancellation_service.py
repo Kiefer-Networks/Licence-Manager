@@ -239,6 +239,7 @@ class CancellationService:
         self,
         license_id: UUID,
         new_expiration_date: date,
+        renewed_by: UUID,
         clear_cancellation: bool = True,
     ) -> LicenseORM:
         """Renew a license by setting a new expiration date.
@@ -246,6 +247,7 @@ class CancellationService:
         Args:
             license_id: License UUID
             new_expiration_date: New expiration date
+            renewed_by: Admin user who renewed
             clear_cancellation: Whether to clear cancellation data
 
         Returns:
@@ -255,7 +257,9 @@ class CancellationService:
             ValueError: If license not found
         """
         result = await self.session.execute(
-            select(LicenseORM).where(LicenseORM.id == license_id)
+            select(LicenseORM)
+            .options(selectinload(LicenseORM.provider))
+            .where(LicenseORM.id == license_id)
         )
         license_orm = result.scalar_one_or_none()
 
@@ -277,12 +281,30 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(license_orm)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                renewed_by_email = await self._get_user_email(renewed_by)
+                await self.notification_service.notify_license_renewed(
+                    provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                    license_type=license_orm.license_type,
+                    user_email=license_orm.external_user_id,
+                    renewed_by=renewed_by_email,
+                    new_expiration_date=new_expiration_date.isoformat() if new_expiration_date else None,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send license renewal notification: {e}")
+
         return license_orm
 
     async def renew_package(
         self,
         package_id: UUID,
         new_contract_end: date,
+        renewed_by: UUID,
         clear_cancellation: bool = True,
     ) -> LicensePackageORM:
         """Renew a license package by setting a new contract end date.
@@ -290,6 +312,7 @@ class CancellationService:
         Args:
             package_id: Package UUID
             new_contract_end: New contract end date
+            renewed_by: Admin user who renewed
             clear_cancellation: Whether to clear cancellation data
 
         Returns:
@@ -323,18 +346,37 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(package)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                renewed_by_email = await self._get_user_email(renewed_by)
+                await self.notification_service.notify_package_renewed(
+                    provider_name=package.provider.display_name if package.provider else "Unknown",
+                    package_name=package.license_type or "Unknown",
+                    seat_count=package.total_seats or 0,
+                    renewed_by=renewed_by_email,
+                    new_contract_end=new_contract_end.isoformat() if new_contract_end else None,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send package renewal notification: {e}")
+
         return package
 
     async def set_license_needs_reorder(
         self,
         license_id: UUID,
         needs_reorder: bool,
+        flagged_by: UUID | None = None,
     ) -> LicenseORM:
         """Set the needs_reorder flag for a license.
 
         Args:
             license_id: License UUID
             needs_reorder: Whether license needs reorder
+            flagged_by: Admin user who flagged (optional, for notification)
 
         Returns:
             Updated LicenseORM
@@ -343,7 +385,9 @@ class CancellationService:
             ValueError: If license not found
         """
         result = await self.session.execute(
-            select(LicenseORM).where(LicenseORM.id == license_id)
+            select(LicenseORM)
+            .options(selectinload(LicenseORM.provider))
+            .where(LicenseORM.id == license_id)
         )
         license_orm = result.scalar_one_or_none()
 
@@ -354,18 +398,37 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(license_orm)
+
+        # Send notification when flagging for reorder (fire-and-forget)
+        if needs_reorder and flagged_by:
+            try:
+                slack_token = await self._get_slack_token()
+                if slack_token:
+                    flagged_by_email = await self._get_user_email(flagged_by)
+                    await self.notification_service.notify_license_needs_reorder(
+                        provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                        license_type=license_orm.license_type,
+                        user_email=license_orm.external_user_id,
+                        flagged_by=flagged_by_email,
+                        slack_token=slack_token,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to send license needs reorder notification: {e}")
+
         return license_orm
 
     async def set_package_needs_reorder(
         self,
         package_id: UUID,
         needs_reorder: bool,
+        flagged_by: UUID | None = None,
     ) -> LicensePackageORM:
         """Set the needs_reorder flag for a package.
 
         Args:
             package_id: Package UUID
             needs_reorder: Whether package needs reorder
+            flagged_by: Admin user who flagged (optional, for notification)
 
         Returns:
             Updated LicensePackageORM
@@ -387,11 +450,29 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(package)
+
+        # Send notification when flagging for reorder (fire-and-forget)
+        if needs_reorder and flagged_by:
+            try:
+                slack_token = await self._get_slack_token()
+                if slack_token:
+                    flagged_by_email = await self._get_user_email(flagged_by)
+                    await self.notification_service.notify_package_needs_reorder(
+                        provider_name=package.provider.display_name if package.provider else "Unknown",
+                        package_name=package.license_type or "Unknown",
+                        seat_count=package.total_seats or 0,
+                        flagged_by=flagged_by_email,
+                        slack_token=slack_token,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to send package needs reorder notification: {e}")
+
         return package
 
     async def renew_org_license(
         self,
         org_license_id: UUID,
+        renewed_by: UUID,
         new_renewal_date: date | None = None,
         new_expires_at: date | None = None,
         clear_cancellation: bool = True,
@@ -400,6 +481,7 @@ class CancellationService:
 
         Args:
             org_license_id: Organization license UUID
+            renewed_by: Admin user who renewed
             new_renewal_date: New renewal date (optional)
             new_expires_at: New expiration date (optional)
             clear_cancellation: Whether to clear cancellation data
@@ -438,18 +520,37 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(org_license)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                renewed_by_email = await self._get_user_email(renewed_by)
+                expiry_date = new_expires_at or new_renewal_date
+                await self.notification_service.notify_org_license_renewed(
+                    provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                    org_license_name=org_license.name,
+                    renewed_by=renewed_by_email,
+                    new_expiration_date=expiry_date.isoformat() if expiry_date else None,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send org license renewal notification: {e}")
+
         return org_license
 
     async def set_org_license_needs_reorder(
         self,
         org_license_id: UUID,
         needs_reorder: bool,
+        flagged_by: UUID | None = None,
     ) -> OrganizationLicenseORM:
         """Set the needs_reorder flag for an organization license.
 
         Args:
             org_license_id: Organization license UUID
             needs_reorder: Whether org license needs reorder
+            flagged_by: Admin user who flagged (optional, for notification)
 
         Returns:
             Updated OrganizationLicenseORM
@@ -471,4 +572,20 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(org_license)
+
+        # Send notification when flagging for reorder (fire-and-forget)
+        if needs_reorder and flagged_by:
+            try:
+                slack_token = await self._get_slack_token()
+                if slack_token:
+                    flagged_by_email = await self._get_user_email(flagged_by)
+                    await self.notification_service.notify_org_license_needs_reorder(
+                        provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                        org_license_name=org_license.name,
+                        flagged_by=flagged_by_email,
+                        slack_token=slack_token,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to send org license needs reorder notification: {e}")
+
         return org_license

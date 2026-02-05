@@ -1,23 +1,15 @@
 """License service for managing licenses."""
 
+from decimal import Decimal
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decimal import Decimal
-
-from enum import Enum
-
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
-
-
-class AccountType(str, Enum):
-    """Type of special account."""
-    SERVICE = "service"
-    ADMIN = "admin"
 from licence_api.models.dto.license import (
     LicenseResponse,
     LicenseListResponse,
@@ -32,6 +24,13 @@ from licence_api.security.encryption import get_encryption_service
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.utils.domain_check import is_company_email
+
+
+class AccountType(str, Enum):
+    """Type of special account."""
+
+    SERVICE = "service"
+    ADMIN = "admin"
 
 
 class LicenseService:
@@ -851,7 +850,6 @@ class LicenseService:
         Returns:
             License response or None if not found
         """
-        from decimal import Decimal
         from licence_api.services.pricing_service import PricingService
 
         license_orm = await self.license_repo.get_by_id(license_id)
