@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from decimal import Decimal
 
+from enum import Enum
+
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
+
+
+class AccountType(str, Enum):
+    """Type of special account."""
+    SERVICE = "service"
+    ADMIN = "admin"
 from licence_api.models.dto.license import (
     LicenseResponse,
     LicenseListResponse,
@@ -36,13 +44,25 @@ class LicenseService:
         self.employee_repo = EmployeeRepository(session)
         self.settings_repo = SettingsRepository(session)
         self.audit_service = AuditService(session)
+        # Request-scoped cache for company domains
+        self._company_domains_cache: list[str] | None = None
 
     async def _get_company_domains(self) -> list[str]:
-        """Get company domains from settings."""
+        """Get company domains from settings.
+
+        Uses request-scoped caching to avoid repeated database calls
+        within the same service instance.
+        """
+        if self._company_domains_cache is not None:
+            return self._company_domains_cache
+
         setting = await self.settings_repo.get("company_domains")
         if setting is None:
-            return []
-        return setting.get("domains", [])
+            self._company_domains_cache = []
+        else:
+            self._company_domains_cache = setting.get("domains", [])
+
+        return self._company_domains_cache
 
     def _check_external_email(
         self, external_user_id: str, company_domains: list[str]
@@ -576,20 +596,22 @@ class LicenseService:
             stats=stats,
         )
 
-    async def update_service_account_status(
+    async def _update_account_status(
         self,
         license_id: UUID,
-        is_service_account: bool,
-        service_account_name: str | None = None,
-        service_account_owner_id: UUID | None = None,
+        account_type: AccountType,
+        is_account: bool,
+        account_name: str | None = None,
+        owner_id: UUID | None = None,
     ) -> tuple[dict, dict] | None:
-        """Update service account status for a license.
+        """Generic method to update service or admin account status.
 
         Args:
             license_id: License UUID
-            is_service_account: Whether this is a service account
-            service_account_name: Name of the service account
-            service_account_owner_id: Owner employee ID
+            account_type: Type of account (SERVICE or ADMIN)
+            is_account: Whether this is a special account
+            account_name: Name of the account
+            owner_id: Owner employee ID
 
         Returns:
             Tuple of (old_values, new_values) for audit logging, or None if not found
@@ -598,31 +620,54 @@ class LicenseService:
         if license_orm is None:
             return None
 
-        # Store old values for audit
+        # Field name prefixes based on account type
+        prefix = "service_account" if account_type == AccountType.SERVICE else "admin_account"
+        is_field = f"is_{prefix}"
+        name_field = f"{prefix}_name"
+        owner_field = f"{prefix}_owner_id"
+
+        # Get old values
+        old_owner_id = getattr(license_orm, owner_field)
         old_values = {
-            "is_service_account": license_orm.is_service_account,
-            "service_account_name": license_orm.service_account_name,
-            "service_account_owner_id": str(license_orm.service_account_owner_id) if license_orm.service_account_owner_id else None,
+            is_field: getattr(license_orm, is_field),
+            name_field: getattr(license_orm, name_field),
+            owner_field: str(old_owner_id) if old_owner_id else None,
         }
 
-        # Update service account fields
-        license_orm.is_service_account = is_service_account
-        license_orm.service_account_name = service_account_name if is_service_account else None
-        license_orm.service_account_owner_id = service_account_owner_id if is_service_account else None
+        # Update fields
+        setattr(license_orm, is_field, is_account)
+        setattr(license_orm, name_field, account_name if is_account else None)
+        setattr(license_orm, owner_field, owner_id if is_account else None)
 
-        # If marking as service account, clear the employee assignment
-        if is_service_account and license_orm.employee_id:
+        # Service accounts clear employee assignment when enabled
+        if account_type == AccountType.SERVICE and is_account and license_orm.employee_id:
             license_orm.employee_id = None
 
         await self.session.flush()
 
         new_values = {
-            "is_service_account": is_service_account,
-            "service_account_name": service_account_name,
-            "service_account_owner_id": str(service_account_owner_id) if service_account_owner_id else None,
+            is_field: is_account,
+            name_field: account_name,
+            owner_field: str(owner_id) if owner_id else None,
         }
 
         return old_values, new_values
+
+    async def update_service_account_status(
+        self,
+        license_id: UUID,
+        is_service_account: bool,
+        service_account_name: str | None = None,
+        service_account_owner_id: UUID | None = None,
+    ) -> tuple[dict, dict] | None:
+        """Update service account status for a license."""
+        return await self._update_account_status(
+            license_id=license_id,
+            account_type=AccountType.SERVICE,
+            is_account=is_service_account,
+            account_name=service_account_name,
+            owner_id=service_account_owner_id,
+        )
 
     async def update_admin_account_status(
         self,
@@ -631,42 +676,14 @@ class LicenseService:
         admin_account_name: str | None = None,
         admin_account_owner_id: UUID | None = None,
     ) -> tuple[dict, dict] | None:
-        """Update admin account status for a license.
-
-        Args:
-            license_id: License UUID
-            is_admin_account: Whether this is an admin account
-            admin_account_name: Name of the admin account
-            admin_account_owner_id: Owner employee ID
-
-        Returns:
-            Tuple of (old_values, new_values) for audit logging, or None if not found
-        """
-        license_orm = await self.license_repo.get_by_id(license_id)
-        if license_orm is None:
-            return None
-
-        # Store old values for audit
-        old_values = {
-            "is_admin_account": license_orm.is_admin_account,
-            "admin_account_name": license_orm.admin_account_name,
-            "admin_account_owner_id": str(license_orm.admin_account_owner_id) if license_orm.admin_account_owner_id else None,
-        }
-
-        # Update admin account fields
-        license_orm.is_admin_account = is_admin_account
-        license_orm.admin_account_name = admin_account_name if is_admin_account else None
-        license_orm.admin_account_owner_id = admin_account_owner_id if is_admin_account else None
-
-        await self.session.flush()
-
-        new_values = {
-            "is_admin_account": is_admin_account,
-            "admin_account_name": admin_account_name,
-            "admin_account_owner_id": str(admin_account_owner_id) if admin_account_owner_id else None,
-        }
-
-        return old_values, new_values
+        """Update admin account status for a license."""
+        return await self._update_account_status(
+            license_id=license_id,
+            account_type=AccountType.ADMIN,
+            is_account=is_admin_account,
+            account_name=admin_account_name,
+            owner_id=admin_account_owner_id,
+        )
 
     async def get_license_external_user_id(self, license_id: UUID) -> str | None:
         """Get the external_user_id for a license.
@@ -680,23 +697,25 @@ class LicenseService:
         license_orm = await self.license_repo.get_by_id(license_id)
         return license_orm.external_user_id if license_orm else None
 
-    async def update_service_account_with_commit(
+    async def _update_account_with_commit(
         self,
         license_id: UUID,
-        is_service_account: bool,
-        service_account_name: str | None,
-        service_account_owner_id: UUID | None,
+        account_type: AccountType,
+        is_account: bool,
+        account_name: str | None,
+        owner_id: UUID | None,
         apply_globally: bool,
         user: AdminUser,
         request: Request | None = None,
     ) -> tuple[LicenseResponse, bool] | None:
-        """Update service account status with full side effects.
+        """Generic method to update account status with full side effects.
 
         Args:
             license_id: License UUID
-            is_service_account: Whether this is a service account
-            service_account_name: Name of the service account
-            service_account_owner_id: Owner employee ID
+            account_type: Type of account (SERVICE or ADMIN)
+            is_account: Whether this is a special account
+            account_name: Name of the account
+            owner_id: Owner employee ID
             apply_globally: Whether to add to global patterns
             user: Admin user making the change
             request: HTTP request for audit logging
@@ -704,13 +723,13 @@ class LicenseService:
         Returns:
             Tuple of (license response, pattern_created) or None if not found
         """
-        from licence_api.services.service_account_service import ServiceAccountService
-
-        result = await self.update_service_account_status(
+        # Update the account status
+        result = await self._update_account_status(
             license_id=license_id,
-            is_service_account=is_service_account,
-            service_account_name=service_account_name,
-            service_account_owner_id=service_account_owner_id,
+            account_type=account_type,
+            is_account=is_account,
+            account_name=account_name,
+            owner_id=owner_id,
         )
 
         if result is None:
@@ -723,14 +742,20 @@ class LicenseService:
 
         # If apply_globally is set, add to global patterns
         pattern_created = False
-        if is_service_account and apply_globally:
+        if is_account and apply_globally:
             external_user_id = await self.get_license_external_user_id(license_id)
             if external_user_id:
-                svc_account_service = ServiceAccountService(self.session)
-                pattern = await svc_account_service.create_pattern_from_email(
+                if account_type == AccountType.SERVICE:
+                    from licence_api.services.service_account_service import ServiceAccountService
+                    pattern_service = ServiceAccountService(self.session)
+                else:
+                    from licence_api.services.admin_account_service import AdminAccountService
+                    pattern_service = AdminAccountService(self.session)
+
+                pattern = await pattern_service.create_pattern_from_email(
                     email=external_user_id,
-                    name=service_account_name,
-                    owner_id=service_account_owner_id,
+                    name=account_name,
+                    owner_id=owner_id,
                     created_by=user.id,
                 )
                 pattern_created = pattern is not None
@@ -763,6 +788,28 @@ class LicenseService:
 
         license_response = await self.get_license(license_id)
         return (license_response, pattern_created) if license_response else None
+
+    async def update_service_account_with_commit(
+        self,
+        license_id: UUID,
+        is_service_account: bool,
+        service_account_name: str | None,
+        service_account_owner_id: UUID | None,
+        apply_globally: bool,
+        user: AdminUser,
+        request: Request | None = None,
+    ) -> tuple[LicenseResponse, bool] | None:
+        """Update service account status with full side effects."""
+        return await self._update_account_with_commit(
+            license_id=license_id,
+            account_type=AccountType.SERVICE,
+            is_account=is_service_account,
+            account_name=service_account_name,
+            owner_id=service_account_owner_id,
+            apply_globally=apply_globally,
+            user=user,
+            request=request,
+        )
 
     async def update_admin_account_with_commit(
         self,
@@ -774,79 +821,17 @@ class LicenseService:
         user: AdminUser,
         request: Request | None = None,
     ) -> tuple[LicenseResponse, bool] | None:
-        """Update admin account status with full side effects.
-
-        Args:
-            license_id: License UUID
-            is_admin_account: Whether this is an admin account
-            admin_account_name: Name of the admin account
-            admin_account_owner_id: Owner employee ID
-            apply_globally: Whether to add to global patterns
-            user: Admin user making the change
-            request: HTTP request for audit logging
-
-        Returns:
-            Tuple of (license response, pattern_created) or None if not found
-        """
-        from licence_api.services.admin_account_service import AdminAccountService
-
-        result = await self.update_admin_account_status(
+        """Update admin account status with full side effects."""
+        return await self._update_account_with_commit(
             license_id=license_id,
-            is_admin_account=is_admin_account,
-            admin_account_name=admin_account_name,
-            admin_account_owner_id=admin_account_owner_id,
-        )
-
-        if result is None:
-            return None
-
-        old_values, new_values = result
-
-        # Get license info for audit log
-        license_orm = await self.license_repo.get(license_id)
-
-        # If apply_globally is set, add to global patterns
-        pattern_created = False
-        if is_admin_account and apply_globally:
-            external_user_id = await self.get_license_external_user_id(license_id)
-            if external_user_id:
-                admin_account_service = AdminAccountService(self.session)
-                pattern = await admin_account_service.create_pattern_from_email(
-                    email=external_user_id,
-                    name=admin_account_name,
-                    owner_id=admin_account_owner_id,
-                    created_by=user.id,
-                )
-                pattern_created = pattern is not None
-
-        # Audit log the change with license user info
-        await self.audit_service.log(
-            action=AuditAction.LICENSE_UPDATE,
-            resource_type=ResourceType.LICENSE,
-            resource_id=license_id,
-            admin_user_id=user.id,
-            changes={
-                "license_user": license_orm.external_user_id if license_orm else None,
-                "employee_id": str(license_orm.employee_id) if license_orm and license_orm.employee_id else None,
-                "provider_id": str(license_orm.provider_id) if license_orm else None,
-                "old": old_values,
-                "new": {
-                    **new_values,
-                    "apply_globally": apply_globally,
-                    "pattern_created": pattern_created,
-                },
-            },
+            account_type=AccountType.ADMIN,
+            is_account=is_admin_account,
+            account_name=admin_account_name,
+            owner_id=admin_account_owner_id,
+            apply_globally=apply_globally,
+            user=user,
             request=request,
         )
-
-        # Invalidate dashboard cache
-        cache = await get_cache_service()
-        await cache.invalidate_dashboard()
-
-        await self.session.commit()
-
-        license_response = await self.get_license(license_id)
-        return (license_response, pattern_created) if license_response else None
 
     async def update_license_type_with_commit(
         self,

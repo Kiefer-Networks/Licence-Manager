@@ -51,7 +51,7 @@ async def get_username_matching_setting(
 async def update_username_matching_setting(
     request: Request,
     data: UsernameMatchingSettingUpdate,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_MANAGE))],
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UsernameMatchingSettingResponse:
