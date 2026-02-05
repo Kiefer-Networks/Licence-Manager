@@ -44,7 +44,6 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
@@ -61,7 +60,7 @@ export default function ReportsPage() {
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
   const tExport = useTranslations('export');
-  const { formatDate, formatCurrency, formatNumber } = useLocale();
+  const { formatDate, formatCurrency } = useLocale();
 
   // Build export translations object
   const exportTranslations: ExportTranslations = {
@@ -99,10 +98,13 @@ export default function ReportsPage() {
 
   const [departments, setDepartments] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [loading, setLoading] = useState(true);
   // Min cost filter for costs-by-employee report
   const [minCostFilter, setMinCostFilter] = useState<string>('');
   const [debouncedMinCost, setDebouncedMinCost] = useState<string>('');
+  // Tab state for lazy loading
+  const [activeTab, setActiveTab] = useState('utilization');
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
+  const [tabLoading, setTabLoading] = useState<Set<string>>(new Set());
 
   // Load departments once
   useEffect(() => {
@@ -117,42 +119,115 @@ export default function ReportsPage() {
     return () => clearTimeout(timer);
   }, [minCostFilter]);
 
-  // Load reports when department changes
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  // Helper to mark tab as loading
+  const setTabLoadingState = (tab: string, isLoading: boolean) => {
+    setTabLoading(prev => {
+      const next = new Set(prev);
+      if (isLoading) next.add(tab);
+      else next.delete(tab);
+      return next;
+    });
+  };
+
+  // Load data for a specific tab
+  const loadTabData = async (tab: string, forceReload = false) => {
+    // Skip if already loaded and not forcing reload
+    if (loadedTabs.has(tab) && !forceReload) return;
+
     const dept = selectedDepartment !== 'all' ? selectedDepartment : undefined;
+    setTabLoadingState(tab, true);
 
-    Promise.all([
-      api.getInactiveLicenseReport(30, dept),
-      api.getOffboardingReport(dept),
-      api.getCostReport(undefined, undefined, dept),
-      api.getExternalUsersReport(dept),
-      // Quick Win Reports (not department-filtered)
-      api.getExpiringContractsReport(90),
-      api.getUtilizationReport(),
-      api.getCostTrendReport(6),
-      api.getDuplicateAccountsReport(),
-      // Cost Breakdown Reports
-      api.getCostsByDepartmentReport(),
-      api.getCostsByEmployeeReport(dept, debouncedMinCost ? parseFloat(debouncedMinCost) : undefined, 100),
-    ]).then(([inactive, offboarding, cost, externalUsers, expiring, utilization, costTrend, duplicates, costsByDept, costsByEmployee]) => {
-      if (!cancelled) {
-        setInactiveReport(inactive);
-        setOffboardingReport(offboarding);
-        setCostReport(cost);
-        setExternalUsersReport(externalUsers);
-        setExpiringContractsReport(expiring);
-        setUtilizationReport(utilization);
-        setCostTrendReport(costTrend);
-        setDuplicateAccountsReport(duplicates);
-        setCostsByDepartmentReport(costsByDept);
-        setCostsByEmployeeReport(costsByEmployee);
+    try {
+      switch (tab) {
+        case 'utilization': {
+          const [utilization, costTrend] = await Promise.all([
+            api.getUtilizationReport(),
+            api.getCostTrendReport(6),
+          ]);
+          setUtilizationReport(utilization);
+          setCostTrendReport(costTrend);
+          break;
+        }
+        case 'expiring': {
+          const expiring = await api.getExpiringContractsReport(90);
+          setExpiringContractsReport(expiring);
+          break;
+        }
+        case 'duplicates': {
+          const duplicates = await api.getDuplicateAccountsReport();
+          setDuplicateAccountsReport(duplicates);
+          break;
+        }
+        case 'inactive': {
+          const inactive = await api.getInactiveLicenseReport(30, dept);
+          setInactiveReport(inactive);
+          break;
+        }
+        case 'offboarding': {
+          const offboarding = await api.getOffboardingReport(dept);
+          setOffboardingReport(offboarding);
+          break;
+        }
+        case 'external': {
+          const external = await api.getExternalUsersReport(dept);
+          setExternalUsersReport(external);
+          break;
+        }
+        case 'costs': {
+          const costs = await api.getCostReport(undefined, undefined, dept);
+          setCostReport(costs);
+          break;
+        }
+        case 'costs-department': {
+          const costsByDept = await api.getCostsByDepartmentReport();
+          setCostsByDepartmentReport(costsByDept);
+          break;
+        }
+        case 'costs-employee': {
+          const costsByEmployee = await api.getCostsByEmployeeReport(dept, debouncedMinCost ? parseFloat(debouncedMinCost) : undefined, 100);
+          setCostsByEmployeeReport(costsByEmployee);
+          break;
+        }
+        case 'recommendations':
+          // LicenseRecommendations component loads its own data
+          break;
       }
-    }).catch((e) => handleSilentError('loadReports', e)).finally(() => !cancelled && setLoading(false));
+      setLoadedTabs(prev => new Set(prev).add(tab));
+    } catch (e) {
+      handleSilentError(`load${tab}Report`, e);
+    } finally {
+      setTabLoadingState(tab, false);
+    }
+  };
 
-    return () => { cancelled = true; };
-  }, [selectedDepartment, debouncedMinCost]);
+  // Load initial tab on mount
+  useEffect(() => {
+    loadTabData('utilization');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load data when active tab changes
+  useEffect(() => {
+    loadTabData(activeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Reload current tab when department changes (for department-filtered tabs)
+  useEffect(() => {
+    const deptFilteredTabs = ['inactive', 'offboarding', 'external', 'costs', 'costs-employee'];
+    if (deptFilteredTabs.includes(activeTab) && loadedTabs.has(activeTab)) {
+      loadTabData(activeTab, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDepartment]);
+
+  // Reload costs-employee when min cost filter changes
+  useEffect(() => {
+    if (activeTab === 'costs-employee' && loadedTabs.has('costs-employee')) {
+      loadTabData('costs-employee', true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedMinCost]);
 
   return (
     <AppLayout>
@@ -186,12 +261,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-          </div>
-        ) : (
-          <Tabs defaultValue="utilization" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="bg-zinc-100/50 p-1 flex-wrap h-auto gap-1">
               <TabsTrigger value="utilization" className="gap-1.5 data-[state=active]:bg-white">
                 <BarChart3 className="h-3.5 w-3.5" />
@@ -247,6 +317,12 @@ export default function ReportsPage() {
 
             {/* Utilization Report */}
             <TabsContent value="utilization" className="space-y-6">
+              {tabLoading.has('utilization') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Stats Overview - Row 1 */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
@@ -417,10 +493,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Expiring Contracts */}
             <TabsContent value="expiring" className="space-y-6">
+              {tabLoading.has('expiring') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Stats */}
               <div className="border rounded-lg bg-white p-5">
                 <div className="flex items-center gap-3">
@@ -491,10 +575,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Duplicate Accounts */}
             <TabsContent value="duplicates" className="space-y-6">
+              {tabLoading.has('duplicates') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="border rounded-lg bg-white p-5">
@@ -553,10 +645,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Inactive Licenses */}
             <TabsContent value="inactive" className="space-y-6">
+              {tabLoading.has('inactive') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
@@ -673,10 +773,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Offboarding */}
             <TabsContent value="offboarding" className="space-y-6">
+              {tabLoading.has('offboarding') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
@@ -728,10 +836,18 @@ export default function ReportsPage() {
                 showAdminAccountBadge={false}
                 showManualBadge={false}
               />
+              </>
+              )}
             </TabsContent>
 
             {/* External Users */}
             <TabsContent value="external" className="space-y-6">
+              {tabLoading.has('external') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
@@ -850,10 +966,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Costs */}
             <TabsContent value="costs" className="space-y-6">
+              {tabLoading.has('costs') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
@@ -932,10 +1056,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Costs by Department */}
             <TabsContent value="costs-department" className="space-y-6">
+              {tabLoading.has('costs-department') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="border rounded-lg bg-white p-5">
@@ -1004,10 +1136,18 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </TabsContent>
 
             {/* Costs by Employee */}
             <TabsContent value="costs-employee" className="space-y-6">
+              {tabLoading.has('costs-employee') ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+              <>
               {/* Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="border rounded-lg bg-white p-5">
@@ -1091,6 +1231,8 @@ export default function ReportsPage() {
                 showAdminAccountBadge={false}
                 showManualBadge={false}
               />
+              </>
+              )}
             </TabsContent>
 
             {/* License Recommendations */}
@@ -1100,7 +1242,6 @@ export default function ReportsPage() {
               />
             </TabsContent>
           </Tabs>
-        )}
       </div>
     </AppLayout>
   );

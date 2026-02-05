@@ -53,11 +53,15 @@ export default function DashboardPage() {
   const [lifecycleOverview, setLifecycleOverview] = useState<LicenseLifecycleOverview | null>(null);
 
   useEffect(() => {
-    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
-    api.getPaymentMethods().then((data) => {
-      setExpiringPaymentMethods(data.items.filter((m) => m.is_expiring));
-    }).catch((e) => handleSilentError('getPaymentMethods', e));
-    api.getLicenseLifecycleOverview().then(setLifecycleOverview).catch((e) => handleSilentError('getLifecycleOverview', e));
+    Promise.all([
+      api.getDepartments(),
+      api.getPaymentMethods(),
+      api.getLicenseLifecycleOverview(),
+    ]).then(([depts, methods, lifecycle]) => {
+      setDepartments(depts);
+      setExpiringPaymentMethods(methods.items.filter((m) => m.is_expiring));
+      setLifecycleOverview(lifecycle);
+    }).catch((e) => handleSilentError('loadInitialData', e));
   }, []);
 
   useEffect(() => {

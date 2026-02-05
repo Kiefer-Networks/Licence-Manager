@@ -73,6 +73,7 @@ from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
 from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
 from licence_api.models.orm.settings import SettingsORM
 from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
+from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
@@ -265,6 +266,7 @@ class BackupService:
         """Collect all exportable data from database."""
         # Fetch all entities
         admin_users = await self._fetch_all(AdminUserORM)
+        password_histories = await self._fetch_all(PasswordHistoryORM)
         roles = await self._fetch_all(RoleORM)
         permissions = await self._fetch_all(PermissionORM)
         user_roles = await self._fetch_all(UserRoleORM)
@@ -297,6 +299,7 @@ class BackupService:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "metadata": {
                 "admin_user_count": len(admin_users),
+                "password_history_count": len(password_histories),
                 "role_count": len(roles),
                 "permission_count": len(permissions),
                 "user_role_count": len(user_roles),
@@ -320,6 +323,7 @@ class BackupService:
             },
             "data": {
                 "admin_users": admin_users_data,
+                "password_histories": [self._orm_to_dict(ph) for ph in password_histories],
                 "roles": [self._orm_to_dict(r) for r in roles],
                 "permissions": [self._orm_to_dict(p) for p in permissions],
                 "user_roles": [self._junction_to_dict(ur) for ur in user_roles],
@@ -769,7 +773,10 @@ class BackupService:
         # 9. Payment methods
         await self.session.execute(delete(PaymentMethodORM))
 
-        # 10. Admin users (after all dependencies cleared)
+        # 10. Password history (depends on admin_users)
+        await self.session.execute(delete(PasswordHistoryORM))
+
+        # 11. Admin users (after all dependencies cleared)
         await self.session.execute(delete(AdminUserORM))
 
         # 11. Roles and permissions
@@ -906,6 +913,17 @@ class BackupService:
             )
             self.session.add(user_orm)
             counts.admin_users += 1
+
+        # 5b. Password histories (depends on admin_users)
+        for ph in data.get("password_histories", []):
+            ph_orm = PasswordHistoryORM(
+                id=UUID(ph["id"]) if isinstance(ph["id"], str) else ph["id"],
+                user_id=UUID(ph["user_id"]) if isinstance(ph["user_id"], str) else ph["user_id"],
+                password_hash=ph["password_hash"],
+                created_at=self._parse_datetime(ph.get("created_at")),
+            )
+            self.session.add(ph_orm)
+            counts.password_histories += 1
 
         # 6. Employees (self-referential FK: manager_id -> employees.id)
         # Insert in two passes to handle manager_id references

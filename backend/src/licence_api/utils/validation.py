@@ -12,8 +12,6 @@ MAX_SORT_BY_LENGTH = 50
 # Pattern for safe text input (letters, numbers, spaces, common punctuation)
 SAFE_TEXT_PATTERN = re.compile(r'^[\w\s\-.,&()\'"/]+$', re.UNICODE)
 
-# Pattern for safe sort direction
-SORT_DIR_PATTERN = re.compile(r'^(asc|desc)$', re.IGNORECASE)
 
 
 def sanitize_search(search: str | None, max_length: int = MAX_SEARCH_LENGTH) -> str | None:
@@ -67,20 +65,6 @@ def sanitize_department(department: str | None, max_length: int = MAX_DEPARTMENT
         return None
 
     return department
-
-
-def validate_sort_direction(sort_dir: str) -> str:
-    """Validate and normalize sort direction.
-
-    Args:
-        sort_dir: Raw sort direction
-
-    Returns:
-        Normalized sort direction ('asc' or 'desc')
-    """
-    if sort_dir and SORT_DIR_PATTERN.match(sort_dir):
-        return sort_dir.lower()
-    return "desc"  # Default to descending
 
 
 def validate_sort_by(sort_by: str, allowed_columns: set[str], default: str) -> str:

@@ -1,7 +1,5 @@
 """Providers router."""
 
-import copy
-import uuid as uuid_module
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
@@ -35,7 +33,7 @@ from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.file_validation import validate_svg_content
-from licence_api.middleware.error_handler import sanitize_error_for_audit
+from licence_api.utils.errors import log_sync_connection_error, log_sync_unexpected_error
 
 router = APIRouter()
 
@@ -131,8 +129,22 @@ async def list_providers(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderListResponse:
-    """List all configured providers. Requires providers.view permission."""
+    """List all configured providers. Requires providers.view permission.
+
+    Response is cached for 5 minutes to improve performance.
+    """
+    # Try to get from cache
+    cache = await get_cache_service()
+    cached = await cache.get_providers()
+    if cached:
+        return ProviderListResponse(items=cached, total=len(cached))
+
+    # Fetch from database
     items = await provider_service.list_providers()
+
+    # Cache the result (serialize to dict for caching)
+    await cache.set_providers([item.model_dump() for item in items])
+
     return ProviderListResponse(items=items, total=len(items))
 
 
@@ -200,7 +212,7 @@ async def create_provider(
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
     try:
-        return await provider_service.create_provider(
+        result = await provider_service.create_provider(
             name=body.name,
             display_name=body.display_name,
             credentials=body.credentials,
@@ -208,6 +220,10 @@ async def create_provider(
             user=current_user,
             request=request,
         )
+        # Invalidate provider cache
+        cache = await get_cache_service()
+        await cache.invalidate_providers()
+        return result
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -242,6 +258,9 @@ async def update_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
+    # Invalidate provider cache
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
     return result
 
 
@@ -445,6 +464,9 @@ async def delete_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
+    # Invalidate provider cache
+    cache = await get_cache_service()
+    await cache.invalidate_providers()
 
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
@@ -558,38 +580,13 @@ async def trigger_sync(
 
         return SyncResponse(success=True, results=results)
     except (ConnectionError, TimeoutError, OSError) as e:
-        # Network/connection errors - audit and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=request,
-            details={"success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
-        )
-        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
-    except ValueError as e:
-        # Validation errors - audit and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=request,
-            details={"success": False, "error_code": "VALIDATION_ERROR", "error_type": "ValueError"},
-        )
+        error = await log_sync_connection_error(audit_service, provider_id, current_user, request, e)
+        return SyncResponse(success=False, results=error)
+    except ValueError:
         return SyncResponse(success=False, results={"error": "Invalid provider configuration"})
     except Exception as e:
-        # Unexpected errors - audit with sanitized details and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=request,
-            details={"success": False, **sanitize_error_for_audit(e)},
-        )
-        return SyncResponse(success=False, results={"error": "Sync operation failed"})
+        error = await log_sync_unexpected_error(audit_service, provider_id, current_user, request, e)
+        return SyncResponse(success=False, results=error)
 
 
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
@@ -627,27 +624,11 @@ async def sync_provider(
             detail="Provider not found",
         )
     except (ConnectionError, TimeoutError, OSError) as e:
-        # Network/connection errors - audit and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=request,
-            details={"success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
-        )
-        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
+        error = await log_sync_connection_error(audit_service, provider_id, current_user, request, e)
+        return SyncResponse(success=False, results=error)
     except Exception as e:
-        # Unexpected errors - audit with sanitized details and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
-            user=current_user,
-            request=request,
-            details={"success": False, **sanitize_error_for_audit(e)},
-        )
-        return SyncResponse(success=False, results={"error": "Sync operation failed"})
+        error = await log_sync_unexpected_error(audit_service, provider_id, current_user, request, e)
+        return SyncResponse(success=False, results=error)
 
 
 class LicenseTypePricing(BaseModel):
