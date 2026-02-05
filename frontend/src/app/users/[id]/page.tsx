@@ -22,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, Employee, License, Provider, AdminAccountLicenseListResponse } from '@/lib/api';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { api, Employee, License, Provider, ExternalAccount, ExternalAccountCreate } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyableText } from '@/components/ui/copy-button';
@@ -43,6 +45,8 @@ import {
   Clock,
   Globe,
   Shield,
+  Link2,
+  Unlink,
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
@@ -78,6 +82,13 @@ export default function UserDetailPage() {
 
   // Unassign Dialog
   const [unassignDialog, setUnassignDialog] = useState<License | null>(null);
+
+  // External Accounts
+  const [externalAccounts, setExternalAccounts] = useState<ExternalAccount[]>([]);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [selectedProviderType, setSelectedProviderType] = useState('');
+  const [externalUsername, setExternalUsername] = useState('');
+  const [unlinkDialog, setUnlinkDialog] = useState<ExternalAccount | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -120,11 +131,20 @@ export default function UserDetailPage() {
     }
   }, [employeeId]);
 
+  const fetchExternalAccounts = useCallback(async () => {
+    try {
+      const accounts = await api.getEmployeeExternalAccounts(employeeId);
+      setExternalAccounts(accounts);
+    } catch (error) {
+      handleSilentError('fetchExternalAccounts', error);
+    }
+  }, [employeeId]);
+
   useEffect(() => {
-    Promise.all([fetchEmployee(), fetchLicenses(), fetchProviders(), fetchOwnedAdminAccounts()]).finally(() =>
+    Promise.all([fetchEmployee(), fetchLicenses(), fetchProviders(), fetchOwnedAdminAccounts(), fetchExternalAccounts()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchEmployee, fetchLicenses, fetchProviders, fetchOwnedAdminAccounts]);
+  }, [fetchEmployee, fetchLicenses, fetchProviders, fetchOwnedAdminAccounts, fetchExternalAccounts]);
 
   const openAssignDialog = async () => {
     setAssignDialogOpen(true);
@@ -202,11 +222,53 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleLinkExternalAccount = async () => {
+    if (!selectedProviderType || !externalUsername.trim()) return;
+    setActionLoading(true);
+    try {
+      await api.linkExternalAccount(employeeId, {
+        provider_type: selectedProviderType,
+        external_username: externalUsername.trim(),
+      });
+      showToast('success', tEmployees('accountLinked'));
+      setLinkDialogOpen(false);
+      setSelectedProviderType('');
+      setExternalUsername('');
+      await fetchExternalAccounts();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to link account');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnlinkExternalAccount = async () => {
+    if (!unlinkDialog) return;
+    setActionLoading(true);
+    try {
+      await api.unlinkExternalAccount(employeeId, unlinkDialog.id);
+      showToast('success', tEmployees('accountUnlinked'));
+      setUnlinkDialog(null);
+      await fetchExternalAccounts();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to unlink account');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Stats
   const licenseMonthlyCost = licenses.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
   const adminAccountsMonthlyCost = ownedAdminAccounts.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
   const totalMonthlyCost = licenseMonthlyCost + adminAccountsMonthlyCost;
   const manualProviders = providers.filter(p => p.config?.provider_type === 'manual' || p.name === 'manual');
+
+  // Get unique provider types that can be linked (non-manual providers)
+  const linkableProviderTypes = Array.from(new Set(
+    providers
+      .filter(p => p.config?.provider_type !== 'manual' && p.name !== 'manual')
+      .map(p => p.name)
+  ));
 
   if (loading) {
     return (
@@ -514,6 +576,76 @@ export default function UserDetailPage() {
           </div>
         )}
 
+        {/* External Accounts */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-muted-foreground" />
+              {tEmployees('externalAccounts')}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={() => setLinkDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {tEmployees('linkExternalAccount')}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            {tEmployees('externalAccountsDescription')}
+          </p>
+          <div className="border rounded-lg bg-white">
+            {externalAccounts.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <Link2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">{tEmployees('noExternalAccounts')}</p>
+                <Button variant="link" size="sm" onClick={() => setLinkDialogOpen(true)} className="mt-2">
+                  {tEmployees('linkExternalAccount')}
+                </Button>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-zinc-50/50">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('providerType')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('externalUsername')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{tEmployees('linkedAt')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">{tCommon('actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {externalAccounts.map((account) => (
+                    <tr key={account.id} className="border-b last:border-0 hover:bg-zinc-50/50">
+                      <td className="px-4 py-3">
+                        <span className="font-medium">{account.provider_type}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs">{account.external_username}</span>
+                          {account.display_name && (
+                            <span className="text-xs text-muted-foreground">{account.display_name}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {account.linked_at ? formatDate(account.linked_at) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-600"
+                          onClick={() => setUnlinkDialog(account)}
+                          title={tEmployees('unlinkAccount')}
+                        >
+                          <Unlink className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
         {/* Employee Info */}
         {employee.termination_date && (
           <Card className="border-red-200">
@@ -646,6 +778,94 @@ export default function UserDetailPage() {
             <Button variant="destructive" onClick={handleRemoveFromProvider} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               {t('removeFromProvider')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link External Account Dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              {tEmployees('linkExternalAccount')}
+            </DialogTitle>
+            <DialogDescription>
+              {tEmployees('externalAccountsDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="provider-type">{tEmployees('providerType')}</Label>
+              {linkableProviderTypes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{tEmployees('noProvidersWithoutEmail')}</p>
+              ) : (
+                <Select value={selectedProviderType} onValueChange={setSelectedProviderType}>
+                  <SelectTrigger id="provider-type">
+                    <SelectValue placeholder={tEmployees('selectProvider')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {linkableProviderTypes.map((providerType) => (
+                      <SelectItem key={providerType} value={providerType}>
+                        {providerType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="external-username">{tEmployees('externalUsername')}</Label>
+              <Input
+                id="external-username"
+                placeholder={tEmployees('enterUsername')}
+                value={externalUsername}
+                onChange={(e) => setExternalUsername(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => {
+              setLinkDialogOpen(false);
+              setSelectedProviderType('');
+              setExternalUsername('');
+            }}>
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              onClick={handleLinkExternalAccount}
+              disabled={!selectedProviderType || !externalUsername.trim() || actionLoading}
+            >
+              {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {tEmployees('linkExternalAccount')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unlink External Account Dialog */}
+      <Dialog open={!!unlinkDialog} onOpenChange={() => setUnlinkDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Unlink className="h-5 w-5 text-red-600" />
+              {tEmployees('unlinkAccount')}
+            </DialogTitle>
+            <DialogDescription>
+              {tEmployees('unlinkAccountConfirm', { username: unlinkDialog?.external_username || '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              {tEmployees('unlinkAccountDescription')}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUnlinkDialog(null)}>{tCommon('cancel')}</Button>
+            <Button variant="destructive" onClick={handleUnlinkExternalAccount} disabled={actionLoading}>
+              {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {tEmployees('unlinkAccount')}
             </Button>
           </DialogFooter>
         </DialogContent>

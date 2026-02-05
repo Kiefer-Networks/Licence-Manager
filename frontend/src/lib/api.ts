@@ -1422,6 +1422,41 @@ export interface UserNotificationPreferencesResponse {
 }
 
 // ============================================================================
+// External Accounts Types
+// ============================================================================
+
+export interface ExternalAccount {
+  id: string;
+  employee_id: string;
+  provider_type: string;
+  external_username: string;
+  external_user_id?: string;
+  display_name?: string;
+  linked_at: string;
+  linked_by_id?: string;
+  linked_by_email?: string;
+}
+
+export interface ExternalAccountCreate {
+  provider_type: string;
+  external_username: string;
+  external_user_id?: string;
+  display_name?: string;
+}
+
+export interface EmployeeSuggestion {
+  employee_id: string;
+  employee_name: string;
+  employee_email: string;
+  similarity_score: number;
+  match_reason: string;
+}
+
+export interface SuggestionsResponse {
+  suggestions: EmployeeSuggestion[];
+}
+
+// ============================================================================
 // Audit Log Types
 // ============================================================================
 
@@ -2875,6 +2910,51 @@ export const api = {
   async refreshCsrfToken(): Promise<string> {
     csrfToken = null;
     return getCsrfToken();
+  },
+
+  // ============================================================================
+  // External Accounts
+  // ============================================================================
+
+  /**
+   * Get external accounts for an employee.
+   */
+  async getEmployeeExternalAccounts(employeeId: string): Promise<ExternalAccount[]> {
+    const result = await fetchApi<{ accounts: ExternalAccount[] }>(`/external-accounts/employees/${employeeId}/accounts`);
+    return result.accounts;
+  },
+
+  /**
+   * Link an external account to an employee.
+   */
+  async linkExternalAccount(employeeId: string, data: ExternalAccountCreate): Promise<ExternalAccount> {
+    return fetchApi<ExternalAccount>(`/external-accounts/employees/${employeeId}/accounts`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Unlink an external account from an employee.
+   */
+  async unlinkExternalAccount(employeeId: string, accountId: string): Promise<void> {
+    await fetchApi(`/external-accounts/employees/${employeeId}/accounts/${accountId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Get employee suggestions for a username.
+   */
+  async getEmployeeSuggestions(providerType: string, username: string, displayName?: string): Promise<SuggestionsResponse> {
+    return fetchApi<SuggestionsResponse>('/external-accounts/suggestions', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider_type: providerType,
+        username,
+        display_name: displayName,
+      }),
+    });
   },
 
   // ============================================================================
