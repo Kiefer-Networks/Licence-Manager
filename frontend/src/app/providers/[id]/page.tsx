@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   Select,
   SelectContent,
@@ -2424,20 +2425,14 @@ export default function ProviderDetailPage() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('deleteLicense')}</DialogTitle>
-            <DialogDescription>
-              {t('deleteConfirmMessage', { email: deleteDialog?.external_user_id || '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteDialog(null)}>{tCommon('cancel')}</Button>
-            <Button variant="destructive" onClick={handleDeleteLicense}>{tCommon('delete')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmationDialog
+        open={!!deleteDialog}
+        onOpenChange={() => setDeleteDialog(null)}
+        title={t('deleteLicense')}
+        description={t('deleteConfirmMessage', { email: deleteDialog?.external_user_id || '' })}
+        confirmLabel={tCommon('delete')}
+        onConfirm={handleDeleteLicense}
+      />
 
       {/* Service Account Dialog */}
       <Dialog open={!!serviceAccountDialog} onOpenChange={() => setServiceAccountDialog(null)}>

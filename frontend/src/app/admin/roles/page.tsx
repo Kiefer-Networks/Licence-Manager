@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -573,24 +574,16 @@ export default function AdminRolesPage() {
       </Dialog>
 
       {/* Delete Role Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('deleteRole')}</DialogTitle>
-            <DialogDescription>
-              {t('deleteRoleConfirmation', { name: selectedRole?.name || '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteRole} disabled={isSubmitting}>
-              {isSubmitting ? t('deleting') : t('deleteRole')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={t('deleteRole')}
+        description={t('deleteRoleConfirmation', { name: selectedRole?.name || '' })}
+        confirmLabel={t('deleteRole')}
+        loadingLabel={t('deleting')}
+        onConfirm={handleDeleteRole}
+        isLoading={isSubmitting}
+      />
       </div>
     </AppLayout>
   );

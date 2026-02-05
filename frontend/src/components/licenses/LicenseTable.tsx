@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { License } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags } from 'lucide-react';
+import { Pagination } from '@/components/ui/pagination';
+import { SearchInput } from '@/components/ui/search-input';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,18 +142,14 @@ export function LicenseTable({
   return (
     <div className="space-y-4">
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-        <Input
-          placeholder={t('searchPlaceholder')}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="pl-9 h-9 bg-zinc-50 border-zinc-200"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        placeholder={t('searchPlaceholder')}
+      />
 
       {/* Table */}
       <div className="border rounded-lg bg-white overflow-hidden">
@@ -349,21 +346,13 @@ export function LicenseTable({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {t('pageOf', { page, total: totalPages })} ({t('totalCount', { count: filteredLicenses.length })})
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>
-              {t('previous')}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
-              {tCommon('next')}
-            </Button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        totalItems={filteredLicenses.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

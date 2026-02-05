@@ -15,6 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { PageLoader } from '@/components/ui/loading-spinner';
 import {
   Select,
   SelectContent,
@@ -336,9 +338,7 @@ export default function ProvidersPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <PageLoader />
       </AppLayout>
     );
   }
@@ -716,20 +716,14 @@ export default function ProvidersPage() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('deleteProvider')}</DialogTitle>
-            <DialogDescription>
-              {t('deleteConfirmation', { name: deletingProvider?.display_name || '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>{tCommon('cancel')}</Button>
-            <Button variant="destructive" onClick={handleDeleteProvider}>{t('deleteProvider')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={t('deleteProvider')}
+        description={t('deleteConfirmation', { name: deletingProvider?.display_name || '' })}
+        confirmLabel={t('deleteProvider')}
+        onConfirm={handleDeleteProvider}
+      />
     </AppLayout>
   );
 }

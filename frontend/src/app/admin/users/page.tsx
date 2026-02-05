@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,15 +34,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { MoreVertical } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
+import { SearchInput } from '@/components/ui/search-input';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ErrorAlert } from '@/components/ui/error-alert';
 
 export default function AdminUsersPage() {
   const t = useTranslations('users');
@@ -244,11 +241,7 @@ export default function AdminUsersPage() {
   };
 
   if (authLoading || isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen size="lg" />;
   }
 
   return (
@@ -268,23 +261,18 @@ export default function AdminUsersPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-              {error}
-              <button className="ml-2 underline" onClick={() => setError('')}>{t('dismiss')}</button>
-            </div>
+            <ErrorAlert message={error} onDismiss={() => setError('')} className="mb-4" />
           )}
 
-          <div className="flex gap-2 mb-4">
-            <Input
-              placeholder={t('searchByEmailOrName')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="max-w-sm"
-            />
-            <Button variant="outline" onClick={handleSearch}>{tCommon('search')}</Button>
-            <Button variant="ghost" onClick={() => { setSearch(''); loadData(); }}>{tCommon('clear')}</Button>
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            onSearch={handleSearch}
+            onClear={loadData}
+            placeholder={t('searchByEmailOrName')}
+            showButtons
+            className="mb-4 max-w-lg"
+          />
 
           <Table>
             <TableHeader>
@@ -506,24 +494,16 @@ export default function AdminUsersPage() {
       </Dialog>
 
       {/* Delete User Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('deleteUser')}</DialogTitle>
-            <DialogDescription>
-              {t('deleteUserConfirmation', { email: selectedUser?.email || '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={isSubmitting}>
-              {isSubmitting ? t('deleting') : t('deleteUser')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={t('deleteUser')}
+        description={t('deleteUserConfirmation', { email: selectedUser?.email || '' })}
+        confirmLabel={t('deleteUser')}
+        loadingLabel={t('deleting')}
+        onConfirm={handleDeleteUser}
+        isLoading={isSubmitting}
+      />
 
       {/* Reset Password Dialog */}
       <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
