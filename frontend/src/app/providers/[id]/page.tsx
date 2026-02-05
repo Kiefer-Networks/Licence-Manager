@@ -582,6 +582,27 @@ export default function ProviderDetailPage() {
     }
   };
 
+  // Match suggestion handlers
+  const handleConfirmMatch = async (license: License) => {
+    try {
+      await api.confirmLicenseMatch(license.id);
+      showToast('success', tLicenses('matchConfirmed'));
+      await fetchCategorizedLicenses();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
+    }
+  };
+
+  const handleRejectMatch = async (license: License) => {
+    try {
+      await api.rejectLicenseMatch(license.id);
+      showToast('success', tLicenses('matchRejected'));
+      await fetchCategorizedLicenses();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToUpdate'));
+    }
+  };
+
   // License Package handlers
   const handleOpenPackageDialog = (pkg?: import('@/lib/api').LicensePackage) => {
     if (pkg) {
@@ -1301,6 +1322,7 @@ export default function ProviderDetailPage() {
                 notInHris={categorizedLicenses.not_in_hris}
                 external={categorizedLicenses.external}
                 serviceAccounts={categorizedLicenses.service_accounts}
+                suggested={categorizedLicenses.suggested}
                 stats={categorizedLicenses.stats}
                 showProvider={false}
                 showStats={true}
@@ -1310,6 +1332,8 @@ export default function ProviderDetailPage() {
                 onLicenseTypeClick={provider?.name === 'figma' ? handleOpenLicenseTypeDialog : undefined}
                 onAssignClick={(license) => setAssignDialog(license)}
                 onDeleteClick={(license) => setDeleteDialog(license)}
+                onConfirmMatch={handleConfirmMatch}
+                onRejectMatch={handleRejectMatch}
               />
             ) : (
               <div className="border rounded-lg bg-white p-8 text-center text-muted-foreground">

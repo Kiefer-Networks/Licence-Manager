@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { License, LicenseStats } from '@/lib/api';
 import { LicenseTable } from './LicenseTable';
 import { LicenseStatsCards } from './LicenseStats';
-import { Users, Package, Globe, AlertTriangle, Bot } from 'lucide-react';
+import { Users, Package, Globe, AlertTriangle, Bot, Lightbulb } from 'lucide-react';
 
 interface ThreeTableLayoutProps {
   assigned: License[];
@@ -13,6 +13,7 @@ interface ThreeTableLayoutProps {
   notInHris?: License[];  // Has user (internal email) but not found in HRIS
   external: License[];
   serviceAccounts?: License[];
+  suggested?: License[];  // Licenses with suggested matches needing confirmation
   stats: LicenseStats;
   showProvider?: boolean;
   showStats?: boolean;
@@ -22,9 +23,11 @@ interface ThreeTableLayoutProps {
   onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
+  onConfirmMatch?: (license: License) => void;
+  onRejectMatch?: (license: License) => void;
 }
 
-type Tab = 'assigned' | 'unassigned' | 'not_in_hris' | 'external' | 'service_accounts';
+type Tab = 'assigned' | 'unassigned' | 'not_in_hris' | 'external' | 'service_accounts' | 'suggested';
 
 // Sort by email alphabetically
 // Use metadata.email if available (e.g., JetBrains), otherwise external_user_id
@@ -40,6 +43,7 @@ export function ThreeTableLayout({
   notInHris = [],
   external,
   serviceAccounts = [],
+  suggested = [],
   stats,
   showProvider = false,
   showStats = true,
@@ -49,9 +53,12 @@ export function ThreeTableLayout({
   onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
+  onConfirmMatch,
+  onRejectMatch,
 }: ThreeTableLayoutProps) {
   const t = useTranslations('licenses');
-  const [activeTab, setActiveTab] = useState<Tab>('assigned');
+  // Default to suggested tab if there are suggestions to review
+  const [activeTab, setActiveTab] = useState<Tab>(suggested.length > 0 ? 'suggested' : 'assigned');
 
   // Calculate ACTIVE-only stats for consistency with Overview
   const activeStats = useMemo(() => {
@@ -60,7 +67,8 @@ export function ThreeTableLayout({
     const activeNotInHris = notInHris.filter(l => l.status === 'active').length;
     const activeExternal = external.filter(l => l.status === 'active').length;
     const activeServiceAccounts = serviceAccounts.filter(l => l.status === 'active').length;
-    const totalActive = activeAssigned + activeUnassigned + activeNotInHris + activeExternal + activeServiceAccounts;
+    const activeSuggested = suggested.filter(l => l.status === 'active').length;
+    const totalActive = activeAssigned + activeUnassigned + activeNotInHris + activeExternal + activeServiceAccounts + activeSuggested;
 
     // For package providers: available = max_users - total_active
     const available = maxUsers ? Math.max(0, maxUsers - totalActive) : null;
@@ -73,9 +81,10 @@ export function ThreeTableLayout({
       total_not_in_hris: activeNotInHris,
       total_external: activeExternal,
       total_service_accounts: activeServiceAccounts,
+      total_suggested: activeSuggested,
       available_seats: available,
     };
-  }, [assigned, unassigned, notInHris, external, serviceAccounts, stats, maxUsers]);
+  }, [assigned, unassigned, notInHris, external, serviceAccounts, suggested, stats, maxUsers]);
 
   // Split unassigned into active and inactive, sorted alphabetically
   const unassignedActive = useMemo(() =>
@@ -117,8 +126,19 @@ export function ThreeTableLayout({
     [serviceAccounts]
   );
 
-  const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
+  // Split suggested into active and inactive, sorted alphabetically
+  const suggestedActive = useMemo(() =>
+    suggested.filter(l => l.status === 'active').sort(sortByEmail),
+    [suggested]
+  );
+  const suggestedInactive = useMemo(() =>
+    suggested.filter(l => l.status !== 'active').sort(sortByEmail),
+    [suggested]
+  );
+
+  const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean; highlight?: boolean }[] = [
     { id: 'assigned', label: t('assigned'), count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
+    ...(suggestedActive.length > 0 ? [{ id: 'suggested' as Tab, label: t('suggested'), count: suggestedActive.length, icon: <Lightbulb className="h-4 w-4" />, highlight: true }] : []),
     ...(notInHrisActive.length > 0 ? [{ id: 'not_in_hris' as Tab, label: t('notInHRIS'), count: notInHrisActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: true }] : []),
     ...(unassignedActive.length > 0 ? [{ id: 'unassigned' as Tab, label: t('unassigned'), count: unassignedActive.length, icon: <Package className="h-4 w-4" />, warning: true }] : []),
     { id: 'external', label: t('external'), count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
@@ -129,6 +149,8 @@ export function ThreeTableLayout({
     switch (activeTab) {
       case 'assigned':
         return assigned.sort(sortByEmail);
+      case 'suggested':
+        return suggested; // Handled separately with two tables
       case 'not_in_hris':
         return notInHris; // Handled separately with two tables
       case 'unassigned':
@@ -144,6 +166,8 @@ export function ThreeTableLayout({
     switch (activeTab) {
       case 'assigned':
         return t('noAssignedLicenses');
+      case 'suggested':
+        return t('noSuggestedMatches');
       case 'not_in_hris':
         return t('noLicensesNotInHRIS');
       case 'unassigned':
@@ -169,17 +193,17 @@ export function ThreeTableLayout({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-zinc-900 text-zinc-900'
+                  ? tab.highlight ? 'border-amber-500 text-amber-700' : 'border-zinc-900 text-zinc-900'
                   : 'border-transparent text-muted-foreground hover:text-zinc-900'
               }`}
             >
-              <span className={tab.warning ? 'text-red-500' : ''}>{tab.icon}</span>
-              <span className={tab.warning ? 'text-red-600' : ''}>{tab.label}</span>
+              <span className={tab.warning ? 'text-red-500' : tab.highlight ? 'text-amber-500' : ''}>{tab.icon}</span>
+              <span className={tab.warning ? 'text-red-600' : tab.highlight ? 'text-amber-600' : ''}>{tab.label}</span>
               <span
                 className={`px-2 py-0.5 text-xs rounded-full ${
                   activeTab === tab.id
-                    ? tab.warning ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white'
-                    : tab.warning ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600'
+                    ? tab.warning ? 'bg-red-600 text-white' : tab.highlight ? 'bg-amber-500 text-white' : 'bg-zinc-900 text-white'
+                    : tab.warning ? 'bg-red-100 text-red-700' : tab.highlight ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-600'
                 }`}
               >
                 {tab.count}
@@ -190,7 +214,65 @@ export function ThreeTableLayout({
       </div>
 
       {/* Tables */}
-      {activeTab === 'not_in_hris' ? (
+      {activeTab === 'suggested' ? (
+        // "Suggested": Licenses with suggested matches needing confirmation
+        <div className="space-y-8">
+          {/* Active */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-medium text-amber-600">
+                {t('activeSuggested', { count: suggestedActive.length })}
+              </h3>
+            </div>
+            {suggestedActive.length > 0 ? (
+              <div className="border border-amber-200 rounded-lg overflow-hidden bg-amber-50/30">
+                <LicenseTable
+                  licenses={suggestedActive}
+                  showProvider={showProvider}
+                  showEmployee={true}
+                  showSuggestion={true}
+                  emptyMessage={t('noSuggestedMatches')}
+                  onServiceAccountClick={onServiceAccountClick}
+                  onAdminAccountClick={onAdminAccountClick}
+                  onLicenseTypeClick={onLicenseTypeClick}
+                  onAssignClick={onAssignClick}
+                  onDeleteClick={onDeleteClick}
+                  onConfirmMatch={onConfirmMatch}
+                  onRejectMatch={onRejectMatch}
+                />
+              </div>
+            ) : (
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
+                <p className="text-sm text-emerald-600">{t('allSuggestionsReviewed')}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Inactive */}
+          {suggestedInactive.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                {t('inactiveSuggested', { count: suggestedInactive.length })}
+              </h3>
+              <LicenseTable
+                licenses={suggestedInactive}
+                showProvider={showProvider}
+                showEmployee={true}
+                showSuggestion={true}
+                emptyMessage={t('noInactiveLicenses')}
+                onServiceAccountClick={onServiceAccountClick}
+                onAdminAccountClick={onAdminAccountClick}
+                onLicenseTypeClick={onLicenseTypeClick}
+                onAssignClick={onAssignClick}
+                onDeleteClick={onDeleteClick}
+                onConfirmMatch={onConfirmMatch}
+                onRejectMatch={onRejectMatch}
+              />
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'not_in_hris' ? (
         // "Not in HRIS": Has user email but not found in HRIS
         <div className="space-y-8">
           {/* Active - Critical! */}

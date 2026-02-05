@@ -8,7 +8,7 @@ import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags, Check, X, Lightbulb } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ interface LicenseTableProps {
   licenses: License[];
   showProvider?: boolean;
   showEmployee?: boolean;
+  showSuggestion?: boolean;
   emptyMessage?: string;
   onSelect?: (license: License) => void;
   selectedIds?: Set<string>;
@@ -32,6 +33,8 @@ interface LicenseTableProps {
   onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
+  onConfirmMatch?: (license: License) => void;
+  onRejectMatch?: (license: License) => void;
 }
 
 type SortColumn = 'external_user_id' | 'employee_name' | 'license_type' | 'monthly_cost' | 'provider_name';
@@ -40,6 +43,7 @@ function LicenseTableComponent({
   licenses,
   showProvider = true,
   showEmployee = true,
+  showSuggestion = false,
   emptyMessage,
   selectedIds,
   onToggleSelect,
@@ -49,11 +53,14 @@ function LicenseTableComponent({
   onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
+  onConfirmMatch,
+  onRejectMatch,
 }: LicenseTableProps) {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const displayEmptyMessage = emptyMessage || tCommon('noResults');
   const hasActions = onServiceAccountClick || onAdminAccountClick || onLicenseTypeClick || onAssignClick || onDeleteClick;
+  const hasMatchActions = onConfirmMatch || onRejectMatch;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -194,6 +201,11 @@ function LicenseTableComponent({
                     </button>
                   </th>
                 )}
+                {showSuggestion && (
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    {t('suggestedMatch')}
+                  </th>
+                )}
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                   <button onClick={() => handleSort('license_type')} className="flex items-center gap-1.5 hover:text-foreground">
                     {t('type')} <SortIcon column="license_type" />
@@ -279,6 +291,53 @@ function LicenseTableComponent({
                         )}
                         <LicenseStatusBadge license={license} showUnassigned={!license.employee_id && !license.is_service_account} />
                       </div>
+                    </td>
+                  )}
+                  {showSuggestion && (
+                    <td className="px-4 py-3">
+                      {license.suggested_employee_id ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center">
+                              <Lightbulb className="h-3 w-3 text-amber-600" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">{license.suggested_employee_name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {license.match_confidence ? `${Math.round(license.match_confidence * 100)}%` : ''} {license.match_method && `(${license.match_method})`}
+                              </span>
+                            </div>
+                          </div>
+                          {hasMatchActions && (
+                            <div className="flex items-center gap-1">
+                              {onConfirmMatch && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  onClick={() => onConfirmMatch(license)}
+                                  title={t('confirmMatch')}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {onRejectMatch && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => onRejectMatch(license)}
+                                  title={t('rejectMatch')}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </td>
                   )}
                   <td className="px-4 py-3 text-muted-foreground">
