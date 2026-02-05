@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { api, License, Provider, CategorizedLicensesResponse, Employee } from '@/lib/api';
+import { api, License, Provider, CategorizedLicensesResponse, Employee, EmployeeSuggestion } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
 import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatsCards, LicenseStatusBadge } from '@/components/licenses';
@@ -48,6 +48,8 @@ import {
   Check,
   User,
   Package,
+  Link2,
+  UserPlus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -105,6 +107,12 @@ function LicensesContent() {
   const [showOwnerResults, setShowOwnerResults] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+
+  // Link to employee suggestion state
+  const [linkDialog, setLinkDialog] = useState<License | null>(null);
+  const [suggestions, setSuggestions] = useState<EmployeeSuggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
   const licenseProviders = providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -373,6 +381,54 @@ function LicensesContent() {
       setToast({ message: t('failedToUpdate'), type: 'error' });
     } finally {
       setMarkAsLoading(false);
+    }
+  };
+
+  // Open link dialog and fetch suggestions
+  const handleOpenLinkDialog = async (license: License) => {
+    setLinkDialog(license);
+    setSuggestions([]);
+    setLoadingSuggestions(true);
+
+    try {
+      // Get username from license metadata or external_user_id
+      const metadata = license.metadata as Record<string, unknown> | undefined;
+      const username = (metadata?.username as string) || (metadata?.hf_username as string) || license.external_user_id;
+      const displayName = (metadata?.fullname as string) || (metadata?.display_name as string);
+      const providerName = license.provider_name;
+
+      const response = await api.getEmployeeSuggestions(providerName, username, displayName);
+      setSuggestions(response.suggestions);
+    } catch (error) {
+      handleSilentError('getEmployeeSuggestions', error);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  // Link license to employee via external account
+  const handleLinkToEmployee = async (employeeId: string) => {
+    if (!linkDialog) return;
+
+    setLinkLoading(true);
+    try {
+      const metadata = linkDialog.metadata as Record<string, unknown> | undefined;
+      const username = (metadata?.username as string) || (metadata?.hf_username as string) || linkDialog.external_user_id;
+      const displayName = (metadata?.fullname as string) || (metadata?.display_name as string);
+
+      await api.linkExternalAccount(employeeId, {
+        provider_type: linkDialog.provider_name,
+        external_username: username,
+        display_name: displayName,
+      });
+
+      setToast({ message: t('linkedToEmployee'), type: 'success' });
+      setLinkDialog(null);
+      loadLicenses();
+    } catch (error) {
+      setToast({ message: t('failedToLink'), type: 'error' });
+    } finally {
+      setLinkLoading(false);
     }
   };
 
@@ -681,6 +737,12 @@ function LicensesContent() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  {!license.employee_id && (
+                                    <DropdownMenuItem onClick={() => handleOpenLinkDialog(license)}>
+                                      <Link2 className="h-4 w-4 mr-2" />
+                                      {t('linkToEmployee')}
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
                                     <Bot className="h-4 w-4 mr-2" />
                                     {tServiceAccounts('markAsServiceAccount')}
@@ -794,6 +856,12 @@ function LicensesContent() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  {!license.employee_id && (
+                                    <DropdownMenuItem onClick={() => handleOpenLinkDialog(license)}>
+                                      <Link2 className="h-4 w-4 mr-2" />
+                                      {t('linkToEmployee')}
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
                                     <Bot className="h-4 w-4 mr-2" />
                                     {tServiceAccounts('markAsServiceAccount')}
@@ -1184,6 +1252,94 @@ function LicensesContent() {
             <Button onClick={handleMarkAs} disabled={markAsLoading}>
               {markAsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {markAsDialog?.type === 'service' ? tServiceAccounts('markAsServiceAccount') : tAdminAccounts('markAsAdminAccount')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link to Employee Dialog */}
+      <Dialog open={!!linkDialog} onOpenChange={() => setLinkDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-blue-500" />
+              {t('linkToEmployee')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('linkToEmployeeDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          {linkDialog && (
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-zinc-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm text-muted-foreground">{t('provider')}:</span>
+                  <span className="text-sm font-medium">{linkDialog.provider_name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{t('user')}:</span>
+                  <code className="text-sm bg-white px-2 py-0.5 rounded border">
+                    {linkDialog.external_user_id}
+                  </code>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">{t('suggestedMatches')}</h4>
+                {loadingSuggestions ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                  </div>
+                ) : suggestions.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">{t('noSuggestionsFound')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.employee_id}
+                        onClick={() => handleLinkToEmployee(suggestion.employee_id)}
+                        disabled={linkLoading}
+                        className="w-full p-3 text-left rounded-lg border hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-medium text-zinc-600">
+                              {suggestion.employee_name.charAt(0)}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium truncate">{suggestion.employee_name}</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5">
+                                {t('matchScore', { score: Math.round(suggestion.similarity_score * 100) })}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {suggestion.employee_email}
+                            </div>
+                            <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
+                              {t('matchReason', { reason: suggestion.match_reason })}
+                            </div>
+                          </div>
+                          {linkLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                          ) : (
+                            <UserPlus className="h-4 w-4 text-zinc-400" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialog(null)} disabled={linkLoading}>
+              {tCommon('cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>

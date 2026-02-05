@@ -334,7 +334,17 @@
     "active": "Aktiv",
     "inactive": "Inaktiv",
     "available": "Verfügbar",
-    "api": "API"
+    "api": "API",
+    "linkToEmployee": "Mit Mitarbeiter verknüpfen",
+    "linkToEmployeeDescription": "Verknüpfen Sie diese Lizenz mit einem Mitarbeiter anhand des Benutzernamens. Dies erstellt eine externe Konto-Verknüpfung.",
+    "suggestedMatches": "Vorgeschlagene Übereinstimmungen",
+    "noSuggestionsFound": "Keine passenden Mitarbeiter basierend auf Benutzernamen-Ähnlichkeit gefunden",
+    "matchScore": "{score}% Übereinstimmung",
+    "matchReason": "Gefunden durch: {reason}",
+    "linkedToEmployee": "Lizenz erfolgreich mit Mitarbeiter verknüpft",
+    "failedToLink": "Verknüpfung mit Mitarbeiter fehlgeschlagen",
+    "manualSearch": "Manuell suchen",
+    "searchEmployeeToLink": "Mitarbeiter zum Verknüpfen suchen"
   },
   "providers": {
     "title": "Anbieter",

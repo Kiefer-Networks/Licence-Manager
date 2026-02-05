@@ -323,7 +323,17 @@
     "active": "Active",
     "inactive": "Inactive",
     "available": "Available",
-    "api": "API"
+    "api": "API",
+    "linkToEmployee": "Link to Employee",
+    "linkToEmployeeDescription": "Link this license to an employee by matching the username. This creates an external account link.",
+    "suggestedMatches": "Suggested Matches",
+    "noSuggestionsFound": "No matching employees found based on username similarity",
+    "matchScore": "{score}% match",
+    "matchReason": "Matched by: {reason}",
+    "linkedToEmployee": "License linked to employee successfully",
+    "failedToLink": "Failed to link license to employee",
+    "manualSearch": "Search manually",
+    "searchEmployeeToLink": "Search for an employee to link"
   },
   "providers": {
     "title": "Providers",
