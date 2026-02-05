@@ -231,6 +231,35 @@ class ExpirationService:
         )
         return list(result.scalars().all())
 
+    async def get_expiring_org_licenses(
+        self,
+        days_ahead: int = 90,
+    ) -> list[OrganizationLicenseORM]:
+        """Get organization licenses expiring within specified days.
+
+        Args:
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of OrganizationLicenseORM
+        """
+        cutoff_date = date.today() + timedelta(days=days_ahead)
+
+        result = await self.session.execute(
+            select(OrganizationLicenseORM)
+            .options(selectinload(OrganizationLicenseORM.provider))
+            .where(
+                and_(
+                    OrganizationLicenseORM.expires_at.isnot(None),
+                    OrganizationLicenseORM.expires_at >= date.today(),
+                    OrganizationLicenseORM.expires_at <= cutoff_date,
+                    OrganizationLicenseORM.status.notin_([OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED]),
+                )
+            )
+            .order_by(OrganizationLicenseORM.expires_at)
+        )
+        return list(result.scalars().all())
+
     async def get_expired_licenses(
         self,
     ) -> list[tuple[LicenseORM, ProviderORM, EmployeeORM | None]]:

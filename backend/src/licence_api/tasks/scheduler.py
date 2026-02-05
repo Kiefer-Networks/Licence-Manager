@@ -109,13 +109,13 @@ async def check_offboarded_employees_job() -> None:
 
 
 async def check_expiring_licenses_job() -> None:
-    """Background job to check for expiring licenses and update expired ones."""
+    """Background job to check for expiring licenses, packages, and org licenses."""
     from licence_api.database import async_session_maker
     from licence_api.services.expiration_service import ExpirationService
     from licence_api.services.notification_service import NotificationService
     from licence_api.repositories.settings_repository import SettingsRepository
 
-    logger.info("Checking for expiring and expired licenses")
+    logger.info("Checking for expiring and expired licenses, packages, and org licenses")
 
     async with async_session_maker() as session:
         try:
@@ -125,43 +125,95 @@ async def check_expiring_licenses_job() -> None:
 
             # First, update any licenses that have expired or have effective cancellation dates
             update_counts = await expiration_service.check_and_update_expired_licenses()
-            logger.info(f"Updated expired/cancelled licenses: {update_counts}")
+            logger.info(f"Updated expired/cancelled items: {update_counts}")
 
             # Get threshold settings
             thresholds = await settings_repo.get("thresholds")
             expiring_days = thresholds.get("expiring_days", 30) if thresholds else 30
 
-            # Get expiring licenses for notification
-            expiring = await expiration_service.get_expiring_licenses(days_ahead=expiring_days)
+            # Get Slack token from settings
+            slack_config = await settings_repo.get("slack_config")
+            slack_token = slack_config.get("bot_token") if slack_config else None
 
-            if expiring:
-                # Get Slack token from settings
-                slack_config = await settings_repo.get("slack_config")
-                if slack_config and slack_config.get("bot_token"):
-                    # Group by provider for notifications
-                    from collections import defaultdict
-                    by_provider: dict = defaultdict(list)
-                    for lic, provider, employee in expiring:
-                        by_provider[provider.display_name].append(lic)
+            total_expiring = 0
 
-                    for provider_name, licenses in by_provider.items():
-                        if licenses:
-                            # Get min days until expiry for this provider
-                            min_days = min(
-                                (lic.expires_at - datetime.now().date()).days
-                                for lic in licenses
-                                if lic.expires_at
-                            )
-                            await notification_service.notify_license_expiring(
-                                provider_name=provider_name,
-                                license_type=licenses[0].license_type,
-                                days_until_expiry=min_days,
-                                affected_count=len(licenses),
-                                slack_token=slack_config["bot_token"],
-                            )
+            # Check expiring individual licenses
+            expiring_licenses = await expiration_service.get_expiring_licenses(days_ahead=expiring_days)
+            if expiring_licenses and slack_token:
+                from collections import defaultdict
+                by_provider: dict = defaultdict(list)
+                for lic, provider, employee in expiring_licenses:
+                    by_provider[provider.display_name].append(lic)
+
+                for provider_name, licenses in by_provider.items():
+                    if licenses:
+                        min_days = min(
+                            (lic.expires_at - datetime.now().date()).days
+                            for lic in licenses
+                            if lic.expires_at
+                        )
+                        await notification_service.notify_license_expiring(
+                            provider_name=provider_name,
+                            license_type=licenses[0].license_type,
+                            days_until_expiry=min_days,
+                            affected_count=len(licenses),
+                            slack_token=slack_token,
+                        )
+            total_expiring += len(expiring_licenses)
+
+            # Check expiring packages
+            expiring_packages = await expiration_service.get_expiring_packages(days_ahead=expiring_days)
+            if expiring_packages and slack_token:
+                from collections import defaultdict
+                by_provider_pkg: dict = defaultdict(list)
+                for pkg in expiring_packages:
+                    by_provider_pkg[pkg.provider.display_name].append(pkg)
+
+                for provider_name, packages in by_provider_pkg.items():
+                    if packages:
+                        min_days = min(
+                            (pkg.contract_end - datetime.now().date()).days
+                            for pkg in packages
+                            if pkg.contract_end
+                        )
+                        await notification_service.notify_license_expiring(
+                            provider_name=f"{provider_name} (Package)",
+                            license_type=packages[0].license_type,
+                            days_until_expiry=min_days,
+                            affected_count=len(packages),
+                            slack_token=slack_token,
+                        )
+            total_expiring += len(expiring_packages)
+
+            # Check expiring org licenses
+            expiring_org = await expiration_service.get_expiring_org_licenses(days_ahead=expiring_days)
+            if expiring_org and slack_token:
+                from collections import defaultdict
+                by_provider_org: dict = defaultdict(list)
+                for org_lic in expiring_org:
+                    by_provider_org[org_lic.provider.display_name].append(org_lic)
+
+                for provider_name, org_licenses in by_provider_org.items():
+                    if org_licenses:
+                        min_days = min(
+                            (ol.expires_at - datetime.now().date()).days
+                            for ol in org_licenses
+                            if ol.expires_at
+                        )
+                        await notification_service.notify_license_expiring(
+                            provider_name=f"{provider_name} (Org License)",
+                            license_type=org_licenses[0].name,
+                            days_until_expiry=min_days,
+                            affected_count=len(org_licenses),
+                            slack_token=slack_token,
+                        )
+            total_expiring += len(expiring_org)
 
             await session.commit()
-            logger.info(f"Expiring licenses check completed: {len(expiring)} found")
+            logger.info(
+                f"Expiring check completed: {len(expiring_licenses)} licenses, "
+                f"{len(expiring_packages)} packages, {len(expiring_org)} org licenses"
+            )
         except Exception as e:
             logger.error(f"Expiring licenses check failed: {e}")
             await session.rollback()
