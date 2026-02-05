@@ -19,7 +19,7 @@ from licence_api.exceptions import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
-    PasswordResetRequest,
+    PasswordResetResponse,
     PermissionResponse,
     PermissionsByCategory,
     RoleCreateRequest,
@@ -27,6 +27,7 @@ from licence_api.models.dto.auth import (
     RoleUpdateRequest,
     SessionInfo,
     UserCreateRequest,
+    UserCreateResponse,
     UserInfo,
     UserUpdateRequest,
 )
@@ -73,7 +74,7 @@ async def list_users(
     return UserListResponse(items=items, total=len(items))
 
 
-@router.post("/users", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
+@router.post("/users", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def create_user(
     request: Request,
@@ -82,8 +83,12 @@ async def create_user(
     service: Annotated[RbacService, Depends(get_rbac_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
-) -> UserInfo:
-    """Create a new user with local authentication."""
+) -> UserCreateResponse:
+    """Create a new user with local authentication.
+
+    If email is configured, password can be omitted and will be auto-generated
+    and sent via email. If email is not configured, password is required.
+    """
     try:
         return await service.create_user(
             request=body,
@@ -93,8 +98,8 @@ async def create_user(
         )
     except UserAlreadyExistsError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-    except ValidationError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user data")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/users/{user_id}", response_model=UserInfo)
@@ -165,31 +170,30 @@ async def delete_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own account")
 
 
-@router.post("/users/{user_id}/reset-password")
+@router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
 @limiter.limit(ADMIN_SENSITIVE_LIMIT)
 async def reset_user_password(
     request: Request,
     user_id: UUID,
-    body: PasswordResetRequest,
     current_user: Annotated[AdminUser, Depends(require_superadmin)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
-) -> dict[str, str]:
-    """Reset a user's password (superadmin only). Rate limited."""
+) -> PasswordResetResponse:
+    """Reset a user's password (superadmin only). Rate limited.
+
+    Generates a new temporary password. If email is configured, the password
+    is sent via email. Otherwise, it is returned in the response.
+    """
     try:
-        await service.reset_user_password(
+        return await service.reset_user_password(
             user_id=user_id,
-            body=body,
             current_user=current_user,
             http_request=request,
             user_agent=user_agent,
         )
-        return {"message": "Password reset successfully"}
     except UserNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    except ValidationError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password reset failed")
 
 
 @router.post("/users/{user_id}/unlock")

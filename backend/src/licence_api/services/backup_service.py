@@ -511,10 +511,33 @@ class BackupService:
         }
 
     def _settings_to_dict(self, settings: SettingsORM) -> dict[str, Any]:
-        """Convert settings ORM to dict."""
+        """Convert settings ORM to dict.
+
+        Special handling for smtp_config: decrypt the password so backups
+        remain portable across different ENCRYPTION_KEYs (same approach as
+        provider credentials and TOTP secrets).
+        """
+        value = settings.value
+
+        # Handle SMTP config: decrypt password for portability
+        if settings.key == "smtp_config" and value and value.get("password_encrypted"):
+            try:
+                # Decrypt password for backup
+                encrypted_hex = value["password_encrypted"]
+                encrypted_bytes = bytes.fromhex(encrypted_hex)
+                decrypted_password = self.encryption.decrypt_string(encrypted_bytes)
+
+                # Create a copy with decrypted password
+                value = dict(value)
+                value["password_decrypted"] = decrypted_password
+                del value["password_encrypted"]
+            except Exception:
+                # If decryption fails, keep encrypted (may already be decrypted in an old backup)
+                pass
+
         return {
             "key": settings.key,
-            "value": settings.value,
+            "value": value,
             "updated_at": settings.updated_at,
         }
 
@@ -808,9 +831,20 @@ class BackupService:
 
         # 1. Settings (no dependencies)
         for s in data["settings"]:
+            value = s["value"]
+
+            # Handle SMTP config: re-encrypt password if it was decrypted for backup
+            if s["key"] == "smtp_config" and value and value.get("password_decrypted"):
+                decrypted_password = value["password_decrypted"]
+                # Re-encrypt with current encryption key
+                encrypted_bytes = self.encryption.encrypt_string(decrypted_password)
+                value = dict(value)
+                value["password_encrypted"] = encrypted_bytes.hex()
+                del value["password_decrypted"]
+
             settings_orm = SettingsORM(
                 key=s["key"],
-                value=s["value"],
+                value=value,
             )
             self.session.add(settings_orm)
             counts.settings += 1

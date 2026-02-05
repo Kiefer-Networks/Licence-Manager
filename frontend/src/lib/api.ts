@@ -1292,8 +1292,20 @@ export interface AdminUserListResponse {
 export interface AdminUserCreateRequest {
   email: string;
   name?: string;
-  password: string;
+  password?: string;  // Optional when email is configured
   role_codes: string[];
+}
+
+export interface AdminUserCreateResponse {
+  user: AdminUser;
+  password_sent_via_email: boolean;
+  temporary_password?: string;  // Only returned if email not configured
+}
+
+export interface PasswordResetResponse {
+  message: string;
+  password_sent_via_email: boolean;
+  temporary_password?: string;  // Only returned if email not configured
 }
 
 export interface AdminUserUpdateRequest {
@@ -1386,6 +1398,39 @@ export interface ThresholdSettings {
   low_utilization_percent: number;
   cost_increase_percent: number;
   max_unassigned_licenses: number;
+}
+
+// ============================================================================
+// Email/SMTP Configuration Types
+// ============================================================================
+
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  username: string;
+  from_email: string;
+  from_name: string;
+  use_tls: boolean;
+  is_configured: boolean;
+}
+
+export interface SmtpConfigRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;  // Optional when updating (keeps existing password)
+  from_email: string;
+  from_name?: string;
+  use_tls: boolean;
+}
+
+export interface EmailConfigStatus {
+  is_configured: boolean;
+}
+
+export interface TestEmailResponse {
+  success: boolean;
+  message: string;
 }
 
 // ============================================================================
@@ -2574,6 +2619,36 @@ export const api = {
     });
   },
 
+  // Email/SMTP Configuration
+  async getEmailConfig(): Promise<SmtpConfig | EmailConfigStatus> {
+    return fetchApi<SmtpConfig | EmailConfigStatus>('/settings/email');
+  },
+
+  async setEmailConfig(config: SmtpConfigRequest): Promise<SmtpConfig> {
+    return fetchApi<SmtpConfig>('/settings/email', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  },
+
+  async deleteEmailConfig(): Promise<void> {
+    return fetchApi<void>('/settings/email', {
+      method: 'DELETE',
+    });
+  },
+
+  async testEmail(toEmail: string): Promise<TestEmailResponse> {
+    return fetchApi<TestEmailResponse>('/settings/email/test', {
+      method: 'POST',
+      body: JSON.stringify({ to_email: toEmail }),
+    });
+  },
+
+  async isEmailConfigured(): Promise<boolean> {
+    const config = await this.getEmailConfig();
+    return 'is_configured' in config ? config.is_configured : true;
+  },
+
   // ============================================================================
   // RBAC - Admin Users
   // ============================================================================
@@ -2603,16 +2678,16 @@ export const api = {
   async createAdminUser(data: {
     email: string;
     name?: string;
-    password: string;
+    password?: string;  // Optional when email is configured
     role_ids: string[];
-  }): Promise<AdminUser> {
+  }): Promise<AdminUserCreateResponse> {
     // Convert role_ids to role_codes by fetching roles first
     const rolesResponse = await this.getRoles();
     const roleCodes = data.role_ids
       .map(id => rolesResponse.items.find(r => r.id === id)?.code)
       .filter((code): code is string => !!code);
 
-    return fetchApi<AdminUser>('/rbac/users', {
+    return fetchApi<AdminUserCreateResponse>('/rbac/users', {
       method: 'POST',
       body: JSON.stringify({
         email: data.email,
@@ -2653,8 +2728,8 @@ export const api = {
     await fetchApi(`/rbac/users/${userId}`, { method: 'DELETE' });
   },
 
-  async resetAdminUserPassword(userId: string): Promise<{ temporary_password: string }> {
-    return fetchApi<{ temporary_password: string }>(`/rbac/users/${userId}/reset-password`, {
+  async resetAdminUserPassword(userId: string): Promise<PasswordResetResponse> {
+    return fetchApi<PasswordResetResponse>(`/rbac/users/${userId}/reset-password`, {
       method: 'POST',
     });
   },

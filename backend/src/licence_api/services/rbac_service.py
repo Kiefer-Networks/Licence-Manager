@@ -1,5 +1,6 @@
 """RBAC service for user, role, and permission management."""
 
+import logging
 from uuid import UUID
 
 from fastapi import Request
@@ -16,11 +17,12 @@ from licence_api.exceptions import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
-    PasswordResetRequest,
+    PasswordResetResponse,
     RoleCreateRequest,
     RoleResponse,
     RoleUpdateRequest,
     UserCreateRequest,
+    UserCreateResponse,
     UserInfo,
     UserUpdateRequest,
 )
@@ -29,6 +31,9 @@ from licence_api.repositories.permission_repository import PermissionRepository
 from licence_api.repositories.role_repository import RoleRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
 from licence_api.security.password import get_password_service
+from licence_api.services.email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 
 class RbacService:
@@ -43,6 +48,7 @@ class RbacService:
         self.token_repo = RefreshTokenRepository(session)
         self.audit_repo = AuditRepository(session)
         self.password_service = get_password_service()
+        self.email_service = EmailService(session)
 
     def _build_user_info(self, user) -> UserInfo:
         """Build UserInfo from user ORM object."""
@@ -76,8 +82,11 @@ class RbacService:
         current_user: AdminUser,
         http_request: Request | None = None,
         user_agent: str | None = None,
-    ) -> UserInfo:
+    ) -> UserCreateResponse:
         """Create a new user with local authentication.
+
+        If email is configured, password can be auto-generated and sent via email.
+        If email is not configured, password must be provided in the request.
 
         Args:
             request: User creation request
@@ -86,24 +95,40 @@ class RbacService:
             user_agent: User agent string
 
         Returns:
-            Created user info
+            UserCreateResponse with user info and password delivery status
 
         Raises:
             UserAlreadyExistsError: If email exists
-            ValidationError: If password invalid
+            ValidationError: If password invalid or required but not provided
         """
         # Check if email already exists
         existing = await self.user_repo.get_by_email(request.email.lower())
         if existing:
             raise UserAlreadyExistsError(request.email)
 
-        # Validate password
-        is_valid, errors = self.password_service.validate_password_strength(request.password)
-        if not is_valid:
-            raise ValidationError(errors[0])
+        # Check if email is configured
+        email_configured = await self.email_service.is_configured()
+
+        # Determine password
+        password: str
+        password_sent_via_email = False
+        temporary_password: str | None = None
+
+        if request.password:
+            # Use provided password
+            password = request.password
+            is_valid, errors = self.password_service.validate_password_strength(password)
+            if not is_valid:
+                raise ValidationError(errors[0])
+        elif email_configured:
+            # Auto-generate password for email delivery
+            password = self.password_service.generate_temporary_password()
+        else:
+            # No email and no password provided
+            raise ValidationError("Password is required when email is not configured")
 
         # Hash password
-        password_hash = self.password_service.hash_password(request.password)
+        password_hash = self.password_service.hash_password(password)
 
         # Create user
         user = await self.user_repo.create_user(
@@ -120,6 +145,24 @@ class RbacService:
             role_ids = [r.id for r in roles]
             await self.user_repo.set_roles(user.id, role_ids, assigned_by=current_user.id)
 
+        # Send password via email if configured and password was auto-generated
+        if email_configured and not request.password:
+            email_sent = await self.email_service.send_password_email(
+                to_email=request.email.lower(),
+                user_name=request.name,
+                password=password,
+                is_new_user=True,
+            )
+            if email_sent:
+                password_sent_via_email = True
+            else:
+                # Email failed but user was created - log warning and return password
+                logger.warning(f"Failed to send password email to {request.email}, returning password in response")
+                temporary_password = password
+        elif not request.password:
+            # No email configured, return password in response
+            temporary_password = password
+
         # Audit log
         ip_address = http_request.client.host if http_request and http_request.client else None
         await self.audit_repo.log(
@@ -127,7 +170,12 @@ class RbacService:
             resource_type="admin_user",
             resource_id=user.id,
             admin_user_id=current_user.id,
-            changes={"email": user.email, "name": user.name, "roles": request.role_codes or []},
+            changes={
+                "email": user.email,
+                "name": user.name,
+                "roles": request.role_codes or [],
+                "password_sent_via_email": password_sent_via_email,
+            },
             ip_address=ip_address,
             user_agent=user_agent,
         )
@@ -136,7 +184,13 @@ class RbacService:
 
         # Fetch user with roles
         user = await self.user_repo.get_with_roles(user.id)
-        return self._build_user_info(user)
+        user_info = self._build_user_info(user)
+
+        return UserCreateResponse(
+            user=user_info,
+            password_sent_via_email=password_sent_via_email,
+            temporary_password=temporary_password,
+        )
 
     async def get_user(self, user_id: UUID) -> UserInfo | None:
         """Get user by ID."""
@@ -250,43 +304,67 @@ class RbacService:
     async def reset_user_password(
         self,
         user_id: UUID,
-        body: PasswordResetRequest,
         current_user: AdminUser,
         http_request: Request | None = None,
         user_agent: str | None = None,
-    ) -> None:
+    ) -> PasswordResetResponse:
         """Reset a user's password.
+
+        Generates a new temporary password. If email is configured,
+        sends the password via email. Otherwise, returns the password
+        in the response.
 
         Args:
             user_id: User ID to reset password for
-            body: Password reset request
             current_user: Admin user performing reset
             http_request: HTTP request for audit logging
             user_agent: User agent string
 
+        Returns:
+            PasswordResetResponse with password delivery status
+
         Raises:
             UserNotFoundError: If user not found
-            ValidationError: If password invalid
         """
         user = await self.user_repo.get_by_id(user_id)
         if user is None:
             raise UserNotFoundError(str(user_id))
 
-        # Validate password
-        is_valid, errors = self.password_service.validate_password_strength(body.new_password)
-        if not is_valid:
-            raise ValidationError(errors[0])
+        # Generate new temporary password
+        new_password = self.password_service.generate_temporary_password()
 
         # Hash and update password
-        password_hash = self.password_service.hash_password(body.new_password)
+        password_hash = self.password_service.hash_password(new_password)
         await self.user_repo.update_password(
             user_id,
             password_hash,
-            require_change=body.require_change,
+            require_change=True,
         )
 
         # Revoke all sessions
         await self.token_repo.revoke_all_for_user(user_id)
+
+        # Check if email is configured and try to send password
+        email_configured = await self.email_service.is_configured()
+        password_sent_via_email = False
+        temporary_password: str | None = None
+
+        if email_configured:
+            email_sent = await self.email_service.send_password_email(
+                to_email=user.email,
+                user_name=user.name,
+                password=new_password,
+                is_new_user=False,
+            )
+            if email_sent:
+                password_sent_via_email = True
+            else:
+                # Email failed - log warning and return password
+                logger.warning(f"Failed to send password reset email to {user.email}, returning password in response")
+                temporary_password = new_password
+        else:
+            # No email configured, return password in response
+            temporary_password = new_password
 
         # Audit log
         ip_address = http_request.client.host if http_request and http_request.client else None
@@ -295,12 +373,22 @@ class RbacService:
             resource_type="admin_user",
             resource_id=user_id,
             admin_user_id=current_user.id,
-            changes={"target_email": user.email, "require_change": body.require_change},
+            changes={
+                "target_email": user.email,
+                "require_change": True,
+                "password_sent_via_email": password_sent_via_email,
+            },
             ip_address=ip_address,
             user_agent=user_agent,
         )
 
         await self.session.commit()
+
+        return PasswordResetResponse(
+            message="Password reset successfully",
+            password_sent_via_email=password_sent_via_email,
+            temporary_password=temporary_password,
+        )
 
     async def unlock_user(self, user_id: UUID) -> bool:
         """Unlock a locked user account.

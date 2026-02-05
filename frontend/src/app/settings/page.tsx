@@ -22,9 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, PaymentMethod, PaymentMethodCreate, PaymentMethodDetails, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings } from '@/lib/api';
+import { api, PaymentMethod, PaymentMethodCreate, PaymentMethodDetails, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
 import { BackupExportDialog } from '@/components/backup';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -58,6 +58,23 @@ export default function SettingsPage() {
     event_type: '',
     slack_channel: '',
     template: '',
+  });
+
+  // Email/SMTP state
+  const [emailConfig, setEmailConfig] = useState<SmtpConfig | null>(null);
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [emailForm, setEmailForm] = useState({
+    host: '',
+    port: 587,
+    username: '',
+    password: '',
+    from_email: '',
+    from_name: 'License Management System',
+    use_tls: true,
   });
   const [paymentMethodForm, setPaymentMethodForm] = useState({
     name: '',
@@ -94,6 +111,7 @@ export default function SettingsPage() {
       fetchSlackConfig(),
       fetchNotificationRules(),
       fetchThresholdSettings(),
+      fetchEmailConfig(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -150,6 +168,20 @@ export default function SettingsPage() {
     }
   }
 
+  async function fetchEmailConfig() {
+    try {
+      const config = await api.getEmailConfig();
+      if ('host' in config) {
+        setEmailConfig(config as SmtpConfig);
+        setEmailConfigured(true);
+      } else {
+        setEmailConfigured(config.is_configured);
+      }
+    } catch (error) {
+      handleSilentError('fetchEmailConfig', error);
+    }
+  }
+
   const handleSaveThresholds = async () => {
     setSavingThresholds(true);
     try {
@@ -160,6 +192,98 @@ export default function SettingsPage() {
       showToast('error', message);
     } finally {
       setSavingThresholds(false);
+    }
+  };
+
+  // Email configuration handlers
+  const handleOpenEmailDialog = () => {
+    if (emailConfig) {
+      setEmailForm({
+        host: emailConfig.host,
+        port: emailConfig.port,
+        username: emailConfig.username,
+        password: '',
+        from_email: emailConfig.from_email,
+        from_name: emailConfig.from_name || 'License Management System',
+        use_tls: emailConfig.use_tls,
+      });
+    } else {
+      setEmailForm({
+        host: '',
+        port: 587,
+        username: '',
+        password: '',
+        from_email: '',
+        from_name: 'License Management System',
+        use_tls: true,
+      });
+    }
+    setEmailDialogOpen(true);
+  };
+
+  const handleSaveEmailConfig = async () => {
+    if (!emailForm.host || !emailForm.username || !emailForm.from_email) {
+      showToast('error', t('fillRequiredFields'));
+      return;
+    }
+    // Password required for new config
+    if (!emailConfigured && !emailForm.password) {
+      showToast('error', t('emailPasswordRequired'));
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      const request: SmtpConfigRequest = {
+        host: emailForm.host,
+        port: emailForm.port,
+        username: emailForm.username,
+        password: emailForm.password || undefined,
+        from_email: emailForm.from_email,
+        from_name: emailForm.from_name,
+        use_tls: emailForm.use_tls,
+      };
+      await api.setEmailConfig(request);
+      await fetchEmailConfig();
+      setEmailDialogOpen(false);
+      showToast('success', t('emailConfigSaved'));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('failedToSaveEmailConfig');
+      showToast('error', message);
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const handleDeleteEmailConfig = async () => {
+    try {
+      await api.deleteEmailConfig();
+      setEmailConfig(null);
+      setEmailConfigured(false);
+      showToast('success', t('emailConfigDeleted'));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('failedToDeleteEmailConfig');
+      showToast('error', message);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmailAddress.trim()) {
+      showToast('error', t('enterTestEmailAddress'));
+      return;
+    }
+    setTestingEmail(true);
+    try {
+      const result = await api.testEmail(testEmailAddress);
+      if (result.success) {
+        showToast('success', result.message);
+      } else {
+        showToast('error', result.message);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('failedToSendTestEmail');
+      showToast('error', message);
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -580,6 +704,81 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground mt-1">{t('addPaymentMethodsNote')}</p>
             </div>
           )}
+        </section>
+
+        {/* Email Configuration Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">{t('emailConfiguration')}</h2>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleOpenEmailDialog}>
+              {emailConfigured ? <Pencil className="h-3.5 w-3.5 mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+              {emailConfigured ? tCommon('edit') : t('configureEmail')}
+            </Button>
+          </div>
+
+          <div className="border rounded-lg bg-white p-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {t('emailConfigDescription')}
+            </p>
+
+            {/* Email Configuration Status */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${emailConfigured ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                <span className="text-sm font-medium">{emailConfigured ? t('emailConfigured') : t('emailNotConfigured')}</span>
+              </div>
+
+              {emailConfigured && emailConfig && (
+                <div className="bg-zinc-50 rounded-lg p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">{t('smtpHost')}:</span>
+                      <span className="ml-2 font-medium">{emailConfig.host}:{emailConfig.port}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">{t('fromEmail')}:</span>
+                      <span className="ml-2 font-medium">{emailConfig.from_email}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">{t('smtpUsername')}:</span>
+                      <span className="ml-2 font-medium">{emailConfig.username}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">{t('tlsEnabled')}:</span>
+                      <span className="ml-2 font-medium">{emailConfig.use_tls ? tCommon('yes') : tCommon('no')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {emailConfigured && (
+                <div className="flex gap-2 pt-2 border-t">
+                  <Input
+                    type="email"
+                    value={testEmailAddress}
+                    onChange={(e) => setTestEmailAddress(e.target.value)}
+                    placeholder={t('testEmailPlaceholder')}
+                    className="flex-1"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleTestEmail} disabled={testingEmail || !testEmailAddress.trim()}>
+                    {testingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> {t('test')}</>}
+                  </Button>
+                </div>
+              )}
+
+              {emailConfigured && (
+                <div className="pt-2 border-t">
+                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={handleDeleteEmailConfig}>
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    {t('removeEmailConfig')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* Slack Integration Section */}
@@ -1080,6 +1279,106 @@ export default function SettingsPage() {
             <Button variant="ghost" onClick={() => setPaymentMethodDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSavePaymentMethod} disabled={!paymentMethodForm.name || savingPaymentMethod}>
               {savingPaymentMethod ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {tCommon('loading')}</> : (editingPaymentMethod ? tCommon('save') : tCommon('add'))}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Configuration Dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{emailConfigured ? t('editEmailConfig') : t('configureEmail')}</DialogTitle>
+            <DialogDescription>
+              {emailConfigured ? t('editEmailConfigDescription') : t('configureEmailDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-2">
+                <Label className="text-xs font-medium">{t('smtpHost')}</Label>
+                <Input
+                  value={emailForm.host}
+                  onChange={(e) => setEmailForm({ ...emailForm, host: e.target.value })}
+                  placeholder="smtp.example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">{t('smtpPort')}</Label>
+                <Input
+                  type="number"
+                  value={emailForm.port}
+                  onChange={(e) => setEmailForm({ ...emailForm, port: parseInt(e.target.value) || 587 })}
+                  placeholder="587"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">{t('smtpUsername')}</Label>
+              <Input
+                value={emailForm.username}
+                onChange={(e) => setEmailForm({ ...emailForm, username: e.target.value })}
+                placeholder="user@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">
+                {t('smtpPassword')}
+                {emailConfigured && <span className="text-muted-foreground font-normal"> ({t('leaveEmptyToKeep')})</span>}
+              </Label>
+              <Input
+                type="password"
+                value={emailForm.password}
+                onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })}
+                placeholder={emailConfigured ? '••••••••' : ''}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">{t('fromEmail')}</Label>
+                <Input
+                  type="email"
+                  value={emailForm.from_email}
+                  onChange={(e) => setEmailForm({ ...emailForm, from_email: e.target.value })}
+                  placeholder="noreply@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">{t('fromName')}</Label>
+                <Input
+                  value={emailForm.from_name}
+                  onChange={(e) => setEmailForm({ ...emailForm, from_name: e.target.value })}
+                  placeholder="License Management System"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="use_tls"
+                checked={emailForm.use_tls}
+                onChange={(e) => setEmailForm({ ...emailForm, use_tls: e.target.checked })}
+                className="rounded border-zinc-300"
+              />
+              <Label htmlFor="use_tls" className="text-xs font-medium cursor-pointer">
+                <ShieldCheck className="h-3.5 w-3.5 inline mr-1" />
+                {t('useTls')}
+              </Label>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+              <Info className="h-4 w-4 inline mr-1" />
+              {t('emailConfigInfo')}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmailDialogOpen(false)}>{tCommon('cancel')}</Button>
+            <Button onClick={handleSaveEmailConfig} disabled={!emailForm.host || !emailForm.username || !emailForm.from_email || savingEmail}>
+              {savingEmail ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {tCommon('loading')}</> : tCommon('save')}
             </Button>
           </DialogFooter>
         </DialogContent>

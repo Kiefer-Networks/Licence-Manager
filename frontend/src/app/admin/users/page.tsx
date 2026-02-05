@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
-import { api, AdminUser, Role } from '@/lib/api';
+import { api, AdminUser, Role, AdminUserCreateResponse } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,9 @@ export default function AdminUsersPage() {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [passwordSentViaEmail, setPasswordSentViaEmail] = useState(false);
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [createResult, setCreateResult] = useState<AdminUserCreateResponse | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -87,7 +90,17 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     loadData();
+    checkEmailConfig();
   }, []);
+
+  const checkEmailConfig = async () => {
+    try {
+      const configured = await api.isEmailConfigured();
+      setEmailConfigured(configured);
+    } catch {
+      setEmailConfigured(false);
+    }
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -122,6 +135,9 @@ export default function AdminUsersPage() {
   const openCreateDialog = () => {
     setFormData({ email: '', name: '', password: '', role_codes: [] });
     setFormErrors([]);
+    setCreateResult(null);
+    setTemporaryPassword(null);
+    setPasswordSentViaEmail(false);
     setCreateDialogOpen(true);
   };
 
@@ -145,6 +161,7 @@ export default function AdminUsersPage() {
   const openResetPasswordDialog = (user: AdminUser) => {
     setSelectedUser(user);
     setTemporaryPassword(null);
+    setPasswordSentViaEmail(false);
     setResetPasswordDialogOpen(true);
   };
 
@@ -158,14 +175,23 @@ export default function AdminUsersPage() {
         .map(code => roles.find(r => r.code === code)?.id)
         .filter((id): id is string => !!id);
 
-      await api.createAdminUser({
+      const result = await api.createAdminUser({
         email: formData.email,
         name: formData.name || undefined,
-        password: formData.password,
+        password: formData.password || undefined,
         role_ids: roleIds,
       });
-      setCreateDialogOpen(false);
-      await loadData();
+
+      setCreateResult(result);
+      setPasswordSentViaEmail(result.password_sent_via_email);
+      setTemporaryPassword(result.temporary_password || null);
+
+      // Only close dialog if password was sent via email
+      if (result.password_sent_via_email) {
+        setCreateDialogOpen(false);
+        await loadData();
+      }
+      // If temporary_password is returned, keep dialog open to show it
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('failedToCreate');
       setFormErrors([errorMessage]);
@@ -222,7 +248,8 @@ export default function AdminUsersPage() {
 
     try {
       const result = await api.resetAdminUserPassword(selectedUser.id);
-      setTemporaryPassword(result.temporary_password);
+      setPasswordSentViaEmail(result.password_sent_via_email);
+      setTemporaryPassword(result.temporary_password || null);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('failedToResetPassword');
       setError(errorMessage);
@@ -364,76 +391,115 @@ export default function AdminUsersPage() {
       </Card>
 
       {/* Create User Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        if (!open && createResult) {
+          loadData();
+        }
+        setCreateDialogOpen(open);
+        if (!open) {
+          setCreateResult(null);
+          setTemporaryPassword(null);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('addUser')}</DialogTitle>
-            <DialogDescription>{t('addUserDescription')}</DialogDescription>
+            <DialogDescription>{createResult ? t('userCreated') : t('addUserDescription')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {formErrors.length > 0 && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {formErrors.map((err, i) => <div key={i}>{err}</div>)}
+          {createResult && createResult.temporary_password ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-md">
+                <Label className="text-sm text-muted-foreground">{t('temporaryPassword')}</Label>
+                <div className="font-mono text-lg mt-1 select-all">{createResult.temporary_password}</div>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="create-email">{tCommon('email')}</Label>
-              <Input
-                id="create-email"
-                type="email"
-                autoComplete="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-name">{t('nameOptional')}</Label>
-              <Input
-                id="create-name"
-                autoComplete="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-password">{tCommon('password')}</Label>
-              <Input
-                id="create-password"
-                type="password"
-                autoComplete="new-password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                minLength={12}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('passwordRequirementsText')}
+              <p className="text-sm text-muted-foreground">
+                {t('sharePasswordSecurely')}
               </p>
             </div>
-            <div className="space-y-2">
-              <Label>{t('roles')}</Label>
-              <div className="flex flex-wrap gap-2">
-                {roles.map((role) => (
-                  <Badge
-                    key={role.id}
-                    variant={formData.role_codes.includes(role.code) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => toggleRole(role.code)}
-                  >
-                    {role.name}
-                  </Badge>
-                ))}
+          ) : (
+            <div className="space-y-4">
+              {formErrors.length > 0 && (
+                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                  {formErrors.map((err, i) => <div key={i}>{err}</div>)}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="create-email">{tCommon('email')}</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-name">{t('nameOptional')}</Label>
+                <Input
+                  id="create-name"
+                  autoComplete="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              {!emailConfigured && (
+                <div className="space-y-2">
+                  <Label htmlFor="create-password">{tCommon('password')}</Label>
+                  <Input
+                    id="create-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    minLength={12}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('passwordRequirementsText')}
+                  </p>
+                </div>
+              )}
+              {emailConfigured && (
+                <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-md">
+                  {t('passwordWillBeSentViaEmail')}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>{t('roles')}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {roles.map((role) => (
+                    <Badge
+                      key={role.id}
+                      variant={formData.role_codes.includes(role.code) ? 'default' : 'outline'}
+                      className="cursor-pointer"
+                      onClick={() => toggleRole(role.code)}
+                    >
+                      {role.name}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button onClick={handleCreateUser} disabled={isSubmitting}>
-              {isSubmitting ? t('creating') : t('addUser')}
-            </Button>
+            {createResult ? (
+              <Button onClick={() => {
+                setCreateDialogOpen(false);
+                setCreateResult(null);
+                setTemporaryPassword(null);
+                loadData();
+              }}>{t('done')}</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                  {tCommon('cancel')}
+                </Button>
+                <Button onClick={handleCreateUser} disabled={isSubmitting}>
+                  {isSubmitting ? t('creating') : t('addUser')}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -516,12 +582,20 @@ export default function AdminUsersPage() {
           <DialogHeader>
             <DialogTitle>{t('resetPassword')}</DialogTitle>
             <DialogDescription>
-              {temporaryPassword
+              {passwordSentViaEmail
+                ? t('passwordSentViaEmail')
+                : temporaryPassword
                 ? t('temporaryPasswordGenerated')
                 : t('resetPasswordFor', { email: selectedUser?.email || '' })}
             </DialogDescription>
           </DialogHeader>
-          {temporaryPassword ? (
+          {passwordSentViaEmail ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 text-green-700 rounded-md">
+                {t('passwordEmailSentTo', { email: selectedUser?.email || '' })}
+              </div>
+            </div>
+          ) : temporaryPassword ? (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-md">
                 <Label className="text-sm text-muted-foreground">{t('temporaryPassword')}</Label>
@@ -533,7 +607,7 @@ export default function AdminUsersPage() {
             </div>
           ) : null}
           <DialogFooter>
-            {temporaryPassword ? (
+            {temporaryPassword || passwordSentViaEmail ? (
               <Button onClick={() => setResetPasswordDialogOpen(false)}>{t('done')}</Button>
             ) : (
               <>

@@ -69,7 +69,7 @@ class UserCreateRequest(BaseModel):
 
     email: EmailStr
     name: str | None = Field(default=None, max_length=255)
-    password: str = Field(min_length=12)
+    password: str | None = Field(default=None, min_length=12)  # Optional when email is configured
     role_codes: list[str] = Field(default=[], max_length=50)  # Max 50 roles per user
 
 
@@ -302,3 +302,19 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int | None = None
     totp_required: bool = False
+
+
+class UserCreateResponse(BaseModel):
+    """User creation response."""
+
+    user: UserInfo
+    password_sent_via_email: bool = False
+    temporary_password: str | None = None  # Only returned if email not configured
+
+
+class PasswordResetResponse(BaseModel):
+    """Password reset response."""
+
+    message: str = "Password reset successfully"
+    password_sent_via_email: bool = False
+    temporary_password: str | None = None  # Only returned if email not configured
