@@ -25,6 +25,7 @@ class BackupMetadata(BaseModel):
     provider_count: int = 0
     license_count: int = 0
     employee_count: int = 0
+    employee_external_account_count: int = 0
     license_package_count: int = 0
     organization_license_count: int = 0
     payment_method_count: int = 0
@@ -74,6 +75,7 @@ class RestoreImportCounts(BaseModel):
     providers: int = 0
     licenses: int = 0
     employees: int = 0
+    employee_external_accounts: int = 0
     license_packages: int = 0
     organization_licenses: int = 0
     payment_methods: int = 0

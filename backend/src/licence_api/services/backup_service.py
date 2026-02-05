@@ -72,6 +72,7 @@ from licence_api.models.orm.service_account_pattern import ServiceAccountPattern
 from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
 from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
 from licence_api.models.orm.settings import SettingsORM
+from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
 from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,26 @@ class BackupService:
         self.session = session
         self.encryption = get_encryption_service()
         self.audit_service = AuditService(session) if session else None
+
+    # =========================================================================
+    # System checks
+    # =========================================================================
+
+    async def has_existing_admin_users(self) -> bool:
+        """Check if any admin users exist in the system.
+
+        Used to verify if setup-restore is allowed (only on fresh installations).
+
+        Returns:
+            True if at least one admin user exists, False otherwise.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(AdminUserORM.id))
+        )
+        admin_count = result.scalar() or 0
+        return admin_count > 0
 
     # =========================================================================
     # Encryption utilities
@@ -252,6 +273,7 @@ class BackupService:
         providers = await self._fetch_all(ProviderORM)
         licenses = await self._fetch_all(LicenseORM)
         employees = await self._fetch_all(EmployeeORM)
+        employee_external_accounts = await self._fetch_all(EmployeeExternalAccountORM)
         license_packages = await self._fetch_all(LicensePackageORM)
         organization_licenses = await self._fetch_all(OrganizationLicenseORM)
         payment_methods = await self._fetch_all(PaymentMethodORM)
@@ -283,6 +305,7 @@ class BackupService:
                 "provider_count": len(providers),
                 "license_count": len(licenses),
                 "employee_count": len(employees),
+                "employee_external_account_count": len(employee_external_accounts),
                 "license_package_count": len(license_packages),
                 "organization_license_count": len(organization_licenses),
                 "payment_method_count": len(payment_methods),
@@ -305,6 +328,7 @@ class BackupService:
                 "providers": [self._provider_to_dict(p) for p in providers],
                 "licenses": [self._orm_to_dict(lic) for lic in licenses],
                 "employees": [self._orm_to_dict(e) for e in employees],
+                "employee_external_accounts": [self._orm_to_dict(eea) for eea in employee_external_accounts],
                 "license_packages": [self._orm_to_dict(lp) for lp in license_packages],
                 "organization_licenses": [self._orm_to_dict(ol) for ol in organization_licenses],
                 "payment_methods": [self._orm_to_dict(pm) for pm in payment_methods],
@@ -736,7 +760,10 @@ class BackupService:
         # 7. Providers (depends on payment_methods)
         await self.session.execute(delete(ProviderORM))
 
-        # 8. Employees (no FK dependencies after above cleared)
+        # 8. Employee external accounts (depends on employees)
+        await self.session.execute(delete(EmployeeExternalAccountORM))
+
+        # 9. Employees (no FK dependencies after above cleared)
         await self.session.execute(delete(EmployeeORM))
 
         # 9. Payment methods
@@ -923,6 +950,25 @@ class BackupService:
                     .values(manager_id=manager_id)
                 )
             await self.session.flush()
+
+        # 6b. Employee external accounts (depends on employees)
+        for eea in data.get("employee_external_accounts", []):
+            eea_orm = EmployeeExternalAccountORM(
+                id=UUID(eea["id"]) if isinstance(eea["id"], str) else eea["id"],
+                employee_id=UUID(eea["employee_id"]) if isinstance(eea["employee_id"], str) else eea["employee_id"],
+                provider_type=eea["provider_type"],
+                external_username=eea["external_username"],
+                external_user_id=eea.get("external_user_id"),
+                display_name=eea.get("display_name"),
+                linked_at=self._parse_datetime(eea["linked_at"]),
+                linked_by_id=UUID(eea["linked_by_id"]) if eea.get("linked_by_id") else None,
+                created_at=self._parse_datetime(eea.get("created_at")),
+                updated_at=self._parse_datetime(eea.get("updated_at")),
+            )
+            self.session.add(eea_orm)
+            counts.employee_external_accounts += 1
+
+        await self.session.flush()
 
         # 7. Role permissions (depends on roles and permissions)
         for rp in data.get("role_permissions", []):

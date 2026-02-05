@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
@@ -16,7 +15,6 @@ from licence_api.models.dto.backup import (
     BackupInfoResponse,
     RestoreResponse,
 )
-from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
@@ -186,7 +184,6 @@ SETUP_RESTORE_LIMIT = "3/hour"
 @limiter.limit(SETUP_RESTORE_LIMIT)
 async def setup_restore_backup(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
     service: Annotated[BackupService, Depends(get_backup_service)],
     file: UploadFile = File(...),
     password: str = Form(..., min_length=12, max_length=256),
@@ -207,10 +204,7 @@ async def setup_restore_backup(
     No authentication required, but only works on fresh installations.
     """
     # Security check: Only allow if no admin users exist
-    result = await db.execute(select(func.count(AdminUserORM.id)))
-    admin_count = result.scalar() or 0
-
-    if admin_count > 0:
+    if await service.has_existing_admin_users():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Setup restore is only available on fresh installations with no existing users",
