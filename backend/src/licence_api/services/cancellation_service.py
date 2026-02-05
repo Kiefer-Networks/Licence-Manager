@@ -14,6 +14,7 @@ Architecture Note (MVC-06):
     complex queries, keeping the cancellation business logic in one place.
 """
 
+import logging
 from datetime import date, datetime, timezone
 from uuid import UUID
 
@@ -25,6 +26,11 @@ from licence_api.models.domain.license import LicenseStatus
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
 from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
+from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_repository import UserRepository
+from licence_api.services.notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class CancellationService:
@@ -33,6 +39,19 @@ class CancellationService:
     def __init__(self, session: AsyncSession) -> None:
         """Initialize service with database session."""
         self.session = session
+        self.notification_service = NotificationService(session)
+        self.settings_repo = SettingsRepository(session)
+        self.user_repo = UserRepository(session)
+
+    async def _get_slack_token(self) -> str | None:
+        """Get Slack bot token from settings."""
+        slack_config = await self.settings_repo.get("slack_config")
+        return slack_config.get("bot_token") if slack_config else None
+
+    async def _get_user_email(self, user_id: UUID) -> str:
+        """Get user email by ID."""
+        user = await self.user_repo.get_by_id(user_id)
+        return user.email if user else "Unknown"
 
     async def cancel_license(
         self,
@@ -56,7 +75,9 @@ class CancellationService:
             ValueError: If license not found
         """
         result = await self.session.execute(
-            select(LicenseORM).where(LicenseORM.id == license_id)
+            select(LicenseORM)
+            .options(selectinload(LicenseORM.provider))
+            .where(LicenseORM.id == license_id)
         )
         license_orm = result.scalar_one_or_none()
 
@@ -74,6 +95,23 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(license_orm)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                cancelled_by_email = await self._get_user_email(cancelled_by)
+                await self.notification_service.notify_license_cancelled(
+                    provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                    license_type=license_orm.license_type,
+                    user_email=license_orm.external_user_id,
+                    cancelled_by=cancelled_by_email,
+                    cancellation_reason=reason,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send cancellation notification: {e}")
+
         return license_orm
 
     async def cancel_package(
@@ -118,6 +156,23 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(package)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                cancelled_by_email = await self._get_user_email(cancelled_by)
+                await self.notification_service.notify_package_cancelled(
+                    provider_name=package.provider.display_name if package.provider else "Unknown",
+                    package_name=package.license_type or "Unknown",
+                    seat_count=package.seats or 0,
+                    cancelled_by=cancelled_by_email,
+                    cancellation_reason=reason,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send package cancellation notification: {e}")
+
         return package
 
     async def cancel_org_license(
@@ -162,6 +217,22 @@ class CancellationService:
 
         await self.session.commit()
         await self.session.refresh(org_license)
+
+        # Send notification (fire-and-forget)
+        try:
+            slack_token = await self._get_slack_token()
+            if slack_token:
+                cancelled_by_email = await self._get_user_email(cancelled_by)
+                await self.notification_service.notify_org_license_cancelled(
+                    provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                    org_license_name=org_license.name,
+                    cancelled_by=cancelled_by_email,
+                    cancellation_reason=reason,
+                    slack_token=slack_token,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send org license cancellation notification: {e}")
+
         return org_license
 
     async def renew_license(
