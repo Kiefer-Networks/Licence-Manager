@@ -52,6 +52,7 @@ MATCH_METHOD_EXACT = "exact_email"
 MATCH_METHOD_LOCAL_PART = "local_part"
 MATCH_METHOD_FUZZY_NAME = "fuzzy_name"
 MATCH_METHOD_EXTERNAL_ACCOUNT = "external_account"
+MATCH_METHOD_METADATA_NAME = "metadata_name"
 
 # Confidence thresholds
 CONFIDENCE_AUTO_ASSIGN = 0.95  # Auto-assign if confidence >= this
@@ -61,7 +62,7 @@ MatchStatus = Literal[
     "auto_matched", "suggested", "confirmed", "rejected",
     "external_guest", "external_review"
 ]
-MatchMethod = Literal["exact_email", "local_part", "fuzzy_name", "external_account"]
+MatchMethod = Literal["exact_email", "local_part", "fuzzy_name", "external_account", "metadata_name"]
 
 
 @dataclass
@@ -236,6 +237,64 @@ class MatchingService:
 
         return best_match, confidence
 
+    def _fuzzy_name_match_by_display_name(
+        self,
+        display_name: str,
+        employees: list[EmployeeORM],
+    ) -> tuple[EmployeeORM | None, float]:
+        """Find best fuzzy name match from display name to employee names.
+
+        Used when providers return display names (e.g., HuggingFace fullName)
+        but not email addresses.
+
+        Args:
+            display_name: Display name from provider metadata
+            employees: List of employees to match against
+
+        Returns:
+            Tuple of (best_match_employee, confidence)
+        """
+        if not display_name or not display_name.strip():
+            return None, 0.0
+
+        name = display_name.lower().strip()
+        best_match: EmployeeORM | None = None
+        best_score = 0.0
+
+        for emp in employees:
+            emp_name = emp.full_name.lower()
+
+            # Direct name comparison
+            score = SequenceMatcher(None, name, emp_name).ratio()
+
+            # Also try reversed name parts (for "doe john" vs "john doe")
+            name_parts = name.split()
+            if len(name_parts) >= 2:
+                reversed_name = f"{name_parts[-1]} {' '.join(name_parts[:-1])}"
+                reversed_score = SequenceMatcher(None, reversed_name, emp_name).ratio()
+                score = max(score, reversed_score)
+
+            # Check first.last and last.first patterns
+            emp_parts = emp_name.split()
+            if len(emp_parts) >= 2:
+                first_last = f"{emp_parts[0]} {emp_parts[-1]}"
+                last_first = f"{emp_parts[-1]} {emp_parts[0]}"
+                score = max(
+                    score,
+                    SequenceMatcher(None, name, first_last).ratio(),
+                    SequenceMatcher(None, name, last_first).ratio(),
+                )
+
+            if score > best_score:
+                best_score = score
+                best_match = emp
+
+        # Apply confidence adjustment - metadata names can be more reliable
+        # than email-derived names, so use 0.90 multiplier
+        confidence = best_score * 0.90  # Max 90% confidence for metadata name
+
+        return best_match, confidence
+
     async def _build_external_accounts_cache(self, provider_type: str) -> None:
         """Build cache of external account mappings for a provider.
 
@@ -254,12 +313,14 @@ class MatchingService:
         company_domains: list[str],
         provider_type: str | None = None,
         username: str | None = None,
+        display_name: str | None = None,
     ) -> MatchResult:
         """Match a license to an employee using multi-level matching.
 
         Matching levels (in order of priority):
-        1. External account match (if provider_type and username provided)
-        2. Exact email match (company email)
+        0. External account match (if provider_type and username provided)
+        1. Exact email match (company email)
+        2. Metadata name match (if display_name provided, fuzzy match against employees)
         3. Local part match (e.g., john.doe@ matches john.doe@company.com)
         4. Fuzzy name match (e.g., "john.doe" matches employee "John Doe")
 
@@ -268,6 +329,7 @@ class MatchingService:
             company_domains: List of company email domains
             provider_type: Optional provider type for external account matching
             username: Optional username for external account matching
+            display_name: Optional display name from provider metadata for fuzzy matching
 
         Returns:
             MatchResult with match details
@@ -307,7 +369,23 @@ class MatchingService:
 
         # For remaining levels, only process if email format
         if "@" not in email:
-            # Non-email identifiers (license keys, server IDs, etc.) are internal unassigned
+            # Non-email identifiers (license keys, user IDs, etc.)
+            # Try metadata name matching if display_name is provided
+            if display_name:
+                all_employees = list(self._employees_by_id.values())
+                best_emp, confidence = self._fuzzy_name_match_by_display_name(
+                    display_name, all_employees
+                )
+                if best_emp and confidence >= CONFIDENCE_SUGGEST:
+                    return MatchResult(
+                        employee_id=best_emp.id,
+                        confidence=confidence,
+                        method=MATCH_METHOD_METADATA_NAME,
+                        status=MATCH_STATUS_SUGGESTED,
+                        is_external=False,
+                    )
+
+            # No match possible without email or display name
             return MatchResult(
                 is_external=False,
                 status=None,  # No status - treat as "not_in_hris" / unassigned

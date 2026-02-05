@@ -517,16 +517,24 @@ class SyncService:
             # Fall back to external_user_id (which is typically an email for most providers)
             match_identifier = lic_data.get("email") or lic_data["external_user_id"]
 
-            # Get username from metadata for external account matching
+            # Get username and display name from metadata for matching
             # This enables matching by linked external accounts (e.g., HuggingFace username)
+            # and fuzzy name matching by display name (e.g., HuggingFace fullName)
             metadata = lic_data.get("metadata", {})
             username_for_matching = metadata.get("username") or metadata.get("hf_username")
+            display_name_for_matching = (
+                metadata.get("fullName")
+                or metadata.get("fullname")
+                or metadata.get("display_name")
+                or metadata.get("displayName")
+            )
 
             match_result = await matching_service.match_license(
                 match_identifier,
                 company_domains,
                 provider_type=provider_orm.name if provider_orm else None,
                 username=username_for_matching,
+                display_name=display_name_for_matching,
             )
 
             # Determine employee_id and match fields
