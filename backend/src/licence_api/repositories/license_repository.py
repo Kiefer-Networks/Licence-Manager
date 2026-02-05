@@ -131,11 +131,12 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             count_query = count_query.where(EmployeeORM.department == department)
 
         if search:
-            search_pattern = f"%{search.lower()}%"
+            # Escape LIKE wildcards to prevent pattern injection
+            search_pattern = f"%{escape_like_wildcards(search.lower())}%"
             search_filter = or_(
-                LicenseORM.external_user_id.ilike(search_pattern),
-                EmployeeORM.email.ilike(search_pattern),
-                EmployeeORM.full_name.ilike(search_pattern),
+                LicenseORM.external_user_id.ilike(search_pattern, escape="\\"),
+                EmployeeORM.email.ilike(search_pattern, escape="\\"),
+                EmployeeORM.full_name.ilike(search_pattern, escape="\\"),
             )
             query = query.where(search_filter)
             count_query = count_query.where(search_filter)
@@ -147,12 +148,12 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             # Must NOT match any company domain
             # Escape SQL wildcards in domains to prevent injection
             domain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@{escape_like_wildcards(domain)}")
+                ~LicenseORM.external_user_id.ilike(f"%@{escape_like_wildcards(domain)}", escape="\\")
                 for domain in company_domains
             ]
             # Also exclude subdomain matches (e.g., @sub.company.com)
             subdomain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@%.{escape_like_wildcards(domain)}")
+                ~LicenseORM.external_user_id.ilike(f"%@%.{escape_like_wildcards(domain)}", escape="\\")
                 for domain in company_domains
             ]
             external_filter = and_(
@@ -928,8 +929,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         # Escape SQL wildcards in domains to prevent injection
         for domain in company_domains:
             escaped_domain = escape_like_wildcards(domain)
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{escaped_domain}"))
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{escaped_domain}"))
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{escaped_domain}", escape="\\"))
+            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{escaped_domain}", escape="\\"))
 
         result = await self.session.execute(query)
         return result.scalar_one()

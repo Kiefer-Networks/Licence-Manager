@@ -10,6 +10,7 @@ from sqlalchemy.orm import aliased
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.base import BaseRepository
+from licence_api.utils.validation import escape_like_wildcards
 
 # Whitelist of valid sort columns to prevent column injection
 VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email", "source", "license_count"}
@@ -116,9 +117,11 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             count_query = count_query.where(EmployeeORM.source == source)
 
         if search:
+            # Escape LIKE wildcards to prevent pattern injection
+            escaped_search = f"%{escape_like_wildcards(search)}%"
             search_filter = (
-                EmployeeORM.email.ilike(f"%{search}%")
-                | EmployeeORM.full_name.ilike(f"%{search}%")
+                EmployeeORM.email.ilike(escaped_search, escape="\\")
+                | EmployeeORM.full_name.ilike(escaped_search, escape="\\")
             )
             query = query.where(search_filter)
             count_query = count_query.where(search_filter)

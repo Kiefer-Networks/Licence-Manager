@@ -11,18 +11,7 @@ from sqlalchemy.orm import joinedload
 from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.models.orm.audit_log import AuditLogORM
 from licence_api.repositories.base import BaseRepository
-
-
-def escape_like_wildcards(value: str) -> str:
-    """Escape SQL LIKE wildcards to prevent injection.
-
-    The % and _ characters have special meaning in SQL LIKE patterns:
-    - % matches any sequence of characters
-    - _ matches any single character
-
-    This function escapes them with backslash to match literally.
-    """
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+from licence_api.utils.validation import escape_like_wildcards
 
 
 class AuditRepository(BaseRepository[AuditLogORM]):
