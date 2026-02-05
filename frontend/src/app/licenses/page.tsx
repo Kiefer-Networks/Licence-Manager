@@ -1,462 +1,211 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useState, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { api, License, Provider, CategorizedLicensesResponse, Employee, EmployeeSuggestion } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
+import { License, Provider, api } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
-import { LicenseStatsCards, LicenseStatusBadge } from '@/components/licenses';
 import {
-  Search,
+  LicenseStatsCards,
+  LicenseFilters,
+  LicenseTabs,
+  LicenseBulkToolbar,
+  LicenseTableRow,
+  BulkRemoveDialog,
+  BulkDeleteDialog,
+  BulkUnassignDialog,
+  MarkAsAccountDialog,
+  LinkToEmployeeDialog,
+} from '@/components/licenses';
+import { useLicenses, LicenseTab } from '@/hooks/use-licenses';
+import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
   Loader2,
   Key,
-  Trash2,
-  UserMinus,
-  Building2,
-  X,
-  CheckSquare,
-  UserX,
-  Globe,
-  Users,
   AlertTriangle,
-  Bot,
-  ShieldCheck,
-  MoreHorizontal,
-  Check,
-  User,
-  Package,
-  Link2,
-  UserPlus,
+  Globe,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
 import Link from 'next/link';
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 // Providers that support remote member removal
 const REMOVABLE_PROVIDERS = ['cursor'];
 
-type Tab = 'assigned' | 'not_in_hris' | 'unassigned' | 'external';
-
 function LicensesContent() {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
-  const tServiceAccounts = useTranslations('serviceAccounts');
-  const tAdminAccounts = useTranslations('adminAccounts');
-  const searchParams = useSearchParams();
-  const [categorizedData, setCategorizedData] = useState<CategorizedLicensesResponse | null>(null);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<string>('all');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [sortColumn, setSortColumn] = useState<string>('external_user_id');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [activeTab, setActiveTab] = useState<Tab>('assigned');
-  const [page, setPage] = useState(1);
 
-  // Multi-select state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Use custom hook for license data management
+  const licenses = useLicenses();
+
+  // Dialog state
   const [bulkActionDialog, setBulkActionDialog] = useState<'remove' | 'delete' | 'unassign' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Mark as service/admin account state
+  // Mark as dialog state
   const [markAsDialog, setMarkAsDialog] = useState<{ license: License; type: 'service' | 'admin' } | null>(null);
-  const [markAsName, setMarkAsName] = useState('');
-  const [markAsOwnerId, setMarkAsOwnerId] = useState('');
-  const [markAsOwnerQuery, setMarkAsOwnerQuery] = useState('');
-  const [markAsLoading, setMarkAsLoading] = useState(false);
-  const [showOwnerResults, setShowOwnerResults] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
-  // Link to employee suggestion state
+  // Link dialog state
   const [linkDialog, setLinkDialog] = useState<License | null>(null);
-  const [suggestions, setSuggestions] = useState<EmployeeSuggestion[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [linkLoading, setLinkLoading] = useState(false);
 
-  const debouncedSearch = useDebounce(search, 300);
-  const licenseProviders = useMemo(
-    () => providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name)),
-    [providers]
-  );
-
-  const pageSize = 50;
-
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
-    return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
-  };
-
-  // Load providers and departments once
-  useEffect(() => {
-    Promise.all([
-      api.getProviders(),
-      api.getDepartments(),
-    ]).then(([providersData, departmentsData]) => {
-      setProviders(providersData.items);
-      setDepartments(departmentsData);
-    }).catch((e) => handleSilentError('getProviders', e));
+  // Toast handler
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // Load categorized licenses when filters change
-  const loadLicenses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api.getCategorizedLicenses({
-        provider_id: selectedProvider !== 'all' ? selectedProvider : undefined,
-        sort_by: sortColumn,
-        sort_dir: sortDirection,
-      });
-      setCategorizedData(data);
-      // Clear selection when data changes
-      setSelectedIds(new Set());
-    } catch (e) {
-      handleSilentError('loadLicenses', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedProvider, sortColumn, sortDirection]);
-
-  useEffect(() => {
-    loadLicenses();
-  }, [loadLicenses]);
-
-  // Get licenses for current tab
-  const getCurrentTabLicenses = (): License[] => {
-    if (!categorizedData) return [];
-    switch (activeTab) {
-      case 'assigned':
-        return categorizedData.assigned;
-      case 'not_in_hris':
-        return categorizedData.not_in_hris || [];
-      case 'unassigned':
-        return categorizedData.unassigned;
-      case 'external':
-        return categorizedData.external;
-    }
-  };
-
-  // Filter licenses by search and department
-  const getFilteredLicenses = (): License[] => {
-    let licenses = getCurrentTabLicenses();
-
-    // Search filter
-    if (debouncedSearch) {
-      const searchLower = debouncedSearch.toLowerCase();
-      licenses = licenses.filter(
-        (l) =>
-          l.external_user_id.toLowerCase().includes(searchLower) ||
-          l.employee_name?.toLowerCase().includes(searchLower) ||
-          l.employee_email?.toLowerCase().includes(searchLower) ||
-          l.provider_name.toLowerCase().includes(searchLower) ||
-          l.license_type?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Department filter (would need backend support for optimal performance)
-    // For now, we filter client-side
-    if (selectedDepartment !== 'all') {
-      // Department info is not in the license response, would need employee data
-      // This is a limitation - in production you'd add department to LicenseResponse
-    }
-
-    return licenses;
-  };
-
-  const filteredLicenses = getFilteredLicenses();
-
-  // Split licenses into active and inactive for "Not in HRIS" and "External" tabs
-  const activeLicenses = filteredLicenses.filter(l => l.status === 'active');
-  const inactiveLicenses = filteredLicenses.filter(l => l.status !== 'active');
-
-  // For tabs that show split tables, we don't paginate the same way
-  const showSplitTables = activeTab === 'not_in_hris' || activeTab === 'unassigned' || activeTab === 'external';
-
-  const totalPages = showSplitTables ? 1 : Math.ceil(filteredLicenses.length / pageSize);
-  const paginatedLicenses = showSplitTables ? filteredLicenses : filteredLicenses.slice((page - 1) * pageSize, page * pageSize);
-
-  // Selection handlers
-  const toggleSelectAll = () => {
-    if (selectedIds.size === paginatedLicenses.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(paginatedLicenses.map(l => l.id)));
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedIds(newSet);
-  };
-
-  // Get selected licenses info
-  const selectedLicenses = paginatedLicenses.filter(l => selectedIds.has(l.id));
-  const removableLicenses = selectedLicenses.filter(l => {
-    const provider = providers.find(p => p.id === l.provider_id);
-    return provider && REMOVABLE_PROVIDERS.includes(provider.name);
-  });
-  const assignedLicenses = selectedLicenses.filter(l => l.employee_id);
-
-  // Bulk actions
+  // Bulk action handlers
   const handleBulkRemove = async () => {
-    if (removableLicenses.length === 0) return;
+    if (licenses.removableLicenses.length === 0) return;
     setBulkActionLoading(true);
     try {
-      const result = await api.bulkRemoveFromProvider(removableLicenses.map(l => l.id));
-      setToast({
-        message: t('bulkRemoved', { successful: result.successful, total: result.total }),
-        type: result.failed > 0 ? 'error' : 'success',
-      });
+      const result = await api.bulkRemoveFromProvider(licenses.removableLicenses.map(l => l.id));
+      showToast(t('bulkRemoved', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
-      loadLicenses();
-    } catch (e) {
-      setToast({ message: t('failedToRemoveLicenses'), type: 'error' });
+      licenses.loadLicenses();
+    } catch {
+      showToast(t('failedToRemoveLicenses'), 'error');
     } finally {
       setBulkActionLoading(false);
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
+    if (licenses.selectedIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const result = await api.bulkDeleteLicenses(Array.from(selectedIds));
-      setToast({
-        message: t('bulkDeleted', { successful: result.successful, total: result.total }),
-        type: result.failed > 0 ? 'error' : 'success',
-      });
+      const result = await api.bulkDeleteLicenses(Array.from(licenses.selectedIds));
+      showToast(t('bulkDeleted', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
-      loadLicenses();
-    } catch (e) {
-      setToast({ message: t('failedToDeleteLicenses'), type: 'error' });
+      licenses.loadLicenses();
+    } catch {
+      showToast(t('failedToDeleteLicenses'), 'error');
     } finally {
       setBulkActionLoading(false);
     }
   };
 
   const handleBulkUnassign = async () => {
-    if (assignedLicenses.length === 0) return;
+    if (licenses.assignedLicenses.length === 0) return;
     setBulkActionLoading(true);
     try {
-      const result = await api.bulkUnassignLicenses(assignedLicenses.map(l => l.id));
-      setToast({
-        message: t('bulkUnassigned', { successful: result.successful, total: result.total }),
-        type: result.failed > 0 ? 'error' : 'success',
-      });
+      const result = await api.bulkUnassignLicenses(licenses.assignedLicenses.map(l => l.id));
+      showToast(t('bulkUnassigned', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
-      loadLicenses();
-    } catch (e) {
-      setToast({ message: t('failedToUnassignLicenses'), type: 'error' });
+      licenses.loadLicenses();
+    } catch {
+      showToast(t('failedToUnassignLicenses'), 'error');
     } finally {
       setBulkActionLoading(false);
     }
   };
 
-  // Auto-hide toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+  // Tab change handler
+  const handleTabChange = useCallback((tab: LicenseTab) => {
+    licenses.setActiveTab(tab);
+    licenses.clearSelection();
+  }, [licenses]);
 
-  // Load employees for owner search
-  const loadEmployees = async (search?: string) => {
-    setLoadingEmployees(true);
-    try {
-      const response = await api.getEmployees({
-        page_size: 50,
-        status: 'active',
-        search: search || undefined,
-      });
-      setEmployees(response.items);
-    } catch (error) {
-      handleSilentError('loadEmployees', error);
-    } finally {
-      setLoadingEmployees(false);
-    }
+  // Sort icon component
+  const SortIcon = ({ column }: { column: string }) => {
+    if (licenses.sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
+    return licenses.sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
 
-  // Debounce employee search
-  useEffect(() => {
-    if (!markAsDialog) return;
+  // Stats calculation
+  const stats = useMemo(() => {
+    if (!licenses.categorizedData) return null;
+    const data = licenses.categorizedData;
+    return {
+      total_active: licenses.assignedActiveCount + licenses.notInHrisActiveCount + licenses.unassignedActiveCount + licenses.externalActiveCount +
+                    (data.service_accounts?.filter(l => l.status === 'active').length || 0),
+      total_assigned: licenses.assignedActiveCount,
+      total_not_in_hris: licenses.notInHrisActiveCount,
+      total_unassigned: licenses.unassignedActiveCount,
+      total_external: licenses.externalActiveCount,
+      total_service_accounts: data.service_accounts?.filter(l => l.status === 'active').length || 0,
+      total_inactive: data.assigned.filter(l => l.status !== 'active').length +
+                      (data.not_in_hris?.filter(l => l.status !== 'active').length || 0) +
+                      data.unassigned.filter(l => l.status !== 'active').length +
+                      data.external.filter(l => l.status !== 'active').length +
+                      (data.service_accounts?.filter(l => l.status !== 'active').length || 0),
+      total_suggested: 0,
+      total_external_review: 0,
+      total_external_guest: 0,
+      monthly_cost: data.stats.monthly_cost,
+      potential_savings: data.stats.potential_savings,
+      currency: data.stats.currency,
+      has_currency_mix: data.stats.has_currency_mix || false,
+      currencies_found: data.stats.currencies_found || [],
+    };
+  }, [licenses.categorizedData, licenses.assignedActiveCount, licenses.notInHrisActiveCount, licenses.unassignedActiveCount, licenses.externalActiveCount]);
 
-    const timer = setTimeout(() => {
-      loadEmployees(markAsOwnerQuery.trim() || undefined);
-    }, 300);
+  // Provider lookup for table rows
+  const getProvider = useCallback((providerId: string) => {
+    return licenses.providers.find(p => p.id === providerId);
+  }, [licenses.providers]);
 
-    return () => clearTimeout(timer);
-  }, [markAsOwnerQuery, markAsDialog]);
-
-  const handleOpenMarkAs = (license: License, type: 'service' | 'admin') => {
-    setMarkAsDialog({ license, type });
-    setMarkAsName('');
-    setMarkAsOwnerId('');
-    setMarkAsOwnerQuery('');
-    setShowOwnerResults(false);
-    loadEmployees();
-  };
-
-  const handleSelectOwner = (emp: Employee) => {
-    setMarkAsOwnerId(emp.id);
-    setMarkAsOwnerQuery(emp.full_name);
-    setShowOwnerResults(false);
-  };
-
-  const handleClearOwner = () => {
-    setMarkAsOwnerId('');
-    setMarkAsOwnerQuery('');
-    setShowOwnerResults(false);
-  };
-
-  const handleMarkAs = async () => {
-    if (!markAsDialog) return;
-
-    setMarkAsLoading(true);
-    try {
-      if (markAsDialog.type === 'service') {
-        await api.updateLicenseServiceAccount(markAsDialog.license.id, {
-          is_service_account: true,
-          service_account_name: markAsName || undefined,
-          service_account_owner_id: markAsOwnerId || undefined,
-        });
-        setToast({ message: tServiceAccounts('markedAsServiceAccount'), type: 'success' });
-      } else {
-        await api.updateLicenseAdminAccount(markAsDialog.license.id, {
-          is_admin_account: true,
-          admin_account_name: markAsName || undefined,
-          admin_account_owner_id: markAsOwnerId || undefined,
-        });
-        setToast({ message: tAdminAccounts('markedAsAdminAccount'), type: 'success' });
-      }
-      setMarkAsDialog(null);
-      loadLicenses();
-    } catch (error) {
-      setToast({ message: t('failedToUpdate'), type: 'error' });
-    } finally {
-      setMarkAsLoading(false);
-    }
-  };
-
-  // Open link dialog and fetch suggestions
-  const handleOpenLinkDialog = async (license: License) => {
-    setLinkDialog(license);
-    setSuggestions([]);
-    setLoadingSuggestions(true);
-
-    try {
-      // Get username from license metadata or external_user_id
-      const metadata = license.metadata as Record<string, unknown> | undefined;
-      const username = (metadata?.username as string) || (metadata?.hf_username as string) || license.external_user_id;
-      const displayName = (metadata?.fullname as string) || (metadata?.display_name as string);
-      const providerName = license.provider_name;
-
-      const response = await api.getEmployeeSuggestions(providerName, username, displayName);
-      setSuggestions(response.suggestions);
-    } catch (error) {
-      handleSilentError('getEmployeeSuggestions', error);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  };
-
-  // Link license to employee via external account
-  const handleLinkToEmployee = async (employeeId: string) => {
-    if (!linkDialog) return;
-
-    setLinkLoading(true);
-    try {
-      const metadata = linkDialog.metadata as Record<string, unknown> | undefined;
-      const username = (metadata?.username as string) || (metadata?.hf_username as string) || linkDialog.external_user_id;
-      const displayName = (metadata?.fullname as string) || (metadata?.display_name as string);
-
-      await api.linkExternalAccount(employeeId, {
-        provider_type: linkDialog.provider_name,
-        external_username: username,
-        display_name: displayName,
-      });
-
-      setToast({ message: t('linkedToEmployee'), type: 'success' });
-      setLinkDialog(null);
-      loadLicenses();
-    } catch (error) {
-      setToast({ message: t('failedToLink'), type: 'error' });
-    } finally {
-      setLinkLoading(false);
-    }
-  };
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, debouncedSearch, selectedDepartment]);
-
-  // Count only active licenses for tab badges (to match provider detail page)
-  const assignedActiveCount = categorizedData?.assigned.filter(l => l.status === 'active').length || 0;
-  const notInHrisActiveCount = categorizedData?.not_in_hris?.filter(l => l.status === 'active').length || 0;
-  const unassignedActiveCount = categorizedData?.unassigned.filter(l => l.status === 'active').length || 0;
-  const externalActiveCount = categorizedData?.external.filter(l => l.status === 'active').length || 0;
-
-  const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean }[] = [
-    { id: 'assigned', label: t('assigned'), count: assignedActiveCount, icon: <Users className="h-4 w-4" /> },
-    ...(notInHrisActiveCount > 0 ? [{ id: 'not_in_hris' as Tab, label: t('notInHRIS'), count: notInHrisActiveCount, icon: <AlertTriangle className="h-4 w-4" />, warning: true }] : []),
-    ...(unassignedActiveCount > 0 ? [{ id: 'unassigned' as Tab, label: t('unassigned'), count: unassignedActiveCount, icon: <Package className="h-4 w-4" />, warning: true }] : []),
-    { id: 'external', label: t('external'), count: externalActiveCount, icon: <Globe className="h-4 w-4" /> },
-  ];
+  // Render table for split tables (not_in_hris, unassigned, external tabs)
+  const renderSplitTable = (licenseList: License[], title: string, icon: React.ReactNode, isWarning: boolean = false) => (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <h3 className={`text-sm font-medium ${isWarning ? 'text-red-600' : ''}`}>{title}</h3>
+      </div>
+      {licenseList.length > 0 ? (
+        <div className={`border rounded-lg bg-white overflow-hidden ${isWarning ? 'border-red-200' : ''}`}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-zinc-50/50">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={licenseList.every(l => licenses.selectedIds.has(l.id)) && licenseList.length > 0}
+                    onChange={() => {
+                      const allSelected = licenseList.every(l => licenses.selectedIds.has(l.id));
+                      const newSet = new Set(licenses.selectedIds);
+                      licenseList.forEach(l => allSelected ? newSet.delete(l.id) : newSet.add(l.id));
+                      licenses.setSelectedIds(newSet);
+                    }}
+                    className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                  />
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
+                <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
+                <th className="w-10 px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {licenseList.map((license) => (
+                <LicenseTableRow
+                  key={license.id}
+                  license={license}
+                  provider={getProvider(license.provider_id)}
+                  isSelected={licenses.selectedIds.has(license.id)}
+                  onToggleSelect={() => licenses.toggleSelect(license.id)}
+                  onMarkAsService={() => setMarkAsDialog({ license, type: 'service' })}
+                  onMarkAsAdmin={() => setMarkAsDialog({ license, type: 'admin' })}
+                  onLinkToEmployee={!license.employee_id ? () => setLinkDialog(license) : undefined}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
+          <p className="text-sm text-emerald-600">
+            {licenses.activeTab === 'unassigned' ? t('allMatchedToHRIS') : t('noActiveExternalLicenses')}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <AppLayout>
@@ -467,431 +216,76 @@ function LicensesContent() {
           <p className="text-muted-foreground text-sm mt-0.5">{t('description')}</p>
         </div>
 
-        {/* Stats - computed from arrays to show active-only counts */}
-        {categorizedData && (
-          <LicenseStatsCards
-            stats={{
-              total_active: assignedActiveCount + notInHrisActiveCount + unassignedActiveCount + externalActiveCount +
-                            (categorizedData.service_accounts?.filter(l => l.status === 'active').length || 0),
-              total_assigned: assignedActiveCount,
-              total_not_in_hris: notInHrisActiveCount,
-              total_unassigned: unassignedActiveCount,
-              total_external: externalActiveCount,
-              total_service_accounts: categorizedData.service_accounts?.filter(l => l.status === 'active').length || 0,
-              total_inactive: categorizedData.assigned.filter(l => l.status !== 'active').length +
-                              (categorizedData.not_in_hris?.filter(l => l.status !== 'active').length || 0) +
-                              categorizedData.unassigned.filter(l => l.status !== 'active').length +
-                              categorizedData.external.filter(l => l.status !== 'active').length +
-                              (categorizedData.service_accounts?.filter(l => l.status !== 'active').length || 0),
-              total_suggested: 0,
-              total_external_review: 0,
-              total_external_guest: 0,
-              monthly_cost: categorizedData.stats.monthly_cost,
-              potential_savings: categorizedData.stats.potential_savings,
-              currency: categorizedData.stats.currency,
-              has_currency_mix: categorizedData.stats.has_currency_mix || false,
-              currencies_found: categorizedData.stats.currencies_found || [],
-            }}
-          />
-        )}
+        {/* Stats */}
+        {stats && <LicenseStatsCards stats={stats} />}
 
         {/* Bulk Action Toolbar */}
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 p-3 bg-zinc-900 text-white rounded-lg">
-            <CheckSquare className="h-4 w-4" />
-            <span className="text-sm font-medium">{t('selectedCount', { count: selectedIds.size })}</span>
-            <div className="flex-1" />
-            {assignedLicenses.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-zinc-800"
-                onClick={() => setBulkActionDialog('unassign')}
-              >
-                <UserX className="h-4 w-4 mr-1.5" />
-                {t('unassignCount', { count: assignedLicenses.length })}
-              </Button>
-            )}
-            {removableLicenses.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-zinc-800"
-                onClick={() => setBulkActionDialog('remove')}
-              >
-                <UserMinus className="h-4 w-4 mr-1.5" />
-                {t('removeFromProviderCount', { count: removableLicenses.length })}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-zinc-800"
-              onClick={() => setBulkActionDialog('delete')}
-            >
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              {t('deleteFromDatabase')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-zinc-400 hover:text-white hover:bg-zinc-800"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+        <LicenseBulkToolbar
+          selectedCount={licenses.selectedIds.size}
+          assignedCount={licenses.assignedLicenses.length}
+          removableCount={licenses.removableLicenses.length}
+          onUnassign={() => setBulkActionDialog('unassign')}
+          onRemove={() => setBulkActionDialog('remove')}
+          onDelete={() => setBulkActionDialog('delete')}
+          onClear={licenses.clearSelection}
+        />
 
         {/* Tabs */}
-        <div className="border-b">
-          <nav className="flex gap-6">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setSelectedIds(new Set());
-                }}
-                className={`flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-zinc-900 text-zinc-900'
-                    : 'border-transparent text-muted-foreground hover:text-zinc-900'
-                }`}
-              >
-                <span className={tab.warning ? 'text-red-500' : ''}>{tab.icon}</span>
-                <span className={tab.warning ? 'text-red-600' : ''}>{tab.label}</span>
-                <span
-                  className={`px-2 py-0.5 text-xs rounded-full ${
-                    activeTab === tab.id
-                      ? tab.warning ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white'
-                      : tab.warning ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </nav>
-        </div>
+        <LicenseTabs
+          activeTab={licenses.activeTab}
+          onTabChange={handleTabChange}
+          assignedCount={licenses.assignedActiveCount}
+          notInHrisCount={licenses.notInHrisActiveCount}
+          unassignedCount={licenses.unassignedActiveCount}
+          externalCount={licenses.externalActiveCount}
+        />
 
-        {/* Search and Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <Input
-              placeholder={t('searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 bg-zinc-50 border-zinc-200"
-            />
-          </div>
-
-          <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-            <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
-              <SelectValue placeholder={t('provider')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('allProviders')}</SelectItem>
-              {licenseProviders.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-            <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 border-zinc-200">
-              <Building2 className="h-4 w-4 mr-2 text-zinc-400" />
-              <SelectValue placeholder={t('department')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('allDepartments')}</SelectItem>
-              {departments.map((dept) => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {(selectedProvider !== 'all' || selectedDepartment !== 'all') && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setSelectedProvider('all');
-                setSelectedDepartment('all');
-              }}
-            >
-              {t('clearFilters')}
-            </Button>
-          )}
-
-          <span className="text-sm text-muted-foreground ml-auto">
-            {t('licenseCount', { count: filteredLicenses.length })}
-          </span>
-        </div>
+        {/* Filters */}
+        <LicenseFilters
+          search={licenses.search}
+          onSearchChange={licenses.setSearch}
+          selectedProvider={licenses.selectedProvider}
+          onProviderChange={licenses.setSelectedProvider}
+          selectedDepartment={licenses.selectedDepartment}
+          onDepartmentChange={licenses.setSelectedDepartment}
+          providers={licenses.licenseProviders}
+          departments={licenses.departments}
+          filteredCount={licenses.filteredLicenses.length}
+          onClearFilters={licenses.clearFilters}
+        />
 
         {/* Table */}
-        {loading ? (
+        {licenses.loading ? (
           <div className="border rounded-lg bg-white flex items-center justify-center h-64">
             <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
           </div>
-        ) : filteredLicenses.length === 0 ? (
+        ) : licenses.filteredLicenses.length === 0 ? (
           <div className="border rounded-lg bg-white flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Key className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">{activeTab === 'unassigned' ? t('noLicensesOutsideHRIS') : t('noLicensesFound', { tab: activeTab })}</p>
+            <p className="text-sm">{licenses.activeTab === 'unassigned' ? t('noLicensesOutsideHRIS') : t('noLicensesFound', { tab: licenses.activeTab })}</p>
           </div>
-        ) : showSplitTables ? (
-          /* Split table view for "Not in HRIS" and "External" tabs */
+        ) : licenses.showSplitTables ? (
           <div className="space-y-8">
-            {/* Active Licenses */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                {activeTab === 'unassigned' ? (
-                  <>
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                    <h3 className="text-sm font-medium text-red-600">
-                      {t('activeNotInHRIS', { count: activeLicenses.length })}
-                    </h3>
-                  </>
-                ) : (
-                  <>
-                    <Globe className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-medium">
-                      {t('activeExternal', { count: activeLicenses.length })}
-                    </h3>
-                  </>
-                )}
-              </div>
-              {activeLicenses.length > 0 ? (
-                <div className={`border rounded-lg bg-white overflow-hidden ${activeTab === 'unassigned' ? 'border-red-200' : ''}`}>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-zinc-50/50">
-                        <th className="w-10 px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={activeLicenses.every(l => selectedIds.has(l.id)) && activeLicenses.length > 0}
-                            onChange={() => {
-                              const allSelected = activeLicenses.every(l => selectedIds.has(l.id));
-                              const newSet = new Set(selectedIds);
-                              activeLicenses.forEach(l => allSelected ? newSet.delete(l.id) : newSet.add(l.id));
-                              setSelectedIds(newSet);
-                            }}
-                            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                          />
-                        </th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
-                        <th className="w-10 px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeLicenses.map((license) => {
-                        const provider = providers.find(p => p.id === license.provider_id);
-                        const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
-                        return (
-                          <tr key={license.id} className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${selectedIds.has(license.id) ? 'bg-zinc-50' : ''}`}>
-                            <td className="px-4 py-3">
-                              <input type="checkbox" checked={selectedIds.has(license.id)} onChange={() => toggleSelect(license.id)} className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500" />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
-                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {license.employee_id && license.employee_status !== 'offboarded' && (
-                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                    <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
-                                      <span className="text-xs font-medium text-zinc-600">{license.employee_name?.charAt(0)}</span>
-                                    </div>
-                                    <span className="truncate hover:underline">{license.employee_name}</span>
-                                  </Link>
-                                )}
-                                {license.employee_id && license.employee_status === 'offboarded' && (
-                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                    <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                      <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
-                                    </div>
-                                    <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
-                                  </Link>
-                                )}
-                                <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">
-                              <div>
-                                <span>{license.license_type_display_name || license.license_type || '-'}</span>
-                                {license.license_type_display_name && license.license_type && (
-                                  <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-sm">
-                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
-                            </td>
-                            <td className="px-4 py-3">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {!license.employee_id && (
-                                    <DropdownMenuItem onClick={() => handleOpenLinkDialog(license)}>
-                                      <Link2 className="h-4 w-4 mr-2" />
-                                      {t('linkToEmployee')}
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
-                                    <Bot className="h-4 w-4 mr-2" />
-                                    {tServiceAccounts('markAsServiceAccount')}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'admin')}>
-                                    <ShieldCheck className="h-4 w-4 mr-2" />
-                                    {tAdminAccounts('markAsAdminAccount')}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
-                  <p className="text-sm text-emerald-600">
-                    {activeTab === 'unassigned' ? t('allMatchedToHRIS') : t('noActiveExternalLicenses')}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Inactive Licenses */}
-            {inactiveLicenses.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  {activeTab === 'unassigned' ? t('inactiveNotInHRIS', { count: inactiveLicenses.length }) : t('inactiveExternal', { count: inactiveLicenses.length })}
-                </h3>
-                <div className="border rounded-lg bg-white overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-zinc-50/50">
-                        <th className="w-10 px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={inactiveLicenses.every(l => selectedIds.has(l.id)) && inactiveLicenses.length > 0}
-                            onChange={() => {
-                              const allSelected = inactiveLicenses.every(l => selectedIds.has(l.id));
-                              const newSet = new Set(selectedIds);
-                              inactiveLicenses.forEach(l => allSelected ? newSet.delete(l.id) : newSet.add(l.id));
-                              setSelectedIds(newSet);
-                            }}
-                            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                          />
-                        </th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('provider')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('user')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('employee')}</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('cost')}</th>
-                        <th className="w-10 px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inactiveLicenses.map((license) => {
-                        const provider = providers.find(p => p.id === license.provider_id);
-                        const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
-                        return (
-                          <tr key={license.id} className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${selectedIds.has(license.id) ? 'bg-zinc-50' : ''}`}>
-                            <td className="px-4 py-3">
-                              <input type="checkbox" checked={selectedIds.has(license.id)} onChange={() => toggleSelect(license.id)} className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500" />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">{license.provider_name}</Link>
-                                {isRemovable && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {license.employee_id && license.employee_status !== 'offboarded' && (
-                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                    <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
-                                      <span className="text-xs font-medium text-zinc-600">{license.employee_name?.charAt(0)}</span>
-                                    </div>
-                                    <span className="truncate hover:underline">{license.employee_name}</span>
-                                  </Link>
-                                )}
-                                {license.employee_id && license.employee_status === 'offboarded' && (
-                                  <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                                    <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                      <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
-                                    </div>
-                                    <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
-                                  </Link>
-                                )}
-                                <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">
-                              <div>
-                                <span>{license.license_type_display_name || license.license_type || '-'}</span>
-                                {license.license_type_display_name && license.license_type && (
-                                  <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-sm">
-                              {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
-                            </td>
-                            <td className="px-4 py-3">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {!license.employee_id && (
-                                    <DropdownMenuItem onClick={() => handleOpenLinkDialog(license)}>
-                                      <Link2 className="h-4 w-4 mr-2" />
-                                      {t('linkToEmployee')}
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'service')}>
-                                    <Bot className="h-4 w-4 mr-2" />
-                                    {tServiceAccounts('markAsServiceAccount')}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleOpenMarkAs(license, 'admin')}>
-                                    <ShieldCheck className="h-4 w-4 mr-2" />
-                                    {tAdminAccounts('markAsAdminAccount')}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            {renderSplitTable(
+              licenses.activeLicenses,
+              licenses.activeTab === 'unassigned'
+                ? t('activeNotInHRIS', { count: licenses.activeLicenses.length })
+                : t('activeExternal', { count: licenses.activeLicenses.length }),
+              licenses.activeTab === 'unassigned'
+                ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                : <Globe className="h-4 w-4 text-orange-500" />,
+              licenses.activeTab === 'unassigned'
+            )}
+            {licenses.inactiveLicenses.length > 0 && renderSplitTable(
+              licenses.inactiveLicenses,
+              licenses.activeTab === 'unassigned'
+                ? t('inactiveNotInHRIS', { count: licenses.inactiveLicenses.length })
+                : t('inactiveExternal', { count: licenses.inactiveLicenses.length }),
+              <></>,
+              false
             )}
           </div>
         ) : (
-          /* Standard single table view for "Assigned" tab */
           <div className="border rounded-lg bg-white overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -899,118 +293,61 @@ function LicensesContent() {
                   <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === paginatedLicenses.length && paginatedLicenses.length > 0}
-                      onChange={toggleSelectAll}
+                      checked={licenses.selectedIds.size === licenses.paginatedLicenses.length && licenses.paginatedLicenses.length > 0}
+                      onChange={licenses.toggleSelectAll}
                       className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                     />
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                    <button onClick={() => handleSort('provider_name')} className="flex items-center gap-1.5 hover:text-foreground">
+                    <button onClick={() => licenses.handleSort('provider_name')} className="flex items-center gap-1.5 hover:text-foreground">
                       {t('provider')} <SortIcon column="provider_name" />
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                    <button onClick={() => handleSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
+                    <button onClick={() => licenses.handleSort('external_user_id')} className="flex items-center gap-1.5 hover:text-foreground">
                       {t('user')} <SortIcon column="external_user_id" />
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                    <button onClick={() => handleSort('employee_name')} className="flex items-center gap-1.5 hover:text-foreground">
+                    <button onClick={() => licenses.handleSort('employee_name')} className="flex items-center gap-1.5 hover:text-foreground">
                       {t('employee')} <SortIcon column="employee_name" />
                     </button>
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('type')}</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">
-                    <button onClick={() => handleSort('monthly_cost')} className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto">
+                    <button onClick={() => licenses.handleSort('monthly_cost')} className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto">
                       {t('cost')} <SortIcon column="monthly_cost" />
                     </button>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedLicenses.map((license) => {
-                  const provider = providers.find(p => p.id === license.provider_id);
-                  const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
-
-                  return (
-                    <tr
-                      key={license.id}
-                      className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${selectedIds.has(license.id) ? 'bg-zinc-50' : ''}`}
-                    >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(license.id)}
-                          onChange={() => toggleSelect(license.id)}
-                          className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Link href={`/providers/${license.provider_id}`} className="font-medium hover:underline">
-                            {license.provider_name}
-                          </Link>
-                          {isRemovable && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">{t('api')}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{license.external_user_id}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {license.employee_id && license.employee_status !== 'offboarded' && (
-                            <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                              <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-200 transition-colors">
-                                <span className="text-xs font-medium text-zinc-600">
-                                  {license.employee_name?.charAt(0)}
-                                </span>
-                              </div>
-                              <span className="truncate hover:underline">{license.employee_name}</span>
-                            </Link>
-                          )}
-                          {license.employee_id && license.employee_status === 'offboarded' && (
-                            <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                              <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-medium text-red-600">
-                                  {license.employee_name?.charAt(0)}
-                                </span>
-                              </div>
-                              <span className="truncate text-muted-foreground line-through">{license.employee_name}</span>
-                            </Link>
-                          )}
-                          <LicenseStatusBadge license={license} showUnassigned={!license.employee_id} />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        <div>
-                          <span>{license.license_type_display_name || license.license_type || '-'}</span>
-                          {license.license_type_display_name && license.license_type && (
-                            <span className="block text-xs text-muted-foreground/60 font-mono">{license.license_type}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-sm">
-                        {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {licenses.paginatedLicenses.map((license) => (
+                  <LicenseTableRow
+                    key={license.id}
+                    license={license}
+                    provider={getProvider(license.provider_id)}
+                    isSelected={licenses.selectedIds.has(license.id)}
+                    onToggleSelect={() => licenses.toggleSelect(license.id)}
+                    showActions={false}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Pagination - only for non-split table views */}
-        {!showSplitTables && totalPages > 1 && (
+        {/* Pagination */}
+        {!licenses.showSplitTables && licenses.totalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {t('pageOf', { page, total: totalPages })}
+              {t('pageOf', { page: licenses.page, total: licenses.totalPages })}
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>
+              <Button variant="outline" size="sm" onClick={() => licenses.setPage(licenses.page - 1)} disabled={licenses.page === 1}>
                 {t('previous')}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
+              <Button variant="outline" size="sm" onClick={() => licenses.setPage(licenses.page + 1)} disabled={licenses.page === licenses.totalPages}>
                 {tCommon('next')}
               </Button>
             </div>
@@ -1018,340 +355,48 @@ function LicensesContent() {
         )}
       </div>
 
-      {/* Bulk Remove Dialog */}
-      <Dialog open={bulkActionDialog === 'remove'} onOpenChange={() => setBulkActionDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('removeFromProvider')}</DialogTitle>
-            <DialogDescription>
-              {t('removeFromProviderDescription', { count: removableLicenses.length })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">{t('actionsPerformed')}</p>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-600">-</span>
-                <span>{t('usersRemovedFromProvider')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-600">-</span>
-                <span>{t('licensesDeletedFromDB')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-amber-600">-</span>
-                <span>{t('onlyCursorSupports', { count: removableLicenses.length, total: selectedIds.size })}</span>
-              </li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              {tCommon('cancel')}
-            </Button>
-            <Button onClick={handleBulkRemove} disabled={bulkActionLoading}>
-              {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {t('removeLicenses', { count: removableLicenses.length })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Dialogs */}
+      <BulkRemoveDialog
+        open={bulkActionDialog === 'remove'}
+        onOpenChange={() => setBulkActionDialog(null)}
+        removableCount={licenses.removableLicenses.length}
+        totalSelected={licenses.selectedIds.size}
+        loading={bulkActionLoading}
+        onConfirm={handleBulkRemove}
+      />
 
-      {/* Bulk Delete Dialog */}
-      <Dialog open={bulkActionDialog === 'delete'} onOpenChange={() => setBulkActionDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('bulkDelete')}</DialogTitle>
-            <DialogDescription>
-              {t('bulkDeleteDescription', { count: selectedIds.size })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">{t('important')}</p>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-red-600">-</span>
-                <span>{t('doesNotRemoveFromProvider')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-amber-600">-</span>
-                <span>{t('mayReappear')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-zinc-600">-</span>
-                <span>{t('useRemoveInstead')}</span>
-              </li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              {tCommon('cancel')}
-            </Button>
-            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkActionLoading}>
-              {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {t('deleteCount', { count: selectedIds.size })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkDeleteDialog
+        open={bulkActionDialog === 'delete'}
+        onOpenChange={() => setBulkActionDialog(null)}
+        selectedCount={licenses.selectedIds.size}
+        loading={bulkActionLoading}
+        onConfirm={handleBulkDelete}
+      />
 
-      {/* Bulk Unassign Dialog */}
-      <Dialog open={bulkActionDialog === 'unassign'} onOpenChange={() => setBulkActionDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('bulkUnassign')}</DialogTitle>
-            <DialogDescription>
-              {t('bulkUnassignDescription', { count: assignedLicenses.length })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-zinc-600 mb-3">{t('thisActionWill')}</p>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-amber-600">-</span>
-                <span>{t('removeEmployeeAssociation')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-zinc-600">-</span>
-                <span>{t('markAsUnassignedInSystem')}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-zinc-600">-</span>
-                <span>{t('licensesRemainInDB')}</span>
-              </li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkActionDialog(null)} disabled={bulkActionLoading}>
-              {tCommon('cancel')}
-            </Button>
-            <Button onClick={handleBulkUnassign} disabled={bulkActionLoading}>
-              {bulkActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {t('unassignCount', { count: assignedLicenses.length })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkUnassignDialog
+        open={bulkActionDialog === 'unassign'}
+        onOpenChange={() => setBulkActionDialog(null)}
+        assignedCount={licenses.assignedLicenses.length}
+        loading={bulkActionLoading}
+        onConfirm={handleBulkUnassign}
+      />
 
-      {/* Mark As Service/Admin Account Dialog */}
-      <Dialog open={!!markAsDialog} onOpenChange={() => setMarkAsDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {markAsDialog?.type === 'service' ? (
-                <>
-                  <Bot className="h-5 w-5 text-blue-500" />
-                  {tServiceAccounts('markAsServiceAccount')}
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="h-5 w-5 text-purple-500" />
-                  {tAdminAccounts('markAsAdminAccount')}
-                </>
-              )}
-            </DialogTitle>
-            <DialogDescription>
-              {markAsDialog?.type === 'service'
-                ? tServiceAccounts('markAsServiceAccountDescription')
-                : tAdminAccounts('markAsAdminAccountDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          {markAsDialog && (
-            <div className="space-y-4 py-4">
-              <div className="p-3 bg-zinc-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{t('user')}:</span>
-                  <code className="text-sm bg-white px-2 py-0.5 rounded border">
-                    {markAsDialog.license.external_user_id}
-                  </code>
-                </div>
-              </div>
+      <MarkAsAccountDialog
+        open={!!markAsDialog}
+        onOpenChange={() => setMarkAsDialog(null)}
+        license={markAsDialog?.license || null}
+        type={markAsDialog?.type || 'service'}
+        onSuccess={licenses.loadLicenses}
+        onToast={showToast}
+      />
 
-              <div className="space-y-2">
-                <Label htmlFor="markAsName">{tCommon('name')}</Label>
-                <Input
-                  id="markAsName"
-                  placeholder={markAsDialog.type === 'service' ? tServiceAccounts('serviceNamePlaceholder') : tAdminAccounts('adminNamePlaceholder')}
-                  value={markAsName}
-                  onChange={(e) => setMarkAsName(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>{markAsDialog.type === 'service' ? tServiceAccounts('owner') : tAdminAccounts('owner')}</Label>
-                <div className="relative">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <Input
-                      placeholder={tServiceAccounts('searchEmployee')}
-                      value={markAsOwnerQuery}
-                      onChange={(e) => {
-                        setMarkAsOwnerQuery(e.target.value);
-                        setShowOwnerResults(true);
-                        if (!e.target.value) {
-                          setMarkAsOwnerId('');
-                        }
-                      }}
-                      onFocus={() => setShowOwnerResults(true)}
-                      className="pl-9 pr-9"
-                    />
-                    {markAsOwnerQuery && (
-                      <button
-                        type="button"
-                        onClick={handleClearOwner}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  {showOwnerResults && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-                      <button
-                        type="button"
-                        onClick={handleClearOwner}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
-                          !markAsOwnerId ? 'bg-zinc-50' : ''
-                        }`}
-                      >
-                        <span className="text-muted-foreground">{tCommon('none')}</span>
-                      </button>
-                      {loadingEmployees ? (
-                        <div className="px-3 py-4 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          {tCommon('loading')}
-                        </div>
-                      ) : employees.length === 0 ? (
-                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                          {tServiceAccounts('noEmployeesFound')}
-                        </div>
-                      ) : (
-                        employees.map((emp) => (
-                          <button
-                            key={emp.id}
-                            type="button"
-                            onClick={() => handleSelectOwner(emp)}
-                            className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 flex items-center gap-2 ${
-                              markAsOwnerId === emp.id ? 'bg-blue-50' : ''
-                            }`}
-                          >
-                            <User className="h-4 w-4 text-zinc-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{emp.full_name}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {emp.department || '-'} · {emp.email}
-                              </div>
-                            </div>
-                            {markAsOwnerId === emp.id && (
-                              <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                            )}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMarkAsDialog(null)} disabled={markAsLoading}>
-              {tCommon('cancel')}
-            </Button>
-            <Button onClick={handleMarkAs} disabled={markAsLoading}>
-              {markAsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {markAsDialog?.type === 'service' ? tServiceAccounts('markAsServiceAccount') : tAdminAccounts('markAsAdminAccount')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Link to Employee Dialog */}
-      <Dialog open={!!linkDialog} onOpenChange={() => setLinkDialog(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-blue-500" />
-              {t('linkToEmployee')}
-            </DialogTitle>
-            <DialogDescription>
-              {t('linkToEmployeeDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          {linkDialog && (
-            <div className="space-y-4 py-4">
-              <div className="p-3 bg-zinc-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm text-muted-foreground">{t('provider')}:</span>
-                  <span className="text-sm font-medium">{linkDialog.provider_name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{t('user')}:</span>
-                  <code className="text-sm bg-white px-2 py-0.5 rounded border">
-                    {linkDialog.external_user_id}
-                  </code>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">{t('suggestedMatches')}</h4>
-                {loadingSuggestions ? (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-                  </div>
-                ) : suggestions.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">{t('noSuggestionsFound')}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {suggestions.map((suggestion) => (
-                      <button
-                        key={suggestion.employee_id}
-                        onClick={() => handleLinkToEmployee(suggestion.employee_id)}
-                        disabled={linkLoading}
-                        className="w-full p-3 text-left rounded-lg border hover:bg-zinc-50 transition-colors disabled:opacity-50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-medium text-zinc-600">
-                              {suggestion.employee_name.charAt(0)}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium truncate">{suggestion.employee_name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5">
-                                {t('matchScore', { score: Math.round(suggestion.similarity_score * 100) })}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {suggestion.employee_email}
-                            </div>
-                            <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
-                              {t('matchReason', { reason: suggestion.match_reason })}
-                            </div>
-                          </div>
-                          {linkLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-                          ) : (
-                            <UserPlus className="h-4 w-4 text-zinc-400" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialog(null)} disabled={linkLoading}>
-              {tCommon('cancel')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LinkToEmployeeDialog
+        open={!!linkDialog}
+        onOpenChange={() => setLinkDialog(null)}
+        license={linkDialog}
+        onSuccess={licenses.loadLicenses}
+        onToast={showToast}
+      />
 
       {/* Toast */}
       {toast && (
