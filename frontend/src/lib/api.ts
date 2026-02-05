@@ -2296,6 +2296,20 @@ export const api = {
     });
   },
 
+  async renewOrgLicense(orgLicenseId: string, request: RenewRequest): Promise<{ success: boolean; renewal_date?: string; expires_at?: string; status: string }> {
+    return fetchApi<{ success: boolean; renewal_date?: string; expires_at?: string; status: string }>(`/org-licenses/${orgLicenseId}/renew`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async setOrgLicenseNeedsReorder(orgLicenseId: string, needsReorder: boolean): Promise<{ success: boolean; needs_reorder: boolean }> {
+    return fetchApi<{ success: boolean; needs_reorder: boolean }>(`/org-licenses/${orgLicenseId}/needs-reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ needs_reorder: needsReorder }),
+    });
+  },
+
   // Departments
   async getDepartments(): Promise<string[]> {
     return fetchApi<string[]>('/users/employees/departments');
