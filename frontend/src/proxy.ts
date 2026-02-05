@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { detectLocaleFromHeader } from '@/lib/locales';
 
-// Supported locales
-const locales = ['en', 'de'];
-const defaultLocale = 'en';
+// Locale cookie settings
+const LOCALE_COOKIE_NAME = 'locale';
+const LOCALE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60; // 1 year
 
 // Routes that are always public (no authentication required)
 const publicRoutes = [
@@ -25,35 +26,32 @@ const protectedRoutes = [
   '/profile',
 ];
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const response = NextResponse.next();
-
-  // Handle locale detection and cookie setting
-  const localeCookie = request.cookies.get('locale');
+/**
+ * Set locale cookie on a response if not already present in request.
+ */
+function setLocaleCookie(
+  response: NextResponse,
+  request: NextRequest,
+  localeCookie: ReturnType<typeof request.cookies.get>
+): void {
   if (!localeCookie) {
-    // Detect locale from Accept-Language header
     const acceptLanguage = request.headers.get('accept-language');
-    let detectedLocale = defaultLocale;
-
-    if (acceptLanguage) {
-      const preferredLocale = acceptLanguage
-        .split(',')
-        .map((lang) => lang.split(';')[0].trim().substring(0, 2))
-        .find((lang) => locales.includes(lang));
-
-      if (preferredLocale) {
-        detectedLocale = preferredLocale;
-      }
-    }
-
-    // Set locale cookie for future requests
-    response.cookies.set('locale', detectedLocale, {
+    const detectedLocale = detectLocaleFromHeader(acceptLanguage);
+    response.cookies.set(LOCALE_COOKIE_NAME, detectedLocale, {
       path: '/',
-      maxAge: 365 * 24 * 60 * 60, // 1 year
+      maxAge: LOCALE_COOKIE_MAX_AGE,
       sameSite: 'lax',
     });
   }
+}
+
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const response = NextResponse.next();
+  const localeCookie = request.cookies.get(LOCALE_COOKIE_NAME);
+
+  // Handle locale detection and cookie setting
+  setLocaleCookie(response, request, localeCookie);
 
   // Allow public routes without authentication check
   if (publicRoutes.some(route => pathname.startsWith(route))) {
@@ -85,25 +83,7 @@ export function proxy(request: NextRequest) {
       signinUrl.searchParams.set('callbackUrl', pathname);
     }
     const redirectResponse = NextResponse.redirect(signinUrl);
-    // Copy locale cookie to redirect response
-    if (!localeCookie) {
-      const acceptLanguage = request.headers.get('accept-language');
-      let detectedLocale = defaultLocale;
-      if (acceptLanguage) {
-        const preferredLocale = acceptLanguage
-          .split(',')
-          .map((lang) => lang.split(';')[0].trim().substring(0, 2))
-          .find((lang) => locales.includes(lang));
-        if (preferredLocale) {
-          detectedLocale = preferredLocale;
-        }
-      }
-      redirectResponse.cookies.set('locale', detectedLocale, {
-        path: '/',
-        maxAge: 365 * 24 * 60 * 60,
-        sameSite: 'lax',
-      });
-    }
+    setLocaleCookie(redirectResponse, request, localeCookie);
     return redirectResponse;
   }
 
@@ -111,25 +91,7 @@ export function proxy(request: NextRequest) {
   if (pathname === '/') {
     const redirectUrl = accessToken ? '/dashboard' : '/auth/signin';
     const redirectResponse = NextResponse.redirect(new URL(redirectUrl, request.url));
-    // Copy locale cookie to redirect response
-    if (!localeCookie) {
-      const acceptLanguage = request.headers.get('accept-language');
-      let detectedLocale = defaultLocale;
-      if (acceptLanguage) {
-        const preferredLocale = acceptLanguage
-          .split(',')
-          .map((lang) => lang.split(';')[0].trim().substring(0, 2))
-          .find((lang) => locales.includes(lang));
-        if (preferredLocale) {
-          detectedLocale = preferredLocale;
-        }
-      }
-      redirectResponse.cookies.set('locale', detectedLocale, {
-        path: '/',
-        maxAge: 365 * 24 * 60 * 60,
-        sameSite: 'lax',
-      });
-    }
+    setLocaleCookie(redirectResponse, request, localeCookie);
     return redirectResponse;
   }
 

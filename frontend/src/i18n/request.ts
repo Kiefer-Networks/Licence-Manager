@@ -1,16 +1,22 @@
 import { getRequestConfig } from 'next-intl/server';
 import { cookies, headers } from 'next/headers';
+import {
+  SUPPORTED_LOCALES,
+  DEFAULT_LOCALE,
+  detectLocaleFromHeader,
+  type SupportedLocale,
+} from '@/lib/locales';
 
-export const locales = ['en', 'de'] as const;
-export type Locale = (typeof locales)[number];
-
-export const defaultLocale: Locale = 'en';
+// Re-export for backwards compatibility
+export const locales = SUPPORTED_LOCALES;
+export type Locale = SupportedLocale;
+export const defaultLocale = DEFAULT_LOCALE;
 
 async function getMessages(locale: string) {
   try {
     return (await import(`../../messages/${locale}.json`)).default;
   } catch {
-    return (await import(`../../messages/${defaultLocale}.json`)).default;
+    return (await import(`../../messages/${DEFAULT_LOCALE}.json`)).default;
   }
 }
 
@@ -21,18 +27,10 @@ export default getRequestConfig(async () => {
   // Try to get locale from cookie first
   let locale = cookieStore.get('locale')?.value;
 
-  // Fall back to Accept-Language header
-  if (!locale || !locales.includes(locale as Locale)) {
+  // Fall back to Accept-Language header detection
+  if (!locale || !SUPPORTED_LOCALES.includes(locale as SupportedLocale)) {
     const acceptLanguage = headersList.get('accept-language');
-    if (acceptLanguage) {
-      const preferredLocale = acceptLanguage
-        .split(',')
-        .map((lang) => lang.split(';')[0].trim().substring(0, 2))
-        .find((lang) => locales.includes(lang as Locale));
-      locale = preferredLocale || defaultLocale;
-    } else {
-      locale = defaultLocale;
-    }
+    locale = detectLocaleFromHeader(acceptLanguage);
   }
 
   return {
