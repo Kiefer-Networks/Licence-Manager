@@ -88,6 +88,7 @@ export function TotpDisableDialog({ open, onOpenChange, onSuccess }: TotpDisable
             <Input
               id="disable-password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);

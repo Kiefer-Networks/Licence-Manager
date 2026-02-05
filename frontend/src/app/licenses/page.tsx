@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -115,7 +115,10 @@ function LicensesContent() {
   const [linkLoading, setLinkLoading] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
-  const licenseProviders = providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const licenseProviders = useMemo(
+    () => providers.filter((p) => p.name !== 'hibob').sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    [providers]
+  );
 
   const pageSize = 50;
 
@@ -135,8 +138,13 @@ function LicensesContent() {
 
   // Load providers and departments once
   useEffect(() => {
-    api.getProviders().then((data) => setProviders(data.items)).catch((e) => handleSilentError('getProviders', e));
-    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
+    Promise.all([
+      api.getProviders(),
+      api.getDepartments(),
+    ]).then(([providersData, departmentsData]) => {
+      setProviders(providersData.items);
+      setDepartments(departmentsData);
+    }).catch((e) => handleSilentError('getProviders', e));
   }, []);
 
   // Load categorized licenses when filters change

@@ -3,7 +3,7 @@
 import fnmatch
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM

@@ -296,6 +296,7 @@ export default function SetupPage() {
                         <Input
                           id="restorePassword"
                           type={showPassword ? 'text' : 'password'}
+                          autoComplete="current-password"
                           value={backupPassword}
                           onChange={(e) => setBackupPassword(e.target.value)}
                           placeholder={tSettings('backupPasswordInput')}

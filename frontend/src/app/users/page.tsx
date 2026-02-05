@@ -77,8 +77,13 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
-    api.getProviders().then((data) => setProviders(data.items)).catch((e) => handleSilentError('getProviders', e));
+    Promise.all([
+      api.getDepartments(),
+      api.getProviders(),
+    ]).then(([departmentsData, providersData]) => {
+      setDepartments(departmentsData);
+      setProviders(providersData.items);
+    }).catch((e) => handleSilentError('getDepartments', e));
   }, []);
 
   // Reset page to 1 when filters change

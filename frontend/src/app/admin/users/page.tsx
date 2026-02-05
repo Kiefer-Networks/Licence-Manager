@@ -381,6 +381,7 @@ export default function AdminUsersPage() {
               <Input
                 id="create-email"
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -390,6 +391,7 @@ export default function AdminUsersPage() {
               <Label htmlFor="create-name">{t('nameOptional')}</Label>
               <Input
                 id="create-name"
+                autoComplete="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
@@ -399,6 +401,7 @@ export default function AdminUsersPage() {
               <Input
                 id="create-password"
                 type="password"
+                autoComplete="new-password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 minLength={12}
@@ -453,6 +456,7 @@ export default function AdminUsersPage() {
               <Input
                 id="edit-email"
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -462,6 +466,7 @@ export default function AdminUsersPage() {
               <Label htmlFor="edit-name">{t('nameOptional')}</Label>
               <Input
                 id="edit-name"
+                autoComplete="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />

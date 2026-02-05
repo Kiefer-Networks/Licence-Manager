@@ -12,7 +12,6 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     AvatarUploadResponse,
-    LocalLoginRequest,
     LoginResponse,
     NotificationEventType,
     PasswordChangeRequest,

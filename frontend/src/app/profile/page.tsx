@@ -760,6 +760,7 @@ export default function ProfilePage() {
                     <Input
                       id="current-password"
                       type="password"
+                      autoComplete="current-password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       required
@@ -770,6 +771,7 @@ export default function ProfilePage() {
                     <Input
                       id="new-password"
                       type="password"
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       minLength={12}
@@ -784,6 +786,7 @@ export default function ProfilePage() {
                     <Input
                       id="confirm-password"
                       type="password"
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       minLength={12}

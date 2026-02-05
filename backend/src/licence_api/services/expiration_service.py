@@ -15,7 +15,6 @@ Architecture Note (MVC-07):
 """
 
 from datetime import date, timedelta
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

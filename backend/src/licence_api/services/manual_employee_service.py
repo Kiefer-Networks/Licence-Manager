@@ -1,6 +1,6 @@
 """Manual employee service for managing employees without HRIS."""
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import Request

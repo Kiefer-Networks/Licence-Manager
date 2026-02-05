@@ -2,8 +2,7 @@
 
 import json
 import logging
-from datetime import timedelta
-from typing import Any, TypeVar, Callable
+from typing import TypeVar, Callable
 from functools import wraps
 
 import redis.asyncio as redis

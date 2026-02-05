@@ -88,6 +88,7 @@ export function TotpRegenerateDialog({ open, onOpenChange, onSuccess }: TotpRege
             <Input
               id="regenerate-password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);

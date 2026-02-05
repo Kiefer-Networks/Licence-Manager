@@ -7,7 +7,6 @@ import io
 import secrets
 import struct
 import time
-from typing import Any
 
 import qrcode
 from qrcode.image.svg import SvgImage

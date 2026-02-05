@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import select, func, and_
 
-from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
+from licence_api.models.orm.organization_license import OrganizationLicenseORM
 from licence_api.repositories.base import BaseRepository
 
 
