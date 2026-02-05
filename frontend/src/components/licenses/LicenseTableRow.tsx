@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { memo } from 'react';
 import { useTranslations } from 'next-intl';
 import { License, Provider } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ interface LicenseTableRowProps {
   showActions?: boolean;
 }
 
-export function LicenseTableRow({
+export const LicenseTableRow = memo(function LicenseTableRow({
   license,
   provider,
   isSelected,
@@ -135,4 +136,4 @@ export function LicenseTableRow({
       )}
     </tr>
   );
-}
+});

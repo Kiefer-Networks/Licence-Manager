@@ -11,6 +11,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.email_service import (
     EmailService,
     SmtpConfigRequest,
@@ -26,6 +27,11 @@ SETTINGS_SENSITIVE_LIMIT = "10/minute"
 def get_email_service(db: AsyncSession = Depends(get_db)) -> EmailService:
     """Get EmailService instance."""
     return EmailService(db)
+
+
+def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
+    """Get AuditService instance."""
+    return AuditService(db)
 
 
 class EmailConfigStatusResponse(BaseModel):
@@ -70,6 +76,7 @@ async def set_email_config(
     body: SmtpConfigRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[EmailService, Depends(get_email_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> SmtpConfigResponse:
     """Save SMTP configuration.
@@ -93,6 +100,22 @@ async def set_email_config(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save SMTP configuration",
         )
+
+    # Audit log the configuration change
+    await audit_service.log(
+        action=AuditAction.SETTINGS_UPDATE,
+        resource_type=ResourceType.SETTINGS,
+        user=current_user,
+        request=request,
+        details={
+            "setting": "smtp_config",
+            "action": "create" if is_new else "update",
+            "host": body.host,
+            "port": body.port,
+            "use_tls": body.use_tls,
+        },
+    )
+
     return config
 
 
@@ -102,6 +125,7 @@ async def delete_email_config(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[EmailService, Depends(get_email_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete SMTP configuration."""
@@ -111,6 +135,15 @@ async def delete_email_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="SMTP configuration not found",
         )
+
+    # Audit log the deletion
+    await audit_service.log(
+        action=AuditAction.SETTING_DELETE,
+        resource_type=ResourceType.SETTINGS,
+        user=current_user,
+        request=request,
+        details={"setting": "smtp_config", "action": "delete"},
+    )
 
 
 @router.post("/test", response_model=TestEmailResponse)

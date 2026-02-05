@@ -529,6 +529,271 @@ This organization license has expired and requires renewal.
 
         return True
 
+    async def notify_license_renewed(
+        self,
+        provider_name: str,
+        license_type: str | None,
+        user_email: str,
+        renewed_by: str,
+        new_expiration_date: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for renewed license.
+
+        Args:
+            provider_name: Provider name
+            license_type: License type (optional)
+            user_email: User email
+            renewed_by: User who renewed
+            new_expiration_date: New expiration date (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("license_renewed")
+        if not rules:
+            return False
+
+        type_str = f" ({license_type})" if license_type else ""
+        expiry_str = f"\n*New Expiration:* {new_expiration_date}" if new_expiration_date else ""
+
+        message = f"""
+:white_check_mark: *License Renewed*
+
+*Provider:* {provider_name}{type_str}
+*User:* {user_email}
+*Renewed by:* {renewed_by}{expiry_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_license_needs_reorder(
+        self,
+        provider_name: str,
+        license_type: str | None,
+        user_email: str,
+        flagged_by: str,
+        slack_token: str,
+    ) -> bool:
+        """Send notification when license is flagged for reorder.
+
+        Args:
+            provider_name: Provider name
+            license_type: License type (optional)
+            user_email: User email
+            flagged_by: User who flagged for reorder
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("license_needs_reorder")
+        if not rules:
+            return False
+
+        type_str = f" ({license_type})" if license_type else ""
+
+        message = f"""
+:shopping_cart: *License Needs Reorder*
+
+*Provider:* {provider_name}{type_str}
+*User:* {user_email}
+*Flagged by:* {flagged_by}
+
+This license has been flagged for reordering.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_package_renewed(
+        self,
+        provider_name: str,
+        package_name: str,
+        seat_count: int,
+        renewed_by: str,
+        new_contract_end: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for renewed package.
+
+        Args:
+            provider_name: Provider name
+            package_name: Package/license type name
+            seat_count: Number of seats in package
+            renewed_by: User who renewed
+            new_contract_end: New contract end date (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("package_renewed")
+        if not rules:
+            return False
+
+        expiry_str = f"\n*New Contract End:* {new_contract_end}" if new_contract_end else ""
+
+        message = f"""
+:white_check_mark: *Package Renewed*
+
+*Provider:* {provider_name}
+*Package:* {package_name}
+*Seats:* {seat_count}
+*Renewed by:* {renewed_by}{expiry_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_package_needs_reorder(
+        self,
+        provider_name: str,
+        package_name: str,
+        seat_count: int,
+        flagged_by: str,
+        slack_token: str,
+    ) -> bool:
+        """Send notification when package is flagged for reorder.
+
+        Args:
+            provider_name: Provider name
+            package_name: Package/license type name
+            seat_count: Number of seats in package
+            flagged_by: User who flagged for reorder
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("package_needs_reorder")
+        if not rules:
+            return False
+
+        message = f"""
+:shopping_cart: *Package Needs Reorder*
+
+*Provider:* {provider_name}
+*Package:* {package_name}
+*Seats:* {seat_count}
+*Flagged by:* {flagged_by}
+
+This package has been flagged for reordering.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_org_license_renewed(
+        self,
+        provider_name: str,
+        org_license_name: str,
+        renewed_by: str,
+        new_expiration_date: str | None,
+        slack_token: str,
+    ) -> bool:
+        """Send notification for renewed organization license.
+
+        Args:
+            provider_name: Provider name
+            org_license_name: Organization license name
+            renewed_by: User who renewed
+            new_expiration_date: New expiration date (optional)
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("org_license_renewed")
+        if not rules:
+            return False
+
+        expiry_str = f"\n*New Expiration:* {new_expiration_date}" if new_expiration_date else ""
+
+        message = f"""
+:white_check_mark: *Organization License Renewed*
+
+*Provider:* {provider_name}
+*License:* {org_license_name}
+*Renewed by:* {renewed_by}{expiry_str}
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
+    async def notify_org_license_needs_reorder(
+        self,
+        provider_name: str,
+        org_license_name: str,
+        flagged_by: str,
+        slack_token: str,
+    ) -> bool:
+        """Send notification when organization license is flagged for reorder.
+
+        Args:
+            provider_name: Provider name
+            org_license_name: Organization license name
+            flagged_by: User who flagged for reorder
+            slack_token: Slack bot token
+
+        Returns:
+            True if notification sent successfully
+        """
+        rules = await self.rule_repo.get_rules_by_event_type("org_license_needs_reorder")
+        if not rules:
+            return False
+
+        message = f"""
+:shopping_cart: *Organization License Needs Reorder*
+
+*Provider:* {provider_name}
+*License:* {org_license_name}
+*Flagged by:* {flagged_by}
+
+This organization license has been flagged for reordering.
+"""
+
+        for rule in rules:
+            await self._send_slack_message(
+                channel=rule.slack_channel,
+                message=message,
+                token=slack_token,
+            )
+
+        return True
+
     async def _send_slack_message(
         self,
         channel: str,

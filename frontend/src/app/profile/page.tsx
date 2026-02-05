@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/components/auth-provider';
 import { api, UserNotificationPreference, NotificationEventType, UserNotificationPreferenceUpdate } from '@/lib/api';
@@ -17,7 +18,12 @@ import { TotpSetupDialog, TotpBackupCodesDialog, TotpDisableDialog, TotpRegenera
 import { TotpStatusResponse } from '@/lib/api';
 import { useTheme } from '@/components/theme-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ImageCropDialog } from '@/components/ui/image-crop-dialog';
+
+// Lazy load the image crop dialog (~50KB savings on non-profile pages)
+const ImageCropDialog = dynamic(
+  () => import('@/components/ui/image-crop-dialog').then((mod) => mod.ImageCropDialog),
+  { ssr: false }
+);
 
 export default function ProfilePage() {
   const t = useTranslations('profile');

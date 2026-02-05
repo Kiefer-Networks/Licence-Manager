@@ -28,16 +28,3 @@ def is_company_email(email: str, company_domains: list[str]) -> bool:
             return True
 
     return False
-
-
-def is_external_email(email: str, company_domains: list[str]) -> bool:
-    """Check if an email is external (not from company domains).
-
-    Args:
-        email: Email address to check
-        company_domains: List of company domain names
-
-    Returns:
-        True if the email is external (not matching any company domain)
-    """
-    return not is_company_email(email, company_domains)
