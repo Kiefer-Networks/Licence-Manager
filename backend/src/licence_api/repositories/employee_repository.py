@@ -52,6 +52,29 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_emails(self, emails: list[str]) -> dict[str, EmployeeORM]:
+        """Get employees by email addresses in a single batch query.
+
+        Args:
+            emails: List of employee email addresses
+
+        Returns:
+            Dict mapping lowercase email to EmployeeORM
+        """
+        if not emails:
+            return {}
+
+        # Normalize emails to lowercase
+        normalized_emails = [e.lower() for e in emails]
+
+        result = await self.session.execute(
+            select(EmployeeORM).where(EmployeeORM.email.in_(normalized_emails))
+        )
+        employees = result.scalars().all()
+
+        # Build dict with lowercase email as key
+        return {emp.email.lower(): emp for emp in employees}
+
     async def get_by_hibob_id(self, hibob_id: str) -> EmployeeORM | None:
         """Get employee by HiBob ID.
 
@@ -260,20 +283,36 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         This should be called after syncing all employees to link
         managers by their email addresses.
 
+        Uses batch query to avoid N+1 problem when resolving managers.
+
         Returns:
             Number of manager relationships resolved
         """
-        # Get all employees with manager_email but no manager_id
+        # Get all employees with manager_email
         query = select(EmployeeORM).where(
             EmployeeORM.manager_email.isnot(None)
         )
         result = await self.session.execute(query)
         employees = result.scalars().all()
 
+        if not employees:
+            return 0
+
+        # Collect all unique manager emails
+        manager_emails = list({
+            emp.manager_email.lower()
+            for emp in employees
+            if emp.manager_email
+        })
+
+        # Batch fetch all potential managers in a single query
+        managers_by_email = await self.get_by_emails(manager_emails)
+
+        # Resolve manager_id for each employee
         resolved = 0
         for emp in employees:
             if emp.manager_email:
-                manager = await self.get_by_email(emp.manager_email.lower())
+                manager = managers_by_email.get(emp.manager_email.lower())
                 if manager and manager.id != emp.id:  # Avoid self-reference
                     emp.manager_id = manager.id
                     resolved += 1
