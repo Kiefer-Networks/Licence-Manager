@@ -70,12 +70,16 @@ export function formatNumberWithLocale(
 }
 
 /**
- * Format currency according to user preferences
+ * Internal helper to format currency with symbol placement.
+ * Used by formatCurrencyWithPrefs and formatMonthlyCost to avoid duplication.
  */
-export function formatCurrencyWithPrefs(
+function formatCurrencyCore(
   value: number | string | null | undefined,
-  currency: string = 'EUR',
-  numberLocale: string = 'de-DE'
+  currency: string,
+  numberLocale: string,
+  minDecimals: number,
+  maxDecimals: number,
+  suffix: string = ''
 ): string {
   if (value === null || value === undefined || value === '') return '-';
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -85,15 +89,26 @@ export function formatCurrencyWithPrefs(
   const symbol = CURRENCY_SYMBOLS[currency] || currency;
 
   const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: minDecimals,
+    maximumFractionDigits: maxDecimals,
   }).format(num);
 
   // Format with proper currency symbol placement
   if (currency === 'EUR' || currency === 'GBP') {
-    return `${formatted} ${symbol}`;
+    return `${formatted} ${symbol}${suffix}`;
   }
-  return `${symbol}${formatted}`;
+  return `${symbol}${formatted}${suffix}`;
+}
+
+/**
+ * Format currency according to user preferences
+ */
+export function formatCurrencyWithPrefs(
+  value: number | string | null | undefined,
+  currency: string = 'EUR',
+  numberLocale: string = 'de-DE'
+): string {
+  return formatCurrencyCore(value, currency, numberLocale, 2, 2);
 }
 
 /**
@@ -218,20 +233,5 @@ export function formatMonthlyCost(
   currency = 'EUR',
   numberLocale = 'de-DE'
 ): string {
-  if (value === null || value === undefined || value === '') return '-';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '-';
-
-  const symbol = CURRENCY_SYMBOLS[currency] || currency;
-  const locale = NUMBER_FORMAT_LOCALES[numberLocale] || 'de-DE';
-
-  const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(num);
-
-  if (currency === 'EUR' || currency === 'GBP') {
-    return `${formatted} ${symbol} / month`;
-  }
-  return `${symbol}${formatted} / month`;
+  return formatCurrencyCore(value, currency, numberLocale, 0, 2, ' / month');
 }

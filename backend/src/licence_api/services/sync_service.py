@@ -248,16 +248,20 @@ class SyncService:
 
         return provider_class(credentials)
 
-    async def _sync_hibob(
+    async def _sync_hris_employees(
         self,
         provider,
-        provider_id: UUID,
+        provider_name: str,
+        sync_avatars: bool = False,
     ) -> dict[str, Any]:
-        """Sync employees from HiBob.
+        """Sync employees from HRIS provider (HiBob or Personio).
+
+        Uses batch loading to avoid N+1 queries when checking for existing employees.
 
         Args:
-            provider: HiBob provider instance
-            provider_id: Provider UUID
+            provider: HRIS provider instance
+            provider_name: Name for result dict (e.g., "hibob", "personio")
+            sync_avatars: Whether to sync avatars after employee data
 
         Returns:
             Dict with sync results
@@ -267,8 +271,12 @@ class SyncService:
         created = 0
         updated = 0
 
+        # Batch load all existing employees by hibob_id to avoid N+1 queries
+        hibob_ids = [emp_data["hibob_id"] for emp_data in employees]
+        existing_employees = await self.employee_repo.get_by_hibob_ids(hibob_ids)
+
         for emp_data in employees:
-            existing = await self.employee_repo.get_by_hibob_id(emp_data["hibob_id"])
+            existing = existing_employees.get(emp_data["hibob_id"])
             await self.employee_repo.upsert(
                 hibob_id=emp_data["hibob_id"],
                 email=emp_data["email"],
@@ -289,17 +297,36 @@ class SyncService:
         managers_resolved = await self.employee_repo.resolve_manager_ids()
         logger.info(f"Resolved {managers_resolved} manager relationships")
 
-        # Sync avatars after employee data
-        avatar_result = await self._sync_avatars(provider, employees)
-
-        return {
-            "provider": "hibob",
+        result: dict[str, Any] = {
+            "provider": provider_name,
             "employees_created": created,
             "employees_updated": updated,
             "total": len(employees),
             "managers_resolved": managers_resolved,
-            "avatars": avatar_result,
         }
+
+        # Sync avatars after employee data (HiBob only)
+        if sync_avatars:
+            avatar_result = await self._sync_avatars(provider, employees)
+            result["avatars"] = avatar_result
+
+        return result
+
+    async def _sync_hibob(
+        self,
+        provider,
+        provider_id: UUID,
+    ) -> dict[str, Any]:
+        """Sync employees from HiBob.
+
+        Args:
+            provider: HiBob provider instance
+            provider_id: Provider UUID
+
+        Returns:
+            Dict with sync results
+        """
+        return await self._sync_hris_employees(provider, "hibob", sync_avatars=True)
 
     async def _sync_personio(
         self,
@@ -315,40 +342,7 @@ class SyncService:
         Returns:
             Dict with sync results
         """
-        employees = await provider.fetch_employees()
-        synced_at = datetime.now(timezone.utc)
-        created = 0
-        updated = 0
-
-        for emp_data in employees:
-            existing = await self.employee_repo.get_by_hibob_id(emp_data["hibob_id"])
-            await self.employee_repo.upsert(
-                hibob_id=emp_data["hibob_id"],
-                email=emp_data["email"],
-                full_name=emp_data["full_name"],
-                department=emp_data.get("department"),
-                status=emp_data["status"],
-                start_date=emp_data.get("start_date"),
-                termination_date=emp_data.get("termination_date"),
-                synced_at=synced_at,
-                manager_email=emp_data.get("manager_email"),
-            )
-            if existing:
-                updated += 1
-            else:
-                created += 1
-
-        # Resolve manager relationships after all employees are synced
-        managers_resolved = await self.employee_repo.resolve_manager_ids()
-        logger.info(f"Resolved {managers_resolved} manager relationships")
-
-        return {
-            "provider": "personio",
-            "employees_created": created,
-            "employees_updated": updated,
-            "total": len(employees),
-            "managers_resolved": managers_resolved,
-        }
+        return await self._sync_hris_employees(provider, "personio", sync_avatars=False)
 
     async def _sync_avatars(
         self,

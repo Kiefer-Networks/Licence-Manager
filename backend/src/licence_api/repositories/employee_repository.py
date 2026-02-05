@@ -89,6 +89,25 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_hibob_ids(self, hibob_ids: list[str]) -> dict[str, EmployeeORM]:
+        """Get employees by HiBob IDs in a single batch query.
+
+        Args:
+            hibob_ids: List of HiBob employee IDs
+
+        Returns:
+            Dict mapping hibob_id to EmployeeORM
+        """
+        if not hibob_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(EmployeeORM).where(EmployeeORM.hibob_id.in_(hibob_ids))
+        )
+        employees = result.scalars().all()
+
+        return {emp.hibob_id: emp for emp in employees if emp.hibob_id}
+
     async def get_all(self) -> list[EmployeeORM]:
         """Get all employees.
 
