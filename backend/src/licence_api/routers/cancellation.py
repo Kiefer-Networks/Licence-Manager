@@ -17,6 +17,7 @@ from licence_api.models.dto.cancellation import (
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cancellation_service import CancellationService
 
 router = APIRouter()
@@ -25,6 +26,11 @@ router = APIRouter()
 def get_cancellation_service(db: AsyncSession = Depends(get_db)) -> CancellationService:
     """Get CancellationService instance."""
     return CancellationService(db)
+
+
+def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
+    """Get AuditService instance."""
+    return AuditService(db)
 
 
 # ==================== LICENSE CANCELLATION ====================
@@ -38,6 +44,7 @@ async def cancel_license(
     body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel a license.
@@ -51,6 +58,17 @@ async def cancel_license(
             effective_date=body.effective_date,
             reason=body.reason,
             cancelled_by=current_user.id,
+        )
+        await audit_service.log(
+            action=AuditAction.LICENSE_CANCEL,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            user=current_user,
+            request=request,
+            details={
+                "effective_date": body.effective_date.isoformat() if body.effective_date else None,
+                "reason": body.reason,
+            },
         )
         return CancellationResponse(
             id=license_orm.id,
@@ -71,6 +89,7 @@ async def renew_license(
     body: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew a license by setting a new expiration date.
@@ -82,6 +101,17 @@ async def renew_license(
             license_id=license_id,
             new_expiration_date=body.new_expiration_date,
             clear_cancellation=body.clear_cancellation,
+        )
+        await audit_service.log(
+            action=AuditAction.LICENSE_RENEW,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            user=current_user,
+            request=request,
+            details={
+                "new_expiration_date": body.new_expiration_date.isoformat(),
+                "clear_cancellation": body.clear_cancellation,
+            },
         )
         return {
             "success": True,
@@ -101,6 +131,7 @@ async def set_license_needs_reorder(
     body: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for a license."""
@@ -108,6 +139,14 @@ async def set_license_needs_reorder(
         license_orm = await service.set_license_needs_reorder(
             license_id=license_id,
             needs_reorder=body.needs_reorder,
+        )
+        await audit_service.log(
+            action=AuditAction.LICENSE_NEEDS_REORDER,
+            resource_type=ResourceType.LICENSE,
+            resource_id=license_id,
+            user=current_user,
+            request=request,
+            details={"needs_reorder": body.needs_reorder},
         )
         return {
             "success": True,
@@ -128,6 +167,7 @@ async def cancel_package(
     body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel a license package.
@@ -141,6 +181,17 @@ async def cancel_package(
             effective_date=body.effective_date,
             reason=body.reason,
             cancelled_by=current_user.id,
+        )
+        await audit_service.log(
+            action=AuditAction.PACKAGE_CANCEL,
+            resource_type=ResourceType.LICENSE_PACKAGE,
+            resource_id=package_id,
+            user=current_user,
+            request=request,
+            details={
+                "effective_date": body.effective_date.isoformat() if body.effective_date else None,
+                "reason": body.reason,
+            },
         )
         return CancellationResponse(
             id=package.id,
@@ -161,6 +212,7 @@ async def renew_package(
     body: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew a license package by setting a new contract end date.
@@ -172,6 +224,17 @@ async def renew_package(
             package_id=package_id,
             new_contract_end=body.new_expiration_date,
             clear_cancellation=body.clear_cancellation,
+        )
+        await audit_service.log(
+            action=AuditAction.PACKAGE_RENEW,
+            resource_type=ResourceType.LICENSE_PACKAGE,
+            resource_id=package_id,
+            user=current_user,
+            request=request,
+            details={
+                "new_contract_end": body.new_expiration_date.isoformat(),
+                "clear_cancellation": body.clear_cancellation,
+            },
         )
         return {
             "success": True,
@@ -191,6 +254,7 @@ async def set_package_needs_reorder(
     body: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for a package."""
@@ -198,6 +262,14 @@ async def set_package_needs_reorder(
         package = await service.set_package_needs_reorder(
             package_id=package_id,
             needs_reorder=body.needs_reorder,
+        )
+        await audit_service.log(
+            action=AuditAction.PACKAGE_NEEDS_REORDER,
+            resource_type=ResourceType.LICENSE_PACKAGE,
+            resource_id=package_id,
+            user=current_user,
+            request=request,
+            details={"needs_reorder": body.needs_reorder},
         )
         return {
             "success": True,
@@ -218,6 +290,7 @@ async def cancel_org_license(
     body: CancellationRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel an organization license.
@@ -231,6 +304,17 @@ async def cancel_org_license(
             effective_date=body.effective_date,
             reason=body.reason,
             cancelled_by=current_user.id,
+        )
+        await audit_service.log(
+            action=AuditAction.ORG_LICENSE_CANCEL,
+            resource_type=ResourceType.ORG_LICENSE,
+            resource_id=org_license_id,
+            user=current_user,
+            request=request,
+            details={
+                "effective_date": body.effective_date.isoformat() if body.effective_date else None,
+                "reason": body.reason,
+            },
         )
         return CancellationResponse(
             id=org_license.id,
@@ -251,6 +335,7 @@ async def renew_org_license(
     body: RenewRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew an organization license by setting new renewal/expiration dates.
@@ -263,6 +348,17 @@ async def renew_org_license(
             new_renewal_date=body.new_expiration_date,
             new_expires_at=body.new_expiration_date,
             clear_cancellation=body.clear_cancellation,
+        )
+        await audit_service.log(
+            action=AuditAction.ORG_LICENSE_RENEW,
+            resource_type=ResourceType.ORG_LICENSE,
+            resource_id=org_license_id,
+            user=current_user,
+            request=request,
+            details={
+                "new_expiration_date": body.new_expiration_date.isoformat(),
+                "clear_cancellation": body.clear_cancellation,
+            },
         )
         return {
             "success": True,
@@ -283,6 +379,7 @@ async def set_org_license_needs_reorder(
     body: NeedsReorderUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for an organization license."""
@@ -290,6 +387,14 @@ async def set_org_license_needs_reorder(
         org_license = await service.set_org_license_needs_reorder(
             org_license_id=org_license_id,
             needs_reorder=body.needs_reorder,
+        )
+        await audit_service.log(
+            action=AuditAction.ORG_LICENSE_NEEDS_REORDER,
+            resource_type=ResourceType.ORG_LICENSE,
+            resource_id=org_license_id,
+            user=current_user,
+            request=request,
+            details={"needs_reorder": body.needs_reorder},
         )
         return {
             "success": True,

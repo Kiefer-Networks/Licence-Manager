@@ -94,6 +94,17 @@ class AuditAction:
     EXPORT = "export"
     IMPORT = "import"
 
+    # Lifecycle - Cancellation/Renewal
+    LICENSE_CANCEL = "license_cancel"
+    LICENSE_RENEW = "license_renew"
+    LICENSE_NEEDS_REORDER = "license_needs_reorder"
+    PACKAGE_CANCEL = "package_cancel"
+    PACKAGE_RENEW = "package_renew"
+    PACKAGE_NEEDS_REORDER = "package_needs_reorder"
+    ORG_LICENSE_CANCEL = "org_license_cancel"
+    ORG_LICENSE_RENEW = "org_license_renew"
+    ORG_LICENSE_NEEDS_REORDER = "org_license_needs_reorder"
+
 
 class ResourceType:
     """Standard resource types for audit logging."""
@@ -113,6 +124,8 @@ class ResourceType:
     SERVICE_ACCOUNT_PATTERN = "service_account_pattern"
     ADMIN_ACCOUNT_PATTERN = "admin_account_pattern"
     SERVICE_ACCOUNT_LICENSE_TYPE = "service_account_license_type"
+    LICENSE_PACKAGE = "license_package"
+    ORG_LICENSE = "org_license"
     SYSTEM = "system"
 
 
