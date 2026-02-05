@@ -1,5 +1,16 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
+// Custom error class for rate limiting
+export class RateLimitError extends Error {
+  public retryAfter: number;
+
+  constructor(message: string, retryAfter: number) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfter = retryAfter;
+  }
+}
+
 // CSRF token cache with expiration tracking
 let csrfToken: string | null = null;
 let csrfTokenTimestamp: number = 0;
@@ -177,6 +188,17 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
         return fetchApi<T>(endpoint, options, false);
       }
       throw new Error(error.detail || 'Access denied');
+    }
+
+    // Handle 429 Rate Limit
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const waitSeconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+      // Emit rate limit event for global toast handling
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('api:ratelimit', { detail: { waitSeconds } }));
+      }
+      throw new RateLimitError(`Rate limit exceeded. Please wait ${waitSeconds} seconds.`, waitSeconds);
     }
 
     if (!response.ok) {

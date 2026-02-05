@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { AuthProvider } from '@/components/auth-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LocaleProvider } from '@/components/locale-provider';
+import { Toaster } from '@/components/ui/toaster';
+import { ApiErrorHandler } from '@/components/api-error-handler';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -35,7 +37,11 @@ export function Providers({ children, locale, messages }: ProvidersProps) {
       <NextIntlClientProvider locale={locale} messages={messages}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <LocaleProvider>{children}</LocaleProvider>
+            <LocaleProvider>
+              {children}
+              <Toaster />
+              <ApiErrorHandler />
+            </LocaleProvider>
           </AuthProvider>
         </QueryClientProvider>
       </NextIntlClientProvider>
