@@ -20,6 +20,7 @@ from licence_api.repositories.admin_account_pattern_repository import AdminAccou
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.matching_service import MatchingService
+from licence_api.utils.pattern_matcher import PatternMatcher
 from licence_api.utils.secure_logging import log_error, log_warning
 
 logger = logging.getLogger(__name__)
@@ -470,6 +471,12 @@ class SyncService:
         # Initialize matching service
         matching_service = MatchingService(self.session)
 
+        # Load all patterns once for optimized bulk matching (avoids N+1 queries)
+        svc_patterns = await self.svc_account_pattern_repo.get_all()
+        admin_patterns = await self.admin_account_pattern_repo.get_all()
+        svc_license_types = await self.svc_account_license_type_repo.get_all()
+        pattern_matcher = PatternMatcher(svc_patterns, admin_patterns, svc_license_types)
+
         # Track licenses for batch matching
         new_licenses: list[tuple[dict, Any]] = []
 
@@ -534,36 +541,29 @@ class SyncService:
             elif match_result.should_suggest:
                 suggested_employee_id = match_result.employee_id
 
-            # Check for global service account patterns (email-based)
-            svc_pattern = await self.svc_account_pattern_repo.matches_email(
-                lic_data["external_user_id"]
-            )
-            is_service_account = svc_pattern is not None
-            service_account_name = svc_pattern.name if svc_pattern else None
-            service_account_owner_id = svc_pattern.owner_id if svc_pattern else None
+            # Check for global service account patterns (email-based) using preloaded patterns
+            svc_match = pattern_matcher.match_service_account_email(lic_data["external_user_id"])
+            is_service_account = svc_match.matched
+            service_account_name = svc_match.name
+            service_account_owner_id = svc_match.owner_id
 
             # Check for license type-based service account rules if not already matched
             if not is_service_account and license_type:
-                svc_license_type = await self.svc_account_license_type_repo.matches_license_type(
-                    license_type
-                )
-                if svc_license_type:
+                svc_type_match = pattern_matcher.match_service_account_license_type(license_type)
+                if svc_type_match.matched:
                     is_service_account = True
-                    service_account_name = svc_license_type.name
-                    service_account_owner_id = svc_license_type.owner_id
+                    service_account_name = svc_type_match.name
+                    service_account_owner_id = svc_type_match.owner_id
 
             # Check for global admin account patterns (only if not a service account)
-            admin_pattern = None
             is_admin_account = False
             admin_account_name = None
             admin_account_owner_id = None
             if not is_service_account:
-                admin_pattern = await self.admin_account_pattern_repo.matches_email(
-                    lic_data["external_user_id"]
-                )
-                is_admin_account = admin_pattern is not None
-                admin_account_name = admin_pattern.name if admin_pattern else None
-                admin_account_owner_id = admin_pattern.owner_id if admin_pattern else None
+                admin_match = pattern_matcher.match_admin_account_email(lic_data["external_user_id"])
+                is_admin_account = admin_match.matched
+                admin_account_name = admin_match.name
+                admin_account_owner_id = admin_match.owner_id
 
             license_orm = await self.license_repo.upsert(
                 provider_id=provider_id,
