@@ -1282,6 +1282,7 @@ export interface AdminUser {
   roles: string[];  // Role codes
   permissions: string[];  // Permission codes
   last_login_at?: string;
+  language?: string;  // ISO 639-1 language code (en, de)
 }
 
 export interface AdminUserListResponse {
@@ -1434,6 +1435,32 @@ export interface EmailConfigStatus {
 export interface TestEmailResponse {
   success: boolean;
   message: string;
+}
+
+// ============================================================================
+// Password Policy Types
+// ============================================================================
+
+export interface PasswordPolicySettings {
+  min_length: number;
+  require_uppercase: boolean;
+  require_lowercase: boolean;
+  require_numbers: boolean;
+  require_special_chars: boolean;
+  expiry_days: number;
+  history_count: number;
+  max_failed_attempts: number;
+  lockout_duration_minutes: number;
+}
+
+export interface PasswordPolicyResponse extends PasswordPolicySettings {
+  length_warning: boolean;  // True if min_length < 16
+}
+
+export interface PasswordValidationResponse {
+  valid: boolean;
+  errors: string[];
+  strength: 'weak' | 'medium' | 'strong' | 'very_strong';
 }
 
 // ============================================================================
@@ -2650,6 +2677,25 @@ export const api = {
   async isEmailConfigured(): Promise<boolean> {
     const config = await this.getEmailConfig();
     return 'is_configured' in config ? config.is_configured : true;
+  },
+
+  // Password Policy
+  async getPasswordPolicy(): Promise<PasswordPolicyResponse> {
+    return fetchApi<PasswordPolicyResponse>('/settings/password-policy');
+  },
+
+  async updatePasswordPolicy(policy: PasswordPolicySettings): Promise<PasswordPolicyResponse> {
+    return fetchApi<PasswordPolicyResponse>('/settings/password-policy', {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+    });
+  },
+
+  async validatePassword(password: string): Promise<PasswordValidationResponse> {
+    return fetchApi<PasswordValidationResponse>('/settings/password-policy/validate', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   },
 
   // ============================================================================

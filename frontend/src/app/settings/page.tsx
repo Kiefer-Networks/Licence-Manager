@@ -22,9 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, PaymentMethod, PaymentMethodCreate, PaymentMethodDetails, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest } from '@/lib/api';
+import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse } from '@/lib/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, CreditCard, Landmark, Wallet, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
 import { BackupExportDialog } from '@/components/backup';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -38,12 +39,6 @@ export default function SettingsPage() {
   const [companyDomains, setCompanyDomains] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState('');
   const [savingDomains, setSavingDomains] = useState(false);
-
-  // Payment Methods state
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [paymentMethodDialogOpen, setPaymentMethodDialogOpen] = useState(false);
-  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
-  const [savingPaymentMethod, setSavingPaymentMethod] = useState(false);
 
   // Slack/Notification state
   const [slackBotToken, setSlackBotToken] = useState('');
@@ -76,20 +71,6 @@ export default function SettingsPage() {
     from_name: 'License Management System',
     use_tls: true,
   });
-  const [paymentMethodForm, setPaymentMethodForm] = useState({
-    name: '',
-    type: 'credit_card',
-    card_holder: '',
-    card_last_four: '',
-    expiry_month: '',
-    expiry_year: '',
-    bank_name: '',
-    account_holder: '',
-    iban_last_four: '',
-    provider_name: '',
-    notes: '',
-    is_default: false,
-  });
 
   // Threshold Settings state
   const [thresholds, setThresholds] = useState<ThresholdSettings>({
@@ -101,17 +82,35 @@ export default function SettingsPage() {
   });
   const [savingThresholds, setSavingThresholds] = useState(false);
 
+  // Password Policy state
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicySettings>({
+    min_length: 12,
+    require_uppercase: true,
+    require_lowercase: true,
+    require_numbers: true,
+    require_special_chars: true,
+    expiry_days: 90,
+    history_count: 5,
+    max_failed_attempts: 5,
+    lockout_duration_minutes: 15,
+  });
+  const [passwordPolicyWarning, setPasswordPolicyWarning] = useState(false);
+  const [savingPasswordPolicy, setSavingPasswordPolicy] = useState(false);
+
+  // Active tab state
+  const [activeTab, setActiveTab] = useState('general');
+
   // Backup state
   const [backupExportDialogOpen, setBackupExportDialogOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetchCompanyDomains(),
-      fetchPaymentMethods(),
       fetchSlackConfig(),
       fetchNotificationRules(),
       fetchThresholdSettings(),
       fetchEmailConfig(),
+      fetchPasswordPolicy(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -121,15 +120,6 @@ export default function SettingsPage() {
       setCompanyDomains(domains);
     } catch (error) {
       handleSilentError('fetchCompanyDomains', error);
-    }
-  }
-
-  async function fetchPaymentMethods() {
-    try {
-      const data = await api.getPaymentMethods();
-      setPaymentMethods(data.items);
-    } catch (error) {
-      handleSilentError('fetchPaymentMethods', error);
     }
   }
 
@@ -194,6 +184,46 @@ export default function SettingsPage() {
       showToast('error', message);
     } finally {
       setSavingThresholds(false);
+    }
+  };
+
+  async function fetchPasswordPolicy() {
+    try {
+      const policy = await api.getPasswordPolicy();
+      setPasswordPolicy({
+        min_length: policy.min_length,
+        require_uppercase: policy.require_uppercase,
+        require_lowercase: policy.require_lowercase,
+        require_numbers: policy.require_numbers,
+        require_special_chars: policy.require_special_chars,
+        expiry_days: policy.expiry_days,
+        history_count: policy.history_count,
+        max_failed_attempts: policy.max_failed_attempts,
+        lockout_duration_minutes: policy.lockout_duration_minutes,
+      });
+      setPasswordPolicyWarning(policy.length_warning);
+    } catch (error) {
+      handleSilentError('fetchPasswordPolicy', error);
+    }
+  }
+
+  const handleSavePasswordPolicy = async () => {
+    // Validate minimum length
+    if (passwordPolicy.min_length < 8) {
+      showToast('error', t('passwordPolicy.minLengthError'));
+      return;
+    }
+
+    setSavingPasswordPolicy(true);
+    try {
+      const result = await api.updatePasswordPolicy(passwordPolicy);
+      setPasswordPolicyWarning(result.length_warning);
+      showToast('success', t('passwordPolicy.saved'));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('failedToSave');
+      showToast('error', message);
+    } finally {
+      setSavingPasswordPolicy(false);
     }
   };
 
@@ -322,106 +352,6 @@ export default function SettingsPage() {
       setSavingDomains(false);
     }
   };
-
-  // Payment Methods handlers
-  const resetPaymentMethodForm = () => {
-    setPaymentMethodForm({
-      name: '',
-      type: 'credit_card',
-      card_holder: '',
-      card_last_four: '',
-      expiry_month: '',
-      expiry_year: '',
-      bank_name: '',
-      account_holder: '',
-      iban_last_four: '',
-      provider_name: '',
-      notes: '',
-      is_default: false,
-    });
-  };
-
-  const handleOpenPaymentMethodDialog = (method?: PaymentMethod) => {
-    if (method) {
-      setEditingPaymentMethod(method);
-      setPaymentMethodForm({
-        name: method.name,
-        type: method.type,
-        card_holder: method.details.card_holder || '',
-        card_last_four: method.details.card_last_four || '',
-        expiry_month: method.details.expiry_month || '',
-        expiry_year: method.details.expiry_year || '',
-        bank_name: method.details.bank_name || '',
-        account_holder: method.details.account_holder || '',
-        iban_last_four: method.details.iban_last_four || '',
-        provider_name: method.details.provider_name || '',
-        notes: method.notes || '',
-        is_default: method.is_default,
-      });
-    } else {
-      setEditingPaymentMethod(null);
-      resetPaymentMethodForm();
-    }
-    setPaymentMethodDialogOpen(true);
-  };
-
-  const handleSavePaymentMethod = async () => {
-    setSavingPaymentMethod(true);
-    try {
-      const details: PaymentMethodDetails = {};
-
-      if (paymentMethodForm.type === 'credit_card') {
-        details.cardholder_name = paymentMethodForm.card_holder;
-        details.card_last_four = paymentMethodForm.card_last_four;
-        details.card_expiry_month = paymentMethodForm.expiry_month ? parseInt(paymentMethodForm.expiry_month) : undefined;
-        details.card_expiry_year = paymentMethodForm.expiry_year ? parseInt(paymentMethodForm.expiry_year) : undefined;
-      } else if (paymentMethodForm.type === 'bank_account') {
-        details.bank_name = paymentMethodForm.bank_name;
-        details.account_holder_name = paymentMethodForm.account_holder;
-        details.account_last_four = paymentMethodForm.iban_last_four;
-      } else {
-        details.provider_name = paymentMethodForm.provider_name;
-      }
-
-      const data: PaymentMethodCreate = {
-        name: paymentMethodForm.name,
-        type: paymentMethodForm.type,
-        details,
-        is_default: paymentMethodForm.is_default,
-        notes: paymentMethodForm.notes || undefined,
-      };
-
-      if (editingPaymentMethod) {
-        await api.updatePaymentMethod(editingPaymentMethod.id, data);
-        showToast('success', t('paymentMethodUpdated'));
-      } else {
-        await api.createPaymentMethod(data);
-        showToast('success', t('paymentMethodAdded'));
-      }
-
-      await fetchPaymentMethods();
-      setPaymentMethodDialogOpen(false);
-      resetPaymentMethodForm();
-      setEditingPaymentMethod(null);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSavePaymentMethod');
-      showToast('error', message);
-    } finally {
-      setSavingPaymentMethod(false);
-    }
-  };
-
-  const handleDeletePaymentMethod = async (id: string) => {
-    try {
-      await api.deletePaymentMethod(id);
-      await fetchPaymentMethods();
-      showToast('success', t('paymentMethodDeleted'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToDeletePaymentMethod');
-      showToast('error', message);
-    }
-  };
-
   // Slack handlers
   const handleSaveSlackConfig = async () => {
     if (!slackBotToken.trim()) {
@@ -530,17 +460,6 @@ export default function SettingsPage() {
     }
   };
 
-  const getPaymentMethodIcon = (type: string) => {
-    switch (type) {
-      case 'credit_card':
-        return <CreditCard className="h-4 w-4" />;
-      case 'bank_account':
-        return <Landmark className="h-4 w-4" />;
-      default:
-        return <Wallet className="h-4 w-4" />;
-    }
-  };
-
   if (loading) {
     return (
       <AppLayout>
@@ -567,8 +486,34 @@ export default function SettingsPage() {
         {/* Header */}
         <div className="pt-2">
           <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{t('general')}</p>
+          <p className="text-muted-foreground text-sm mt-0.5">{t('description')}</p>
         </div>
+
+        {/* Tabs Navigation */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="general" className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              {t('tabs.general')}
+            </TabsTrigger>
+            <TabsTrigger value="security" className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              {t('tabs.security')}
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              {t('tabs.integrations')}
+            </TabsTrigger>
+            <TabsTrigger value="system" className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4" />
+              {t('tabs.system')}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ============================================ */}
+          {/* GENERAL TAB */}
+          {/* ============================================ */}
+          <TabsContent value="general" className="space-y-8 mt-6">
 
         {/* Company Domains Section */}
         <section>
@@ -634,79 +579,173 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Payment Methods Section */}
+          </TabsContent>
+
+          {/* ============================================ */}
+          {/* SECURITY TAB */}
+          {/* ============================================ */}
+          <TabsContent value="security" className="space-y-8 mt-6">
+
+        {/* Password Policy Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">{t('paymentMethods')}</h2>
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">{t('passwordPolicy.title')}</h2>
             </div>
-            <Button size="sm" variant="outline" onClick={() => handleOpenPaymentMethodDialog()}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              {t('addPaymentMethod')}
-            </Button>
           </div>
 
-          {paymentMethods.length > 0 ? (
-            <div className="border rounded-lg bg-white divide-y">
-              {paymentMethods.map((method) => (
-                <div key={method.id} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${
-                      method.is_expiring ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-600'
-                    }`}>
-                      {getPaymentMethodIcon(method.type)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{method.name}</p>
-                        {method.is_default && (
-                          <Badge variant="secondary" className="text-xs">{t('default')}</Badge>
-                        )}
-                        {method.is_expiring && (
-                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-200 bg-amber-50">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            {method.days_until_expiry !== null && method.days_until_expiry !== undefined && method.days_until_expiry > 0
-                              ? t('expiresInDays', { days: method.days_until_expiry })
-                              : t('expiresSoon')}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {method.type === 'credit_card' && method.details.card_last_four && (
-                          <>•••• {method.details.card_last_four} · Expires {method.details.expiry_month}/{method.details.expiry_year}</>
-                        )}
-                        {method.type === 'bank_account' && method.details.bank_name && (
-                          <>{method.details.bank_name} {method.details.iban_last_four && `· •••• ${method.details.iban_last_four}`}</>
-                        )}
-                        {method.type !== 'credit_card' && method.type !== 'bank_account' && method.details.provider_name && (
-                          <>{method.details.provider_name}</>
-                        )}
-                        {method.type !== 'credit_card' && method.type !== 'bank_account' && !method.details.provider_name && (
-                          <span className="capitalize">{method.type.replace('_', ' ')}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenPaymentMethodDialog(method)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeletePaymentMethod(method.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+          <div className="border rounded-lg bg-white p-4 space-y-6">
+            <p className="text-xs text-muted-foreground">
+              {t('passwordPolicy.description')}
+            </p>
+
+            {/* Warning for min_length < 16 */}
+            {passwordPolicyWarning && (
+              <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-medium">{t('passwordPolicy.lengthWarningTitle')}</p>
+                  <p className="text-xs mt-1">{t('passwordPolicy.lengthWarningDescription')}</p>
                 </div>
-              ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Minimum Length */}
+              <div className="space-y-2">
+                <Label htmlFor="min-length">{t('passwordPolicy.minLength')}</Label>
+                <Input
+                  id="min-length"
+                  type="number"
+                  value={passwordPolicy.min_length}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 8;
+                    setPasswordPolicy({ ...passwordPolicy, min_length: Math.max(8, value) });
+                    setPasswordPolicyWarning(value < 16);
+                  }}
+                  min={8}
+                  max={128}
+                />
+                <p className="text-xs text-muted-foreground">{t('passwordPolicy.minLengthHint')}</p>
+              </div>
+
+              {/* Password Expiry */}
+              <div className="space-y-2">
+                <Label htmlFor="expiry-days">{t('passwordPolicy.expiryDays')}</Label>
+                <Input
+                  id="expiry-days"
+                  type="number"
+                  value={passwordPolicy.expiry_days}
+                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, expiry_days: parseInt(e.target.value) || 0 })}
+                  min={0}
+                  max={365}
+                />
+                <p className="text-xs text-muted-foreground">{t('passwordPolicy.expiryDaysHint')}</p>
+              </div>
+
+              {/* History Count */}
+              <div className="space-y-2">
+                <Label htmlFor="history-count">{t('passwordPolicy.historyCount')}</Label>
+                <Input
+                  id="history-count"
+                  type="number"
+                  value={passwordPolicy.history_count}
+                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, history_count: parseInt(e.target.value) || 0 })}
+                  min={0}
+                  max={24}
+                />
+                <p className="text-xs text-muted-foreground">{t('passwordPolicy.historyCountHint')}</p>
+              </div>
+
+              {/* Max Failed Attempts */}
+              <div className="space-y-2">
+                <Label htmlFor="max-attempts">{t('passwordPolicy.maxFailedAttempts')}</Label>
+                <Input
+                  id="max-attempts"
+                  type="number"
+                  value={passwordPolicy.max_failed_attempts}
+                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, max_failed_attempts: parseInt(e.target.value) || 5 })}
+                  min={1}
+                  max={20}
+                />
+                <p className="text-xs text-muted-foreground">{t('passwordPolicy.maxFailedAttemptsHint')}</p>
+              </div>
+
+              {/* Lockout Duration */}
+              <div className="space-y-2">
+                <Label htmlFor="lockout-duration">{t('passwordPolicy.lockoutDuration')}</Label>
+                <Input
+                  id="lockout-duration"
+                  type="number"
+                  value={passwordPolicy.lockout_duration_minutes}
+                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, lockout_duration_minutes: parseInt(e.target.value) || 15 })}
+                  min={1}
+                  max={1440}
+                />
+                <p className="text-xs text-muted-foreground">{t('passwordPolicy.lockoutDurationHint')}</p>
+              </div>
             </div>
-          ) : (
-            <div className="border rounded-lg bg-white p-6 text-center">
-              <CreditCard className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
-              <p className="text-sm text-muted-foreground">{t('noPaymentMethods')}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('addPaymentMethodsNote')}</p>
+
+            {/* Complexity Requirements */}
+            <div className="space-y-3">
+              <Label>{t('passwordPolicy.complexityRequirements')}</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={passwordPolicy.require_uppercase}
+                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_uppercase: e.target.checked })}
+                    className="rounded border-zinc-300"
+                  />
+                  <span className="text-sm">{t('passwordPolicy.requireUppercase')}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={passwordPolicy.require_lowercase}
+                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_lowercase: e.target.checked })}
+                    className="rounded border-zinc-300"
+                  />
+                  <span className="text-sm">{t('passwordPolicy.requireLowercase')}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={passwordPolicy.require_numbers}
+                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_numbers: e.target.checked })}
+                    className="rounded border-zinc-300"
+                  />
+                  <span className="text-sm">{t('passwordPolicy.requireNumbers')}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={passwordPolicy.require_special_chars}
+                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_special_chars: e.target.checked })}
+                    className="rounded border-zinc-300"
+                  />
+                  <span className="text-sm">{t('passwordPolicy.requireSpecialChars')}</span>
+                </label>
+              </div>
             </div>
-          )}
+
+            {/* Save Button */}
+            <div className="pt-4 border-t">
+              <Button onClick={handleSavePasswordPolicy} disabled={savingPasswordPolicy}>
+                {savingPasswordPolicy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {t('passwordPolicy.save')}
+              </Button>
+            </div>
+          </div>
         </section>
+
+          </TabsContent>
+
+          {/* ============================================ */}
+          {/* INTEGRATIONS TAB */}
+          {/* ============================================ */}
+          <TabsContent value="integrations" className="space-y-8 mt-6">
 
         {/* Email Configuration Section */}
         <section>
@@ -906,6 +945,13 @@ export default function SettingsPage() {
           )}
         </section>
 
+          </TabsContent>
+
+          {/* ============================================ */}
+          {/* SYSTEM TAB */}
+          {/* ============================================ */}
+          <TabsContent value="system" className="space-y-8 mt-6">
+
         {/* Threshold Settings Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -1041,6 +1087,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Backup Dialog */}
@@ -1118,169 +1167,6 @@ export default function SettingsPage() {
             <Button variant="ghost" onClick={() => setRuleDialogOpen(false)}>{tCommon('cancel')}</Button>
             <Button onClick={handleSaveRule} disabled={!ruleForm.event_type || !ruleForm.slack_channel}>
               {editingRule ? tCommon('save') : tCommon('create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payment Method Dialog */}
-      <Dialog open={paymentMethodDialogOpen} onOpenChange={setPaymentMethodDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingPaymentMethod ? t('editPaymentMethod') : t('addPaymentMethod')}</DialogTitle>
-            <DialogDescription>
-              {editingPaymentMethod ? t('editPaymentMethodDescription') : t('createPaymentMethodDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">{tCommon('name')}</Label>
-              <Input
-                value={paymentMethodForm.name}
-                onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, name: e.target.value })}
-                placeholder={t('paymentNamePlaceholder')}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">{tCommon('type')}</Label>
-              <Select
-                value={paymentMethodForm.type}
-                onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, type: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bank_account">{t('bankAccount')}</SelectItem>
-                  <SelectItem value="credit_card">{t('creditCard')}</SelectItem>
-                  <SelectItem value="invoice">{tCommon('invoice')}</SelectItem>
-                  <SelectItem value="other">{t('otherPayment')}</SelectItem>
-                  <SelectItem value="paypal">{t('paypal')}</SelectItem>
-                  <SelectItem value="stripe">{t('stripe')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {paymentMethodForm.type === 'credit_card' && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">{t('cardHolder')}</Label>
-                  <Input
-                    value={paymentMethodForm.card_holder}
-                    onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, card_holder: e.target.value })}
-                    placeholder={t('nameOnCard')}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">{t('lastFourDigits')}</Label>
-                    <Input
-                      value={paymentMethodForm.card_last_four}
-                      onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, card_last_four: e.target.value.slice(0, 4) })}
-                      placeholder="1234"
-                      maxLength={4}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">{t('expiryMonth')}</Label>
-                    <Select
-                      value={paymentMethodForm.expiry_month}
-                      onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, expiry_month: v })}
-                    >
-                      <SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 12 }, (_, i) => {
-                          const m = String(i + 1).padStart(2, '0');
-                          return <SelectItem key={m} value={m}>{m}</SelectItem>;
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">{t('expiryYear')}</Label>
-                    <Select
-                      value={paymentMethodForm.expiry_year}
-                      onValueChange={(v) => setPaymentMethodForm({ ...paymentMethodForm, expiry_year: v })}
-                    >
-                      <SelectTrigger><SelectValue placeholder="YY" /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 10 }, (_, i) => {
-                          const y = String(new Date().getFullYear() + i).slice(-2);
-                          return <SelectItem key={y} value={y}>{y}</SelectItem>;
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {paymentMethodForm.type === 'bank_account' && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">{t('bankName')}</Label>
-                  <Input
-                    value={paymentMethodForm.bank_name}
-                    onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, bank_name: e.target.value })}
-                    placeholder={t('bankNamePlaceholder')}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">{t('accountHolder')}</Label>
-                    <Input
-                      value={paymentMethodForm.account_holder}
-                      onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, account_holder: e.target.value })}
-                      placeholder={t('accountHolderName')}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium">{t('ibanLastFour')}</Label>
-                    <Input
-                      value={paymentMethodForm.iban_last_four}
-                      onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, iban_last_four: e.target.value.slice(0, 4) })}
-                      placeholder="1234"
-                      maxLength={4}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {paymentMethodForm.type !== 'credit_card' && paymentMethodForm.type !== 'bank_account' && (
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">{t('providerAccount')}</Label>
-                <Input
-                  value={paymentMethodForm.provider_name}
-                  onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, provider_name: e.target.value })}
-                  placeholder={t('accountEmailPlaceholder')}
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">{t('notesOptional')}</Label>
-              <Input
-                value={paymentMethodForm.notes}
-                onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, notes: e.target.value })}
-                placeholder={t('anyAdditionalNotes')}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_default"
-                checked={paymentMethodForm.is_default}
-                onChange={(e) => setPaymentMethodForm({ ...paymentMethodForm, is_default: e.target.checked })}
-                className="rounded border-zinc-300"
-              />
-              <Label htmlFor="is_default" className="text-xs font-medium cursor-pointer">{t('setAsDefaultPayment')}</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPaymentMethodDialogOpen(false)}>{tCommon('cancel')}</Button>
-            <Button onClick={handleSavePaymentMethod} disabled={!paymentMethodForm.name || savingPaymentMethod}>
-              {savingPaymentMethod ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {tCommon('loading')}</> : (editingPaymentMethod ? tCommon('save') : tCommon('add'))}
             </Button>
           </DialogFooter>
         </DialogContent>
