@@ -68,6 +68,7 @@ export default function AdminUsersPage() {
     email: '',
     name: '',
     password: '',
+    language: 'en',  // Default to English
     role_codes: [] as string[],
   });
   const [formErrors, setFormErrors] = useState<string[]>([]);
@@ -133,7 +134,7 @@ export default function AdminUsersPage() {
   };
 
   const openCreateDialog = () => {
-    setFormData({ email: '', name: '', password: '', role_codes: [] });
+    setFormData({ email: '', name: '', password: '', language: 'en', role_codes: [] });
     setFormErrors([]);
     setCreateResult(null);
     setTemporaryPassword(null);
@@ -147,6 +148,7 @@ export default function AdminUsersPage() {
       email: user.email,
       name: user.name || '',
       password: '',
+      language: user.language || 'en',
       role_codes: user.roles, // Backend returns role codes directly
     });
     setFormErrors([]);
@@ -179,6 +181,7 @@ export default function AdminUsersPage() {
         email: formData.email,
         name: formData.name || undefined,
         password: formData.password || undefined,
+        language: formData.language,
         role_ids: roleIds,
       });
 
@@ -442,6 +445,21 @@ export default function AdminUsersPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-language">{t('emailLanguage')}</Label>
+                <select
+                  id="create-language"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.language}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                >
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {t('emailLanguageDescription')}
+                </p>
               </div>
               {!emailConfigured && (
                 <div className="space-y-2">

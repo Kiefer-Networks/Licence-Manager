@@ -394,98 +394,160 @@ class EmailService:
             logger.error(f"SMTP test failed: {e}")
             return False, f"Connection failed: {str(e)}"
 
+    def _get_email_translations(self, language: str) -> dict[str, str]:
+        """Get email translations for the specified language.
+
+        Args:
+            language: ISO 639-1 language code (e.g., 'en', 'de')
+
+        Returns:
+            Dictionary with translation strings
+        """
+        # Normalize language code (e.g., 'de-DE' -> 'de')
+        lang = language.split("-")[0].lower() if language else "en"
+
+        translations = {
+            "en": {
+                # New user email
+                "new_user_subject": "License Management System - Your Account Has Been Created",
+                "new_user_heading": "Welcome to License Management System",
+                "new_user_greeting": "Hello",
+                "new_user_intro": "Your account has been created. Please use the following credentials to log in:",
+                "email_label": "Email",
+                "temp_password_label": "Temporary Password",
+                "new_password_label": "New Temporary Password",
+                "new_user_warning": "You will be required to change this password when you first log in.",
+                "security_notice": "For security reasons, please do not share this email with anyone.",
+                "footer": "This is an automated message from the License Management System.",
+                "important": "Important",
+                # Password reset email
+                "reset_subject": "License Management System - Password Reset",
+                "reset_heading": "Password Reset",
+                "reset_intro": "Your password has been reset by an administrator. Please use the following credentials to log in:",
+                "reset_warning": "You will be required to change this password when you next log in.",
+                "reset_not_requested": "If you did not request this password reset, please contact your administrator immediately.",
+            },
+            "de": {
+                # New user email
+                "new_user_subject": "License Management System - Ihr Konto wurde erstellt",
+                "new_user_heading": "Willkommen beim License Management System",
+                "new_user_greeting": "Hallo",
+                "new_user_intro": "Ihr Konto wurde erstellt. Bitte verwenden Sie die folgenden Anmeldedaten:",
+                "email_label": "E-Mail",
+                "temp_password_label": "Temporäres Passwort",
+                "new_password_label": "Neues temporäres Passwort",
+                "new_user_warning": "Sie müssen dieses Passwort bei der ersten Anmeldung ändern.",
+                "security_notice": "Aus Sicherheitsgründen teilen Sie diese E-Mail bitte nicht mit anderen.",
+                "footer": "Dies ist eine automatische Nachricht vom License Management System.",
+                "important": "Wichtig",
+                # Password reset email
+                "reset_subject": "License Management System - Passwort zurückgesetzt",
+                "reset_heading": "Passwort zurückgesetzt",
+                "reset_intro": "Ihr Passwort wurde von einem Administrator zurückgesetzt. Bitte verwenden Sie die folgenden Anmeldedaten:",
+                "reset_warning": "Sie müssen dieses Passwort bei der nächsten Anmeldung ändern.",
+                "reset_not_requested": "Falls Sie dieses Zurücksetzen nicht angefordert haben, kontaktieren Sie bitte umgehend Ihren Administrator.",
+            },
+        }
+
+        return translations.get(lang, translations["en"])
+
     async def send_password_email(
         self,
         to_email: str,
         user_name: str | None,
         password: str,
         is_new_user: bool = True,
+        language: str = "en",
     ) -> bool:
-        """Send password to user via email.
+        """Send password to user via email in the specified language.
 
         Args:
             to_email: User's email address
             user_name: User's name (optional)
             password: The temporary password
             is_new_user: True for new user, False for password reset
+            language: ISO 639-1 language code (e.g., 'en', 'de')
 
         Returns:
             True if sent successfully, False otherwise
         """
+        # Get translations for the user's language
+        t = self._get_email_translations(language)
+
         # Escape user-provided data for HTML to prevent XSS
         name_display = html_escape(user_name or to_email)
         safe_email = html_escape(to_email)
         safe_password = html_escape(password)
 
         if is_new_user:
-            subject = "License Management System - Your Account Has Been Created"
+            subject = t["new_user_subject"]
             html_body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2563eb;">Welcome to License Management System</h2>
-                <p>Hello {name_display},</p>
-                <p>Your account has been created. Please use the following credentials to log in:</p>
+                <h2 style="color: #2563eb;">{t["new_user_heading"]}</h2>
+                <p>{t["new_user_greeting"]} {name_display},</p>
+                <p>{t["new_user_intro"]}</p>
                 <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Email:</strong> {safe_email}</p>
-                    <p style="margin: 8px 0 0 0;"><strong>Temporary Password:</strong></p>
+                    <p style="margin: 0;"><strong>{t["email_label"]}:</strong> {safe_email}</p>
+                    <p style="margin: 8px 0 0 0;"><strong>{t["temp_password_label"]}:</strong></p>
                     <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
-                <p style="color: #dc2626;"><strong>Important:</strong> You will be required to change this password when you first log in.</p>
-                <p>For security reasons, please do not share this email with anyone.</p>
+                <p style="color: #dc2626;"><strong>{t["important"]}:</strong> {t["new_user_warning"]}</p>
+                <p>{t["security_notice"]}</p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-                <p style="color: #6b7280; font-size: 12px;">This is an automated message from the License Management System.</p>
+                <p style="color: #6b7280; font-size: 12px;">{t["footer"]}</p>
             </body>
             </html>
             """
-            plain_body = f"""Welcome to License Management System
+            plain_body = f"""{t["new_user_heading"]}
 
-Hello {user_name or to_email},
+{t["new_user_greeting"]} {user_name or to_email},
 
-Your account has been created. Please use the following credentials to log in:
+{t["new_user_intro"]}
 
-Email: {to_email}
-Temporary Password: {password}
+{t["email_label"]}: {to_email}
+{t["temp_password_label"]}: {password}
 
-IMPORTANT: You will be required to change this password when you first log in.
+{t["important"].upper()}: {t["new_user_warning"]}
 
-For security reasons, please do not share this email with anyone.
+{t["security_notice"]}
 
 ---
-This is an automated message from the License Management System."""
+{t["footer"]}"""
         else:
-            subject = "License Management System - Password Reset"
+            subject = t["reset_subject"]
             html_body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2563eb;">Password Reset</h2>
-                <p>Hello {name_display},</p>
-                <p>Your password has been reset by an administrator. Please use the following credentials to log in:</p>
+                <h2 style="color: #2563eb;">{t["reset_heading"]}</h2>
+                <p>{t["new_user_greeting"]} {name_display},</p>
+                <p>{t["reset_intro"]}</p>
                 <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Email:</strong> {safe_email}</p>
-                    <p style="margin: 8px 0 0 0;"><strong>New Temporary Password:</strong></p>
+                    <p style="margin: 0;"><strong>{t["email_label"]}:</strong> {safe_email}</p>
+                    <p style="margin: 8px 0 0 0;"><strong>{t["new_password_label"]}:</strong></p>
                     <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
-                <p style="color: #dc2626;"><strong>Important:</strong> You will be required to change this password when you next log in.</p>
-                <p>If you did not request this password reset, please contact your administrator immediately.</p>
+                <p style="color: #dc2626;"><strong>{t["important"]}:</strong> {t["reset_warning"]}</p>
+                <p>{t["reset_not_requested"]}</p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-                <p style="color: #6b7280; font-size: 12px;">This is an automated message from the License Management System.</p>
+                <p style="color: #6b7280; font-size: 12px;">{t["footer"]}</p>
             </body>
             </html>
             """
-            plain_body = f"""Password Reset
+            plain_body = f"""{t["reset_heading"]}
 
-Hello {user_name or to_email},
+{t["new_user_greeting"]} {user_name or to_email},
 
-Your password has been reset by an administrator. Please use the following credentials to log in:
+{t["reset_intro"]}
 
-Email: {to_email}
-New Temporary Password: {password}
+{t["email_label"]}: {to_email}
+{t["new_password_label"]}: {password}
 
-IMPORTANT: You will be required to change this password when you next log in.
+{t["important"].upper()}: {t["reset_warning"]}
 
-If you did not request this password reset, please contact your administrator immediately.
+{t["reset_not_requested"]}
 
 ---
-This is an automated message from the License Management System."""
+{t["footer"]}"""
 
         return await self.send_email(to_email, subject, html_body, plain_body)

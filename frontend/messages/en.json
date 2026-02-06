@@ -861,7 +861,9 @@
     "searchFailed": "Search failed",
     "passwordWillBeSentViaEmail": "A temporary password will be generated and sent to the user's email address.",
     "passwordSentViaEmail": "Password sent via email",
-    "passwordEmailSentTo": "A temporary password has been sent to {email}."
+    "passwordEmailSentTo": "A temporary password has been sent to {email}.",
+    "emailLanguage": "Email Language",
+    "emailLanguageDescription": "Language for system emails (password, notifications)"
   },
   "roles": {
     "title": "Roles",

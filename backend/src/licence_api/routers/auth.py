@@ -492,6 +492,7 @@ async def update_profile(
     return await auth_service.update_profile(
         user_id=current_user.id,
         name=body.name,
+        language=body.language,
         date_format=body.date_format,
         number_format=body.number_format,
         currency=body.currency,

@@ -69,6 +69,10 @@ class RbacService:
             roles=roles,
             permissions=sorted(permissions),
             last_login_at=user.last_login_at,
+            language=getattr(user, "language", "en") or "en",
+            date_format=user.date_format,
+            number_format=user.number_format,
+            currency=user.currency,
         )
 
     async def list_users(self) -> list[UserInfo]:
@@ -130,13 +134,14 @@ class RbacService:
         # Hash password
         password_hash = self.password_service.hash_password(password)
 
-        # Create user
+        # Create user with language preference
         user = await self.user_repo.create_user(
             email=request.email.lower(),
             password_hash=password_hash,
             name=request.name,
             auth_provider="local",
             require_password_change=True,
+            language=request.language,
         )
 
         # Assign roles
@@ -152,6 +157,7 @@ class RbacService:
                 user_name=request.name,
                 password=password,
                 is_new_user=True,
+                language=request.language,
             )
             if email_sent:
                 password_sent_via_email = True
@@ -350,17 +356,23 @@ class RbacService:
         temporary_password: str | None = None
 
         if email_configured:
+            # Use the user's preferred language for the email
+            user_language = getattr(user, "language", "en") or "en"
             email_sent = await self.email_service.send_password_email(
                 to_email=user.email,
                 user_name=user.name,
                 password=new_password,
                 is_new_user=False,
+                language=user_language,
             )
             if email_sent:
                 password_sent_via_email = True
             else:
                 # Email failed - log warning and return password
-                logger.warning(f"Failed to send password reset email to {user.email}, returning password in response")
+                logger.warning(
+                    f"Failed to send password reset email to {user.email}, "
+                    "returning password in response"
+                )
                 temporary_password = new_password
         else:
             # No email configured, return password in response

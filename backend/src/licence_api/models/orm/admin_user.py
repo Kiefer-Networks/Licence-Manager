@@ -40,7 +40,8 @@ class AdminUserORM(Base, UUIDMixin, TimestampMixin):
     # Login tracking
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Locale preferences
+    # Locale preferences (language: ISO 639-1 codes like en, de)
+    language: Mapped[str] = mapped_column(String(5), nullable=False, default="en")
     date_format: Mapped[str | None] = mapped_column(String(20), nullable=True, default="DD.MM.YYYY")
     number_format: Mapped[str | None] = mapped_column(String(20), nullable=True, default="de-DE")
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True, default="EUR")

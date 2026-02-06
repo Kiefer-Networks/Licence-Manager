@@ -1293,6 +1293,7 @@ export interface AdminUserCreateRequest {
   email: string;
   name?: string;
   password?: string;  // Optional when email is configured
+  language?: string;  // ISO 639-1 language code (en, de) for email notifications
   role_codes: string[];
 }
 
@@ -1334,6 +1335,7 @@ export interface CurrentUserInfo {
   permissions: string[];
   is_superadmin: boolean;
   // Locale preferences
+  language?: string;  // ISO 639-1 language code (en, de)
   date_format?: string;
   number_format?: string;
   currency?: string;
@@ -1343,6 +1345,7 @@ export interface CurrentUserInfo {
 
 export interface ProfileUpdateRequest {
   name?: string;
+  language?: string;  // ISO 639-1 language code (en, de)
   date_format?: string;
   number_format?: string;
   currency?: string;
@@ -2679,6 +2682,7 @@ export const api = {
     email: string;
     name?: string;
     password?: string;  // Optional when email is configured
+    language?: string;  // ISO 639-1 language code for email
     role_ids: string[];
   }): Promise<AdminUserCreateResponse> {
     // Convert role_ids to role_codes by fetching roles first
@@ -2693,6 +2697,7 @@ export const api = {
         email: data.email,
         name: data.name,
         password: data.password,
+        language: data.language,
         role_codes: roleCodes,
       }),
     });

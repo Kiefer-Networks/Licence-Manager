@@ -59,6 +59,7 @@ class UserInfo(BaseModel):
     is_superadmin: bool = False
     last_login_at: datetime | None = None
     # Locale preferences
+    language: str = "en"  # ISO 639-1 language code (en, de)
     date_format: str | None = "DD.MM.YYYY"
     number_format: str | None = "de-DE"
     currency: str | None = "EUR"
@@ -70,6 +71,12 @@ class UserCreateRequest(BaseModel):
     email: EmailStr
     name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=12)  # Optional when email is configured
+    language: str = Field(
+        default="en",
+        min_length=2,
+        max_length=5,
+        pattern=r"^[a-z]{2}(-[A-Z]{2})?$",  # ISO 639-1: en, de, or en-US, de-DE
+    )
     role_codes: list[str] = Field(default=[], max_length=50)  # Max 50 roles per user
 
 
@@ -198,6 +205,12 @@ class ProfileUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, max_length=255)
     # Locale preferences with validation patterns
+    language: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=5,
+        pattern=r"^[a-z]{2}(-[A-Z]{2})?$",  # ISO 639-1: en, de, or en-US, de-DE
+    )
     date_format: str | None = Field(
         default=None,
         max_length=20,

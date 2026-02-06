@@ -79,6 +79,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
         picture_url: str | None = None,
         auth_provider: str = "local",
         require_password_change: bool = False,
+        language: str = "en",
     ) -> AdminUserORM:
         """Create a new user.
 
@@ -89,6 +90,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             picture_url: Profile picture URL
             auth_provider: Authentication provider
             require_password_change: Whether user must change password
+            language: ISO 639-1 language code for email notifications
 
         Returns:
             Created AdminUserORM
@@ -101,6 +103,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             auth_provider=auth_provider,
             require_password_change=require_password_change,
             password_changed_at=datetime.now(timezone.utc) if password_hash else None,
+            language=language,
         )
         return user
 
@@ -401,6 +404,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
     async def update_locale_preferences(
         self,
         user_id: UUID,
+        language: str | None = None,
         date_format: str | None = None,
         number_format: str | None = None,
         currency: str | None = None,
@@ -409,6 +413,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
 
         Args:
             user_id: User UUID
+            language: Language code (e.g., en, de)
             date_format: Date format (e.g., DD.MM.YYYY, MM/DD/YYYY)
             number_format: Number format locale (e.g., de-DE, en-US)
             currency: Currency code (e.g., EUR, USD)
@@ -420,6 +425,8 @@ class UserRepository(BaseRepository[AdminUserORM]):
         if user is None:
             return None
 
+        if language is not None:
+            user.language = language
         if date_format is not None:
             user.date_format = date_format
         if number_format is not None:
