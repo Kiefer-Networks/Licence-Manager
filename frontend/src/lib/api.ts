@@ -3349,17 +3349,36 @@ export const api = {
    * Download import template CSV.
    */
   async downloadImportTemplate(providerId: string, includeExamples: boolean = true): Promise<Blob> {
-    const response = await fetch(
-      `${API_BASE}/api/v1/providers/${providerId}/import/template?include_examples=${includeExamples}`,
-      {
-        method: 'GET',
-        credentials: 'include',
+    const url = `${API_BASE}/api/v1/providers/${providerId}/import/template?include_examples=${includeExamples}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/csv',
+      },
+      credentials: 'include',
+    });
+
+    // Handle 401 - attempt token refresh
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry with new token
+        const retryResponse = await fetch(url, {
+          method: 'GET',
+          headers: { 'Accept': 'text/csv' },
+          credentials: 'include',
+        });
+        if (retryResponse.ok) {
+          return retryResponse.blob();
+        }
       }
-    );
+      throw new Error('Session expired');
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to download template' }));
-      throw new Error(error.detail || 'Failed to download template');
+      throw new Error(error.detail || `Download failed (${response.status})`);
     }
 
     return response.blob();
