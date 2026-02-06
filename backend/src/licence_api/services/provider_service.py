@@ -1,6 +1,7 @@
 """Provider service for provider management operations."""
 
 import uuid as uuid_module
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 

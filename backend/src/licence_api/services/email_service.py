@@ -5,6 +5,7 @@ import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape as html_escape
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
@@ -330,7 +331,10 @@ class EmailService:
         Returns:
             True if sent successfully, False otherwise
         """
-        name_display = user_name or to_email
+        # Escape user-provided data for HTML to prevent XSS
+        name_display = html_escape(user_name or to_email)
+        safe_email = html_escape(to_email)
+        safe_password = html_escape(password)
 
         if is_new_user:
             subject = "License Management System - Your Account Has Been Created"
@@ -341,9 +345,9 @@ class EmailService:
                 <p>Hello {name_display},</p>
                 <p>Your account has been created. Please use the following credentials to log in:</p>
                 <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Email:</strong> {to_email}</p>
+                    <p style="margin: 0;"><strong>Email:</strong> {safe_email}</p>
                     <p style="margin: 8px 0 0 0;"><strong>Temporary Password:</strong></p>
-                    <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{password}</p>
+                    <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
                 <p style="color: #dc2626;"><strong>Important:</strong> You will be required to change this password when you first log in.</p>
                 <p>For security reasons, please do not share this email with anyone.</p>
@@ -354,7 +358,7 @@ class EmailService:
             """
             plain_body = f"""Welcome to License Management System
 
-Hello {name_display},
+Hello {user_name or to_email},
 
 Your account has been created. Please use the following credentials to log in:
 
@@ -376,9 +380,9 @@ This is an automated message from the License Management System."""
                 <p>Hello {name_display},</p>
                 <p>Your password has been reset by an administrator. Please use the following credentials to log in:</p>
                 <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Email:</strong> {to_email}</p>
+                    <p style="margin: 0;"><strong>Email:</strong> {safe_email}</p>
                     <p style="margin: 8px 0 0 0;"><strong>New Temporary Password:</strong></p>
-                    <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{password}</p>
+                    <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
                 <p style="color: #dc2626;"><strong>Important:</strong> You will be required to change this password when you next log in.</p>
                 <p>If you did not request this password reset, please contact your administrator immediately.</p>
@@ -389,7 +393,7 @@ This is an automated message from the License Management System."""
             """
             plain_body = f"""Password Reset
 
-Hello {name_display},
+Hello {user_name or to_email},
 
 Your password has been reset by an administrator. Please use the following credentials to log in:
 

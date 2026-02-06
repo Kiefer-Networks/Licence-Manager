@@ -23,7 +23,7 @@ from licence_api.models.dto.provider import (
 )
 from licence_api.services.payment_method_service import PaymentMethodService
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.auth import require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.encryption import get_encryption_service
 from licence_api.security.rate_limit import limiter, PROVIDER_TEST_CONNECTION_LIMIT, SENSITIVE_OPERATION_LIMIT
@@ -33,6 +33,7 @@ from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.file_validation import validate_svg_content
+from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.utils.errors import log_sync_connection_error, log_sync_unexpected_error
 
 router = APIRouter()
