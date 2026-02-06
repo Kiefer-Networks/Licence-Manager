@@ -1,10 +1,15 @@
 """Email service for SMTP configuration and sending emails."""
 
+import asyncio
 import logging
+import re
 import smtplib
 import ssl
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
+from functools import partial
 from html import escape as html_escape
 from typing import Any
 
@@ -15,6 +20,9 @@ from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for non-blocking SMTP operations
+_smtp_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="smtp")
 
 SMTP_CONFIG_KEY = "smtp_config"
 
@@ -183,18 +191,95 @@ class EmailService:
         Returns:
             SMTP connection
         """
+        context = ssl.create_default_context()
+
         if config.use_tls:
-            # Use STARTTLS
-            context = ssl.create_default_context()
+            # Use STARTTLS (port 587 typically)
             smtp = smtplib.SMTP(config.host, config.port, timeout=30)
+            # EHLO before STARTTLS for proper server greeting
+            smtp.ehlo()
             smtp.starttls(context=context)
+            # EHLO again after STARTTLS as required by RFC 3207
+            smtp.ehlo()
         else:
             # Direct SSL connection (port 465 typically)
-            context = ssl.create_default_context()
             smtp = smtplib.SMTP_SSL(config.host, config.port, timeout=30, context=context)
+            smtp.ehlo()
 
         smtp.login(config.username, password)
         return smtp
+
+    def _create_message(
+        self,
+        config: SmtpConfig,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        plain_body: str | None = None,
+    ) -> MIMEMultipart:
+        """Create email message with proper headers.
+
+        Args:
+            config: SMTP configuration
+            to_email: Recipient email address
+            subject: Email subject
+            html_body: HTML email body
+            plain_body: Plain text body (optional)
+
+        Returns:
+            Constructed email message
+        """
+        msg = MIMEMultipart("alternative")
+
+        # Standard headers
+        msg["Subject"] = subject
+        msg["From"] = f"{config.from_name} <{config.from_email}>"
+        msg["To"] = to_email
+
+        # Additional headers for better deliverability
+        msg["Message-ID"] = make_msgid(domain=config.from_email.split("@")[1])
+        msg["Date"] = formatdate(localtime=True)
+        msg["X-Mailer"] = "License Management System"
+
+        # Add plain text part
+        if plain_body:
+            msg.attach(MIMEText(plain_body, "plain", "utf-8"))
+        else:
+            # Generate plain text from HTML (basic strip)
+            plain = re.sub(r"<[^>]+>", "", html_body)
+            plain = re.sub(r"\s+", " ", plain).strip()
+            msg.attach(MIMEText(plain, "plain", "utf-8"))
+
+        # Add HTML part
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        return msg
+
+    def _send_email_sync(
+        self,
+        config: SmtpConfig,
+        password: str,
+        to_email: str,
+        msg: MIMEMultipart,
+    ) -> None:
+        """Synchronous email sending (runs in thread pool).
+
+        Args:
+            config: SMTP configuration
+            password: Decrypted password
+            to_email: Recipient email address
+            msg: Constructed email message
+        """
+        smtp = None
+        try:
+            smtp = self._get_smtp_connection(config, password)
+            smtp.sendmail(config.from_email, to_email, msg.as_string())
+        finally:
+            if smtp:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
 
     async def send_email(
         self,
@@ -203,7 +288,9 @@ class EmailService:
         html_body: str,
         plain_body: str | None = None,
     ) -> bool:
-        """Send an email via SMTP.
+        """Send an email via SMTP (non-blocking).
+
+        Uses a thread pool executor to avoid blocking the async event loop.
 
         Args:
             to_email: Recipient email address
@@ -223,28 +310,15 @@ class EmailService:
             # Decrypt password
             password = self.encryption.decrypt_string(config.password_encrypted)
 
-            # Create message
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{config.from_name} <{config.from_email}>"
-            msg["To"] = to_email
+            # Create message with proper headers
+            msg = self._create_message(config, to_email, subject, html_body, plain_body)
 
-            # Add plain text part
-            if plain_body:
-                msg.attach(MIMEText(plain_body, "plain", "utf-8"))
-            else:
-                # Generate plain text from HTML (basic strip)
-                import re
-                plain = re.sub(r"<[^>]+>", "", html_body)
-                plain = re.sub(r"\s+", " ", plain).strip()
-                msg.attach(MIMEText(plain, "plain", "utf-8"))
-
-            # Add HTML part
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-            # Send email
-            with self._get_smtp_connection(config, password) as smtp:
-                smtp.sendmail(config.from_email, to_email, msg.as_string())
+            # Run synchronous SMTP in thread pool to avoid blocking
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                _smtp_executor,
+                partial(self._send_email_sync, config, password, to_email, msg),
+            )
 
             logger.info(f"Email sent successfully to {to_email}")
             return True
@@ -257,7 +331,7 @@ class EmailService:
             return False
 
     async def send_test_email(self, to_email: str) -> tuple[bool, str]:
-        """Send a test email to verify SMTP configuration.
+        """Send a test email to verify SMTP configuration (non-blocking).
 
         Args:
             to_email: Recipient email address
@@ -275,29 +349,36 @@ class EmailService:
         try:
             password = self.encryption.decrypt_string(config.password_encrypted)
 
-            # Test connection
-            with self._get_smtp_connection(config, password) as smtp:
-                # Create test message
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = "License Management System - Test Email"
-                msg["From"] = f"{config.from_name} <{config.from_email}>"
-                msg["To"] = to_email
+            html_body = """
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h2>Test Email</h2>
+                <p>This is a test email from the License Management System.</p>
+                <p>If you received this email, your SMTP configuration is working correctly.</p>
+            </body>
+            </html>
+            """
+            plain_body = (
+                "Test Email\n\n"
+                "This is a test email from the License Management System.\n"
+                "If you received this email, your SMTP configuration is working correctly."
+            )
 
-                html_body = """
-                <html>
-                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <h2>Test Email</h2>
-                    <p>This is a test email from the License Management System.</p>
-                    <p>If you received this email, your SMTP configuration is working correctly.</p>
-                </body>
-                </html>
-                """
-                plain_body = "Test Email\n\nThis is a test email from the License Management System.\nIf you received this email, your SMTP configuration is working correctly."
+            # Create message with proper headers
+            msg = self._create_message(
+                config,
+                to_email,
+                "License Management System - Test Email",
+                html_body,
+                plain_body,
+            )
 
-                msg.attach(MIMEText(plain_body, "plain", "utf-8"))
-                msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-                smtp.sendmail(config.from_email, to_email, msg.as_string())
+            # Run synchronous SMTP in thread pool to avoid blocking
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                _smtp_executor,
+                partial(self._send_email_sync, config, password, to_email, msg),
+            )
 
             return True, "Test email sent successfully"
 
