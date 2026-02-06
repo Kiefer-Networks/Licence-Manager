@@ -1663,6 +1663,7 @@ export const api = {
       enabled?: boolean;
       credentials?: ProviderCredentials;
       config?: ProviderConfig;
+      payment_method_id?: string | null;
     }
   ): Promise<Provider> {
     return fetchApi<Provider>(`/providers/${providerId}`, {

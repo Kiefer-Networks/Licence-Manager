@@ -95,3 +95,35 @@ class ProviderRepository(BaseRepository[ProviderORM]):
             select(func.count()).select_from(ProviderORM).limit(1)
         )
         return result.scalar_one() > 0
+
+    async def count_by_payment_method(self, payment_method_id: UUID) -> int:
+        """Count providers using a specific payment method.
+
+        Args:
+            payment_method_id: Payment method UUID
+
+        Returns:
+            Number of providers using this payment method
+        """
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ProviderORM)
+            .where(ProviderORM.payment_method_id == payment_method_id)
+        )
+        return result.scalar_one()
+
+    async def get_by_payment_method(self, payment_method_id: UUID) -> list[ProviderORM]:
+        """Get providers using a specific payment method.
+
+        Args:
+            payment_method_id: Payment method UUID
+
+        Returns:
+            List of providers using this payment method
+        """
+        result = await self.session.execute(
+            select(ProviderORM)
+            .where(ProviderORM.payment_method_id == payment_method_id)
+            .order_by(ProviderORM.display_name)
+        )
+        return list(result.scalars().all())

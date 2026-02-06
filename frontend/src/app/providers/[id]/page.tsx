@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { EmployeeAutocomplete } from '@/components/ui/employee-autocomplete';
-import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo } from '@/lib/api';
+import { api, Provider, License, Employee, LicenseTypeInfo, LicenseTypePricing, PackagePricing, ProviderFile, CategorizedLicensesResponse, IndividualLicenseTypeInfo, PaymentMethod } from '@/lib/api';
 import { ThreeTableLayout } from '@/components/licenses';
 import { formatMonthlyCost } from '@/lib/format';
 import { getProviderFields, getFieldLabel, TEXTAREA_FIELDS, isSecretField } from '@/lib/provider-fields';
@@ -113,8 +113,10 @@ export default function ProviderDetailPage() {
   const [settingsForm, setSettingsForm] = useState({
     display_name: '',
     license_model: 'license_based',
+    payment_method_id: '' as string | null,
   });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   // Credentials Form
   const [credentialsForm, setCredentialsForm] = useState<Record<string, string>>({});
@@ -246,11 +248,21 @@ export default function ProviderDetailPage() {
       setSettingsForm({
         display_name: p.display_name,
         license_model: p.config?.license_model || 'license_based',
+        payment_method_id: p.payment_method_id || null,
       });
     } catch (error) {
       handleSilentError('fetchProvider', error);
     }
   }, [providerId]);
+
+  const fetchPaymentMethods = useCallback(async () => {
+    try {
+      const data = await api.getPaymentMethods();
+      setPaymentMethods(data.items);
+    } catch (error) {
+      handleSilentError('fetchPaymentMethods', error);
+    }
+  }, []);
 
   const fetchPublicCredentials = useCallback(async () => {
     try {
@@ -386,10 +398,10 @@ export default function ProviderDetailPage() {
   }, [providerId]);
 
   useEffect(() => {
-    Promise.all([fetchProvider(), fetchPublicCredentials(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles(), fetchLicensePackages(), fetchOrgLicenses()]).finally(() =>
+    Promise.all([fetchProvider(), fetchPublicCredentials(), fetchLicenses(), fetchCategorizedLicenses(), fetchEmployees(), fetchLicenseTypes(), fetchIndividualLicenseTypes(), fetchFiles(), fetchLicensePackages(), fetchOrgLicenses(), fetchPaymentMethods()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchProvider, fetchPublicCredentials, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles, fetchLicensePackages, fetchOrgLicenses]);
+  }, [fetchProvider, fetchPublicCredentials, fetchLicenses, fetchCategorizedLicenses, fetchEmployees, fetchLicenseTypes, fetchIndividualLicenseTypes, fetchFiles, fetchLicensePackages, fetchOrgLicenses, fetchPaymentMethods]);
 
   const handleSync = async () => {
     if (!provider || isManual) return;
@@ -857,6 +869,7 @@ export default function ProviderDetailPage() {
       await api.updateProvider(provider.id, {
         display_name: settingsForm.display_name,
         config,
+        payment_method_id: settingsForm.payment_method_id || null,
       });
       await fetchProvider();
       showToast('success', t('settingsSaved'));
@@ -2202,6 +2215,26 @@ export default function ProviderDetailPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     {t('seatBasedDescription')}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">{t('paymentMethod')}</Label>
+                  <Select
+                    value={settingsForm.payment_method_id || '_none'}
+                    onValueChange={(v) => setSettingsForm({ ...settingsForm, payment_method_id: v === '_none' ? null : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t('selectPaymentMethod')} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">{t('noPaymentMethod')}</SelectItem>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem key={pm.id} value={pm.id}>
+                          {pm.name} {pm.is_default && `(${t('default')})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t('paymentMethodDescription')}
                   </p>
                 </div>
                 <Button onClick={handleSaveSettings} disabled={savingSettings}>

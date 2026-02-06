@@ -15,6 +15,7 @@ from licence_api.models.dto.payment_method import (
     PaymentMethodUpdate,
 )
 from licence_api.repositories.payment_method_repository import PaymentMethodRepository
+from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
 # Valid payment method types
@@ -28,6 +29,7 @@ class PaymentMethodService:
         """Initialize service with database session."""
         self.session = session
         self.repo = PaymentMethodRepository(session)
+        self.provider_repo = ProviderRepository(session)
         self.audit_service = AuditService(session)
 
     @staticmethod
@@ -208,6 +210,7 @@ class PaymentMethodService:
         payment_method_id: UUID,
         user: AdminUser,
         request: Request | None = None,
+        force: bool = False,
     ) -> None:
         """Delete a payment method.
 
@@ -215,14 +218,27 @@ class PaymentMethodService:
             payment_method_id: Payment method UUID
             user: Admin user deleting the method
             request: HTTP request for audit logging
+            force: If True, delete even if in use by providers
 
         Raises:
-            ValueError: If payment method not found
+            ValueError: If payment method not found or in use by providers
         """
         # Get method info for audit before deletion
         method = await self.repo.get_by_id(payment_method_id)
         if method is None:
             raise ValueError("Payment method not found")
+
+        # Check if payment method is in use by providers
+        if not force:
+            provider_count = await self.provider_repo.count_by_payment_method(payment_method_id)
+            if provider_count > 0:
+                providers = await self.provider_repo.get_by_payment_method(payment_method_id)
+                provider_names = [p.display_name for p in providers[:5]]
+                if provider_count > 5:
+                    provider_names.append(f"... and {provider_count - 5} more")
+                raise ValueError(
+                    f"Cannot delete payment method: used by {provider_count} provider(s): {', '.join(provider_names)}"
+                )
 
         method_name = method.name
         method_type = method.type
@@ -242,3 +258,34 @@ class PaymentMethodService:
         )
 
         await self.session.commit()
+
+    async def get_payment_method_usage(
+        self,
+        payment_method_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Get usage information for a payment method.
+
+        Args:
+            payment_method_id: Payment method UUID
+
+        Returns:
+            Usage info dict or None if payment method not found
+        """
+        method = await self.repo.get_by_id(payment_method_id)
+        if method is None:
+            return None
+
+        providers = await self.provider_repo.get_by_payment_method(payment_method_id)
+
+        return {
+            "payment_method_id": str(payment_method_id),
+            "provider_count": len(providers),
+            "providers": [
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "display_name": p.display_name,
+                }
+                for p in providers
+            ],
+        }
