@@ -1512,6 +1512,14 @@ export interface PasswordChangeRequest {
 }
 
 // ============================================================================
+// System Name Settings Types
+// ============================================================================
+
+export interface SystemNameSettings {
+  name: string;
+}
+
+// ============================================================================
 // Threshold Settings Types
 // ============================================================================
 
@@ -2751,6 +2759,21 @@ export const api = {
     return fetchApi<TotpBackupCodesResponse>('/auth/totp/backup-codes', {
       method: 'POST',
       body: JSON.stringify({ password }),
+    });
+  },
+
+  // ============================================================================
+  // System Name Settings
+  // ============================================================================
+
+  async getSystemName(): Promise<SystemNameSettings> {
+    return fetchApi<SystemNameSettings>('/settings/system-name');
+  },
+
+  async updateSystemName(settings: SystemNameSettings): Promise<SystemNameSettings> {
+    return fetchApi<SystemNameSettings>('/settings/system-name', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     });
   },
 

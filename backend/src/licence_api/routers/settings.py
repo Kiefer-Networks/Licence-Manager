@@ -76,6 +76,15 @@ class ThresholdSettings(BaseModel):
 
 DEFAULT_THRESHOLDS = ThresholdSettings()
 
+SYSTEM_NAME_KEY = "system_name"
+DEFAULT_SYSTEM_NAME = "License Management System"
+
+
+class SystemNameSettings(BaseModel):
+    """System name settings."""
+
+    name: str = Field(default=DEFAULT_SYSTEM_NAME, min_length=1, max_length=100)
+
 
 class NotificationRuleCreate(BaseModel):
     """Create notification rule request."""
@@ -245,6 +254,40 @@ async def update_threshold_settings(
     """Update threshold settings."""
     await service.set_thresholds(
         thresholds=body.model_dump(),
+        user=current_user,
+        request=request,
+    )
+    return body
+
+
+# System Name Endpoints
+
+
+@router.get("/system-name", response_model=SystemNameSettings)
+async def get_system_name(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+) -> SystemNameSettings:
+    """Get system name setting."""
+    settings = await service.get(SYSTEM_NAME_KEY)
+    if settings and "name" in settings:
+        return SystemNameSettings(name=settings["name"])
+    return SystemNameSettings()
+
+
+@router.put("/system-name", response_model=SystemNameSettings)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def update_system_name(
+    request: Request,
+    body: SystemNameSettings,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> SystemNameSettings:
+    """Update system name setting."""
+    await service.set(
+        key=SYSTEM_NAME_KEY,
+        value={"name": body.name},
         user=current_user,
         request=request,
     )

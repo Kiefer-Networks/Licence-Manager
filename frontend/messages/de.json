@@ -1300,6 +1300,10 @@
   "settings": {
     "title": "Einstellungen",
     "general": "Allgemein",
+    "systemName": "Systemname",
+    "systemNameDescription": "Dieser Name wird in allen E-Mails und Benachrichtigungen des Systems verwendet.",
+    "systemNameRequired": "Systemname ist erforderlich",
+    "systemNameSaved": "Systemname gespeichert",
     "companyDomains": "Firmen-Domains",
     "companyDomainsHelp": "Domains zur Identifizierung interner vs. externer Benutzer",
     "addDomain": "Domain hinzufügen",

@@ -1288,6 +1288,10 @@
   "settings": {
     "title": "Settings",
     "general": "General",
+    "systemName": "System Name",
+    "systemNameDescription": "This name will be used in all emails and notifications sent by the system.",
+    "systemNameRequired": "System name is required",
+    "systemNameSaved": "System name saved",
     "companyDomains": "Company Domains",
     "companyDomainsHelp": "Domains used to identify internal vs external users",
     "addDomain": "Add Domain",

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse } from '@/lib/api';
+import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemNameSettings } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
@@ -34,6 +34,10 @@ export default function SettingsPage() {
   const tCommon = useTranslations('common');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // System Name state
+  const [systemName, setSystemName] = useState('License Management System');
+  const [savingSystemName, setSavingSystemName] = useState(false);
 
   // Company Domains state
   const [companyDomains, setCompanyDomains] = useState<string[]>([]);
@@ -105,6 +109,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([
+      fetchSystemName(),
       fetchCompanyDomains(),
       fetchSlackConfig(),
       fetchNotificationRules(),
@@ -113,6 +118,15 @@ export default function SettingsPage() {
       fetchPasswordPolicy(),
     ]).finally(() => setLoading(false));
   }, []);
+
+  async function fetchSystemName() {
+    try {
+      const settings = await api.getSystemName();
+      setSystemName(settings.name);
+    } catch (error) {
+      handleSilentError('fetchSystemName', error);
+    }
+  }
 
   async function fetchCompanyDomains() {
     try {
@@ -173,6 +187,23 @@ export default function SettingsPage() {
       handleSilentError('fetchEmailConfig', error);
     }
   }
+
+  const handleSaveSystemName = async () => {
+    if (!systemName.trim()) {
+      showToast('error', t('systemNameRequired'));
+      return;
+    }
+    setSavingSystemName(true);
+    try {
+      await api.updateSystemName({ name: systemName.trim() });
+      showToast('success', t('systemNameSaved'));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('failedToSave');
+      showToast('error', message);
+    } finally {
+      setSavingSystemName(false);
+    }
+  };
 
   const handleSaveThresholds = async () => {
     setSavingThresholds(true);
@@ -514,6 +545,34 @@ export default function SettingsPage() {
           {/* GENERAL TAB */}
           {/* ============================================ */}
           <TabsContent value="general" className="space-y-8 mt-6">
+
+        {/* System Name Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">{t('systemName')}</h2>
+            </div>
+          </div>
+
+          <div className="border rounded-lg bg-white p-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {t('systemNameDescription')}
+            </p>
+
+            <div className="flex gap-2">
+              <Input
+                value={systemName}
+                onChange={(e) => setSystemName(e.target.value)}
+                placeholder="License Management System"
+                className="flex-1"
+              />
+              <Button size="sm" onClick={handleSaveSystemName} disabled={savingSystemName}>
+                {savingSystemName ? <Loader2 className="h-4 w-4 animate-spin" /> : tCommon('save')}
+              </Button>
+            </div>
+          </div>
+        </section>
 
         {/* Company Domains Section */}
         <section>

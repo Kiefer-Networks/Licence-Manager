@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 _smtp_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="smtp")
 
 SMTP_CONFIG_KEY = "smtp_config"
+SYSTEM_NAME_KEY = "system_name"
+DEFAULT_SYSTEM_NAME = "License Management System"
 
 
 class SmtpConfig(BaseModel):
@@ -71,6 +73,17 @@ class EmailService:
         self.session = session
         self.settings_repo = SettingsRepository(session)
         self.encryption = get_encryption_service()
+
+    async def get_system_name(self) -> str:
+        """Get the configured system name.
+
+        Returns:
+            System name or default if not configured
+        """
+        settings = await self.settings_repo.get(SYSTEM_NAME_KEY)
+        if settings and "name" in settings:
+            return settings["name"]
+        return DEFAULT_SYSTEM_NAME
 
     async def get_smtp_config(self) -> SmtpConfig | None:
         """Get and decrypt SMTP configuration.
@@ -348,19 +361,20 @@ class EmailService:
 
         try:
             password = self.encryption.decrypt_string(config.password_encrypted)
+            system_name = await self.get_system_name()
 
-            html_body = """
+            html_body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <h2>Test Email</h2>
-                <p>This is a test email from the License Management System.</p>
+                <p>This is a test email from {system_name}.</p>
                 <p>If you received this email, your SMTP configuration is working correctly.</p>
             </body>
             </html>
             """
             plain_body = (
                 "Test Email\n\n"
-                "This is a test email from the License Management System.\n"
+                f"This is a test email from {system_name}.\n"
                 "If you received this email, your SMTP configuration is working correctly."
             )
 
@@ -368,7 +382,7 @@ class EmailService:
             msg = self._create_message(
                 config,
                 to_email,
-                "License Management System - Test Email",
+                f"{system_name} - Test Email",
                 html_body,
                 plain_body,
             )
@@ -394,11 +408,12 @@ class EmailService:
             logger.error(f"SMTP test failed: {e}")
             return False, f"Connection failed: {str(e)}"
 
-    def _get_email_translations(self, language: str) -> dict[str, str]:
+    def _get_email_translations(self, language: str, system_name: str) -> dict[str, str]:
         """Get email translations for the specified language.
 
         Args:
             language: ISO 639-1 language code (e.g., 'en', 'de')
+            system_name: The configured system name
 
         Returns:
             Dictionary with translation strings
@@ -409,8 +424,8 @@ class EmailService:
         translations = {
             "en": {
                 # New user email
-                "new_user_subject": "License Management System - Your Account Has Been Created",
-                "new_user_heading": "Welcome to License Management System",
+                "new_user_subject": f"{system_name} - Your Account Has Been Created",
+                "new_user_heading": f"Welcome to {system_name}",
                 "new_user_greeting": "Hello",
                 "new_user_intro": "Your account has been created. Please use the following credentials to log in:",
                 "email_label": "Email",
@@ -418,10 +433,10 @@ class EmailService:
                 "new_password_label": "New Temporary Password",
                 "new_user_warning": "You will be required to change this password when you first log in.",
                 "security_notice": "For security reasons, please do not share this email with anyone.",
-                "footer": "This is an automated message from the License Management System.",
+                "footer": f"This is an automated message from {system_name}.",
                 "important": "Important",
                 # Password reset email
-                "reset_subject": "License Management System - Password Reset",
+                "reset_subject": f"{system_name} - Password Reset",
                 "reset_heading": "Password Reset",
                 "reset_intro": "Your password has been reset by an administrator. Please use the following credentials to log in:",
                 "reset_warning": "You will be required to change this password when you next log in.",
@@ -429,8 +444,8 @@ class EmailService:
             },
             "de": {
                 # New user email
-                "new_user_subject": "License Management System - Ihr Konto wurde erstellt",
-                "new_user_heading": "Willkommen beim License Management System",
+                "new_user_subject": f"{system_name} - Ihr Konto wurde erstellt",
+                "new_user_heading": f"Willkommen bei {system_name}",
                 "new_user_greeting": "Hallo",
                 "new_user_intro": "Ihr Konto wurde erstellt. Bitte verwenden Sie die folgenden Anmeldedaten:",
                 "email_label": "E-Mail",
@@ -438,10 +453,10 @@ class EmailService:
                 "new_password_label": "Neues temporäres Passwort",
                 "new_user_warning": "Sie müssen dieses Passwort bei der ersten Anmeldung ändern.",
                 "security_notice": "Aus Sicherheitsgründen teilen Sie diese E-Mail bitte nicht mit anderen.",
-                "footer": "Dies ist eine automatische Nachricht vom License Management System.",
+                "footer": f"Dies ist eine automatische Nachricht von {system_name}.",
                 "important": "Wichtig",
                 # Password reset email
-                "reset_subject": "License Management System - Passwort zurückgesetzt",
+                "reset_subject": f"{system_name} - Passwort zurückgesetzt",
                 "reset_heading": "Passwort zurückgesetzt",
                 "reset_intro": "Ihr Passwort wurde von einem Administrator zurückgesetzt. Bitte verwenden Sie die folgenden Anmeldedaten:",
                 "reset_warning": "Sie müssen dieses Passwort bei der nächsten Anmeldung ändern.",
@@ -471,8 +486,9 @@ class EmailService:
         Returns:
             True if sent successfully, False otherwise
         """
-        # Get translations for the user's language
-        t = self._get_email_translations(language)
+        # Get system name and translations for the user's language
+        system_name = await self.get_system_name()
+        t = self._get_email_translations(language, system_name)
 
         # Escape user-provided data for HTML to prevent XSS
         name_display = html_escape(user_name or to_email)
