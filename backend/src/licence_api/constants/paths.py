@@ -26,3 +26,6 @@ PROVIDER_FILES_DIR = DATA_DIR / "files"
 # Alias for backwards compatibility
 FILES_DIR = PROVIDER_FILES_DIR
 LOGOS_DIR = DATA_DIR / "logos"
+
+# Backup directory
+BACKUPS_DIR = DATA_DIR / "backups"

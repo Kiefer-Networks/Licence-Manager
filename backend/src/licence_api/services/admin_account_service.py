@@ -309,13 +309,24 @@ class AdminAccountService:
             limit=page_size,
         )
 
+        # Batch load all admin account owners to avoid N+1 queries
+        admin_owner_ids = [
+            license_orm.admin_account_owner_id
+            for license_orm, _, _ in results
+            if license_orm.admin_account_owner_id
+        ]
+        owners_map = {}
+        if admin_owner_ids:
+            owners = await self.employee_repo.get_by_ids(admin_owner_ids)
+            owners_map = {emp.id: emp for emp in owners}
+
         items = []
         for license_orm, provider_orm, employee_orm in results:
-            # Get admin account owner info
+            # Get admin account owner info from pre-loaded cache
             admin_account_owner_name = None
             admin_account_owner_status = None
             if license_orm.admin_account_owner_id:
-                owner = await self.employee_repo.get_by_id(license_orm.admin_account_owner_id)
+                owner = owners_map.get(license_orm.admin_account_owner_id)
                 if owner:
                     admin_account_owner_name = owner.full_name
                     admin_account_owner_status = owner.status

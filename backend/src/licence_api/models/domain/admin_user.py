@@ -41,16 +41,23 @@ class AdminUser(BaseModel):
     def has_permission(self, permission_code: str) -> bool:
         """Check if user has a specific permission.
 
+        Super admins automatically have all permissions.
+
         Args:
             permission_code: Permission code to check
 
         Returns:
             True if user has the permission
         """
+        # Super admins have all permissions
+        if self.is_superadmin():
+            return True
         return permission_code in self.permissions
 
     def has_any_permission(self, *permission_codes: str) -> bool:
         """Check if user has any of the specified permissions.
+
+        Super admins automatically have all permissions.
 
         Args:
             permission_codes: Permission codes to check
@@ -58,10 +65,15 @@ class AdminUser(BaseModel):
         Returns:
             True if user has any of the permissions
         """
+        # Super admins have all permissions
+        if self.is_superadmin():
+            return True
         return any(p in self.permissions for p in permission_codes)
 
     def has_all_permissions(self, *permission_codes: str) -> bool:
         """Check if user has all specified permissions.
+
+        Super admins automatically have all permissions.
 
         Args:
             permission_codes: Permission codes to check
@@ -69,6 +81,9 @@ class AdminUser(BaseModel):
         Returns:
             True if user has all permissions
         """
+        # Super admins have all permissions
+        if self.is_superadmin():
+            return True
         return all(p in self.permissions for p in permission_codes)
 
     def has_role(self, role_code: str) -> bool:

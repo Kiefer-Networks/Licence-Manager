@@ -38,13 +38,18 @@ from fastapi import Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.constants.paths import FILES_DIR
+from licence_api.constants.paths import BACKUPS_DIR, FILES_DIR
 from licence_api.models.dto.backup import (
+    BackupConfig,
+    BackupConfigUpdate,
     BackupInfoResponse,
+    BackupListResponse,
     ProviderValidation,
     RestoreImportCounts,
     RestoreResponse,
     RestoreValidation,
+    StoredBackup,
+    StoredBackupMetadata,
 )
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
@@ -1466,3 +1471,534 @@ class BackupService:
             providers_valid=len([v for v in validations if v.valid]),
             providers_failed=failed,
         )
+
+    # =========================================================================
+    # Scheduled Backup Configuration
+    # =========================================================================
+
+    async def get_config(self) -> BackupConfig:
+        """Get backup configuration from settings.
+
+        Returns:
+            Current backup configuration
+        """
+        from licence_api.repositories.settings_repository import SettingsRepository
+
+        settings_repo = SettingsRepository(self.session)
+        config_data = await settings_repo.get("backup_config")
+
+        if not config_data:
+            return BackupConfig()
+
+        return BackupConfig(
+            enabled=config_data.get("enabled", False),
+            schedule=config_data.get("schedule", "0 2 * * *"),
+            retention_count=config_data.get("retention_count", 7),
+            password_configured=bool(config_data.get("password_encrypted")),
+        )
+
+    async def update_config(
+        self,
+        request: BackupConfigUpdate,
+        user: "AdminUser | None" = None,
+        http_request: Request | None = None,
+    ) -> BackupConfig:
+        """Update backup configuration.
+
+        Args:
+            request: Configuration update request
+            user: Admin user making the change
+            http_request: HTTP request for audit logging
+
+        Returns:
+            Updated configuration
+        """
+        from licence_api.repositories.settings_repository import SettingsRepository
+
+        settings_repo = SettingsRepository(self.session)
+        config_data = await settings_repo.get("backup_config") or {}
+
+        # Update fields if provided
+        if request.enabled is not None:
+            config_data["enabled"] = request.enabled
+        if request.schedule is not None:
+            # Validate cron expression
+            self._validate_cron(request.schedule)
+            config_data["schedule"] = request.schedule
+        if request.retention_count is not None:
+            config_data["retention_count"] = request.retention_count
+        if request.password is not None:
+            # Encrypt the password
+            encrypted = self.encryption.encrypt_string(request.password)
+            config_data["password_encrypted"] = encrypted.hex()
+
+        await settings_repo.set("backup_config", config_data)
+
+        # Update scheduler if schedule changed
+        if request.schedule is not None or request.enabled is not None:
+            await self._update_scheduler(
+                enabled=config_data.get("enabled", False),
+                schedule=config_data.get("schedule", "0 2 * * *"),
+            )
+
+        # Audit log
+        if user and self.audit_service:
+            await self.audit_service.log(
+                action=AuditAction.UPDATE,
+                resource_type=ResourceType.SYSTEM,
+                user=user,
+                request=http_request,
+                details={
+                    "action": "backup_config_updated",
+                    "enabled": config_data.get("enabled"),
+                    "schedule": config_data.get("schedule"),
+                    "retention_count": config_data.get("retention_count"),
+                },
+            )
+
+        await self.session.commit()
+
+        return BackupConfig(
+            enabled=config_data.get("enabled", False),
+            schedule=config_data.get("schedule", "0 2 * * *"),
+            retention_count=config_data.get("retention_count", 7),
+            password_configured=bool(config_data.get("password_encrypted")),
+        )
+
+    def _validate_cron(self, expression: str) -> None:
+        """Validate a cron expression.
+
+        Args:
+            expression: Cron expression to validate
+
+        Raises:
+            ValueError: If expression is invalid
+        """
+        from croniter import croniter
+
+        if not croniter.is_valid(expression):
+            raise ValueError(f"Invalid cron expression: {expression}")
+
+    async def _update_scheduler(self, enabled: bool, schedule: str) -> None:
+        """Update the backup scheduler.
+
+        Args:
+            enabled: Whether backups are enabled
+            schedule: Cron schedule expression
+        """
+        from licence_api.tasks.scheduler import update_backup_schedule
+
+        await update_backup_schedule(enabled, schedule)
+
+    # =========================================================================
+    # Stored Backup Management
+    # =========================================================================
+
+    async def create_scheduled_backup(self) -> StoredBackup | None:
+        """Create a scheduled backup using stored password.
+
+        Returns:
+            StoredBackup info if successful, None if backups not configured
+        """
+        from licence_api.repositories.settings_repository import SettingsRepository
+
+        settings_repo = SettingsRepository(self.session)
+        config_data = await settings_repo.get("backup_config")
+
+        if not config_data or not config_data.get("enabled"):
+            logger.debug("Scheduled backup skipped: not enabled")
+            return None
+
+        if not config_data.get("password_encrypted"):
+            logger.warning("Scheduled backup skipped: no password configured")
+            return None
+
+        # Decrypt the password
+        try:
+            password_hex = config_data["password_encrypted"]
+            password = self.encryption.decrypt_string(bytes.fromhex(password_hex))
+        except Exception as e:
+            logger.error(f"Failed to decrypt backup password: {e}")
+            return None
+
+        # Create the backup
+        backup_data = await self.create_backup(password=password)
+
+        # Generate backup ID and filename
+        backup_id = self._generate_backup_id()
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+        filename = f"backup-{timestamp}-{backup_id[:8]}.lcbak"
+
+        # Ensure backups directory exists
+        BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Write backup file
+        backup_path = BACKUPS_DIR / filename
+        backup_path.write_bytes(backup_data)
+        # Set restrictive permissions (owner read/write only)
+        os.chmod(backup_path, 0o600)
+
+        # Create metadata
+        metadata = await self._get_backup_metadata()
+
+        # Write metadata file
+        metadata_path = BACKUPS_DIR / f"{filename[:-6]}.json"
+        metadata_dict = {
+            "id": backup_id,
+            "filename": filename,
+            "created_at": datetime.now(UTC).isoformat(),
+            "size_bytes": len(backup_data),
+            "is_encrypted": True,
+            "metadata": metadata.model_dump(),
+        }
+        metadata_path.write_text(json.dumps(metadata_dict, indent=2))
+
+        # Cleanup old backups
+        retention = config_data.get("retention_count", 7)
+        await self.cleanup_old_backups(retention)
+
+        logger.info(f"Scheduled backup created: {filename} ({len(backup_data)} bytes)")
+
+        return StoredBackup(
+            id=backup_id,
+            filename=filename,
+            size_bytes=len(backup_data),
+            created_at=datetime.now(UTC),
+            is_encrypted=True,
+            age_description=self._calculate_age_description(datetime.now(UTC)),
+            is_overdue=False,
+            metadata=metadata,
+        )
+
+    def _generate_backup_id(self) -> str:
+        """Generate a unique backup ID."""
+        import uuid
+
+        return str(uuid.uuid4())
+
+    async def _get_backup_metadata(self) -> StoredBackupMetadata:
+        """Get current system counts for backup metadata."""
+        from sqlalchemy import func
+
+        provider_count = await self.session.scalar(
+            select(func.count()).select_from(ProviderORM)
+        )
+        license_count = await self.session.scalar(
+            select(func.count()).select_from(LicenseORM)
+        )
+        employee_count = await self.session.scalar(
+            select(func.count()).select_from(EmployeeORM)
+        )
+
+        return StoredBackupMetadata(
+            provider_count=provider_count or 0,
+            license_count=license_count or 0,
+            employee_count=employee_count or 0,
+        )
+
+    async def list_stored_backups(self) -> BackupListResponse:
+        """List all stored backups.
+
+        Returns:
+            List of stored backups with configuration
+        """
+        backups: list[StoredBackup] = []
+
+        if not BACKUPS_DIR.exists():
+            config = await self.get_config()
+            return BackupListResponse(backups=[], config=config)
+
+        # Find all backup files
+        for backup_file in sorted(BACKUPS_DIR.glob("*.lcbak"), reverse=True):
+            metadata_file = backup_file.with_suffix(".json")
+
+            if metadata_file.exists():
+                try:
+                    metadata_dict = json.loads(metadata_file.read_text())
+                    created_at = datetime.fromisoformat(
+                        metadata_dict["created_at"].replace("Z", "+00:00")
+                    )
+
+                    backups.append(
+                        StoredBackup(
+                            id=metadata_dict["id"],
+                            filename=metadata_dict["filename"],
+                            size_bytes=metadata_dict["size_bytes"],
+                            created_at=created_at,
+                            is_encrypted=metadata_dict.get("is_encrypted", True),
+                            age_description=self._calculate_age_description(created_at),
+                            is_overdue=False,  # Will be calculated below
+                            metadata=StoredBackupMetadata(**metadata_dict.get("metadata", {}))
+                            if metadata_dict.get("metadata")
+                            else None,
+                        )
+                    )
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"Failed to read backup metadata {metadata_file}: {e}")
+                    # Create entry from file info
+                    stat = backup_file.stat()
+                    created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+                    backups.append(
+                        StoredBackup(
+                            id=backup_file.stem.split("-")[-1],
+                            filename=backup_file.name,
+                            size_bytes=stat.st_size,
+                            created_at=created_at,
+                            is_encrypted=True,
+                            age_description=self._calculate_age_description(created_at),
+                            is_overdue=False,
+                            metadata=None,
+                        )
+                    )
+            else:
+                # No metadata file, use file info
+                stat = backup_file.stat()
+                created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+                backups.append(
+                    StoredBackup(
+                        id=backup_file.stem.split("-")[-1],
+                        filename=backup_file.name,
+                        size_bytes=stat.st_size,
+                        created_at=created_at,
+                        is_encrypted=True,
+                        age_description=self._calculate_age_description(created_at),
+                        is_overdue=False,
+                        metadata=None,
+                    )
+                )
+
+        config = await self.get_config()
+
+        # Calculate next scheduled and last backup times
+        next_scheduled = None
+        last_backup = backups[0].created_at if backups else None
+
+        if config.enabled and config.schedule:
+            next_scheduled = self._get_next_run(config.schedule)
+
+            # Mark overdue backups
+            for backup in backups:
+                backup.is_overdue = self._is_overdue(backup.created_at, config.schedule)
+
+        return BackupListResponse(
+            backups=backups,
+            config=config,
+            next_scheduled=next_scheduled,
+            last_backup=last_backup,
+        )
+
+    async def get_stored_backup(self, backup_id: str) -> tuple[bytes, str]:
+        """Get a stored backup file by ID.
+
+        Args:
+            backup_id: Backup ID
+
+        Returns:
+            Tuple of (file_bytes, filename)
+
+        Raises:
+            ValueError: If backup not found
+        """
+        if not BACKUPS_DIR.exists():
+            raise ValueError("Backup not found")
+
+        # Find the backup file
+        for metadata_file in BACKUPS_DIR.glob("*.json"):
+            try:
+                metadata_dict = json.loads(metadata_file.read_text())
+                if metadata_dict.get("id") == backup_id:
+                    backup_file = BACKUPS_DIR / metadata_dict["filename"]
+                    if backup_file.exists():
+                        return backup_file.read_bytes(), metadata_dict["filename"]
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        raise ValueError("Backup not found")
+
+    async def delete_stored_backup(
+        self,
+        backup_id: str,
+        user: "AdminUser | None" = None,
+        http_request: Request | None = None,
+    ) -> None:
+        """Delete a stored backup.
+
+        Args:
+            backup_id: Backup ID
+            user: Admin user making the change
+            http_request: HTTP request for audit logging
+
+        Raises:
+            ValueError: If backup not found
+        """
+        if not BACKUPS_DIR.exists():
+            raise ValueError("Backup not found")
+
+        # Find and delete the backup file
+        deleted = False
+        for metadata_file in BACKUPS_DIR.glob("*.json"):
+            try:
+                metadata_dict = json.loads(metadata_file.read_text())
+                if metadata_dict.get("id") == backup_id:
+                    backup_file = BACKUPS_DIR / metadata_dict["filename"]
+                    if backup_file.exists():
+                        backup_file.unlink()
+                    metadata_file.unlink()
+                    deleted = True
+                    break
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        if not deleted:
+            raise ValueError("Backup not found")
+
+        # Audit log
+        if user and self.audit_service:
+            await self.audit_service.log(
+                action=AuditAction.DELETE,
+                resource_type=ResourceType.SYSTEM,
+                user=user,
+                request=http_request,
+                details={"action": "backup_deleted", "backup_id": backup_id},
+            )
+            await self.session.commit()
+
+        logger.info(f"Backup deleted: {backup_id}")
+
+    async def restore_from_stored(
+        self,
+        backup_id: str,
+        password: str,
+        user: "AdminUser | None" = None,
+        http_request: Request | None = None,
+    ) -> RestoreResponse:
+        """Restore from a stored backup.
+
+        Args:
+            backup_id: Backup ID
+            password: Decryption password
+            user: Admin user performing the restore
+            http_request: HTTP request for audit logging
+
+        Returns:
+            Restore response
+        """
+        file_data, filename = await self.get_stored_backup(backup_id)
+        return await self.restore_backup(
+            file_data=file_data,
+            password=password,
+            user=user,
+            request=http_request,
+        )
+
+    async def cleanup_old_backups(self, retention_count: int) -> int:
+        """Remove old backups beyond retention count.
+
+        Args:
+            retention_count: Number of backups to keep
+
+        Returns:
+            Number of backups deleted
+        """
+        if not BACKUPS_DIR.exists():
+            return 0
+
+        # Get all backups sorted by creation time (newest first)
+        backups = []
+        for backup_file in BACKUPS_DIR.glob("*.lcbak"):
+            stat = backup_file.stat()
+            backups.append((backup_file, stat.st_mtime))
+
+        backups.sort(key=lambda x: x[1], reverse=True)
+
+        # Delete backups beyond retention
+        deleted = 0
+        for backup_file, _ in backups[retention_count:]:
+            try:
+                backup_file.unlink()
+                # Also delete metadata file
+                metadata_file = backup_file.with_suffix(".json")
+                if metadata_file.exists():
+                    metadata_file.unlink()
+                deleted += 1
+                logger.debug(f"Cleaned up old backup: {backup_file.name}")
+            except OSError as e:
+                logger.warning(f"Failed to delete old backup {backup_file}: {e}")
+
+        if deleted > 0:
+            logger.info(f"Cleaned up {deleted} old backup(s)")
+
+        return deleted
+
+    def _calculate_age_description(self, created_at: datetime) -> str:
+        """Calculate a human-readable age description.
+
+        Args:
+            created_at: Backup creation time
+
+        Returns:
+            Age description like "vor 2 Stunden" or "vor 1 Tag"
+        """
+        now = datetime.now(UTC)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+
+        delta = now - created_at
+
+        if delta.total_seconds() < 60:
+            return "gerade eben"
+        elif delta.total_seconds() < 3600:
+            minutes = int(delta.total_seconds() / 60)
+            return f"vor {minutes} Minute{'n' if minutes != 1 else ''}"
+        elif delta.total_seconds() < 86400:
+            hours = int(delta.total_seconds() / 3600)
+            return f"vor {hours} Stunde{'n' if hours != 1 else ''}"
+        elif delta.days < 30:
+            return f"vor {delta.days} Tag{'en' if delta.days != 1 else ''}"
+        elif delta.days < 365:
+            months = delta.days // 30
+            return f"vor {months} Monat{'en' if months != 1 else ''}"
+        else:
+            years = delta.days // 365
+            return f"vor {years} Jahr{'en' if years != 1 else ''}"
+
+    def _is_overdue(self, last_backup: datetime, cron_schedule: str) -> bool:
+        """Check if a backup is overdue based on schedule.
+
+        Args:
+            last_backup: Last backup time
+            cron_schedule: Cron schedule expression
+
+        Returns:
+            True if backup is overdue
+        """
+        try:
+            from croniter import croniter
+
+            if last_backup.tzinfo is None:
+                last_backup = last_backup.replace(tzinfo=UTC)
+
+            # Get what the next run after last backup would have been
+            cron = croniter(cron_schedule, last_backup)
+            expected_next = cron.get_next(datetime)
+
+            # If expected next is in the past, we're overdue
+            now = datetime.now(UTC)
+            return expected_next < now
+        except Exception:
+            return False
+
+    def _get_next_run(self, cron_schedule: str) -> datetime:
+        """Get the next scheduled run time.
+
+        Args:
+            cron_schedule: Cron schedule expression
+
+        Returns:
+            Next run datetime
+        """
+        from croniter import croniter
+
+        now = datetime.now(UTC)
+        cron = croniter(cron_schedule, now)
+        return cron.get_next(datetime)

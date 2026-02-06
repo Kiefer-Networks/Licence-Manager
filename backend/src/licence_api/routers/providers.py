@@ -170,7 +170,7 @@ async def get_provider(
 async def get_provider_public_credentials(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> PublicCredentialsResponse:
     """Get non-secret credential values for a provider.
 
@@ -179,28 +179,14 @@ async def get_provider_public_credentials(
 
     Requires providers.view permission.
     """
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        public_credentials = await provider_service.get_public_credentials(provider_id)
+        return PublicCredentialsResponse(credentials=public_credentials)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-
-    # Decrypt credentials
-    encryption = get_encryption_service()
-    try:
-        credentials = encryption.decrypt(provider.credentials_encrypted)
-    except Exception:
-        return PublicCredentialsResponse(credentials={})
-
-    # Filter out secret fields
-    public_credentials = {
-        key: str(value) if value is not None else ""
-        for key, value in credentials.items()
-        if key not in SECRET_CREDENTIAL_FIELDS and value is not None
-    }
-
-    return PublicCredentialsResponse(credentials=public_credentials)
 
 
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
@@ -361,67 +347,35 @@ async def get_provider_logo_file(
     provider_id: UUID,
     filename: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> FileResponse:
-    """Get a provider's logo file."""
-    # Sanitize filename
-    safe_filename = Path(filename).name
-    if "/" in safe_filename or "\\" in safe_filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename",
-        )
+    """Get a provider's logo file.
 
-    # Verify the logo belongs to the specified provider
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
-    # Check that the requested filename matches the provider's logo_url
-    expected_logo_url = f"/api/v1/providers/{provider_id}/logo/{safe_filename}"
-    if provider.logo_url != expected_logo_url:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
-
-    file_path = LOGOS_DIR / safe_filename
-
-    # Validate path is within LOGOS_DIR
+    Validates that the requested logo belongs to the provider and serves the file.
+    Requires providers.view permission.
+    """
     try:
-        resolved = file_path.resolve()
-        if not resolved.is_relative_to(LOGOS_DIR.resolve()):
+        file_path, media_type = await provider_service.get_logo_file_path(
+            provider_id, filename
+        )
+        return FileResponse(path=file_path, media_type=media_type)
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg == "Provider not found" or error_msg == "Logo not found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_msg,
+            )
+        elif error_msg == "Access denied":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied",
             )
-    except (ValueError, RuntimeError):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
-
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Logo not found",
-        )
-
-    # Determine media type
-    ext = file_path.suffix.lower()
-    media_types = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".svg": "image/svg+xml",
-        ".webp": "image/webp",
-    }
-    media_type = media_types.get(ext, "application/octet-stream")
-
-    return FileResponse(path=file_path, media_type=media_type)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid filename",
+            )
 
 
 @router.delete("/{provider_id}/logo", status_code=status.HTTP_204_NO_CONTENT)

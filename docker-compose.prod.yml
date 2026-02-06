@@ -107,6 +107,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
     volumes:
       - backend_data:/app/data
+      - ${BACKUP_PATH:-./backups}:/app/data/backups
     networks:
       - backend_network
       - frontend_network

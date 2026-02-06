@@ -25,8 +25,9 @@ import {
 import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemSettings } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck, Database } from 'lucide-react';
 import { BackupExportDialog } from '@/components/backup';
+import { BackupsTab } from '@/components/settings/BackupsTab';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function SettingsPage() {
@@ -527,7 +528,7 @@ export default function SettingsPage() {
 
         {/* Tabs Navigation */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
               {t('tabs.general')}
@@ -539,6 +540,10 @@ export default function SettingsPage() {
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
               {t('tabs.integrations')}
+            </TabsTrigger>
+            <TabsTrigger value="backups" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              {t('tabs.backups')}
             </TabsTrigger>
             <TabsTrigger value="system" className="flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
@@ -1023,6 +1028,13 @@ export default function SettingsPage() {
           )}
         </section>
 
+          </TabsContent>
+
+          {/* ============================================ */}
+          {/* BACKUPS TAB */}
+          {/* ============================================ */}
+          <TabsContent value="backups" className="space-y-8 mt-6">
+            <BackupsTab showToast={(type, message) => setToast({ type, text: message })} />
           </TabsContent>
 
           {/* ============================================ */}

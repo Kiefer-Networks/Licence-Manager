@@ -115,3 +115,56 @@ class RestoreResponse(BaseModel):
     imported: RestoreImportCounts
     validation: RestoreValidation
     error: str | None = None
+
+
+# =============================================================================
+# Scheduled Backup DTOs
+# =============================================================================
+
+
+class BackupConfig(BaseModel):
+    """Backup configuration settings."""
+
+    enabled: bool = False
+    schedule: str = "0 2 * * *"  # Cron format, default: 2 AM daily
+    retention_count: int = 7  # Max number of backups to keep
+    password_configured: bool = False
+
+
+class BackupConfigUpdate(BaseModel):
+    """Request to update backup configuration."""
+
+    enabled: bool | None = None
+    schedule: str | None = None  # Cron format
+    retention_count: int | None = Field(None, ge=1, le=100)
+    password: str | None = Field(None, min_length=12)  # New encryption password
+
+
+class StoredBackupMetadata(BaseModel):
+    """Metadata stored alongside a backup file."""
+
+    provider_count: int = 0
+    license_count: int = 0
+    employee_count: int = 0
+
+
+class StoredBackup(BaseModel):
+    """Information about a stored backup file."""
+
+    id: str
+    filename: str
+    size_bytes: int
+    created_at: datetime
+    is_encrypted: bool = True
+    age_description: str  # "vor 2 Stunden", "vor 1 Tag"
+    is_overdue: bool = False  # True if older than schedule expects
+    metadata: StoredBackupMetadata | None = None
+
+
+class BackupListResponse(BaseModel):
+    """Response listing stored backups."""
+
+    backups: list[StoredBackup]
+    config: BackupConfig
+    next_scheduled: datetime | None = None
+    last_backup: datetime | None = None

@@ -48,6 +48,7 @@ from licence_api.routers import (
     users,
 )
 from licence_api.security.rate_limit import limiter
+from licence_api.services.permission_sync_service import sync_system_role_permissions
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
 
@@ -80,6 +81,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
     # Startup
+    # Sync system role permissions (adds new permissions to admin/auditor roles)
+    await sync_system_role_permissions()
     await start_scheduler()
     yield
     # Shutdown

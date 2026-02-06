@@ -538,6 +538,115 @@ class ProviderService:
 
         await self.session.commit()
 
+    async def get_public_credentials(self, provider_id: UUID) -> dict[str, str]:
+        """Get non-secret credential values for a provider.
+
+        Returns values like base_url, org_id, domain etc. that are not secrets.
+        Secret fields (tokens, keys, passwords) are excluded.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dictionary of public credential key-value pairs
+
+        Raises:
+            ValueError: If provider not found
+        """
+        # Secret credential fields that should never be exposed
+        SECRET_CREDENTIAL_FIELDS = {
+            "api_key",
+            "api_secret",
+            "access_token",
+            "refresh_token",
+            "token",
+            "secret",
+            "password",
+            "client_secret",
+            "private_key",
+            "service_account_key",
+            "license_key",
+        }
+
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        # Decrypt credentials
+        encryption = get_encryption_service()
+        try:
+            credentials = encryption.decrypt(provider.credentials_encrypted)
+        except Exception:
+            return {}
+
+        # Filter out secret fields
+        public_credentials = {
+            key: str(value) if value is not None else ""
+            for key, value in credentials.items()
+            if key not in SECRET_CREDENTIAL_FIELDS and value is not None
+        }
+
+        return public_credentials
+
+    async def get_logo_file_path(
+        self, provider_id: UUID, filename: str
+    ) -> tuple[Path, str]:
+        """Get validated logo file path for a provider.
+
+        Validates that the requested logo belongs to the provider and
+        returns the safe file path.
+
+        Args:
+            provider_id: Provider UUID
+            filename: Requested filename
+
+        Returns:
+            Tuple of (file_path, media_type)
+
+        Raises:
+            ValueError: If provider not found, access denied, or file not found
+        """
+        # Sanitize filename
+        safe_filename = Path(filename).name
+        if "/" in safe_filename or "\\" in safe_filename:
+            raise ValueError("Invalid filename")
+
+        # Verify the logo belongs to the specified provider
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        # Check that the requested filename matches the provider's logo_url
+        expected_logo_url = f"/api/v1/providers/{provider_id}/logo/{safe_filename}"
+        if provider.logo_url != expected_logo_url:
+            raise ValueError("Access denied")
+
+        file_path = LOGOS_DIR / safe_filename
+
+        # Validate path is within LOGOS_DIR (prevent path traversal)
+        try:
+            resolved = file_path.resolve()
+            if not resolved.is_relative_to(LOGOS_DIR.resolve()):
+                raise ValueError("Access denied")
+        except (ValueError, RuntimeError):
+            raise ValueError("Access denied")
+
+        if not file_path.exists():
+            raise ValueError("Logo not found")
+
+        # Determine media type
+        ext = file_path.suffix.lower()
+        media_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".webp": "image/webp",
+        }
+        media_type = media_types.get(ext, "application/octet-stream")
+
+        return file_path, media_type
+
     async def delete_provider(
         self,
         provider_id: UUID,

@@ -294,5 +294,12 @@ class Permissions:
     AUDIT_VIEW = "audit.view"
     AUDIT_EXPORT = "audit.export"
 
+    # Backups
+    BACKUPS_VIEW = "backups.view"
+    BACKUPS_CREATE = "backups.create"
+    BACKUPS_DELETE = "backups.delete"
+    BACKUPS_RESTORE = "backups.restore"
+    BACKUPS_CONFIGURE = "backups.configure"
+
     # System
     SYSTEM_ADMIN = "system.admin"

@@ -6,20 +6,26 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.backup import (
+    BackupConfig,
+    BackupConfigUpdate,
     BackupExportRequest,
     BackupInfoResponse,
+    BackupListResponse,
     RestoreResponse,
+    StoredBackup,
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
     BACKUP_EXPORT_LIMIT,
     BACKUP_INFO_LIMIT,
+    BACKUP_RESTORE_LIMIT,
     limiter,
 )
 from licence_api.services.backup_service import BackupService
@@ -27,6 +33,12 @@ from licence_api.services.backup_service import BackupService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class RestoreFromStoredRequest(BaseModel):
+    """Request to restore from a stored backup."""
+
+    password: str = Field(min_length=12, max_length=256)
 
 # Maximum backup file size: 500MB
 MAX_BACKUP_SIZE = 500 * 1024 * 1024
@@ -238,3 +250,178 @@ async def setup_restore_backup(
         user=None,  # No user during setup
         request=request,
     )
+
+
+# =============================================================================
+# Scheduled Backup Endpoints
+# =============================================================================
+
+
+@router.get("/config", response_model=BackupConfig)
+async def get_backup_config(
+    request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+) -> BackupConfig:
+    """Get backup configuration.
+
+    Requires backups.view permission.
+    """
+    return await service.get_config()
+
+
+@router.put("/config", response_model=BackupConfig)
+@limiter.limit("10/minute")
+async def update_backup_config(
+    request: Request,
+    body: BackupConfigUpdate,
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.BACKUPS_CONFIGURE))
+    ],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> BackupConfig:
+    """Update backup configuration.
+
+    Requires backups.configure permission.
+    """
+    try:
+        return await service.update_config(
+            request=body,
+            user=current_user,
+            http_request=request,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.get("/list", response_model=BackupListResponse)
+async def list_backups(
+    request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+) -> BackupListResponse:
+    """List all stored backups.
+
+    Requires backups.view permission.
+    """
+    return await service.list_stored_backups()
+
+
+@router.post("/trigger", response_model=StoredBackup)
+@limiter.limit("5/hour")
+async def trigger_backup(
+    request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_CREATE))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> StoredBackup:
+    """Trigger a manual backup.
+
+    Creates a new backup using the configured encryption password.
+
+    Requires backups.create permission.
+    """
+    try:
+        result = await service.create_scheduled_backup()
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Backup not configured. Please set an encryption password first.",
+            )
+        return result
+    except Exception as e:
+        logger.error(f"Manual backup failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create backup",
+        )
+
+
+@router.get("/{backup_id}/download")
+@limiter.limit(BACKUP_INFO_LIMIT)
+async def download_backup(
+    request: Request,
+    backup_id: str,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+) -> Response:
+    """Download a stored backup file.
+
+    Requires backups.view permission.
+    """
+    try:
+        file_data, filename = await service.get_stored_backup(backup_id)
+        return Response(
+            content=file_data,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(file_data)),
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.delete("/{backup_id}")
+@limiter.limit("10/minute")
+async def delete_backup(
+    request: Request,
+    backup_id: str,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_DELETE))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> dict[str, str]:
+    """Delete a stored backup.
+
+    Requires backups.delete permission.
+    """
+    try:
+        await service.delete_stored_backup(
+            backup_id=backup_id,
+            user=current_user,
+            http_request=request,
+        )
+        return {"status": "deleted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.post("/{backup_id}/restore", response_model=RestoreResponse)
+@limiter.limit(BACKUP_RESTORE_LIMIT)
+async def restore_from_backup(
+    request: Request,
+    backup_id: str,
+    body: RestoreFromStoredRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_RESTORE))],
+    service: Annotated[BackupService, Depends(get_backup_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> RestoreResponse:
+    """Restore system from a stored backup.
+
+    WARNING: This deletes ALL existing data!
+
+    Requires backups.restore permission.
+    """
+    try:
+        return await service.restore_from_stored(
+            backup_id=backup_id,
+            password=body.password,
+            user=current_user,
+            http_request=request,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )

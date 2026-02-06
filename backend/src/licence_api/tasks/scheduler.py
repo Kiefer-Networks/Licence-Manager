@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from licence_api.config import get_settings
@@ -300,6 +301,9 @@ async def start_scheduler() -> None:
     _scheduler.start()
     logger.info("Background scheduler started")
 
+    # Initialize backup schedule from configuration
+    await initialize_backup_schedule()
+
 
 async def stop_scheduler() -> None:
     """Stop the background task scheduler."""
@@ -309,3 +313,79 @@ async def stop_scheduler() -> None:
         _scheduler.shutdown(wait=False)
         _scheduler = None
         logger.info("Background scheduler stopped")
+
+
+# =============================================================================
+# Scheduled Backup Job
+# =============================================================================
+
+
+async def scheduled_backup_job() -> None:
+    """Background job to create scheduled backups."""
+    from licence_api.database import async_session_maker
+    from licence_api.services.backup_service import BackupService
+
+    logger.info("Starting scheduled backup")
+
+    async with async_session_maker() as session:
+        try:
+            service = BackupService(session)
+            result = await service.create_scheduled_backup()
+            if result:
+                logger.info(f"Scheduled backup completed: {result.filename}")
+            else:
+                logger.debug("Scheduled backup skipped (not configured)")
+        except Exception as e:
+            logger.error(f"Scheduled backup failed: {e}")
+
+
+async def update_backup_schedule(enabled: bool, cron_expression: str) -> None:
+    """Update or create the backup schedule dynamically.
+
+    Args:
+        enabled: Whether backups are enabled
+        cron_expression: Cron expression for schedule
+    """
+    global _scheduler
+
+    if not _scheduler:
+        logger.warning("Cannot update backup schedule: scheduler not running")
+        return
+
+    job_id = "scheduled_backup"
+
+    # Remove existing job if present
+    existing_job = _scheduler.get_job(job_id)
+    if existing_job:
+        _scheduler.remove_job(job_id)
+        logger.debug("Removed existing backup schedule")
+
+    if enabled:
+        try:
+            _scheduler.add_job(
+                scheduled_backup_job,
+                trigger=CronTrigger.from_crontab(cron_expression),
+                id=job_id,
+                name="Scheduled backup",
+                replace_existing=True,
+            )
+            logger.info(f"Backup schedule updated: {cron_expression}")
+        except ValueError as e:
+            logger.error(f"Invalid cron expression '{cron_expression}': {e}")
+    else:
+        logger.info("Backup schedule disabled")
+
+
+async def initialize_backup_schedule() -> None:
+    """Initialize backup schedule from stored configuration."""
+    from licence_api.database import async_session_maker
+    from licence_api.services.backup_service import BackupService
+
+    async with async_session_maker() as session:
+        try:
+            service = BackupService(session)
+            config = await service.get_config()
+            if config.enabled:
+                await update_backup_schedule(True, config.schedule)
+        except Exception as e:
+            logger.warning(f"Failed to initialize backup schedule: {e}")

@@ -1740,6 +1740,45 @@ export interface BackupRestoreResponse {
   error?: string;
 }
 
+// Scheduled Backup Types
+export interface BackupConfig {
+  enabled: boolean;
+  schedule: string;
+  retention_count: number;
+  password_configured: boolean;
+}
+
+export interface BackupConfigUpdate {
+  enabled?: boolean;
+  schedule?: string;
+  retention_count?: number;
+  password?: string;
+}
+
+export interface StoredBackupMetadata {
+  provider_count: number;
+  license_count: number;
+  employee_count: number;
+}
+
+export interface StoredBackup {
+  id: string;
+  filename: string;
+  size_bytes: number;
+  created_at: string;
+  is_encrypted: boolean;
+  age_description: string;
+  is_overdue: boolean;
+  metadata: StoredBackupMetadata | null;
+}
+
+export interface BackupListResponse {
+  backups: StoredBackup[];
+  config: BackupConfig;
+  next_scheduled: string | null;
+  last_backup: string | null;
+}
+
 // API Functions
 export const api = {
   // Setup
@@ -3339,6 +3378,95 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  // ============================================================================
+  // Scheduled Backup Management
+  // ============================================================================
+
+  /**
+   * Get backup configuration.
+   */
+  async getBackupConfig(): Promise<BackupConfig> {
+    return fetchApi<BackupConfig>('/backup/config');
+  },
+
+  /**
+   * Update backup configuration.
+   */
+  async updateBackupConfig(config: BackupConfigUpdate): Promise<BackupConfig> {
+    return fetchApi<BackupConfig>('/backup/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  },
+
+  /**
+   * List all stored backups.
+   */
+  async listBackups(): Promise<BackupListResponse> {
+    return fetchApi<BackupListResponse>('/backup/list');
+  },
+
+  /**
+   * Trigger a manual backup.
+   */
+  async triggerBackup(): Promise<StoredBackup> {
+    return fetchApi<StoredBackup>('/backup/trigger', {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Download a stored backup file.
+   */
+  async downloadStoredBackup(backupId: string): Promise<Blob> {
+    const response = await fetch(`${API_BASE}/api/v1/backup/${backupId}/download`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    // Handle 401 - attempt token refresh
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        const retryResponse = await fetch(`${API_BASE}/api/v1/backup/${backupId}/download`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (retryResponse.ok) {
+          return retryResponse.blob();
+        }
+      }
+      throw new Error('Session expired');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Download failed' }));
+      throw new Error(error.detail || 'Download failed');
+    }
+
+    return response.blob();
+  },
+
+  /**
+   * Delete a stored backup.
+   */
+  async deleteStoredBackup(backupId: string): Promise<void> {
+    await fetchApi(`/backup/${backupId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Restore system from a stored backup.
+   * WARNING: This deletes ALL existing data!
+   */
+  async restoreFromStoredBackup(backupId: string, password: string): Promise<BackupRestoreResponse> {
+    return fetchApi<BackupRestoreResponse>(`/backup/${backupId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   },
 
   // ============================================================================
