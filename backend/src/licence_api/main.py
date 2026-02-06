@@ -62,6 +62,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     await stop_scheduler()
 
+    # Close shared HTTP clients to release connections
+    from licence_api.services.notification_service import NotificationService
+    from licence_api.providers.slack import SlackProvider
+
+    await NotificationService.close_client()
+    await SlackProvider.close_client()
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""

@@ -1,6 +1,8 @@
 """Notification service for Slack alerts."""
 
+import asyncio
 import logging
+from typing import ClassVar
 from uuid import UUID
 
 import httpx
@@ -11,14 +13,48 @@ from licence_api.repositories.notification_rule_repository import NotificationRu
 
 logger = logging.getLogger(__name__)
 
+# Slack API constants
+SLACK_API_BASE = "https://slack.com/api"
+SLACK_TIMEOUT = 10.0
+SLACK_MAX_RETRIES = 3
+SLACK_RETRY_DELAY = 1.0  # Base delay in seconds
+
+# User-Agent per RFC 7231
+USER_AGENT = "LicenseManagementSystem/1.0 (https://github.com/Kiefer-Networks/Licence-Manager)"
+
 
 class NotificationService:
     """Service for sending Slack notifications."""
+
+    # Shared HTTP client for connection reuse (class-level)
+    _http_client: ClassVar[httpx.AsyncClient | None] = None
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize service with database session."""
         self.session = session
         self.rule_repo = NotificationRuleRepository(session)
+
+    @classmethod
+    def _get_http_client(cls) -> httpx.AsyncClient:
+        """Get or create shared HTTP client with connection pooling.
+
+        Returns:
+            Shared httpx.AsyncClient instance
+        """
+        if cls._http_client is None or cls._http_client.is_closed:
+            cls._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(SLACK_TIMEOUT),
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                headers={"User-Agent": USER_AGENT},
+            )
+        return cls._http_client
+
+    @classmethod
+    async def close_client(cls) -> None:
+        """Close the shared HTTP client. Call on application shutdown."""
+        if cls._http_client and not cls._http_client.is_closed:
+            await cls._http_client.aclose()
+            cls._http_client = None
 
     async def get_rules(self) -> list[NotificationRuleORM]:
         """Get all enabled notification rules.
@@ -800,35 +836,79 @@ This organization license has been flagged for reordering.
         message: str,
         token: str,
     ) -> bool:
-        """Send a Slack message.
+        """Send a Slack message with retry and rate limit handling.
+
+        Implements exponential backoff for transient failures and
+        respects Slack's Retry-After header for rate limiting.
 
         Args:
-            channel: Slack channel
-            message: Message text
-            token: Bot token
+            channel: Slack channel (name or ID)
+            message: Message text (mrkdwn format)
+            token: Slack bot token
 
         Returns:
             True if sent successfully
         """
-        try:
-            async with httpx.AsyncClient() as client:
+        client = self._get_http_client()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        for attempt in range(SLACK_MAX_RETRIES):
+            try:
                 response = await client.post(
-                    "https://slack.com/api/chat.postMessage",
-                    headers={"Authorization": f"Bearer {token}"},
+                    f"{SLACK_API_BASE}/chat.postMessage",
+                    headers=headers,
                     json={
                         "channel": channel,
                         "text": message,
                         "mrkdwn": True,
                     },
                 )
+
+                # Handle rate limiting (HTTP 429)
+                if response.status_code == 429:
+                    retry_after = float(response.headers.get("Retry-After", SLACK_RETRY_DELAY))
+                    logger.warning(f"Slack rate limited, retrying after {retry_after}s")
+                    await asyncio.sleep(retry_after)
+                    continue
+
                 result = response.json()
-                if not result.get("ok"):
-                    logger.error(f"Slack API error: {result.get('error')}")
+
+                if result.get("ok"):
+                    return True
+
+                error = result.get("error", "unknown_error")
+
+                # Non-retryable errors
+                non_retryable = (
+                    "channel_not_found", "invalid_auth", "token_revoked", "not_in_channel"
+                )
+                if error in non_retryable:
+                    logger.error(f"Slack API error (non-retryable): {error}")
                     return False
-                return True
-        except (httpx.HTTPError, httpx.TimeoutException) as e:
-            logger.error(f"Failed to send Slack message: {e}")
-            return False
+
+                # Retryable error - use exponential backoff
+                if attempt < SLACK_MAX_RETRIES - 1:
+                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Slack API error: {error}, retrying in {delay}s")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"Slack API error after {SLACK_MAX_RETRIES} attempts: {error}")
+                    return False
+
+            except httpx.TimeoutException:
+                if attempt < SLACK_MAX_RETRIES - 1:
+                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Slack request timeout, retrying in {delay}s")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error("Slack request timeout after max retries")
+                    return False
+
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error sending Slack message: {e}")
+                return False
+
+        return False
 
     async def send_test_notification(
         self,
@@ -850,24 +930,40 @@ This organization license has been flagged for reordering.
             "If you received this, your Slack integration is working correctly!"
         )
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://slack.com/api/chat.postMessage",
-                    headers={"Authorization": f"Bearer {token}"},
-                    json={
-                        "channel": channel,
-                        "text": test_message,
-                        "mrkdwn": True,
-                    },
-                    timeout=10.0,
-                )
-                result = response.json()
+        client = self._get_http_client()
 
-                if result.get("ok"):
-                    return True, f"Test notification sent successfully to {channel}"
-                else:
-                    error = result.get("error", "Unknown error")
-                    return False, f"Failed to send notification: {error}"
-        except (httpx.HTTPError, httpx.TimeoutException) as e:
+        try:
+            response = await client.post(
+                f"{SLACK_API_BASE}/chat.postMessage",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "channel": channel,
+                    "text": test_message,
+                    "mrkdwn": True,
+                },
+            )
+
+            # Handle rate limiting
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "unknown")
+                return False, f"Rate limited by Slack. Retry after {retry_after} seconds."
+
+            result = response.json()
+
+            if result.get("ok"):
+                return True, f"Test notification sent successfully to {channel}"
+
+            error = result.get("error", "Unknown error")
+            error_messages = {
+                "channel_not_found": f"Channel '{channel}' not found",
+                "not_in_channel": f"Bot is not a member of '{channel}'",
+                "invalid_auth": "Invalid bot token",
+                "token_revoked": "Bot token has been revoked",
+                "missing_scope": "Bot is missing required 'chat:write' scope",
+            }
+            return False, error_messages.get(error, f"Slack API error: {error}")
+
+        except httpx.TimeoutException:
+            return False, "Request to Slack timed out"
+        except httpx.HTTPError as e:
             return False, f"Failed to connect to Slack: {str(e)}"
