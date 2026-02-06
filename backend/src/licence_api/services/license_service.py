@@ -1,5 +1,6 @@
 """License service for managing licenses."""
 
+from datetime import UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -11,13 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
 from licence_api.models.dto.license import (
-    LicenseResponse,
-    LicenseListResponse,
-    LicenseStats,
     CategorizedLicensesResponse,
+    LicenseListResponse,
+    LicenseResponse,
+    LicenseStats,
 )
-from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
@@ -63,9 +64,7 @@ class LicenseService:
 
         return self._company_domains_cache
 
-    def _check_external_email(
-        self, external_user_id: str, company_domains: list[str]
-    ) -> bool:
+    def _check_external_email(self, external_user_id: str, company_domains: list[str]) -> bool:
         """Check if an external_user_id (email) is external.
 
         Returns True if:
@@ -210,6 +209,7 @@ class LicenseService:
 
         # Get provider
         from licence_api.repositories.provider_repository import ProviderRepository
+
         provider_repo = ProviderRepository(self.session)
         provider_orm = await provider_repo.get_by_id(license_orm.provider_id)
 
@@ -308,12 +308,12 @@ class LicenseService:
         Returns:
             Updated LicenseResponse or None if not found
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         license_orm = await self.license_repo.update(
             license_id,
             employee_id=employee_id,
-            assigned_at=datetime.now(timezone.utc),
+            assigned_at=datetime.now(UTC),
         )
 
         if license_orm is None:
@@ -356,7 +356,9 @@ class LicenseService:
         """
         # Get current employee before unassigning
         license_orm = await self.license_repo.get_by_id(license_id)
-        old_employee_id = str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
+        old_employee_id = (
+            str(license_orm.employee_id) if license_orm and license_orm.employee_id else None
+        )
 
         license_orm = await self.license_repo.update(
             license_id,
@@ -460,9 +462,7 @@ class LicenseService:
             return employee_cache.get(emp_id, (None, None))
 
         for license_orm, provider_orm, employee_orm in results:
-            is_external = self._check_external_email(
-                license_orm.external_user_id, company_domains
-            )
+            is_external = self._check_external_email(license_orm.external_user_id, company_domains)
             is_active = license_orm.status == "active"
             is_assigned = license_orm.employee_id is not None
             is_offboarded = employee_orm and employee_orm.status == "offboarded"
@@ -476,9 +476,7 @@ class LicenseService:
             )
 
             # Get suggested employee info from pre-loaded cache
-            suggested_name, suggested_email = get_employee_info(
-                license_orm.suggested_employee_id
-            )
+            suggested_name, suggested_email = get_employee_info(license_orm.suggested_employee_id)
 
             license_response = LicenseResponse(
                 id=license_orm.id,
@@ -746,9 +744,11 @@ class LicenseService:
             if external_user_id:
                 if account_type == AccountType.SERVICE:
                     from licence_api.services.service_account_service import ServiceAccountService
+
                     pattern_service = ServiceAccountService(self.session)
                 else:
                     from licence_api.services.admin_account_service import AdminAccountService
+
                     pattern_service = AdminAccountService(self.session)
 
                 pattern = await pattern_service.create_pattern_from_email(
@@ -767,7 +767,9 @@ class LicenseService:
             admin_user_id=user.id,
             changes={
                 "license_user": license_orm.external_user_id if license_orm else None,
-                "employee_id": str(license_orm.employee_id) if license_orm and license_orm.employee_id else None,
+                "employee_id": str(license_orm.employee_id)
+                if license_orm and license_orm.employee_id
+                else None,
                 "provider_id": str(license_orm.provider_id) if license_orm else None,
                 "old": old_values,
                 "new": {
@@ -893,8 +895,14 @@ class LicenseService:
                 "license_user": license_orm.external_user_id,
                 "employee_id": str(license_orm.employee_id) if license_orm.employee_id else None,
                 "provider_id": str(license_orm.provider_id),
-                "old": {"license_type": old_license_type, "monthly_cost": str(old_monthly_cost) if old_monthly_cost else None},
-                "new": {"license_type": license_type, "monthly_cost": str(monthly_cost) if monthly_cost else None},
+                "old": {
+                    "license_type": old_license_type,
+                    "monthly_cost": str(old_monthly_cost) if old_monthly_cost else None,
+                },
+                "new": {
+                    "license_type": license_type,
+                    "monthly_cost": str(monthly_cost) if monthly_cost else None,
+                },
             },
             request=request,
         )
@@ -1078,12 +1086,9 @@ class LicenseService:
         from licence_api.providers import CursorProvider
 
         encryption = get_encryption_service()
-        provider_repo = ProviderRepository(self.session)
 
         # Fetch all licenses with their providers
-        licenses_with_providers = await self.license_repo.get_by_ids_with_providers(
-            license_ids
-        )
+        licenses_with_providers = await self.license_repo.get_by_ids_with_providers(license_ids)
 
         # Group by provider for efficient credential decryption
         provider_credentials: dict[UUID, dict] = {}
@@ -1095,11 +1100,16 @@ class LicenseService:
         for license_orm, provider in licenses_with_providers:
             # Check if provider supports remote removal
             if provider.name != ProviderName.CURSOR:
-                results.append({
-                    "license_id": str(license_orm.id),
-                    "success": False,
-                    "message": f"Provider {provider.display_name} does not support remote user removal",
-                })
+                results.append(
+                    {
+                        "license_id": str(license_orm.id),
+                        "success": False,
+                        "message": (
+                            f"Provider {provider.display_name} does not "
+                            "support remote user removal"
+                        ),
+                    }
+                )
                 failed += 1
                 continue
 
@@ -1117,25 +1127,31 @@ class LicenseService:
                     await self.license_repo.delete(license_orm.id)
                     deleted_license_ids.append(license_orm.id)
                     successful += 1
-                    results.append({
-                        "license_id": str(license_orm.id),
-                        "success": True,
-                        "message": result["message"],
-                    })
+                    results.append(
+                        {
+                            "license_id": str(license_orm.id),
+                            "success": True,
+                            "message": result["message"],
+                        }
+                    )
                 else:
                     failed += 1
-                    results.append({
-                        "license_id": str(license_orm.id),
-                        "success": False,
-                        "message": result.get("message", "Unknown error"),
-                    })
+                    results.append(
+                        {
+                            "license_id": str(license_orm.id),
+                            "success": False,
+                            "message": result.get("message", "Unknown error"),
+                        }
+                    )
             except ValueError as e:
                 failed += 1
-                results.append({
-                    "license_id": str(license_orm.id),
-                    "success": False,
-                    "message": str(e),
-                })
+                results.append(
+                    {
+                        "license_id": str(license_orm.id),
+                        "success": False,
+                        "message": str(e),
+                    }
+                )
 
         # Audit log the bulk operation
         if deleted_license_ids:

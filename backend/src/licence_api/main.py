@@ -1,8 +1,8 @@
 """FastAPI application entry point."""
 
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -15,15 +15,38 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from licence_api.config import get_settings
 from licence_api.middleware.audit_middleware import AuditMiddleware
-from licence_api.middleware.csrf_middleware import CSRFMiddleware
 from licence_api.middleware.cors_logging_middleware import CORSLoggingMiddleware
+from licence_api.middleware.csrf_middleware import CSRFMiddleware
 from licence_api.middleware.error_handler import (
     generic_exception_handler,
     http_exception_handler,
     sqlalchemy_exception_handler,
     validation_exception_handler,
 )
-from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, email_settings, exports, external_accounts, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, provider_import, providers, rbac, reports, service_accounts, settings, users
+from licence_api.routers import (
+    admin_accounts,
+    audit,
+    auth,
+    backup,
+    cancellation,
+    dashboard,
+    email_settings,
+    exports,
+    external_accounts,
+    license_packages,
+    licenses,
+    manual_licenses,
+    organization_licenses,
+    payment_methods,
+    provider_files,
+    provider_import,
+    providers,
+    rbac,
+    reports,
+    service_accounts,
+    settings,
+    users,
+)
 from licence_api.security.rate_limit import limiter
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
@@ -63,8 +86,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_scheduler()
 
     # Close shared HTTP clients to release connections
-    from licence_api.services.notification_service import NotificationService
     from licence_api.providers.slack import SlackProvider
+    from licence_api.services.notification_service import NotificationService
 
     await NotificationService.close_client()
     await SlackProvider.close_client()
@@ -160,17 +183,43 @@ def create_app() -> FastAPI:
     app.include_router(providers.router, prefix="/api/v1/providers", tags=["Providers"])
     app.include_router(provider_files.router, prefix="/api/v1/providers", tags=["Provider Files"])
     app.include_router(provider_import.router, prefix="/api/v1/providers", tags=["Provider Import"])
-    app.include_router(license_packages.router, prefix="/api/v1/providers", tags=["License Packages"])
-    app.include_router(organization_licenses.router, prefix="/api/v1/providers", tags=["Organization Licenses"])
+    app.include_router(
+        license_packages.router, prefix="/api/v1/providers", tags=["License Packages"]
+    )
+    app.include_router(
+        organization_licenses.router,
+        prefix="/api/v1/providers",
+        tags=["Organization Licenses"],
+    )
     app.include_router(licenses.router, prefix="/api/v1/licenses", tags=["Licenses"])
-    app.include_router(service_accounts.router, prefix="/api/v1/service-accounts", tags=["Service Accounts"])
-    app.include_router(admin_accounts.router, prefix="/api/v1/admin-accounts", tags=["Admin Accounts"])
-    app.include_router(manual_licenses.router, prefix="/api/v1/manual-licenses", tags=["Manual Licenses"])
+    app.include_router(
+        service_accounts.router,
+        prefix="/api/v1/service-accounts",
+        tags=["Service Accounts"],
+    )
+    app.include_router(
+        admin_accounts.router,
+        prefix="/api/v1/admin-accounts",
+        tags=["Admin Accounts"],
+    )
+    app.include_router(
+        manual_licenses.router,
+        prefix="/api/v1/manual-licenses",
+        tags=["Manual Licenses"],
+    )
     app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
     app.include_router(cancellation.router, prefix="/api/v1", tags=["Cancellation"])
     app.include_router(settings.router, prefix="/api/v1/settings", tags=["Settings"])
-    app.include_router(email_settings.router, prefix="/api/v1/settings/email", tags=["Email Settings"])
-    app.include_router(payment_methods.router, prefix="/api/v1/payment-methods", tags=["Payment Methods"])
+    app.include_router(
+        email_settings.router,
+        prefix="/api/v1/settings/email",
+        tags=["Email Settings"],
+    )
+    app.include_router(
+        payment_methods.router,
+        prefix="/api/v1/payment-methods",
+        tags=["Payment Methods"],
+    )
     app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
     app.include_router(exports.router, prefix="/api/v1/exports", tags=["Exports"])
     app.include_router(backup.router, prefix="/api/v1/backup", tags=["Backup"])

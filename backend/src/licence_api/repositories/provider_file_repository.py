@@ -1,10 +1,8 @@
 """Provider file repository."""
 
-from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.provider_file import ProviderFileORM
 from licence_api.repositories.base import BaseRepository

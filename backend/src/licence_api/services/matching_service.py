@@ -21,7 +21,7 @@ Admins decide what to do with each suggestion.
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Literal
 from uuid import UUID
@@ -32,12 +32,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
+from licence_api.repositories.employee_external_account_repository import (
+    EmployeeExternalAccountRepository,
+)
 from licence_api.repositories.employee_repository import EmployeeRepository
-from licence_api.repositories.employee_external_account_repository import EmployeeExternalAccountRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
-
 
 # Match status constants
 MATCH_STATUS_AUTO_MATCHED = "auto_matched"  # High confidence, auto-assigned
@@ -59,10 +60,11 @@ CONFIDENCE_AUTO_ASSIGN = 0.95  # Auto-assign if confidence >= this
 CONFIDENCE_SUGGEST = 0.5  # Suggest if confidence >= this
 
 MatchStatus = Literal[
-    "auto_matched", "suggested", "confirmed", "rejected",
-    "external_guest", "external_review"
+    "auto_matched", "suggested", "confirmed", "rejected", "external_guest", "external_review"
 ]
-MatchMethod = Literal["exact_email", "local_part", "fuzzy_name", "external_account", "metadata_name"]
+MatchMethod = Literal[
+    "exact_email", "local_part", "fuzzy_name", "external_account", "metadata_name"
+]
 
 
 @dataclass
@@ -78,10 +80,7 @@ class MatchResult:
     @property
     def should_auto_assign(self) -> bool:
         """Check if match should be auto-assigned."""
-        return (
-            self.employee_id is not None
-            and self.confidence >= CONFIDENCE_AUTO_ASSIGN
-        )
+        return self.employee_id is not None and self.confidence >= CONFIDENCE_AUTO_ASSIGN
 
     @property
     def should_suggest(self) -> bool:
@@ -110,7 +109,9 @@ class MatchingService:
         self._email_to_employee: dict[str, EmployeeORM] = {}
         self._local_to_employees: dict[str, list[EmployeeORM]] = {}
         self._employees_by_id: dict[UUID, EmployeeORM] = {}
-        self._external_accounts: dict[str, dict[str, UUID]] = {}  # provider -> username -> employee_id
+        self._external_accounts: dict[
+            str, dict[str, UUID]
+        ] = {}  # provider -> username -> employee_id
 
     async def _build_caches(self) -> None:
         """Build lookup caches for efficient matching."""
@@ -211,9 +212,7 @@ class MatchingService:
             email_parts = email_name.split()
             if len(email_parts) == 2:
                 reversed_email = f"{email_parts[1]} {email_parts[0]}"
-                reversed_score = SequenceMatcher(
-                    None, reversed_email, emp_name
-                ).ratio()
+                reversed_score = SequenceMatcher(None, reversed_email, emp_name).ratio()
                 score = max(score, reversed_score)
 
             # Check if first.last or last.first pattern matches
@@ -409,9 +408,7 @@ class MatchingService:
                 )
             elif len(candidates) > 1:
                 # Multiple matches - try fuzzy name matching
-                best_emp, confidence = self._fuzzy_name_match(
-                    email, candidates
-                )
+                best_emp, confidence = self._fuzzy_name_match(email, candidates)
                 if best_emp and confidence >= CONFIDENCE_SUGGEST:
                     return MatchResult(
                         employee_id=best_emp.id,
@@ -525,7 +522,7 @@ class MatchingService:
         license.employee_id = license.suggested_employee_id
         license.suggested_employee_id = None
         license.match_status = MATCH_STATUS_CONFIRMED
-        license.match_reviewed_at = datetime.now(timezone.utc)
+        license.match_reviewed_at = datetime.now(UTC)
         license.match_reviewed_by = admin_user_id
 
         await self.session.flush()
@@ -552,7 +549,7 @@ class MatchingService:
 
         license.suggested_employee_id = None
         license.match_status = MATCH_STATUS_REJECTED
-        license.match_reviewed_at = datetime.now(timezone.utc)
+        license.match_reviewed_at = datetime.now(UTC)
         license.match_reviewed_by = admin_user_id
 
         await self.session.flush()
@@ -580,7 +577,7 @@ class MatchingService:
         license.employee_id = None
         license.suggested_employee_id = None
         license.match_status = MATCH_STATUS_EXTERNAL_GUEST
-        license.match_reviewed_at = datetime.now(timezone.utc)
+        license.match_reviewed_at = datetime.now(UTC)
         license.match_reviewed_by = admin_user_id
 
         await self.session.flush()
@@ -612,7 +609,7 @@ class MatchingService:
         license.match_confidence = 1.0
         license.match_method = None  # Manual assignment
         license.match_status = MATCH_STATUS_CONFIRMED
-        license.match_reviewed_at = datetime.now(timezone.utc)
+        license.match_reviewed_at = datetime.now(UTC)
         license.match_reviewed_by = admin_user_id
 
         await self.session.flush()
@@ -637,19 +634,14 @@ class MatchingService:
 
         query = (
             select(LicenseORM, EmployeeORM)
-            .outerjoin(
-                EmployeeORM,
-                LicenseORM.suggested_employee_id == EmployeeORM.id
-            )
+            .outerjoin(EmployeeORM, LicenseORM.suggested_employee_id == EmployeeORM.id)
             .where(LicenseORM.match_status == MATCH_STATUS_SUGGESTED)
         )
 
         if provider_id:
             query = query.where(LicenseORM.provider_id == provider_id)
 
-        query = query.order_by(
-            LicenseORM.match_confidence.desc()
-        ).limit(limit)
+        query = query.order_by(LicenseORM.match_confidence.desc()).limit(limit)
 
         result = await self.session.execute(query)
         return list(result.all())
@@ -670,10 +662,7 @@ class MatchingService:
         """
         from sqlalchemy import select
 
-        query = (
-            select(LicenseORM)
-            .where(LicenseORM.match_status == MATCH_STATUS_EXTERNAL_REVIEW)
-        )
+        query = select(LicenseORM).where(LicenseORM.match_status == MATCH_STATUS_EXTERNAL_REVIEW)
 
         if provider_id:
             query = query.where(LicenseORM.provider_id == provider_id)

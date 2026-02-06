@@ -3,7 +3,7 @@
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.base import Base
@@ -29,9 +29,7 @@ class BaseRepository(Generic[T]):
         Returns:
             Record or None if not found
         """
-        result = await self.session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        result = await self.session.execute(select(self.model).where(self.model.id == id))
         return result.scalar_one_or_none()
 
     async def get_all(
@@ -48,9 +46,7 @@ class BaseRepository(Generic[T]):
         Returns:
             List of records
         """
-        result = await self.session.execute(
-            select(self.model).offset(offset).limit(limit)
-        )
+        result = await self.session.execute(select(self.model).offset(offset).limit(limit))
         return list(result.scalars().all())
 
     async def count(self) -> int:
@@ -59,9 +55,7 @@ class BaseRepository(Generic[T]):
         Returns:
             Total count
         """
-        result = await self.session.execute(
-            select(func.count()).select_from(self.model)
-        )
+        result = await self.session.execute(select(func.count()).select_from(self.model))
         return result.scalar_one()
 
     async def create(self, **kwargs: Any) -> T:

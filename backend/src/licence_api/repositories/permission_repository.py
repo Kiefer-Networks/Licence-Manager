@@ -1,9 +1,6 @@
 """Permission repository."""
 
-from uuid import UUID
-
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.permission import PermissionORM
 from licence_api.repositories.base import BaseRepository
@@ -23,9 +20,7 @@ class PermissionRepository(BaseRepository[PermissionORM]):
         Returns:
             PermissionORM or None if not found
         """
-        result = await self.session.execute(
-            select(PermissionORM).where(PermissionORM.code == code)
-        )
+        result = await self.session.execute(select(PermissionORM).where(PermissionORM.code == code))
         return result.scalar_one_or_none()
 
     async def get_by_codes(self, codes: list[str]) -> list[PermissionORM]:
@@ -76,8 +71,6 @@ class PermissionRepository(BaseRepository[PermissionORM]):
             List of category names
         """
         result = await self.session.execute(
-            select(PermissionORM.category)
-            .distinct()
-            .order_by(PermissionORM.category)
+            select(PermissionORM.category).distinct().order_by(PermissionORM.category)
         )
         return list(result.scalars().all())

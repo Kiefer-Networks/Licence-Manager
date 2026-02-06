@@ -12,8 +12,7 @@ MIN_SECRET_UNIQUE_CHARS = 16
 
 # Key generation command for documentation (split for line length)
 KEY_GEN_CMD = (
-    'python -c "import secrets,base64;'
-    'print(base64.b64encode(secrets.token_bytes(32)).decode())"'
+    'python -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(32)).decode())"'
 )
 
 

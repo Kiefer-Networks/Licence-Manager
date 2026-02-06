@@ -3,7 +3,6 @@
 from uuid import UUID
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
 from licence_api.repositories.base import BaseRepository
@@ -125,8 +124,9 @@ class UserNotificationPreferenceRepository(BaseRepository[UserNotificationPrefer
             Number of deleted records
         """
         result = await self.session.execute(
-            delete(UserNotificationPreferenceORM)
-            .where(UserNotificationPreferenceORM.user_id == user_id)
+            delete(UserNotificationPreferenceORM).where(
+                UserNotificationPreferenceORM.user_id == user_id
+            )
         )
         await self.session.flush()
         return result.rowcount

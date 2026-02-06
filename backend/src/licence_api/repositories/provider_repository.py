@@ -1,11 +1,9 @@
 """Provider repository."""
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
 from licence_api.models.orm.provider import ProviderORM
 from licence_api.repositories.base import BaseRepository
@@ -25,9 +23,7 @@ class ProviderRepository(BaseRepository[ProviderORM]):
         Returns:
             ProviderORM or None if not found
         """
-        result = await self.session.execute(
-            select(ProviderORM).where(ProviderORM.name == name)
-        )
+        result = await self.session.execute(select(ProviderORM).where(ProviderORM.name == name))
         return result.scalar_one_or_none()
 
     async def get_enabled(self) -> list[ProviderORM]:
@@ -36,9 +32,7 @@ class ProviderRepository(BaseRepository[ProviderORM]):
         Returns:
             List of enabled providers
         """
-        result = await self.session.execute(
-            select(ProviderORM).where(ProviderORM.enabled == True)
-        )
+        result = await self.session.execute(select(ProviderORM).where(ProviderORM.enabled == True))
         return list(result.scalars().all())
 
     async def get_all_with_license_counts(self) -> list[tuple[ProviderORM, int]]:
@@ -48,6 +42,7 @@ class ProviderRepository(BaseRepository[ProviderORM]):
             List of (provider, license_count) tuples
         """
         from sqlalchemy.orm import noload
+
         from licence_api.models.orm.license import LicenseORM
 
         result = await self.session.execute(
@@ -91,9 +86,7 @@ class ProviderRepository(BaseRepository[ProviderORM]):
         Returns:
             True if at least one provider exists
         """
-        result = await self.session.execute(
-            select(func.count()).select_from(ProviderORM).limit(1)
-        )
+        result = await self.session.execute(select(func.count()).select_from(ProviderORM).limit(1))
         return result.scalar_one() > 0
 
     async def count_by_payment_method(self, payment_method_id: UUID) -> int:

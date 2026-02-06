@@ -1,9 +1,8 @@
 """Payment method ORM model."""
 
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 

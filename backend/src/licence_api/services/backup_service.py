@@ -26,14 +26,14 @@ import hashlib
 import json
 import logging
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
 from fastapi import Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,10 +41,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.constants.paths import FILES_DIR
 from licence_api.models.dto.backup import (
     BackupInfoResponse,
+    ProviderValidation,
     RestoreImportCounts,
     RestoreResponse,
     RestoreValidation,
-    ProviderValidation,
 )
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
@@ -52,29 +52,29 @@ if TYPE_CHECKING:
     from licence_api.models.domain.admin_user import AdminUser
 
 # ORM models
+from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
 from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.models.orm.audit_log import AuditLogORM
-from licence_api.models.orm.role import RoleORM
-from licence_api.models.orm.permission import PermissionORM
-from licence_api.models.orm.user_role import UserRoleORM
-from licence_api.models.orm.role_permission import RolePermissionORM
-from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.models.orm.employee import EmployeeORM
+from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.models.orm.organization_license import OrganizationLicenseORM
+from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.models.orm.payment_method import PaymentMethodORM
+from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.provider import ProviderORM
 from licence_api.models.orm.provider_file import ProviderFileORM
-from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
-from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
-from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
-from licence_api.models.orm.settings import SettingsORM
-from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
-from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.models.orm.refresh_token import RefreshTokenORM
+from licence_api.models.orm.role import RoleORM
+from licence_api.models.orm.role_permission import RolePermissionORM
+from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
+from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
+from licence_api.models.orm.settings import SettingsORM
+from licence_api.models.orm.user_notification_preference import UserNotificationPreferenceORM
+from licence_api.models.orm.user_role import UserRoleORM
 from licence_api.security.encryption import get_encryption_service
 
 logger = logging.getLogger(__name__)
@@ -113,9 +113,7 @@ class BackupService:
         """
         from sqlalchemy import func
 
-        result = await self.session.execute(
-            select(func.count(AdminUserORM.id))
-        )
+        result = await self.session.execute(select(func.count(AdminUserORM.id)))
         admin_count = result.scalar() or 0
         return admin_count > 0
 
@@ -298,7 +296,7 @@ class BackupService:
 
         return {
             "version": BACKUP_VERSION,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {
                 "admin_user_count": len(admin_users),
                 "password_history_count": len(password_histories),
@@ -332,11 +330,15 @@ class BackupService:
                 "permissions": [self._orm_to_dict(p) for p in permissions],
                 "user_roles": [self._junction_to_dict(ur) for ur in user_roles],
                 "role_permissions": [self._junction_to_dict(rp) for rp in role_permissions],
-                "user_notification_preferences": [self._orm_to_dict(unp) for unp in user_notification_preferences],
+                "user_notification_preferences": [
+                    self._orm_to_dict(unp) for unp in user_notification_preferences
+                ],
                 "providers": [self._provider_to_dict(p) for p in providers],
                 "licenses": [self._orm_to_dict(lic) for lic in licenses],
                 "employees": [self._orm_to_dict(e) for e in employees],
-                "employee_external_accounts": [self._orm_to_dict(eea) for eea in employee_external_accounts],
+                "employee_external_accounts": [
+                    self._orm_to_dict(eea) for eea in employee_external_accounts
+                ],
                 "license_packages": [self._orm_to_dict(lp) for lp in license_packages],
                 "organization_licenses": [self._orm_to_dict(ol) for ol in organization_licenses],
                 "payment_methods": [self._orm_to_dict(pm) for pm in payment_methods],
@@ -344,9 +346,15 @@ class BackupService:
                 "cost_snapshots": [self._orm_to_dict(cs) for cs in cost_snapshots],
                 "settings": [self._settings_to_dict(s) for s in settings],
                 "notification_rules": [self._orm_to_dict(nr) for nr in notification_rules],
-                "service_account_patterns": [self._orm_to_dict(sap) for sap in service_account_patterns],
-                "admin_account_patterns": [self._orm_to_dict(aap) for aap in admin_account_patterns],
-                "service_account_license_types": [self._orm_to_dict(salt) for salt in service_account_license_types],
+                "service_account_patterns": [
+                    self._orm_to_dict(sap) for sap in service_account_patterns
+                ],
+                "admin_account_patterns": [
+                    self._orm_to_dict(aap) for aap in admin_account_patterns
+                ],
+                "service_account_license_types": [
+                    self._orm_to_dict(salt) for salt in service_account_license_types
+                ],
                 "audit_logs": [self._audit_log_to_dict(al) for al in audit_logs],
             },
         }
@@ -368,8 +376,7 @@ class BackupService:
         Uses the mapper to get the correct Python attribute name for each column,
         handling cases where the Python attribute differs from the DB column name.
         """
-        from sqlalchemy import inspect
-        from sqlalchemy import MetaData
+        from sqlalchemy import MetaData, inspect
 
         result = {}
         mapper = inspect(obj.__class__)
@@ -378,7 +385,7 @@ class BackupService:
             # Find the attribute name from the mapper
             attr_name = None
             for prop in mapper.iterate_properties:
-                if hasattr(prop, 'columns'):
+                if hasattr(prop, "columns"):
                     for col in prop.columns:
                         if col.name == column.name:
                             attr_name = prop.key
@@ -403,8 +410,7 @@ class BackupService:
 
     def _junction_to_dict(self, obj: Any) -> dict[str, Any]:
         """Convert junction table ORM object to dict."""
-        from sqlalchemy import inspect
-        from sqlalchemy import MetaData
+        from sqlalchemy import MetaData, inspect
 
         result = {}
         mapper = inspect(obj.__class__)
@@ -413,7 +419,7 @@ class BackupService:
             # Find the attribute name from the mapper
             attr_name = None
             for prop in mapper.iterate_properties:
-                if hasattr(prop, 'columns'):
+                if hasattr(prop, "columns"):
                     for col in prop.columns:
                         if col.name == column.name:
                             attr_name = prop.key
@@ -987,7 +993,9 @@ class BackupService:
             emp_id = UUID(e["id"]) if isinstance(e["id"], str) else e["id"]
             # Store manager_id for second pass
             if e.get("manager_id"):
-                manager_id = UUID(e["manager_id"]) if isinstance(e["manager_id"], str) else e["manager_id"]
+                manager_id = (
+                    UUID(e["manager_id"]) if isinstance(e["manager_id"], str) else e["manager_id"]
+                )
                 employee_manager_map[emp_id] = manager_id
 
             emp_orm = EmployeeORM(
@@ -1015,6 +1023,7 @@ class BackupService:
         # Pass 2: Update employees with their manager_id references
         if employee_manager_map:
             from sqlalchemy import update
+
             for emp_id, manager_id in employee_manager_map.items():
                 await self.session.execute(
                     update(EmployeeORM)
@@ -1027,7 +1036,9 @@ class BackupService:
         for eea in data.get("employee_external_accounts", []):
             eea_orm = EmployeeExternalAccountORM(
                 id=UUID(eea["id"]) if isinstance(eea["id"], str) else eea["id"],
-                employee_id=UUID(eea["employee_id"]) if isinstance(eea["employee_id"], str) else eea["employee_id"],
+                employee_id=UUID(eea["employee_id"])
+                if isinstance(eea["employee_id"], str)
+                else eea["employee_id"],
                 provider_type=eea["provider_type"],
                 external_username=eea["external_username"],
                 external_user_id=eea.get("external_user_id"),
@@ -1046,7 +1057,9 @@ class BackupService:
         for rp in data.get("role_permissions", []):
             rp_orm = RolePermissionORM(
                 role_id=UUID(rp["role_id"]) if isinstance(rp["role_id"], str) else rp["role_id"],
-                permission_id=UUID(rp["permission_id"]) if isinstance(rp["permission_id"], str) else rp["permission_id"],
+                permission_id=UUID(rp["permission_id"])
+                if isinstance(rp["permission_id"], str)
+                else rp["permission_id"],
                 created_at=self._parse_datetime(rp.get("created_at")),
             )
             self.session.add(rp_orm)
@@ -1105,7 +1118,9 @@ class BackupService:
                 config=p.get("config"),
                 last_sync_at=self._parse_datetime(p.get("last_sync_at")),
                 last_sync_status=p.get("last_sync_status"),
-                payment_method_id=UUID(p["payment_method_id"]) if p.get("payment_method_id") else None,
+                payment_method_id=UUID(p["payment_method_id"])
+                if p.get("payment_method_id")
+                else None,
                 created_at=self._parse_datetime(p.get("created_at")),
                 updated_at=self._parse_datetime(p.get("updated_at")),
             )
@@ -1132,7 +1147,9 @@ class BackupService:
         for lp in data["license_packages"]:
             lp_orm = LicensePackageORM(
                 id=UUID(lp["id"]) if isinstance(lp["id"], str) else lp["id"],
-                provider_id=UUID(lp["provider_id"]) if isinstance(lp["provider_id"], str) else lp["provider_id"],
+                provider_id=UUID(lp["provider_id"])
+                if isinstance(lp["provider_id"], str)
+                else lp["provider_id"],
                 license_type=lp["license_type"],
                 display_name=lp.get("display_name"),
                 total_seats=lp["total_seats"],
@@ -1160,7 +1177,9 @@ class BackupService:
         for ol in data["organization_licenses"]:
             ol_orm = OrganizationLicenseORM(
                 id=UUID(ol["id"]) if isinstance(ol["id"], str) else ol["id"],
-                provider_id=UUID(ol["provider_id"]) if isinstance(ol["provider_id"], str) else ol["provider_id"],
+                provider_id=UUID(ol["provider_id"])
+                if isinstance(ol["provider_id"], str)
+                else ol["provider_id"],
                 name=ol["name"],
                 license_type=ol.get("license_type"),
                 quantity=ol.get("quantity"),
@@ -1205,7 +1224,9 @@ class BackupService:
         for lic in data["licenses"]:
             lic_orm = LicenseORM(
                 id=UUID(lic["id"]) if isinstance(lic["id"], str) else lic["id"],
-                provider_id=UUID(lic["provider_id"]) if isinstance(lic["provider_id"], str) else lic["provider_id"],
+                provider_id=UUID(lic["provider_id"])
+                if isinstance(lic["provider_id"], str)
+                else lic["provider_id"],
                 employee_id=UUID(lic["employee_id"]) if lic.get("employee_id") else None,
                 external_user_id=lic["external_user_id"],
                 license_type=lic.get("license_type"),
@@ -1218,20 +1239,30 @@ class BackupService:
                 synced_at=self._parse_datetime(lic["synced_at"]),
                 is_service_account=lic.get("is_service_account", False),
                 service_account_name=lic.get("service_account_name"),
-                service_account_owner_id=UUID(lic["service_account_owner_id"]) if lic.get("service_account_owner_id") else None,
+                service_account_owner_id=UUID(lic["service_account_owner_id"])
+                if lic.get("service_account_owner_id")
+                else None,
                 is_admin_account=lic.get("is_admin_account", False),
                 admin_account_name=lic.get("admin_account_name"),
-                admin_account_owner_id=UUID(lic["admin_account_owner_id"]) if lic.get("admin_account_owner_id") else None,
-                suggested_employee_id=UUID(lic["suggested_employee_id"]) if lic.get("suggested_employee_id") else None,
+                admin_account_owner_id=UUID(lic["admin_account_owner_id"])
+                if lic.get("admin_account_owner_id")
+                else None,
+                suggested_employee_id=UUID(lic["suggested_employee_id"])
+                if lic.get("suggested_employee_id")
+                else None,
                 match_confidence=lic.get("match_confidence"),
                 match_status=lic.get("match_status"),
                 match_method=lic.get("match_method"),
                 match_reviewed_at=self._parse_datetime(lic.get("match_reviewed_at")),
-                match_reviewed_by=UUID(lic["match_reviewed_by"]) if lic.get("match_reviewed_by") else None,
+                match_reviewed_by=UUID(lic["match_reviewed_by"])
+                if lic.get("match_reviewed_by")
+                else None,
                 expires_at=self._parse_date(lic.get("expires_at")),
                 needs_reorder=lic.get("needs_reorder", False),
                 cancelled_at=self._parse_datetime(lic.get("cancelled_at")),
-                cancellation_effective_date=self._parse_date(lic.get("cancellation_effective_date")),
+                cancellation_effective_date=self._parse_date(
+                    lic.get("cancellation_effective_date")
+                ),
                 cancellation_reason=lic.get("cancellation_reason"),
                 cancelled_by=UUID(lic["cancelled_by"]) if lic.get("cancelled_by") else None,
                 created_at=self._parse_datetime(lic.get("created_at")),
@@ -1244,7 +1275,9 @@ class BackupService:
         for pf in data["provider_files"]:
             pf_orm = ProviderFileORM(
                 id=UUID(pf["id"]) if isinstance(pf["id"], str) else pf["id"],
-                provider_id=UUID(pf["provider_id"]) if isinstance(pf["provider_id"], str) else pf["provider_id"],
+                provider_id=UUID(pf["provider_id"])
+                if isinstance(pf["provider_id"], str)
+                else pf["provider_id"],
                 filename=pf["filename"],
                 original_name=pf["original_name"],
                 file_type=pf["file_type"],
@@ -1374,10 +1407,12 @@ class BackupService:
         for provider in providers:
             # Skip manual providers - they don't have external credentials
             if provider.name == ProviderName.MANUAL or provider.name == "manual":
-                validations.append(ProviderValidation(
-                    provider_name=provider.display_name,
-                    valid=True,
-                ))
+                validations.append(
+                    ProviderValidation(
+                        provider_name=provider.display_name,
+                        valid=True,
+                    )
+                )
                 continue
 
             try:
@@ -1399,25 +1434,31 @@ class BackupService:
                         # This is a lightweight test
                         pass
 
-                    validations.append(ProviderValidation(
-                        provider_name=provider.display_name,
-                        valid=True,
-                    ))
+                    validations.append(
+                        ProviderValidation(
+                            provider_name=provider.display_name,
+                            valid=True,
+                        )
+                    )
                 except Exception as e:
                     error_msg = f"{provider.display_name}: {str(e)}"
-                    validations.append(ProviderValidation(
+                    validations.append(
+                        ProviderValidation(
+                            provider_name=provider.display_name,
+                            valid=False,
+                            error=str(e),
+                        )
+                    )
+                    failed.append(error_msg)
+            except Exception:
+                error_msg = f"{provider.display_name}: Failed to decrypt credentials"
+                validations.append(
+                    ProviderValidation(
                         provider_name=provider.display_name,
                         valid=False,
-                        error=str(e),
-                    ))
-                    failed.append(error_msg)
-            except Exception as e:
-                error_msg = f"{provider.display_name}: Failed to decrypt credentials"
-                validations.append(ProviderValidation(
-                    provider_name=provider.display_name,
-                    valid=False,
-                    error="Failed to decrypt credentials",
-                ))
+                        error="Failed to decrypt credentials",
+                    )
+                )
                 failed.append(error_msg)
 
         return RestoreValidation(

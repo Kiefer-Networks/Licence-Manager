@@ -17,7 +17,6 @@ import httpx
 
 from licence_api.providers.base import BaseProvider
 
-
 # Map Figma seat types to license type names
 SEAT_TYPE_MAP = {
     "full": "Figma Full Seat",
@@ -152,19 +151,22 @@ class FigmaProvider(BaseProvider):
                         "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User", {}
                     )
 
-                    licenses.append({
-                        "external_user_id": user.get("id"),
-                        "email": email.lower() if email else "",
-                        "license_type": license_type,
-                        "status": "active" if user.get("active", True) else "inactive",
-                        "metadata": {
-                            "name": display_name,
-                            "seat_type": seat_type,
-                            "figma_admin": user.get("figmaAdmin", False),
-                            "department": enterprise_ext.get("department") or user.get("department"),
-                            "title": user.get("title"),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": user.get("id"),
+                            "email": email.lower() if email else "",
+                            "license_type": license_type,
+                            "status": "active" if user.get("active", True) else "inactive",
+                            "metadata": {
+                                "name": display_name,
+                                "seat_type": seat_type,
+                                "figma_admin": user.get("figmaAdmin", False),
+                                "department": enterprise_ext.get("department")
+                                or user.get("department"),
+                                "title": user.get("title"),
+                            },
+                        }
+                    )
 
                 # Check if we've fetched all users
                 total_results = data.get("totalResults", 0)

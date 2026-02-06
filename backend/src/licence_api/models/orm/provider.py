@@ -5,7 +5,8 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
@@ -43,7 +44,10 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
         "LicensePackageORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
     )
     organization_licenses: Mapped[list["OrganizationLicenseORM"]] = relationship(
-        "OrganizationLicenseORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
+        "OrganizationLicenseORM",
+        back_populates="provider",
+        lazy="select",
+        cascade="all, delete-orphan",
     )
     cost_snapshots: Mapped[list["CostSnapshotORM"]] = relationship(
         "CostSnapshotORM", back_populates="provider", lazy="select", cascade="all, delete-orphan"
@@ -51,9 +55,9 @@ class ProviderORM(Base, UUIDMixin, TimestampMixin):
 
 
 # Import here to avoid circular import
+from licence_api.models.orm.cost_snapshot import CostSnapshotORM  # noqa: E402, F401
 from licence_api.models.orm.license import LicenseORM  # noqa: E402, F401
-from licence_api.models.orm.provider_file import ProviderFileORM  # noqa: E402, F401
-from licence_api.models.orm.payment_method import PaymentMethodORM  # noqa: E402, F401
 from licence_api.models.orm.license_package import LicensePackageORM  # noqa: E402, F401
 from licence_api.models.orm.organization_license import OrganizationLicenseORM  # noqa: E402, F401
-from licence_api.models.orm.cost_snapshot import CostSnapshotORM  # noqa: E402, F401
+from licence_api.models.orm.payment_method import PaymentMethodORM  # noqa: E402, F401
+from licence_api.models.orm.provider_file import ProviderFileORM  # noqa: E402, F401

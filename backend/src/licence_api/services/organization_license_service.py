@@ -161,7 +161,9 @@ class OrganizationLicenseService:
             raise ValueError("Organization license not found")
 
         update_data = data.model_dump(exclude_unset=True)
-        license_orm = await self.license_repo.update_organization_license(license_orm, **update_data)
+        license_orm = await self.license_repo.update_organization_license(
+            license_orm, **update_data
+        )
 
         # Audit log
         await self.audit_service.log(

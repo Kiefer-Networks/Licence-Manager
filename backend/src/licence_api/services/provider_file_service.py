@@ -24,11 +24,23 @@ ALLOWED_EXTENSIONS = {
     # PDFs
     ".pdf",
     # Images
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
     # Microsoft Office
-    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
     # OpenDocument
-    ".odt", ".ods", ".odp",
+    ".odt",
+    ".ods",
+    ".odp",
 }
 
 # File types that can be viewed inline in browser
@@ -145,7 +157,6 @@ class ProviderFileService:
         Raises:
             ValueError: If validation fails
         """
-        from licence_api.models.orm.provider_file import ProviderFileORM
 
         # Check provider exists
         provider = await self.provider_repo.get_by_id(provider_id)

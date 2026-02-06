@@ -123,24 +123,26 @@ class GitHubProvider(BaseProvider):
                     # Use email if available, otherwise use username
                     email = user_data.get("email") or f"{username}@github.com"
 
-                    licenses.append({
-                        "external_user_id": username,
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": "active",
-                        "assigned_at": created_at,
-                        "last_activity_at": updated_at,
-                        "metadata": {
-                            "github_id": member.get("id"),
-                            "username": username,
-                            "name": user_data.get("name"),
-                            "avatar_url": member.get("avatar_url"),
-                            "role": role,
-                            "two_factor_enabled": member.get("two_factor_authentication"),
-                            "company": user_data.get("company"),
-                            "location": user_data.get("location"),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": username,
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": "active",
+                            "assigned_at": created_at,
+                            "last_activity_at": updated_at,
+                            "metadata": {
+                                "github_id": member.get("id"),
+                                "username": username,
+                                "name": user_data.get("name"),
+                                "avatar_url": member.get("avatar_url"),
+                                "role": role,
+                                "two_factor_enabled": member.get("two_factor_authentication"),
+                                "company": user_data.get("company"),
+                                "location": user_data.get("location"),
+                            },
+                        }
+                    )
 
                 page += 1
 

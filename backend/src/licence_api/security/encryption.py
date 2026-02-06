@@ -25,7 +25,7 @@ class EncryptionService:
     """
 
     # Magic bytes to identify versioned encryption format (0xEC = "Encrypted")
-    MAGIC_BYTES = b"\xEC\x01"
+    MAGIC_BYTES = b"\xec\x01"
     MAGIC_SIZE = 2
     NONCE_SIZE = 12  # 96 bits for GCM
     VERSION_SIZE = 1  # 1 byte for version (0-255)

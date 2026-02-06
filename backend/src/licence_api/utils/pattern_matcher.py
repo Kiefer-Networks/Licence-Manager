@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
-    from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
     from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
     from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
+    from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
 
 
 @dataclass
@@ -49,7 +49,7 @@ class PatternMatcher:
         self._svc_license_types = service_account_license_types
 
         # Build lookup dict for exact license type matches (case-insensitive)
-        self._license_type_lookup: dict[str, "ServiceAccountLicenseTypeORM"] = {
+        self._license_type_lookup: dict[str, ServiceAccountLicenseTypeORM] = {
             lt.license_type.lower(): lt for lt in service_account_license_types
         }
 

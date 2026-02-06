@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 
 from licence_api.models.orm.organization_license import OrganizationLicenseORM
 from licence_api.repositories.base import BaseRepository
@@ -60,8 +60,9 @@ class OrganizationLicenseRepository(BaseRepository[OrganizationLicenseORM]):
             Total monthly cost
         """
         result = await self.session.execute(
-            select(func.coalesce(func.sum(OrganizationLicenseORM.monthly_cost), 0))
-            .where(OrganizationLicenseORM.provider_id == provider_id)
+            select(func.coalesce(func.sum(OrganizationLicenseORM.monthly_cost), 0)).where(
+                OrganizationLicenseORM.provider_id == provider_id
+            )
         )
         return Decimal(str(result.scalar_one()))
 
@@ -144,9 +145,7 @@ class OrganizationLicenseRepository(BaseRepository[OrganizationLicenseORM]):
         await self.session.refresh(license_orm)
         return license_orm
 
-    async def delete_organization_license(
-        self, license_orm: OrganizationLicenseORM
-    ) -> None:
+    async def delete_organization_license(self, license_orm: OrganizationLicenseORM) -> None:
         """Delete an organization license.
 
         Args:

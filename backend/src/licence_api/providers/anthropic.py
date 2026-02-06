@@ -186,19 +186,21 @@ class AnthropicProvider(BaseProvider):
                     role = user.get("role", "user")
                     license_type = self.ROLE_LICENSE_MAP.get(role, "User")
 
-                    licenses.append({
-                        "external_user_id": user.get("id"),
-                        "email": user.get("email"),
-                        "license_type": license_type,
-                        "status": "active",
-                        "assigned_at": self._parse_datetime(user.get("added_at")),
-                        "last_activity_at": None,
-                        "metadata": {
-                            "user_id": user.get("id"),
-                            "name": user.get("name"),
-                            "role": role,
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": user.get("id"),
+                            "email": user.get("email"),
+                            "license_type": license_type,
+                            "status": "active",
+                            "assigned_at": self._parse_datetime(user.get("added_at")),
+                            "last_activity_at": None,
+                            "metadata": {
+                                "user_id": user.get("id"),
+                                "name": user.get("name"),
+                                "role": role,
+                            },
+                        }
+                    )
 
                 logger.info(f"Fetched {len(users)} users from Anthropic")
 
@@ -223,20 +225,48 @@ class AnthropicProvider(BaseProvider):
                             if lic["metadata"].get("user_id") == owner_id:
                                 if "api_keys" not in lic["metadata"]:
                                     lic["metadata"]["api_keys"] = []
-                                lic["metadata"]["api_keys"].append({
-                                    "id": key_id,
-                                    "name": key_name,
-                                    "status": key.get("status", "active"),
-                                })
+                                lic["metadata"]["api_keys"].append(
+                                    {
+                                        "id": key_id,
+                                        "name": key_name,
+                                        "status": key.get("status", "active"),
+                                    }
+                                )
                                 break
                         else:
                             # Owner not in user list, add as separate entry
-                            owner_email = created_by.get("email") if isinstance(created_by, dict) else None
-                            licenses.append({
+                            if isinstance(created_by, dict):
+                                owner_email = created_by.get("email")
+                            else:
+                                owner_email = None
+                            key_status = key.get("status")
+                            licenses.append(
+                                {
+                                    "external_user_id": f"api_key:{key_id}",
+                                    "email": owner_email,
+                                    "license_type": "API Key",
+                                    "status": "active" if key_status != "disabled" else "disabled",
+                                    "assigned_at": self._parse_datetime(key.get("created_at")),
+                                    "last_activity_at": self._parse_datetime(
+                                        key.get("last_used_at")
+                                    ),
+                                    "metadata": {
+                                        "key_id": key_id,
+                                        "key_name": key_name,
+                                        "partial_key_hint": key.get("partial_key_hint"),
+                                        "workspace_id": key.get("workspace_id"),
+                                    },
+                                }
+                            )
+                    else:
+                        # Unassigned/service key
+                        licenses.append(
+                            {
                                 "external_user_id": f"api_key:{key_id}",
-                                "email": owner_email,
                                 "license_type": "API Key",
-                                "status": "active" if key.get("status") != "disabled" else "disabled",
+                                "status": "active"
+                                if key.get("status") != "disabled"
+                                else "disabled",
                                 "assigned_at": self._parse_datetime(key.get("created_at")),
                                 "last_activity_at": self._parse_datetime(key.get("last_used_at")),
                                 "metadata": {
@@ -245,22 +275,8 @@ class AnthropicProvider(BaseProvider):
                                     "partial_key_hint": key.get("partial_key_hint"),
                                     "workspace_id": key.get("workspace_id"),
                                 },
-                            })
-                    else:
-                        # Unassigned/service key
-                        licenses.append({
-                            "external_user_id": f"api_key:{key_id}",
-                            "license_type": "API Key",
-                            "status": "active" if key.get("status") != "disabled" else "disabled",
-                            "assigned_at": self._parse_datetime(key.get("created_at")),
-                            "last_activity_at": self._parse_datetime(key.get("last_used_at")),
-                            "metadata": {
-                                "key_id": key_id,
-                                "key_name": key_name,
-                                "partial_key_hint": key.get("partial_key_hint"),
-                                "workspace_id": key.get("workspace_id"),
-                            },
-                        })
+                            }
+                        )
 
                 logger.info(f"Processed {len(api_keys)} API keys from Anthropic")
 

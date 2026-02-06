@@ -5,8 +5,20 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
@@ -32,7 +44,9 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
     )
     monthly_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)
-    extra_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
+    extra_data: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, default=dict, nullable=True
+    )
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Service account fields
@@ -56,7 +70,9 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
     match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     match_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     match_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    match_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    match_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     match_reviewed_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
     )
@@ -106,6 +122,6 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
 
 
 # Import here to avoid circular import
+from licence_api.models.orm.admin_user import AdminUserORM  # noqa: E402, F401
 from licence_api.models.orm.employee import EmployeeORM  # noqa: E402, F401
 from licence_api.models.orm.provider import ProviderORM  # noqa: E402, F401
-from licence_api.models.orm.admin_user import AdminUserORM  # noqa: E402, F401

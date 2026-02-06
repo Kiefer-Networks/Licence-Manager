@@ -157,8 +157,7 @@ class NotificationService:
             return False
 
         license_list = "\n".join(
-            f"  • {lic['provider']}: {lic.get('type', 'Unknown')}"
-            for lic in pending_licenses
+            f"  • {lic['provider']}: {lic.get('type', 'Unknown')}" for lic in pending_licenses
         )
 
         message = f"""
@@ -880,7 +879,10 @@ This organization license has been flagged for reordering.
 
                 # Non-retryable errors
                 non_retryable = (
-                    "channel_not_found", "invalid_auth", "token_revoked", "not_in_channel"
+                    "channel_not_found",
+                    "invalid_auth",
+                    "token_revoked",
+                    "not_in_channel",
                 )
                 if error in non_retryable:
                     logger.error(f"Slack API error (non-retryable): {error}")
@@ -888,7 +890,7 @@ This organization license has been flagged for reordering.
 
                 # Retryable error - use exponential backoff
                 if attempt < SLACK_MAX_RETRIES - 1:
-                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    delay = SLACK_RETRY_DELAY * (2**attempt)
                     logger.warning(f"Slack API error: {error}, retrying in {delay}s")
                     await asyncio.sleep(delay)
                 else:
@@ -897,7 +899,7 @@ This organization license has been flagged for reordering.
 
             except httpx.TimeoutException:
                 if attempt < SLACK_MAX_RETRIES - 1:
-                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    delay = SLACK_RETRY_DELAY * (2**attempt)
                     logger.warning(f"Slack request timeout, retrying in {delay}s")
                     await asyncio.sleep(delay)
                 else:

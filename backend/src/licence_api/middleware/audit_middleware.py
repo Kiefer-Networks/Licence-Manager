@@ -1,7 +1,7 @@
 """Audit logging middleware."""
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -39,10 +39,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             Response from downstream handler
         """
         # Skip non-mutation methods and excluded paths
-        if (
-            request.method not in self.AUDIT_METHODS
-            or request.url.path in self.EXCLUDED_PATHS
-        ):
+        if request.method not in self.AUDIT_METHODS or request.url.path in self.EXCLUDED_PATHS:
             return await call_next(request)
 
         # Extract client info

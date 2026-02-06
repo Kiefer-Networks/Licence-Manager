@@ -2,13 +2,11 @@
 
 import logging
 import os
-import traceback
 from typing import Any
 
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -50,6 +48,7 @@ def _get_cors_headers(request: Request) -> dict[str, str]:
         }
 
     return {}
+
 
 # Safe error messages that can be shown to users
 SAFE_ERROR_MESSAGES = {
@@ -306,7 +305,8 @@ def sanitize_error_for_audit(error: Exception) -> dict[str, str]:
     error_msg = re.sub(r"['\"]?(/[a-zA-Z0-9_./\-]+|[A-Z]:\\[^\s'\"]+)['\"]?", "[PATH]", error_msg)
 
     # Remove anything that looks like a connection string
-    error_msg = re.sub(r"(postgresql|mysql|sqlite|mongodb|redis)://[^\s]+", "[CONNECTION_STRING]", error_msg)
+    conn_pattern = r"(postgresql|mysql|sqlite|mongodb|redis)://[^\s]+"
+    error_msg = re.sub(conn_pattern, "[CONNECTION_STRING]", error_msg)
 
     # Remove email addresses
     error_msg = re.sub(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", "[EMAIL]", error_msg)

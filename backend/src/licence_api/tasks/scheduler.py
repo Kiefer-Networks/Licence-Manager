@@ -35,9 +35,9 @@ async def sync_all_providers_job() -> None:
 async def check_inactive_licenses_job() -> None:
     """Background job to check for inactive licenses and send notifications."""
     from licence_api.database import async_session_maker
-    from licence_api.services.report_service import ReportService
-    from licence_api.services.notification_service import NotificationService
     from licence_api.repositories.settings_repository import SettingsRepository
+    from licence_api.services.notification_service import NotificationService
+    from licence_api.services.report_service import ReportService
 
     logger.info("Checking for inactive licenses")
 
@@ -72,9 +72,9 @@ async def check_inactive_licenses_job() -> None:
 async def check_offboarded_employees_job() -> None:
     """Background job to check for offboarded employees with licenses."""
     from licence_api.database import async_session_maker
-    from licence_api.services.report_service import ReportService
-    from licence_api.services.notification_service import NotificationService
     from licence_api.repositories.settings_repository import SettingsRepository
+    from licence_api.services.notification_service import NotificationService
+    from licence_api.services.report_service import ReportService
 
     logger.info("Checking for offboarded employees with licenses")
 
@@ -111,9 +111,9 @@ async def check_offboarded_employees_job() -> None:
 async def check_expiring_licenses_job() -> None:
     """Background job to check for expiring licenses, packages, and org licenses."""
     from licence_api.database import async_session_maker
+    from licence_api.repositories.settings_repository import SettingsRepository
     from licence_api.services.expiration_service import ExpirationService
     from licence_api.services.notification_service import NotificationService
-    from licence_api.repositories.settings_repository import SettingsRepository
 
     logger.info("Checking for expiring and expired licenses, packages, and org licenses")
 
@@ -149,9 +149,10 @@ async def check_expiring_licenses_job() -> None:
                         slack_token=slack_token,
                     )
                 if update_counts.get("org_licenses_expired", 0) > 0:
+                    count = update_counts["org_licenses_expired"]
                     await notification_service.notify_org_license_expired(
                         provider_name="Multiple providers",
-                        org_license_name=f"{update_counts['org_licenses_expired']} organization license(s)",
+                        org_license_name=f"{count} organization license(s)",
                         slack_token=slack_token,
                     )
 
@@ -162,9 +163,12 @@ async def check_expiring_licenses_job() -> None:
             total_expiring = 0
 
             # Check expiring individual licenses
-            expiring_licenses = await expiration_service.get_expiring_licenses(days_ahead=expiring_days)
+            expiring_licenses = await expiration_service.get_expiring_licenses(
+                days_ahead=expiring_days
+            )
             if expiring_licenses and slack_token:
                 from collections import defaultdict
+
                 by_provider: dict = defaultdict(list)
                 for lic, provider, employee in expiring_licenses:
                     by_provider[provider.display_name].append(lic)
@@ -186,9 +190,12 @@ async def check_expiring_licenses_job() -> None:
             total_expiring += len(expiring_licenses)
 
             # Check expiring packages
-            expiring_packages = await expiration_service.get_expiring_packages(days_ahead=expiring_days)
+            expiring_packages = await expiration_service.get_expiring_packages(
+                days_ahead=expiring_days
+            )
             if expiring_packages and slack_token:
                 from collections import defaultdict
+
                 by_provider_pkg: dict = defaultdict(list)
                 for pkg in expiring_packages:
                     by_provider_pkg[pkg.provider.display_name].append(pkg)
@@ -210,9 +217,12 @@ async def check_expiring_licenses_job() -> None:
             total_expiring += len(expiring_packages)
 
             # Check expiring org licenses
-            expiring_org = await expiration_service.get_expiring_org_licenses(days_ahead=expiring_days)
+            expiring_org = await expiration_service.get_expiring_org_licenses(
+                days_ahead=expiring_days
+            )
             if expiring_org and slack_token:
                 from collections import defaultdict
+
                 by_provider_org: dict = defaultdict(list)
                 for org_lic in expiring_org:
                     by_provider_org[org_lic.provider.display_name].append(org_lic)

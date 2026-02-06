@@ -4,9 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, and_, or_, func, distinct, cast, String
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy import String, and_, cast, distinct, func, or_, select
 
 from licence_api.models.orm.admin_user import AdminUserORM
 from licence_api.models.orm.audit_log import AuditLogORM
@@ -140,9 +138,7 @@ class AuditRepository(BaseRepository[AuditLogORM]):
 
         # For search, we need to join with admin_users
         if search:
-            query = query.outerjoin(
-                AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
-            )
+            query = query.outerjoin(AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id)
             count_query = count_query.outerjoin(
                 AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
             )
@@ -258,9 +254,7 @@ class AuditRepository(BaseRepository[AuditLogORM]):
         query = select(AuditLogORM)
 
         if search:
-            query = query.outerjoin(
-                AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id
-            )
+            query = query.outerjoin(AdminUserORM, AuditLogORM.admin_user_id == AdminUserORM.id)
 
         conditions = []
 

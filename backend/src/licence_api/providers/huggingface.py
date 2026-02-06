@@ -308,19 +308,22 @@ class HuggingFaceProvider(BaseProvider):
                     metadata["hf_user_id"] = user_id
                     metadata["hf_username"] = username
 
-                    licenses.append({
-                        "external_user_id": external_user_id,
-                        "email": email,
-                        "license_type": license_type,
-                        "status": "active",
-                        "assigned_at": None,  # Not provided in API
-                        "last_activity_at": None,  # Not provided in API
-                        "metadata": metadata,
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": external_user_id,
+                            "email": email,
+                            "license_type": license_type,
+                            "status": "active",
+                            "assigned_at": None,  # Not provided in API
+                            "last_activity_at": None,  # Not provided in API
+                            "metadata": metadata,
+                        }
+                    )
 
                 logger.info(
                     f"Fetched {len(members)} members from Hugging Face "
-                    f"({members_with_email} with email, {members_without_email} require manual linking)"
+                    f"({members_with_email} with email, "
+                    f"{members_without_email} require manual linking)"
                 )
 
             except Exception as e:
@@ -347,7 +350,9 @@ class HuggingFaceProvider(BaseProvider):
             return False
 
         if role not in self.ROLE_LICENSE_MAP:
-            logger.error(f"Invalid role: {role}. Must be one of: {list(self.ROLE_LICENSE_MAP.keys())}")
+            logger.error(
+                f"Invalid role: {role}. Must be one of: {list(self.ROLE_LICENSE_MAP.keys())}"
+            )
             return False
 
         try:
@@ -367,8 +372,9 @@ class HuggingFaceProvider(BaseProvider):
                     logger.info(f"Changed role for {username} to {role}")
                     return True
                 else:
+                    status = response.status_code
                     logger.error(
-                        f"Failed to change role for {username}: {response.status_code} - {response.text}"
+                        f"Failed to change role for {username}: {status} - {response.text}"
                     )
                     return False
 
@@ -392,5 +398,7 @@ class HuggingFaceProvider(BaseProvider):
             "manual_linking_hint": (
                 "This provider returns usernames only. "
                 "Use manual linking to associate members with employees."
-            ) if not self.has_email_access else None,
+            )
+            if not self.has_email_access
+            else None,
         }

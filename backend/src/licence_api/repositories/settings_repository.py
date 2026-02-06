@@ -24,9 +24,7 @@ class SettingsRepository:
         Returns:
             Setting value or None if not found
         """
-        result = await self.session.execute(
-            select(SettingsORM).where(SettingsORM.key == key)
-        )
+        result = await self.session.execute(select(SettingsORM).where(SettingsORM.key == key))
         setting = result.scalar_one_or_none()
         return setting.value if setting else None
 
@@ -40,9 +38,7 @@ class SettingsRepository:
         Returns:
             Created or updated SettingsORM
         """
-        result = await self.session.execute(
-            select(SettingsORM).where(SettingsORM.key == key)
-        )
+        result = await self.session.execute(select(SettingsORM).where(SettingsORM.key == key))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -66,9 +62,7 @@ class SettingsRepository:
         Returns:
             True if deleted, False if not found
         """
-        result = await self.session.execute(
-            select(SettingsORM).where(SettingsORM.key == key)
-        )
+        result = await self.session.execute(select(SettingsORM).where(SettingsORM.key == key))
         setting = result.scalar_one_or_none()
 
         if setting is None:

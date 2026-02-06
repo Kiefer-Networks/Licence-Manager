@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.dto.admin_account import (
     AdminAccountPatternCreate,
-    AdminAccountPatternResponse,
     AdminAccountPatternListResponse,
+    AdminAccountPatternResponse,
     ApplyAdminPatternsResponse,
-    OrphanedAdminAccountWarning,
     OrphanedAdminAccountsResponse,
+    OrphanedAdminAccountWarning,
 )
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
@@ -225,7 +225,9 @@ class AdminAccountService:
             patterns_applied=patterns_applied,
         )
 
-    async def check_and_mark_license(self, license_external_user_id: str) -> AdminAccountPatternORM | None:
+    async def check_and_mark_license(
+        self, license_external_user_id: str
+    ) -> AdminAccountPatternORM | None:
         """Check if an email matches any pattern and return the matching pattern.
 
         This method is used during sync to automatically mark licenses as admin accounts.

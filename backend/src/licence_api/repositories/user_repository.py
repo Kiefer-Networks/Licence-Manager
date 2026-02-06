@@ -1,10 +1,9 @@
 """Admin user repository."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from licence_api.models.orm.admin_user import AdminUserORM
@@ -31,9 +30,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
         """
         result = await self.session.execute(
             select(AdminUserORM)
-            .options(
-                selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions)
-            )
+            .options(selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions))
             .where(AdminUserORM.email == email)
         )
         return result.scalar_one_or_none()
@@ -49,9 +46,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
         """
         result = await self.session.execute(
             select(AdminUserORM)
-            .options(
-                selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions)
-            )
+            .options(selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions))
             .where(AdminUserORM.id == user_id)
         )
         return result.scalar_one_or_none()
@@ -64,9 +59,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
         """
         result = await self.session.execute(
             select(AdminUserORM)
-            .options(
-                selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions)
-            )
+            .options(selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions))
             .order_by(AdminUserORM.email)
         )
         return list(result.scalars().all())
@@ -102,7 +95,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             picture_url=picture_url,
             auth_provider=auth_provider,
             require_password_change=require_password_change,
-            password_changed_at=datetime.now(timezone.utc) if password_hash else None,
+            password_changed_at=datetime.now(UTC) if password_hash else None,
             language=language,
         )
         return user
@@ -137,7 +130,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             )
 
         user.password_hash = password_hash
-        user.password_changed_at = datetime.now(timezone.utc)
+        user.password_changed_at = datetime.now(UTC)
         user.require_password_change = require_change
         user.failed_login_attempts = 0
         user.is_locked = False
@@ -187,7 +180,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
         # Lock account after 5 failed attempts
         if user.failed_login_attempts >= 5:
             user.is_locked = True
-            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+            user.locked_until = datetime.now(UTC) + timedelta(minutes=30)
 
         await self.session.flush()
         await self.session.refresh(user)
@@ -207,7 +200,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             return None
 
         user.failed_login_attempts = 0
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = datetime.now(UTC)
 
         await self.session.flush()
         await self.session.refresh(user)
@@ -248,9 +241,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             assigned_by: UUID of user assigning roles
         """
         # Delete existing roles
-        await self.session.execute(
-            delete(UserRoleORM).where(UserRoleORM.user_id == user_id)
-        )
+        await self.session.execute(delete(UserRoleORM).where(UserRoleORM.user_id == user_id))
 
         # Add new roles
         for role_id in role_ids:
@@ -323,9 +314,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             Number of active users
         """
         result = await self.session.execute(
-            select(func.count())
-            .select_from(AdminUserORM)
-            .where(AdminUserORM.is_active == True)
+            select(func.count()).select_from(AdminUserORM).where(AdminUserORM.is_active == True)
         )
         return result.scalar_one()
 
@@ -342,9 +331,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             return {}
 
         result = await self.session.execute(
-            select(AdminUserORM.id, AdminUserORM.email).where(
-                AdminUserORM.id.in_(user_ids)
-            )
+            select(AdminUserORM.id, AdminUserORM.email).where(AdminUserORM.id.in_(user_ids))
         )
         return {row.id: row.email for row in result.all()}
 
@@ -454,9 +441,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             return False
 
         # Delete user roles
-        await self.session.execute(
-            delete(UserRoleORM).where(UserRoleORM.user_id == user_id)
-        )
+        await self.session.execute(delete(UserRoleORM).where(UserRoleORM.user_id == user_id))
 
         # Delete refresh tokens
         await self.session.execute(
@@ -518,7 +503,7 @@ class UserRepository(BaseRepository[AdminUserORM]):
             return None
 
         user.totp_enabled = True
-        user.totp_verified_at = datetime.now(timezone.utc)
+        user.totp_verified_at = datetime.now(UTC)
         user.totp_backup_codes_encrypted = backup_codes_encrypted
         await self.session.flush()
         await self.session.refresh(user)
@@ -648,7 +633,7 @@ class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
         """
         token = await self.get_by_id(token_id)
         if token:
-            token.revoked_at = datetime.now(timezone.utc)
+            token.revoked_at = datetime.now(UTC)
             await self.session.flush()
 
     async def revoke_all_for_user(self, user_id: UUID) -> int:
@@ -667,7 +652,7 @@ class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
         )
         tokens = list(result.scalars().all())
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for token in tokens:
             token.revoked_at = now
 
@@ -687,7 +672,7 @@ class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
             select(RefreshTokenORM)
             .where(RefreshTokenORM.user_id == user_id)
             .where(RefreshTokenORM.revoked_at.is_(None))
-            .where(RefreshTokenORM.expires_at > datetime.now(timezone.utc))
+            .where(RefreshTokenORM.expires_at > datetime.now(UTC))
             .order_by(RefreshTokenORM.created_at.desc())
         )
         return list(result.scalars().all())
@@ -699,8 +684,7 @@ class RefreshTokenRepository(BaseRepository[RefreshTokenORM]):
             Number of tokens deleted
         """
         result = await self.session.execute(
-            delete(RefreshTokenORM)
-            .where(RefreshTokenORM.expires_at < datetime.now(timezone.utc))
+            delete(RefreshTokenORM).where(RefreshTokenORM.expires_at < datetime.now(UTC))
         )
         await self.session.flush()
         return result.rowcount

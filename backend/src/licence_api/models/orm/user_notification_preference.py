@@ -32,11 +32,11 @@ class UserNotificationPreferenceORM(Base, UUIDMixin, TimestampMixin):
     slack_channel: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
-    user: Mapped["AdminUserORM"] = relationship("AdminUserORM", back_populates="notification_preferences")
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "event_type", name="uq_user_notification_pref"),
+    user: Mapped["AdminUserORM"] = relationship(
+        "AdminUserORM", back_populates="notification_preferences"
     )
+
+    __table_args__ = (UniqueConstraint("user_id", "event_type", name="uq_user_notification_pref"),)
 
 
 # Import here to avoid circular import

@@ -12,6 +12,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.external_account import (
     BulkLinkRequest,
     BulkLinkResponse,
+    EmployeeSuggestion,
     ExternalAccountCreate,
     ExternalAccountListResponse,
     ExternalAccountResponse,
@@ -19,9 +20,8 @@ from licence_api.models.dto.external_account import (
     SuggestionsResponse,
     UsernameMatchingSettingResponse,
     UsernameMatchingSettingUpdate,
-    EmployeeSuggestion,
 )
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.services.external_account_service import ExternalAccountService
 
@@ -97,7 +97,11 @@ async def get_employee_external_accounts(
 
 
 # Link an external account
-@router.post("/external-accounts", response_model=ExternalAccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/external-accounts",
+    response_model=ExternalAccountResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def link_external_account(
     request: Request,
     data: ExternalAccountCreate,
@@ -170,11 +174,7 @@ async def get_employee_suggestions(
         provider_type=data.provider_type,
         limit=data.limit,
     )
-    return SuggestionsResponse(
-        suggestions=[
-            EmployeeSuggestion(**s) for s in suggestions
-        ]
-    )
+    return SuggestionsResponse(suggestions=[EmployeeSuggestion(**s) for s in suggestions])
 
 
 # Bulk link accounts

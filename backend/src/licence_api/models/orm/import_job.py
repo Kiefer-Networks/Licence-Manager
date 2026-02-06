@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
@@ -36,12 +37,8 @@ class ImportJobORM(Base, UUIDMixin, TimestampMixin):
     column_mapping: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     options: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     error_details: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("admin_users.id", ondelete="SET NULL"),

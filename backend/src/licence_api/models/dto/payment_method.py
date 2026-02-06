@@ -1,6 +1,5 @@
 """Payment method DTOs."""
 
-from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -21,7 +20,12 @@ class BankAccountDetails(BaseModel):
 
     bank_name: str = Field(min_length=1, max_length=255)
     iban_last_four: str | None = Field(default=None, min_length=4, max_length=4, pattern=r"^\d{4}$")
-    bic: str | None = Field(default=None, min_length=8, max_length=11, pattern=r"^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$")
+    bic: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=11,
+        pattern=r"^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$",
+    )
 
 
 class PaymentMethodCreate(BaseModel):

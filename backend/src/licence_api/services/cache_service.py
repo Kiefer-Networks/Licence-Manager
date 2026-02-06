@@ -2,8 +2,9 @@
 
 import json
 import logging
-from typing import TypeVar, Callable
+from collections.abc import Callable
 from functools import wraps
+from typing import TypeVar
 
 import redis.asyncio as redis
 from pydantic import BaseModel
@@ -434,6 +435,7 @@ def cache_response(
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
@@ -459,4 +461,5 @@ def cache_response(
             return result
 
         return wrapper
+
     return decorator

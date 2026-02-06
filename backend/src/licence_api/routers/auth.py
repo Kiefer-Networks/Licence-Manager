@@ -3,11 +3,23 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.config import get_settings
+from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
@@ -32,7 +44,7 @@ from licence_api.models.dto.auth import (
     UserNotificationPreferenceUpdate,
 )
 from licence_api.security.auth import get_current_user
-from licence_api.security.csrf import generate_csrf_token, CSRFProtected
+from licence_api.security.csrf import CSRFProtected, generate_csrf_token
 from licence_api.security.rate_limit import (
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
@@ -40,7 +52,6 @@ from licence_api.security.rate_limit import (
     AUTH_REFRESH_LIMIT,
     limiter,
 )
-from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.services.auth_service import AuthService
 
 router = APIRouter()
@@ -53,6 +64,7 @@ CSRF_TOKEN_TTL_SECONDS = 8 * 3600
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     """Get AuthService instance."""
     return AuthService(db)
+
 
 # Available notification event types
 NOTIFICATION_EVENT_TYPES = [
@@ -115,7 +127,9 @@ NOTIFICATION_EVENT_TYPES = [
 EVENT_TYPE_MAP = {e.code: e for e in NOTIFICATION_EVENT_TYPES}
 
 
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
+def _set_auth_cookies(
+    response: Response, access_token: str, refresh_token: str | None = None
+) -> None:
     """Set authentication cookies on response.
 
     Uses cookie security settings from configuration.
@@ -651,7 +665,9 @@ async def update_notification_preferences(
     )
 
 
-@router.patch("/me/notification-preferences/{event_type}", response_model=UserNotificationPreferenceResponse)
+@router.patch(
+    "/me/notification-preferences/{event_type}", response_model=UserNotificationPreferenceResponse
+)
 @limiter.limit(AUTH_REFRESH_LIMIT)
 async def update_single_notification_preference(
     request: Request,

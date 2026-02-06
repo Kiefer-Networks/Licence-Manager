@@ -4,10 +4,10 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 
-from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.models.orm.license import LicenseORM
+from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.repositories.base import BaseRepository
 
 
@@ -71,9 +71,7 @@ class LicensePackageRepository(BaseRepository[LicensePackageORM]):
         )
         return result.scalar_one_or_none()
 
-    async def get_assigned_seats_count(
-        self, provider_id: UUID, license_type: str
-    ) -> int:
+    async def get_assigned_seats_count(self, provider_id: UUID, license_type: str) -> int:
         """Count assigned seats for a license type.
 
         Args:
@@ -93,9 +91,7 @@ class LicensePackageRepository(BaseRepository[LicensePackageORM]):
         )
         return result.scalar_one()
 
-    async def get_all_assigned_seats_counts(
-        self, provider_id: UUID
-    ) -> dict[str, int]:
+    async def get_all_assigned_seats_counts(self, provider_id: UUID) -> dict[str, int]:
         """Get assigned seat counts for all license types of a provider.
 
         Args:

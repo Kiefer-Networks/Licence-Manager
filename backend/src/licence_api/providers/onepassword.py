@@ -91,7 +91,9 @@ class OnePasswordProvider(BaseProvider):
 
                     # Get name
                     name_obj = user.get("name", {})
-                    full_name = user.get("displayName") or f"{name_obj.get('givenName', '')} {name_obj.get('familyName', '')}".strip()
+                    given = name_obj.get("givenName", "")
+                    family = name_obj.get("familyName", "")
+                    full_name = user.get("displayName") or f"{given} {family}".strip()
 
                     # Determine status
                     active = user.get("active", True)
@@ -105,9 +107,7 @@ class OnePasswordProvider(BaseProvider):
                     meta = user.get("meta", {})
                     created_at = None
                     if meta.get("created"):
-                        created_at = datetime.fromisoformat(
-                            meta["created"].replace("Z", "+00:00")
-                        )
+                        created_at = datetime.fromisoformat(meta["created"].replace("Z", "+00:00"))
 
                     modified_at = None
                     if meta.get("lastModified"):
@@ -118,31 +118,35 @@ class OnePasswordProvider(BaseProvider):
                     # Get groups
                     groups = []
                     for group in user.get("groups", []):
-                        groups.append({
-                            "id": group.get("value"),
-                            "name": group.get("display"),
-                        })
+                        groups.append(
+                            {
+                                "id": group.get("value"),
+                                "name": group.get("display"),
+                            }
+                        )
 
                     external_id = user.get("externalId") or user.get("id")
 
-                    licenses.append({
-                        "external_user_id": email.lower() if email else external_id,
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": modified_at,
-                        "metadata": {
-                            "onepassword_id": user.get("id"),
-                            "external_id": user.get("externalId"),
-                            "name": full_name,
-                            "username": user.get("userName"),
-                            "user_type": user_type,
-                            "groups": groups,
-                            "locale": user.get("locale"),
-                            "timezone": user.get("timezone"),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": email.lower() if email else external_id,
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": modified_at,
+                            "metadata": {
+                                "onepassword_id": user.get("id"),
+                                "external_id": user.get("externalId"),
+                                "name": full_name,
+                                "username": user.get("userName"),
+                                "user_type": user_type,
+                                "groups": groups,
+                                "locale": user.get("locale"),
+                                "timezone": user.get("timezone"),
+                            },
+                        }
+                    )
 
                 # Check if there are more results
                 total_results = data.get("totalResults", 0)

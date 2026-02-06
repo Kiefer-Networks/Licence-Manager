@@ -5,8 +5,8 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.admin_account_pattern import AdminAccountPatternORM
+from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.base import BaseRepository
 
 
@@ -126,9 +126,7 @@ class AdminAccountPatternRepository(BaseRepository[AdminAccountPatternORM]):
 
         return results
 
-    async def find_matching_licenses(
-        self, pattern: AdminAccountPatternORM
-    ) -> list[LicenseORM]:
+    async def find_matching_licenses(self, pattern: AdminAccountPatternORM) -> list[LicenseORM]:
         """Find all licenses matching a pattern.
 
         Args:

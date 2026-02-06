@@ -168,7 +168,9 @@ async def delete_user(
     except UserNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     except CannotDeleteSelfError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own account")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own account"
+        )
 
 
 @router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
@@ -336,7 +338,9 @@ async def update_role(
     except RoleNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     except CannotModifySystemRoleError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system role")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system role"
+        )
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -354,11 +358,14 @@ async def delete_role(
     except RoleNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     except CannotModifySystemRoleError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system role")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system role"
+        )
     except RoleHasUsersError as e:
+        user_count = e.details.get("user_count", 0)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete role with assigned users ({e.details.get('user_count', 0)} users)",
+            detail=f"Cannot delete role with assigned users ({user_count} users)",
         )
 
 

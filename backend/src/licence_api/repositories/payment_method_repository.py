@@ -1,11 +1,9 @@
 """Payment method repository."""
 
 from datetime import date
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.payment_method import PaymentMethodORM
 from licence_api.repositories.base import BaseRepository
@@ -33,9 +31,7 @@ class PaymentMethodRepository(BaseRepository[PaymentMethodORM]):
     async def set_default(self, payment_method_id: UUID) -> None:
         """Set a payment method as default (and unset others)."""
         # Unset all defaults
-        await self.session.execute(
-            update(PaymentMethodORM).values(is_default=False)
-        )
+        await self.session.execute(update(PaymentMethodORM).values(is_default=False))
         # Set the new default
         await self.session.execute(
             update(PaymentMethodORM)

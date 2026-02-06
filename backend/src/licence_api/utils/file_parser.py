@@ -1,63 +1,138 @@
 """CSV file parser with auto-detection for license imports."""
 
 import csv
-import io
 import re
-from collections import Counter
 from typing import Any
 
 import chardet
 
-
 # Known column aliases for auto-mapping
 COLUMN_ALIASES: dict[str, list[str]] = {
     "license_key": [
-        "license_key", "license", "lizenz", "key", "schlüssel", "id",
-        "license_id", "lizenz_id", "licensekey", "lizenzschlüssel",
+        "license_key",
+        "license",
+        "lizenz",
+        "key",
+        "schlüssel",
+        "id",
+        "license_id",
+        "lizenz_id",
+        "licensekey",
+        "lizenzschlüssel",
     ],
     "external_user_id": [
-        "external_user_id", "user_id", "benutzer_id", "user", "benutzer",
-        "username", "benutzername", "account", "konto", "login",
+        "external_user_id",
+        "user_id",
+        "benutzer_id",
+        "user",
+        "benutzer",
+        "username",
+        "benutzername",
+        "account",
+        "konto",
+        "login",
     ],
     "license_type": [
-        "license_type", "type", "typ", "art", "edition", "version",
-        "lizenztyp", "plan", "tier", "stufe", "package", "paket",
+        "license_type",
+        "type",
+        "typ",
+        "art",
+        "edition",
+        "version",
+        "lizenztyp",
+        "plan",
+        "tier",
+        "stufe",
+        "package",
+        "paket",
     ],
     "employee_email": [
-        "employee_email", "email", "e-mail", "mail", "benutzer_email",
-        "user_email", "emailaddress", "e_mail", "mitarbeiter_email",
+        "employee_email",
+        "email",
+        "e-mail",
+        "mail",
+        "benutzer_email",
+        "user_email",
+        "emailaddress",
+        "e_mail",
+        "mitarbeiter_email",
     ],
     "monthly_cost": [
-        "monthly_cost", "cost", "kosten", "preis", "price", "betrag",
-        "monatlich", "monthly", "monatliche_kosten", "amount", "gebühr",
+        "monthly_cost",
+        "cost",
+        "kosten",
+        "preis",
+        "price",
+        "betrag",
+        "monatlich",
+        "monthly",
+        "monatliche_kosten",
+        "amount",
+        "gebühr",
     ],
     "currency": [
-        "currency", "währung", "waehrung", "curr", "ccy",
+        "currency",
+        "währung",
+        "waehrung",
+        "curr",
+        "ccy",
     ],
     "valid_until": [
-        "valid_until", "valid", "gültig_bis", "gueltig_bis", "ablauf",
-        "expiry", "expires", "expires_at", "expiration", "ablaufdatum",
+        "valid_until",
+        "valid",
+        "gültig_bis",
+        "gueltig_bis",
+        "ablauf",
+        "expiry",
+        "expires",
+        "expires_at",
+        "expiration",
+        "ablaufdatum",
     ],
     "status": [
-        "status", "zustand", "state", "aktiv", "active",
+        "status",
+        "zustand",
+        "state",
+        "aktiv",
+        "active",
     ],
     "notes": [
-        "notes", "notizen", "bemerkung", "comment", "kommentar",
-        "description", "beschreibung", "anmerkung", "hinweis",
+        "notes",
+        "notizen",
+        "bemerkung",
+        "comment",
+        "kommentar",
+        "description",
+        "beschreibung",
+        "anmerkung",
+        "hinweis",
     ],
     "is_service_account": [
-        "is_service_account", "service_account", "servicekonto",
-        "service", "technical", "technisch", "bot",
+        "is_service_account",
+        "service_account",
+        "servicekonto",
+        "service",
+        "technical",
+        "technisch",
+        "bot",
     ],
     "service_account_name": [
-        "service_account_name", "service_name", "servicename",
-        "technical_name", "bot_name",
+        "service_account_name",
+        "service_name",
+        "servicename",
+        "technical_name",
+        "bot_name",
     ],
     "is_admin_account": [
-        "is_admin_account", "admin_account", "admin", "administrator",
+        "is_admin_account",
+        "admin_account",
+        "admin",
+        "administrator",
     ],
     "admin_account_name": [
-        "admin_account_name", "admin_name", "adminname",
+        "admin_account_name",
+        "admin_name",
+        "adminname",
     ],
 }
 
@@ -232,7 +307,7 @@ def parse_csv_file(
     else:
         # Generate column names (Column1, Column2, etc.)
         first_row = rows_raw[0]
-        columns = [f"Column{i+1}" for i in range(len(first_row))]
+        columns = [f"Column{i + 1}" for i in range(len(first_row))]
         data_rows = rows_raw
 
     # Validate columns

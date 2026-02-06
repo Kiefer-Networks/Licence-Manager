@@ -72,7 +72,9 @@ class EmployeeUpdate(BaseModel):
     """DTO for updating a manual employee."""
 
     email: EmailStr | None = Field(default=None, description="Employee email address")
-    full_name: str | None = Field(default=None, min_length=1, max_length=255, description="Full name of the employee")
+    full_name: str | None = Field(
+        default=None, min_length=1, max_length=255, description="Full name of the employee"
+    )
     department: str | None = Field(default=None, max_length=255, description="Department name")
     status: EmployeeStatus | None = Field(default=None, description="Employment status")
     start_date: date | None = Field(default=None, description="Employment start date")

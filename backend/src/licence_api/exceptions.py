@@ -10,7 +10,9 @@ from typing import Any
 class LicenceAPIError(Exception):
     """Base exception for all licence API errors."""
 
-    def __init__(self, message: str = "An error occurred", details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, message: str = "An error occurred", details: dict[str, Any] | None = None
+    ) -> None:
         self.message = message
         self.details = details or {}
         super().__init__(self.message)

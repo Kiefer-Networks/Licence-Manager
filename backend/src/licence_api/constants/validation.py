@@ -10,24 +10,28 @@ from typing import Final
 # License Constants
 # =============================================================================
 
-ALLOWED_LICENSE_STATUSES: Final[frozenset[str]] = frozenset({
-    "active",
-    "inactive",
-    "suspended",
-    "pending",
-})
+ALLOWED_LICENSE_STATUSES: Final[frozenset[str]] = frozenset(
+    {
+        "active",
+        "inactive",
+        "suspended",
+        "pending",
+    }
+)
 
-ALLOWED_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset({
-    "external_user_id",
-    "synced_at",
-    "status",
-    "created_at",
-    "employee_name",
-    "provider_name",
-    "is_external",
-    "monthly_cost",
-    "license_type",
-})
+ALLOWED_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "external_user_id",
+        "synced_at",
+        "status",
+        "created_at",
+        "employee_name",
+        "provider_name",
+        "is_external",
+        "monthly_cost",
+        "license_type",
+    }
+)
 
 DEFAULT_LICENSE_SORT_COLUMN: Final[str] = "synced_at"
 
@@ -35,30 +39,36 @@ DEFAULT_LICENSE_SORT_COLUMN: Final[str] = "synced_at"
 # Employee Constants
 # =============================================================================
 
-ALLOWED_EMPLOYEE_STATUSES: Final[frozenset[str]] = frozenset({
-    "active",
-    "offboarded",
-    "pending",
-    "on_leave",
-})
+ALLOWED_EMPLOYEE_STATUSES: Final[frozenset[str]] = frozenset(
+    {
+        "active",
+        "offboarded",
+        "pending",
+        "on_leave",
+    }
+)
 
-ALLOWED_EMPLOYEE_SOURCES: Final[frozenset[str]] = frozenset({
-    "hibob",
-    "personio",
-    "manual",
-})
+ALLOWED_EMPLOYEE_SOURCES: Final[frozenset[str]] = frozenset(
+    {
+        "hibob",
+        "personio",
+        "manual",
+    }
+)
 
-ALLOWED_EMPLOYEE_SORT_COLUMNS: Final[frozenset[str]] = frozenset({
-    "full_name",
-    "email",
-    "department",
-    "status",
-    "source",
-    "start_date",
-    "termination_date",
-    "synced_at",
-    "license_count",
-})
+ALLOWED_EMPLOYEE_SORT_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "full_name",
+        "email",
+        "department",
+        "status",
+        "source",
+        "start_date",
+        "termination_date",
+        "synced_at",
+        "license_count",
+    }
+)
 
 DEFAULT_EMPLOYEE_SORT_COLUMN: Final[str] = "full_name"
 
@@ -66,21 +76,25 @@ DEFAULT_EMPLOYEE_SORT_COLUMN: Final[str] = "full_name"
 # Service/Admin Account License Constants
 # =============================================================================
 
-ALLOWED_SERVICE_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset({
-    "external_user_id",
-    "synced_at",
-    "created_at",
-    "provider_name",
-    "monthly_cost",
-})
+ALLOWED_SERVICE_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "external_user_id",
+        "synced_at",
+        "created_at",
+        "provider_name",
+        "monthly_cost",
+    }
+)
 
-ALLOWED_ADMIN_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset({
-    "external_user_id",
-    "synced_at",
-    "created_at",
-    "provider_name",
-    "monthly_cost",
-})
+ALLOWED_ADMIN_LICENSE_SORT_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "external_user_id",
+        "synced_at",
+        "created_at",
+        "provider_name",
+        "monthly_cost",
+    }
+)
 
 DEFAULT_SERVICE_LICENSE_SORT_COLUMN: Final[str] = "external_user_id"
 

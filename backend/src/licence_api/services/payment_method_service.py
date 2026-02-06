@@ -236,9 +236,8 @@ class PaymentMethodService:
                 provider_names = [p.display_name for p in providers[:5]]
                 if provider_count > 5:
                     provider_names.append(f"... and {provider_count - 5} more")
-                raise ValueError(
-                    f"Cannot delete payment method: used by {provider_count} provider(s): {', '.join(provider_names)}"
-                )
+                msg = f"Cannot delete payment method: used by {provider_count} provider(s)"
+                raise ValueError(f"{msg}: {', '.join(provider_names)}")
 
         method_name = method.name
         method_type = method.type

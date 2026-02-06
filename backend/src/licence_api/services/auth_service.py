@@ -1,7 +1,7 @@
 """Authentication service."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -22,8 +22,10 @@ from licence_api.models.dto.auth import (
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
 from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_notification_preference_repository import (
+    UserNotificationPreferenceRepository,
+)
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
-from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
 from licence_api.security.auth import (
     create_access_token,
     create_refresh_token,
@@ -32,11 +34,11 @@ from licence_api.security.auth import (
 from licence_api.security.password import get_password_service
 from licence_api.services.totp_service import get_totp_service
 from licence_api.utils.file_validation import (
-    validate_image_signature,
     get_extension_from_content_type,
+    validate_image_signature,
 )
 from licence_api.utils.secure_logging import log_error, log_warning
-from licence_api.utils.security_events import log_security_event, SecurityEventType
+from licence_api.utils.security_events import SecurityEventType, log_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +113,7 @@ class AuthService:
 
         # Check if account is locked
         if user.is_locked:
-            if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+            if user.locked_until and user.locked_until > datetime.now(UTC):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Account is locked. Try again later.",
@@ -196,7 +198,7 @@ class AuthService:
         )
 
         raw_refresh, refresh_hash = create_refresh_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
+        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
 
         await self.token_repo.create_token(
             user_id=user.id,
@@ -256,9 +258,7 @@ class AuthService:
 
         # Check if it's a backup code
         if backup_codes_encrypted and len(normalized_code) == 8:
-            is_valid, updated_codes = totp_service.verify_backup_code(
-                code, backup_codes_encrypted
-            )
+            is_valid, updated_codes = totp_service.verify_backup_code(code, backup_codes_encrypted)
             if is_valid and updated_codes:
                 # Remove used backup code
                 await self.user_repo.update_backup_codes(user_id, updated_codes)
@@ -300,7 +300,7 @@ class AuthService:
                 detail="Invalid refresh token",
             )
 
-        if token_record.expires_at < datetime.now(timezone.utc):
+        if token_record.expires_at < datetime.now(UTC):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token expired",
@@ -331,7 +331,7 @@ class AuthService:
 
         # Create new refresh token (rotation)
         raw_refresh, refresh_hash = create_refresh_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
+        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
 
         await self.token_repo.create_token(
             user_id=user.id,
@@ -945,9 +945,7 @@ class AuthService:
         backup_codes_remaining = 0
         if user.totp_enabled and user.totp_backup_codes_encrypted:
             totp_service = get_totp_service()
-            hashed_codes = totp_service.decrypt_backup_codes(
-                user.totp_backup_codes_encrypted
-            )
+            hashed_codes = totp_service.decrypt_backup_codes(user.totp_backup_codes_encrypted)
             backup_codes_remaining = len(hashed_codes)
 
         return TotpStatusResponse(

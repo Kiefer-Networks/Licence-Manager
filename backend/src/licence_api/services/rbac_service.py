@@ -30,8 +30,8 @@ from licence_api.models.dto.auth import (
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.permission_repository import PermissionRepository
 from licence_api.repositories.role_repository import RoleRepository
-from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
 from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
 from licence_api.security.password import get_password_service
 from licence_api.services.email_service import EmailService
 
@@ -147,9 +147,7 @@ class RbacService:
                 raise ValidationError(errors[0])
         elif email_configured:
             # Auto-generate password for email delivery using policy
-            password = self.password_service.generate_temporary_password(
-                policy=password_policy
-            )
+            password = self.password_service.generate_temporary_password(policy=password_policy)
         else:
             # No email and no password provided
             raise ValidationError("Password is required when email is not configured")
@@ -186,7 +184,10 @@ class RbacService:
                 password_sent_via_email = True
             else:
                 # Email failed but user was created - log warning and return password
-                logger.warning(f"Failed to send password email to {request.email}, returning password in response")
+                logger.warning(
+                    f"Failed to send password email to {request.email}, "
+                    "returning password in response"
+                )
                 temporary_password = password
         elif not request.password:
             # No email configured, return password in response
@@ -363,9 +364,7 @@ class RbacService:
         password_policy = await self._get_password_policy()
 
         # Generate new temporary password using policy
-        new_password = self.password_service.generate_temporary_password(
-            policy=password_policy
-        )
+        new_password = self.password_service.generate_temporary_password(policy=password_policy)
 
         # Hash and update password
         password_hash = self.password_service.hash_password(new_password)

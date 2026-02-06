@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from licence_api.models.domain.provider import ProviderName, SyncStatus
+from licence_api.models.domain.provider import SyncStatus
 
 
 def validate_dict_size(v: dict[str, Any] | None, max_keys: int = 50) -> dict[str, Any] | None:

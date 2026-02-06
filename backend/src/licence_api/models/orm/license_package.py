@@ -4,7 +4,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,7 +61,9 @@ class LicensePackageORM(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     provider: Mapped["ProviderORM"] = relationship("ProviderORM", back_populates="license_packages")
-    canceller: Mapped["AdminUserORM | None"] = relationship("AdminUserORM", foreign_keys=[cancelled_by])
+    canceller: Mapped["AdminUserORM | None"] = relationship(
+        "AdminUserORM", foreign_keys=[cancelled_by]
+    )
 
     __table_args__ = (
         UniqueConstraint("provider_id", "license_type", name="uq_package_provider_type"),
@@ -60,5 +72,5 @@ class LicensePackageORM(Base, UUIDMixin, TimestampMixin):
 
 
 # Import here to avoid circular import
-from licence_api.models.orm.provider import ProviderORM  # noqa: E402, F401
 from licence_api.models.orm.admin_user import AdminUserORM  # noqa: E402, F401
+from licence_api.models.orm.provider import ProviderORM  # noqa: E402, F401

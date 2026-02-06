@@ -1,12 +1,11 @@
 """License repository."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, func, or_, select
 
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -124,7 +123,9 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         if admin_account_owner_id:
             query = query.where(LicenseORM.admin_account_owner_id == admin_account_owner_id)
-            count_query = count_query.where(LicenseORM.admin_account_owner_id == admin_account_owner_id)
+            count_query = count_query.where(
+                LicenseORM.admin_account_owner_id == admin_account_owner_id
+            )
 
         if department:
             query = query.where(EmployeeORM.department == department)
@@ -148,12 +149,16 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             # Must NOT match any company domain
             # Escape SQL wildcards in domains to prevent injection
             domain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@{escape_like_wildcards(domain)}", escape="\\")
+                ~LicenseORM.external_user_id.ilike(
+                    f"%@{escape_like_wildcards(domain)}", escape="\\"
+                )
                 for domain in company_domains
             ]
             # Also exclude subdomain matches (e.g., @sub.company.com)
             subdomain_conditions = [
-                ~LicenseORM.external_user_id.ilike(f"%@%.{escape_like_wildcards(domain)}", escape="\\")
+                ~LicenseORM.external_user_id.ilike(
+                    f"%@%.{escape_like_wildcards(domain)}", escape="\\"
+                )
                 for domain in company_domains
             ]
             external_filter = and_(
@@ -214,17 +219,14 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         Returns:
             List of inactive licenses with details
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_threshold)
+        cutoff = datetime.now(UTC) - timedelta(days=days_threshold)
 
         query = (
             select(LicenseORM, ProviderORM, EmployeeORM)
             .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
             .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
             .where(LicenseORM.status == "active")
-            .where(
-                (LicenseORM.last_activity_at < cutoff)
-                | (LicenseORM.last_activity_at.is_(None))
-            )
+            .where((LicenseORM.last_activity_at < cutoff) | (LicenseORM.last_activity_at.is_(None)))
         )
 
         if department:
@@ -349,9 +351,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             potential_savings = Decimal("0")
         else:
             unassigned_result = await self.session.execute(
-                select(func.count())
-                .select_from(LicenseORM)
-                .where(LicenseORM.employee_id.is_(None))
+                select(func.count()).select_from(LicenseORM).where(LicenseORM.employee_id.is_(None))
             )
             unassigned = unassigned_result.scalar_one()
 
@@ -365,10 +365,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         # Total monthly cost - include all licenses regardless of status
         # (unassigned licenses still cost money)
-        cost_query = (
-            select(func.sum(LicenseORM.monthly_cost))
-            .select_from(LicenseORM)
-        )
+        cost_query = select(func.sum(LicenseORM.monthly_cost)).select_from(LicenseORM)
         if department:
             cost_query = cost_query.join(
                 EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
@@ -391,8 +388,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             Dict mapping provider ID to count
         """
         result = await self.session.execute(
-            select(LicenseORM.provider_id, func.count())
-            .group_by(LicenseORM.provider_id)
+            select(LicenseORM.provider_id, func.count()).group_by(LicenseORM.provider_id)
         )
         return dict(result.all())
 
@@ -528,9 +524,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         from sqlalchemy import update
 
         result = await self.session.execute(
-            update(LicenseORM)
-            .where(LicenseORM.id.in_(license_ids))
-            .values(employee_id=None)
+            update(LicenseORM).where(LicenseORM.id.in_(license_ids)).values(employee_id=None)
         )
         await self.session.flush()
         return result.rowcount
@@ -758,7 +752,7 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             - unassigned: count of active licenses with no user assigned
             - external: count of active external licenses
         """
-        from sqlalchemy import func, case
+        from sqlalchemy import func
 
         # Build domain matching condition for external detection
         # A license is external if its email doesn't end with any company domain
@@ -768,14 +762,15 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             select(
                 LicenseORM.provider_id,
                 func.count().filter(LicenseORM.status == "active").label("active"),
-                func.count().filter(
+                func.count()
+                .filter(
                     and_(
                         LicenseORM.status == "active",
                         LicenseORM.employee_id.isnot(None),
                     )
-                ).label("assigned"),
-            )
-            .group_by(LicenseORM.provider_id)
+                )
+                .label("assigned"),
+            ).group_by(LicenseORM.provider_id)
         )
 
         stats: dict[UUID, dict[str, int]] = {}
@@ -794,8 +789,9 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         # (service accounts are intentionally unassigned and should not count as problems)
         # Also exclude licenses with suggested_employee_id (these are "suggested", not "external")
         unassigned_results = await self.session.execute(
-            select(LicenseORM.provider_id, LicenseORM.external_user_id, LicenseORM.match_status)
-            .where(
+            select(
+                LicenseORM.provider_id, LicenseORM.external_user_id, LicenseORM.match_status
+            ).where(
                 and_(
                     LicenseORM.status == "active",
                     LicenseORM.employee_id.is_(None),
@@ -811,7 +807,13 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             match_status = row.match_status
 
             if provider_id not in stats:
-                stats[provider_id] = {"active": 0, "assigned": 0, "not_in_hris": 0, "unassigned": 0, "external": 0}
+                stats[provider_id] = {
+                    "active": 0,
+                    "assigned": 0,
+                    "not_in_hris": 0,
+                    "unassigned": 0,
+                    "external": 0,
+                }
 
             # Check if license has no user assigned:
             # - empty external_user_id, OR
@@ -929,8 +931,12 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         # Escape SQL wildcards in domains to prevent injection
         for domain in company_domains:
             escaped_domain = escape_like_wildcards(domain)
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@{escaped_domain}", escape="\\"))
-            query = query.where(~LicenseORM.external_user_id.ilike(f"%@%.{escaped_domain}", escape="\\"))
+            query = query.where(
+                ~LicenseORM.external_user_id.ilike(f"%@{escaped_domain}", escape="\\")
+            )
+            query = query.where(
+                ~LicenseORM.external_user_id.ilike(f"%@%.{escaped_domain}", escape="\\")
+            )
 
         result = await self.session.execute(query)
         return result.scalar_one()
@@ -953,7 +959,6 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         Returns:
             List of licenses needing status update
         """
-        from datetime import date
         result = await self.session.execute(
             select(LicenseORM).where(
                 and_(
@@ -979,7 +984,6 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         Returns:
             List of licenses needing status update
         """
-        from datetime import date
         result = await self.session.execute(
             select(LicenseORM).where(
                 and_(

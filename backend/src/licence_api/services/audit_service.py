@@ -1,7 +1,7 @@
 """Audit service for centralized audit logging."""
 
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import Request
@@ -137,22 +137,24 @@ class AuditService:
     """
 
     # Sensitive fields that should be masked in audit logs
-    SENSITIVE_FIELDS = frozenset({
-        "password",
-        "api_key",
-        "api_secret",
-        "client_secret",
-        "access_token",
-        "refresh_token",
-        "bot_token",
-        "user_token",
-        "admin_api_key",
-        "auth_token",
-        "private_key",
-        "secret",
-        "credentials",
-        "service_account_json",
-    })
+    SENSITIVE_FIELDS = frozenset(
+        {
+            "password",
+            "api_key",
+            "api_secret",
+            "client_secret",
+            "access_token",
+            "refresh_token",
+            "bot_token",
+            "user_token",
+            "admin_api_key",
+            "auth_token",
+            "private_key",
+            "secret",
+            "credentials",
+            "service_account_json",
+        }
+    )
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize audit service.

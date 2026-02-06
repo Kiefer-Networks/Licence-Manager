@@ -21,12 +21,17 @@ from licence_api.models.dto.employee import (
     EmployeeUpdate,
     ManagerInfo,
 )
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.employee_service import EmployeeService
 from licence_api.services.manual_employee_service import ManualEmployeeService
-from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
+from licence_api.utils.validation import (
+    sanitize_department,
+    sanitize_search,
+    sanitize_status,
+    validate_sort_by,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -62,7 +67,7 @@ def get_avatar_base64(hibob_id: str) -> str | None:
         avatar_bytes = avatar_path.read_bytes()
         b64 = base64.b64encode(avatar_bytes).decode("utf-8")
         return f"data:image/jpeg;base64,{b64}"
-    except (OSError, IOError):
+    except OSError:
         return None
 
 
@@ -74,8 +79,15 @@ ALLOWED_EMPLOYEE_SOURCES = {"hibob", "personio", "manual"}
 
 # Allowed sort columns for employees (whitelist to prevent injection)
 ALLOWED_EMPLOYEE_SORT_COLUMNS = {
-    "full_name", "email", "department", "status", "source",
-    "start_date", "termination_date", "synced_at", "license_count",
+    "full_name",
+    "email",
+    "department",
+    "status",
+    "source",
+    "start_date",
+    "termination_date",
+    "synced_at",
+    "license_count",
 }
 
 

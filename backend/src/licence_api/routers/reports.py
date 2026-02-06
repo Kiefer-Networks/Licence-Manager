@@ -41,7 +41,9 @@ async def get_cost_report(
     report_service: Annotated[ReportService, Depends(get_report_service)],
     start_date: date = Query(default=None, description="Report start date"),
     end_date: date = Query(default=None, description="Report end date"),
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
 ) -> CostReportResponse:
     """Get cost report for specified date range.
 
@@ -60,7 +62,9 @@ async def get_inactive_license_report(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     days: int = Query(default=30, ge=1, le=365, description="Days of inactivity threshold"),
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
 ) -> InactiveLicenseReport:
     """Get report of licenses without activity for specified days."""
     return await report_service.get_inactive_license_report(days, department=department)
@@ -70,7 +74,9 @@ async def get_inactive_license_report(
 async def get_offboarding_report(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
 ) -> OffboardingReport:
     """Get report of offboarded employees with pending licenses."""
     return await report_service.get_offboarding_report(department=department)
@@ -80,7 +86,9 @@ async def get_offboarding_report(
 async def get_external_users_report(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
 ) -> ExternalUsersReport:
     """Get report of licenses with external (non-company) email addresses."""
     return await report_service.get_external_users_report(department=department)
@@ -162,8 +170,12 @@ async def get_costs_by_department_report(
 async def get_costs_by_employee_report(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
-    min_cost: float | None = Query(default=None, ge=0, le=1000000, description="Minimum monthly cost filter"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
+    min_cost: float | None = Query(
+        default=None, ge=0, le=1000000, description="Minimum monthly cost filter"
+    ),
     limit: int = Query(default=100, ge=1, le=500, description="Maximum employees to return"),
 ) -> CostsByEmployeeReport:
     """Get cost breakdown grouped by employee.
@@ -230,21 +242,15 @@ async def get_license_recommendations(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     min_days_inactive: int = Query(
-        default=60, ge=30, le=365,
-        description="Minimum days of inactivity to consider"
+        default=60, ge=30, le=365, description="Minimum days of inactivity to consider"
     ),
     department: str | None = Query(
-        default=None, max_length=100,
-        description="Filter by department"
+        default=None, max_length=100, description="Filter by department"
     ),
     provider_id: str | None = Query(
-        default=None, max_length=36,
-        description="Filter by provider UUID"
+        default=None, max_length=36, description="Filter by provider UUID"
     ),
-    limit: int = Query(
-        default=100, ge=1, le=500,
-        description="Maximum recommendations to return"
-    ),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum recommendations to return"),
 ) -> LicenseRecommendationsReport:
     """Get license optimization recommendations based on usage patterns.
 

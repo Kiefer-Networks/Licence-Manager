@@ -136,17 +136,19 @@ class HiBobProvider(HRISProvider):
                 emp_id = emp.get("id")
                 manager_email = manager_email_map.get(emp_id)
 
-                employees.append({
-                    "hibob_id": emp_id,
-                    "email": emp.get("email", "").lower(),
-                    "full_name": full_name,
-                    "department": work.get("department"),
-                    "status": status,
-                    "start_date": start_date,
-                    "termination_date": termination_date,
-                    "manager_email": manager_email,
-                    "avatar_url": f"/api/v1/users/employees/avatar/{emp_id}",
-                })
+                employees.append(
+                    {
+                        "hibob_id": emp_id,
+                        "email": emp.get("email", "").lower(),
+                        "full_name": full_name,
+                        "department": work.get("department"),
+                        "status": status,
+                        "start_date": start_date,
+                        "termination_date": termination_date,
+                        "manager_email": manager_email,
+                        "avatar_url": f"/api/v1/users/employees/avatar/{emp_id}",
+                    }
+                )
 
         return employees
 
@@ -177,7 +179,9 @@ class HiBobProvider(HRISProvider):
                     raise Exception(f"429 Rate Limited: {response.text[:100]}")
 
                 if response.status_code != 200:
-                    logger.warning("Avatar URL fetch failed for %s: status=%d", hibob_id, response.status_code)
+                    logger.warning(
+                        "Avatar URL fetch failed for %s: status=%d", hibob_id, response.status_code
+                    )
                     return None
 
                 # Parse the response - could be JSON with URL or just the URL string
@@ -185,13 +189,19 @@ class HiBobProvider(HRISProvider):
 
                 # If response is already an image, return it directly
                 if content_type.startswith("image/"):
-                    logger.info(f"Avatar fetched directly for {hibob_id}, content-type: {content_type}, size: {len(response.content)} bytes")
+                    size = len(response.content)
+                    logger.info(
+                        f"Avatar fetched directly for {hibob_id}, "
+                        f"content-type: {content_type}, size: {size} bytes"
+                    )
                     return response.content
 
                 # Otherwise, parse as JSON or text to get the URL
                 try:
                     data = response.json()
-                    avatar_url = data if isinstance(data, str) else data.get("url") or data.get("avatarUrl")
+                    avatar_url = (
+                        data if isinstance(data, str) else data.get("url") or data.get("avatarUrl")
+                    )
                 except Exception:
                     # Try as plain text
                     avatar_url = response.text.strip().strip('"')
@@ -205,10 +215,12 @@ class HiBobProvider(HRISProvider):
                 # Step 2: Fetch the actual image from the URL
                 img_response = await client.get(avatar_url, timeout=10.0, follow_redirects=True)
                 if img_response.status_code == 200:
-                    logger.info(f"Avatar image fetched for {hibob_id}, size: {len(img_response.content)} bytes")
+                    size = len(img_response.content)
+                    logger.info(f"Avatar image fetched for {hibob_id}, size: {size} bytes")
                     return img_response.content
 
-                logger.warning(f"Avatar image download failed for {hibob_id}: status={img_response.status_code}")
+                status = img_response.status_code
+                logger.warning(f"Avatar image download failed for {hibob_id}: status={status}")
                 return None
 
         except Exception as e:

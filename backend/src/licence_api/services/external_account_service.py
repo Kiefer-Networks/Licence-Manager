@@ -1,7 +1,7 @@
 """External account service for managing employee provider links."""
 
-from uuid import UUID
 from typing import Any
+from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
-from licence_api.repositories.employee_external_account_repository import EmployeeExternalAccountRepository
+from licence_api.repositories.employee_external_account_repository import (
+    EmployeeExternalAccountRepository,
+)
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
-
 
 # Setting key for enabling/disabling username matching
 SETTING_USERNAME_MATCHING_ENABLED = "username_matching_enabled"
@@ -187,9 +188,7 @@ class ExternalAccountService:
 
         employee_id = account.employee_id
 
-        deleted = await self.external_account_repo.unlink_account(
-            provider_type, external_username
-        )
+        deleted = await self.external_account_repo.unlink_account(provider_type, external_username)
 
         if deleted and user:
             await self.audit_service.log(
@@ -300,9 +299,7 @@ class ExternalAccountService:
         Returns:
             Dict mapping username to employee info
         """
-        employees = await self.external_account_repo.bulk_lookup(
-            provider_type, usernames
-        )
+        employees = await self.external_account_repo.bulk_lookup(provider_type, usernames)
 
         return {
             username: {

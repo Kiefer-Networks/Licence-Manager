@@ -9,15 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.security.auth import get_current_user, require_permission, Permissions
-from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
 from licence_api.models.dto.password_policy import (
     PasswordPolicyResponse,
     PasswordPolicySettings,
     PasswordValidationRequest,
     PasswordValidationResponse,
 )
+from licence_api.security.auth import Permissions, get_current_user, require_permission
+from licence_api.security.csrf import CSRFProtected
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 

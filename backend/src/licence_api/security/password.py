@@ -178,7 +178,9 @@ class PasswordService:
             r"welcome",
             r"(.)\1{3,}",  # Same char repeated 4+ times
             r"(012|123|234|345|456|567|678|789)",  # Sequential numbers
-            r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)",  # Sequential letters
+            # Sequential letters
+            r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|"
+            r"opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)",
         ]
 
         password_lower = password.lower()
@@ -203,9 +205,7 @@ class PasswordService:
         Returns:
             True if password was used before
         """
-        history_count = (
-            policy.history_count if policy else self.password_history_count
-        )
+        history_count = policy.history_count if policy else self.password_history_count
         for old_hash in history_hashes[-history_count:]:
             if self.verify_password(password, old_hash):
                 return True

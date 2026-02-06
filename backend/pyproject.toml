@@ -51,10 +51,26 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    # SQLAlchemy requires == True/False for column comparisons
+    "E712",
+    # Forward references in ORM models are valid
+    "F821",
+    # Module imports at bottom for circular import handling
+    "E402",
+    # str + Enum inheritance is valid for serialization
+    "UP042",
+    # Generic[T] syntax is clear and widely used
+    "UP046",
+    # Alias imports like `UUID as PyUUID` are intentional
+    "N811",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # HTML email templates have long inline-style lines
 "src/licence_api/services/email_service.py" = ["E501"]
+# ORM models have circular imports resolved at bottom
+"src/licence_api/models/orm/*.py" = ["E402", "F401", "F821"]
 
 [tool.mypy]
 python_version = "3.12"

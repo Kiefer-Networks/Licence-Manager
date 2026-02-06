@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.manual_license_service import ManualLicenseService
 
 router = APIRouter()
@@ -103,7 +103,10 @@ async def create_manual_licenses(
             request=request,
         )
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid license data or provider not found",
+        )
 
 
 @router.post("/bulk", response_model=list[LicenseResponse])
@@ -129,7 +132,10 @@ async def create_manual_licenses_bulk(
             request=request,
         )
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid license data or provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid license data or provider not found",
+        )
 
 
 @router.put("/{license_id}", response_model=LicenseResponse)
@@ -161,7 +167,10 @@ async def update_manual_license(
             request=request,
         )
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License not found or invalid update data")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="License not found or invalid update data",
+        )
 
 
 @router.post("/{license_id}/assign", response_model=LicenseResponse)
@@ -183,7 +192,9 @@ async def assign_manual_license(
             request=request,
         )
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="License or employee not found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="License or employee not found"
+        )
 
 
 @router.post("/{license_id}/unassign", response_model=LicenseResponse)

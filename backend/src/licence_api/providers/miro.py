@@ -113,9 +113,7 @@ class MiroProvider(BaseProvider):
                 # Parse dates
                 created_at = None
                 if member.get("createdAt"):
-                    created_at = datetime.fromisoformat(
-                        member["createdAt"].replace("Z", "+00:00")
-                    )
+                    created_at = datetime.fromisoformat(member["createdAt"].replace("Z", "+00:00"))
 
                 modified_at = None
                 if member.get("modifiedAt"):
@@ -123,20 +121,22 @@ class MiroProvider(BaseProvider):
                         member["modifiedAt"].replace("Z", "+00:00")
                     )
 
-                licenses.append({
-                    "external_user_id": email.lower() if email else user.get("id"),
-                    "email": email.lower() if email else None,
-                    "license_type": license_type,
-                    "status": "active" if member.get("active", True) else "suspended",
-                    "assigned_at": created_at,
-                    "last_activity_at": modified_at,
-                    "metadata": {
-                        "miro_id": user.get("id"),
-                        "name": user.get("name"),
-                        "role": role,
-                        "license": member.get("license"),
-                    },
-                })
+                licenses.append(
+                    {
+                        "external_user_id": email.lower() if email else user.get("id"),
+                        "email": email.lower() if email else None,
+                        "license_type": license_type,
+                        "status": "active" if member.get("active", True) else "suspended",
+                        "assigned_at": created_at,
+                        "last_activity_at": modified_at,
+                        "metadata": {
+                            "miro_id": user.get("id"),
+                            "name": user.get("name"),
+                            "role": role,
+                            "license": member.get("license"),
+                        },
+                    }
+                )
 
             # Check for next page
             cursor = data.get("cursor")
@@ -202,19 +202,21 @@ class MiroProvider(BaseProvider):
                     role = member.get("role", "member")
                     license_type = self._get_license_type(role)
 
-                    licenses.append({
-                        "external_user_id": email.lower() if email else str(user_id),
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": "active",
-                        "metadata": {
-                            "miro_id": user_id,
-                            "name": member.get("name"),
-                            "role": role,
-                            "team_id": team_id,
-                            "team_name": team.get("name"),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": email.lower() if email else str(user_id),
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": "active",
+                            "metadata": {
+                                "miro_id": user_id,
+                                "name": member.get("name"),
+                                "role": role,
+                                "team_id": team_id,
+                                "team_name": team.get("name"),
+                            },
+                        }
+                    )
 
                 # Check for next page
                 cursor = data.get("cursor")

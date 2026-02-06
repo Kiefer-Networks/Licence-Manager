@@ -14,7 +14,6 @@ from qrcode.image.svg import SvgImage
 from licence_api.config import get_settings
 from licence_api.security.encryption import get_encryption_service
 
-
 # TOTP Constants (RFC 6238)
 TOTP_DIGITS = 6
 TOTP_PERIOD = 30  # seconds

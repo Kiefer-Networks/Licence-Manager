@@ -3,9 +3,7 @@
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy import func, select
 
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -13,7 +11,18 @@ from licence_api.repositories.base import BaseRepository
 from licence_api.utils.validation import escape_like_wildcards
 
 # Whitelist of valid sort columns to prevent column injection
-VALID_SORT_COLUMNS = {"full_name", "email", "status", "department", "start_date", "termination_date", "synced_at", "manager_email", "source", "license_count"}
+VALID_SORT_COLUMNS = {
+    "full_name",
+    "email",
+    "status",
+    "department",
+    "start_date",
+    "termination_date",
+    "synced_at",
+    "manager_email",
+    "source",
+    "license_count",
+}
 
 
 class EmployeeRepository(BaseRepository[EmployeeORM]):
@@ -32,9 +41,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         """
         if not ids:
             return {}
-        result = await self.session.execute(
-            select(EmployeeORM).where(EmployeeORM.id.in_(ids))
-        )
+        result = await self.session.execute(select(EmployeeORM).where(EmployeeORM.id.in_(ids)))
         employees = result.scalars().all()
         return {emp.id: emp for emp in employees}
 
@@ -47,9 +54,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         Returns:
             EmployeeORM or None if not found
         """
-        result = await self.session.execute(
-            select(EmployeeORM).where(EmployeeORM.email == email)
-        )
+        result = await self.session.execute(select(EmployeeORM).where(EmployeeORM.email == email))
         return result.scalar_one_or_none()
 
     async def get_by_emails(self, emails: list[str]) -> dict[str, EmployeeORM]:
@@ -161,10 +166,9 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         if search:
             # Escape LIKE wildcards to prevent pattern injection
             escaped_search = f"%{escape_like_wildcards(search)}%"
-            search_filter = (
-                EmployeeORM.email.ilike(escaped_search, escape="\\")
-                | EmployeeORM.full_name.ilike(escaped_search, escape="\\")
-            )
+            search_filter = EmployeeORM.email.ilike(
+                escaped_search, escape="\\"
+            ) | EmployeeORM.full_name.ilike(escaped_search, escape="\\")
             query = query.where(search_filter)
             count_query = count_query.where(search_filter)
 
@@ -178,17 +182,13 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         if sort_by == "license_count":
             # Create subquery for license count
             license_count_subq = (
-                select(
-                    LicenseORM.employee_id,
-                    func.count(LicenseORM.id).label("license_count")
-                )
+                select(LicenseORM.employee_id, func.count(LicenseORM.id).label("license_count"))
                 .group_by(LicenseORM.employee_id)
                 .subquery()
             )
             # Join with subquery and sort by count
             query = query.outerjoin(
-                license_count_subq,
-                EmployeeORM.id == license_count_subq.c.employee_id
+                license_count_subq, EmployeeORM.id == license_count_subq.c.employee_id
             )
             sort_column = func.coalesce(license_count_subq.c.license_count, 0)
         else:
@@ -308,9 +308,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             Number of manager relationships resolved
         """
         # Get all employees with manager_email
-        query = select(EmployeeORM).where(
-            EmployeeORM.manager_email.isnot(None)
-        )
+        query = select(EmployeeORM).where(EmployeeORM.manager_email.isnot(None))
         result = await self.session.execute(query)
         employees = result.scalars().all()
 
@@ -318,11 +316,7 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             return 0
 
         # Collect all unique manager emails
-        manager_emails = list({
-            emp.manager_email.lower()
-            for emp in employees
-            if emp.manager_email
-        })
+        manager_emails = list({emp.manager_email.lower() for emp in employees if emp.manager_email})
 
         # Batch fetch all potential managers in a single query
         managers_by_email = await self.get_by_emails(manager_emails)
@@ -378,8 +372,10 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         Returns:
             True if email exists, False otherwise
         """
-        query = select(func.count()).select_from(EmployeeORM).where(
-            func.lower(EmployeeORM.email) == email.lower()
+        query = (
+            select(func.count())
+            .select_from(EmployeeORM)
+            .where(func.lower(EmployeeORM.email) == email.lower())
         )
         if exclude_id:
             query = query.where(EmployeeORM.id != exclude_id)

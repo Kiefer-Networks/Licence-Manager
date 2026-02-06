@@ -55,14 +55,16 @@ class OrganizationLicenseORM(Base, UUIDMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
 
     # Relationships
-    provider: Mapped["ProviderORM"] = relationship("ProviderORM", back_populates="organization_licenses")
-    canceller: Mapped["AdminUserORM | None"] = relationship("AdminUserORM", foreign_keys=[cancelled_by])
-
-    __table_args__ = (
-        Index("idx_org_licenses_provider", "provider_id"),
+    provider: Mapped["ProviderORM"] = relationship(
+        "ProviderORM", back_populates="organization_licenses"
     )
+    canceller: Mapped["AdminUserORM | None"] = relationship(
+        "AdminUserORM", foreign_keys=[cancelled_by]
+    )
+
+    __table_args__ = (Index("idx_org_licenses_provider", "provider_id"),)
 
 
 # Import here to avoid circular import
-from licence_api.models.orm.provider import ProviderORM  # noqa: E402, F401
 from licence_api.models.orm.admin_user import AdminUserORM  # noqa: E402, F401
+from licence_api.models.orm.provider import ProviderORM  # noqa: E402, F401

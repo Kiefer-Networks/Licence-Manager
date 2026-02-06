@@ -47,7 +47,8 @@ class LicenseResponse(BaseModel):
     suggested_employee_name: str | None = None
     suggested_employee_email: str | None = None
     match_confidence: float | None = None
-    match_status: str | None = None  # auto_matched, suggested, confirmed, rejected, external_guest, external_review
+    # auto_matched, suggested, confirmed, rejected, external_guest, external_review
+    match_status: str | None = None
     match_method: str | None = None  # exact_email, alias, local_part, fuzzy_name
     # Expiration tracking
     expires_at: date | None = None

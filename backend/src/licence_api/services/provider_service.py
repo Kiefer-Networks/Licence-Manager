@@ -187,7 +187,8 @@ class ProviderService:
                 existing_hris = await self.provider_repo.get_by_name(hris_name)
                 if existing_hris:
                     raise ValueError(
-                        f"Only one HRIS provider allowed. {existing_hris.display_name} is already configured."
+                        f"Only one HRIS provider allowed. "
+                        f"{existing_hris.display_name} is already configured."
                     )
 
         encryption = get_encryption_service()
@@ -245,7 +246,9 @@ class ProviderService:
         """
         return await self.license_repo.get_license_type_counts(provider_id)
 
-    async def get_individual_license_type_counts(self, provider_id: UUID) -> tuple[dict[str, int], bool]:
+    async def get_individual_license_type_counts(
+        self, provider_id: UUID
+    ) -> tuple[dict[str, int], bool]:
         """Get individual license type counts (extracted from combined strings).
 
         Args:
@@ -446,9 +449,7 @@ class ProviderService:
             )
 
         if len(content) > MAX_LOGO_SIZE:
-            raise ValueError(
-                f"File too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB"
-            )
+            raise ValueError(f"File too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB")
 
         if not self._validate_logo_signature(content, ext):
             raise ValueError("File content does not match declared file type")

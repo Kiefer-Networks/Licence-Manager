@@ -54,9 +54,11 @@ class ServiceAccountLicenseTypeRepository(BaseRepository[ServiceAccountLicenseTy
         """
         # Use database-level case-insensitive comparison
         result = await self.session.execute(
-            select(ServiceAccountLicenseTypeORM).where(
+            select(ServiceAccountLicenseTypeORM)
+            .where(
                 func.lower(ServiceAccountLicenseTypeORM.license_type) == func.lower(license_type)
-            ).limit(1)
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -98,9 +100,7 @@ class ServiceAccountLicenseTypeRepository(BaseRepository[ServiceAccountLicenseTy
 
         return results
 
-    async def find_matching_licenses(
-        self, entry: ServiceAccountLicenseTypeORM
-    ) -> list[LicenseORM]:
+    async def find_matching_licenses(self, entry: ServiceAccountLicenseTypeORM) -> list[LicenseORM]:
         """Find all licenses matching a license type entry.
 
         Uses database-level filtering for efficiency.

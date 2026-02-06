@@ -1,10 +1,9 @@
 """Import service for license imports from CSV files."""
 
-import io
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID, uuid4
@@ -15,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.import_dto import (
     CSVOptions,
-    ImportColumnMapping,
     ImportExecuteRequest,
     ImportExecuteResponse,
     ImportJobStatus,
@@ -36,10 +34,10 @@ from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.utils.file_parser import (
-    parse_csv_file,
-    suggest_column_mapping,
     parse_boolean,
+    parse_csv_file,
     parse_date,
+    suggest_column_mapping,
     validate_email,
 )
 
@@ -124,7 +122,7 @@ class ImportService:
             raise ValueError("File is empty")
 
         if file_size > MAX_FILE_SIZE:
-            raise ValueError(f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)} MB")
+            raise ValueError(f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)} MB")
 
         # Parse the file
         try:
@@ -133,7 +131,9 @@ class ImportService:
             raise ValueError(f"Failed to parse CSV file: {str(e)}")
 
         if parsed["total_rows"] > MAX_IMPORT_ROWS:
-            raise ValueError(f"File has too many rows ({parsed['total_rows']}). Maximum is {MAX_IMPORT_ROWS}")
+            raise ValueError(
+                f"File has too many rows ({parsed['total_rows']}). Maximum is {MAX_IMPORT_ROWS}"
+            )
 
         # Generate upload ID
         upload_id = uuid4()
@@ -223,9 +223,7 @@ class ImportService:
         employee_map: dict[str, Any] = {}
         if email_field:
             emails = [
-                row.get(email_field, "").lower()
-                for row in parsed["rows"]
-                if row.get(email_field)
+                row.get(email_field, "").lower() for row in parsed["rows"] if row.get(email_field)
             ]
             if emails:
                 employee_map = await self.employee_repo.get_by_emails(emails)
@@ -260,60 +258,70 @@ class ImportService:
             )
 
             if not license_key:
-                row_errors.append(ImportRowError(
-                    row=row_num,
-                    column="license_key",
-                    value="",
-                    message="License key or external user ID is required",
-                    code="MISSING_REQUIRED",
-                ))
+                row_errors.append(
+                    ImportRowError(
+                        row=row_num,
+                        column="license_key",
+                        value="",
+                        message="License key or external user ID is required",
+                        code="MISSING_REQUIRED",
+                    )
+                )
             else:
                 # Check for duplicate in file
                 if license_key in seen_keys:
-                    row_warnings.append(ImportRowWarning(
-                        row=row_num,
-                        column="license_key",
-                        value=license_key,
-                        message="Duplicate key in file",
-                        code="DUPLICATE_IN_FILE",
-                    ))
+                    row_warnings.append(
+                        ImportRowWarning(
+                            row=row_num,
+                            column="license_key",
+                            value=license_key,
+                            message="Duplicate key in file",
+                            code="DUPLICATE_IN_FILE",
+                        )
+                    )
                 seen_keys.add(license_key)
 
                 # Check for duplicate in database
                 if license_key in existing_ids:
-                    row_warnings.append(ImportRowWarning(
-                        row=row_num,
-                        column="license_key",
-                        value=license_key,
-                        message="License already exists",
-                        code="DUPLICATE_IN_DB",
-                    ))
+                    row_warnings.append(
+                        ImportRowWarning(
+                            row=row_num,
+                            column="license_key",
+                            value=license_key,
+                            message="License already exists",
+                            code="DUPLICATE_IN_DB",
+                        )
+                    )
                     will_skip_duplicates += 1
 
             # Validate email if provided
             employee_email = mapped_row.get("employee_email", "").strip()
             if employee_email:
                 if not validate_email(employee_email):
-                    row_errors.append(ImportRowError(
-                        row=row_num,
-                        column="employee_email",
-                        value=employee_email,
-                        message="Invalid email format",
-                        code="INVALID_EMAIL",
-                    ))
+                    row_errors.append(
+                        ImportRowError(
+                            row=row_num,
+                            column="employee_email",
+                            value=employee_email,
+                            message="Invalid email format",
+                            code="INVALID_EMAIL",
+                        )
+                    )
                 else:
                     # Check if employee exists
                     if employee_email.lower() in employee_map:
                         employees_matched += 1
                     else:
                         employees_not_found += 1
-                        row_warnings.append(ImportRowWarning(
-                            row=row_num,
-                            column="employee_email",
-                            value=employee_email,
-                            message="Employee not found in system",
-                            code="EMPLOYEE_NOT_FOUND",
-                        ))
+                        row_warnings.append(
+                            ImportRowWarning(
+                                row=row_num,
+                                column="employee_email",
+                                value=employee_email,
+                                message="Employee not found in system",
+                                code="EMPLOYEE_NOT_FOUND",
+                            )
+                        )
 
             # Validate monthly_cost
             monthly_cost = mapped_row.get("monthly_cost", "").strip()
@@ -321,45 +329,53 @@ class ImportService:
                 try:
                     cost = Decimal(monthly_cost.replace(",", "."))
                     if cost < 0:
-                        row_errors.append(ImportRowError(
+                        row_errors.append(
+                            ImportRowError(
+                                row=row_num,
+                                column="monthly_cost",
+                                value=monthly_cost,
+                                message="Cost cannot be negative",
+                                code="INVALID_COST",
+                            )
+                        )
+                except InvalidOperation:
+                    row_errors.append(
+                        ImportRowError(
                             row=row_num,
                             column="monthly_cost",
                             value=monthly_cost,
-                            message="Cost cannot be negative",
-                            code="INVALID_COST",
-                        ))
-                except InvalidOperation:
-                    row_errors.append(ImportRowError(
-                        row=row_num,
-                        column="monthly_cost",
-                        value=monthly_cost,
-                        message="Invalid number format",
-                        code="INVALID_NUMBER",
-                    ))
+                            message="Invalid number format",
+                            code="INVALID_NUMBER",
+                        )
+                    )
 
             # Validate date
             valid_until = mapped_row.get("valid_until", "").strip()
             if valid_until:
                 parsed_date = parse_date(valid_until)
                 if parsed_date is None:
-                    row_errors.append(ImportRowError(
-                        row=row_num,
-                        column="valid_until",
-                        value=valid_until,
-                        message="Invalid date format",
-                        code="INVALID_DATE",
-                    ))
+                    row_errors.append(
+                        ImportRowError(
+                            row=row_num,
+                            column="valid_until",
+                            value=valid_until,
+                            message="Invalid date format",
+                            code="INVALID_DATE",
+                        )
+                    )
 
             # Validate status
             status = mapped_row.get("status", "").strip().lower()
             if status and status not in ("active", "inactive", "suspended"):
-                row_errors.append(ImportRowError(
-                    row=row_num,
-                    column="status",
-                    value=status,
-                    message="Invalid status. Must be: active, inactive, or suspended",
-                    code="INVALID_STATUS",
-                ))
+                row_errors.append(
+                    ImportRowError(
+                        row=row_num,
+                        column="status",
+                        value=status,
+                        message="Invalid status. Must be: active, inactive, or suspended",
+                        code="INVALID_STATUS",
+                    )
+                )
 
             # Build preview row
             has_errors = len(row_errors) > 0
@@ -377,13 +393,15 @@ class ImportService:
                 will_create += 1
                 valid_count += 1
 
-            preview_rows.append(ImportPreviewRow(
-                row_number=row_num,
-                data=mapped_row,
-                has_errors=has_errors,
-                has_warnings=has_warnings,
-                status=status_str,
-            ))
+            preview_rows.append(
+                ImportPreviewRow(
+                    row_number=row_num,
+                    data=mapped_row,
+                    has_errors=has_errors,
+                    has_warnings=has_warnings,
+                    status=status_str,
+                )
+            )
 
             errors.extend(row_errors)
             warnings.extend(row_warnings)
@@ -468,7 +486,7 @@ class ImportService:
             total_rows=len(parsed["rows"]),
             column_mapping=[m.model_dump() for m in request.column_mapping],
             options=request.options.model_dump(),
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             created_by=user.id,
         )
         self.session.add(job)
@@ -487,9 +505,7 @@ class ImportService:
         employee_map: dict[str, Any] = {}
         if email_field:
             emails = [
-                row.get(email_field, "").lower()
-                for row in parsed["rows"]
-                if row.get(email_field)
+                row.get(email_field, "").lower() for row in parsed["rows"] if row.get(email_field)
             ]
             if emails:
                 employee_map = await self.employee_repo.get_by_emails(emails)
@@ -521,10 +537,12 @@ class ImportService:
 
             except Exception as e:
                 error_count += 1
-                error_details.append({
-                    "row": row_num,
-                    "message": str(e),
-                })
+                error_details.append(
+                    {
+                        "row": row_num,
+                        "message": str(e),
+                    }
+                )
 
                 if request.options.error_handling == "strict":
                     job.status = "failed"
@@ -537,7 +555,7 @@ class ImportService:
         job.created_count = created
         job.skipped_count = skipped
         job.error_count = error_count
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
         job.error_details = {"errors": error_details} if error_details else None
 
         # Audit log
@@ -667,14 +685,13 @@ class ImportService:
         if include_examples:
             # Add example rows
             lines.append(
-                "LIC-001,Professional,max.mustermann@example.com,99.00,EUR,2025-12-31,active,Main license,false,"
+                "LIC-001,Professional,max.mustermann@example.com,"
+                "99.00,EUR,2025-12-31,active,Main license,false,"
             )
             lines.append(
                 "LIC-002,Enterprise,anna.schmidt@example.com,199.00,EUR,2025-12-31,active,,false,"
             )
-            lines.append(
-                "SVC-001,API,,,EUR,,active,API Access,true,API Bot"
-            )
+            lines.append("SVC-001,API,,,EUR,,active,API Access,true,API Bot")
 
         return "\n".join(lines)
 
@@ -690,9 +707,7 @@ class ImportService:
         from sqlalchemy import select
 
         result = await self.session.execute(
-            select(LicenseORM.external_user_id).where(
-                LicenseORM.provider_id == provider_id
-            )
+            select(LicenseORM.external_user_id).where(LicenseORM.provider_id == provider_id)
         )
         return {row[0] for row in result.all()}
 
@@ -727,10 +742,7 @@ class ImportService:
                 mapped[field] = row.get(col, "").strip()
 
         # Get external_user_id (license key)
-        external_user_id = (
-            mapped.get("license_key", "")
-            or mapped.get("external_user_id", "")
-        )
+        external_user_id = mapped.get("license_key", "") or mapped.get("external_user_id", "")
 
         if not external_user_id:
             raise ValueError("Missing license key or external user ID")
@@ -761,6 +773,7 @@ class ImportService:
             parsed_date = parse_date(date_str)
             if parsed_date:
                 from datetime import date
+
                 year, month, day = parsed_date.split("-")
                 expires_at = date(int(year), int(month), int(day))
 
@@ -790,7 +803,7 @@ class ImportService:
             service_account_name=service_account_name,
             is_admin_account=is_admin_account,
             admin_account_name=admin_account_name,
-            synced_at=datetime.now(timezone.utc),
+            synced_at=datetime.now(UTC),
             extra_data={"notes": notes} if notes else None,
         )
         self.session.add(license_orm)

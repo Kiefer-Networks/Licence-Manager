@@ -38,11 +38,7 @@ class LicensePackageService:
         """Build license package response with utilization stats."""
         available_seats = max(0, package.total_seats - assigned_seats)
         utilization = (assigned_seats / package.total_seats * 100) if package.total_seats > 0 else 0
-        total_cost = (
-            package.cost_per_seat * package.total_seats
-            if package.cost_per_seat
-            else None
-        )
+        total_cost = package.cost_per_seat * package.total_seats if package.cost_per_seat else None
 
         return LicensePackageResponse(
             id=package.id,
@@ -203,7 +199,9 @@ class LicensePackageService:
 
         await self.session.commit()
 
-        assigned = await self.package_repo.get_assigned_seats_count(provider_id, package.license_type)
+        assigned = await self.package_repo.get_assigned_seats_count(
+            provider_id, package.license_type
+        )
         return self._build_package_response(package, assigned)
 
     async def delete_package(

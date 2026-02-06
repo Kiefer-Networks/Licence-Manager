@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
-from licence_api.utils.errors import raise_not_found
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.organization_license import (
     OrganizationLicenseCreate,
@@ -15,10 +14,11 @@ from licence_api.models.dto.organization_license import (
     OrganizationLicenseResponse,
     OrganizationLicenseUpdate,
 )
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.organization_license_service import OrganizationLicenseService
+from licence_api.utils.errors import raise_not_found
 
 router = APIRouter()
 

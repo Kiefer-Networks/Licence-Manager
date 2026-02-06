@@ -1,6 +1,6 @@
 """Cursor provider integration."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -105,7 +105,7 @@ class CursorProvider(BaseProvider):
         last_activity: dict[str, datetime] = {}
         try:
             # Get last 30 days of usage
-            end_date = datetime.now(timezone.utc)
+            end_date = datetime.now(UTC)
             start_date = end_date - timedelta(days=30)
 
             response = await client.post(
@@ -124,9 +124,7 @@ class CursorProvider(BaseProvider):
                     if not date_str:
                         continue
                     try:
-                        activity_date = datetime.strptime(date_str, "%Y-%m-%d").replace(
-                            tzinfo=timezone.utc
-                        )
+                        activity_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
                     except ValueError:
                         continue
 
@@ -196,20 +194,22 @@ class CursorProvider(BaseProvider):
                     # Get last activity
                     last_activity = usage_data.get(email)
 
-                    licenses.append({
-                        "external_user_id": email,
-                        "email": email,
-                        "license_type": license_type,
-                        "status": "active",
-                        "monthly_cost": monthly_cost,
-                        "currency": "USD",
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "name": member.get("name"),
-                            "role": role,
-                            "current_spend_usd": str(current_spend),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": email,
+                            "email": email,
+                            "license_type": license_type,
+                            "status": "active",
+                            "monthly_cost": monthly_cost,
+                            "currency": "USD",
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "name": member.get("name"),
+                                "role": role,
+                                "current_spend_usd": str(current_spend),
+                            },
+                        }
+                    )
         except Exception:
             pass
 
@@ -230,18 +230,20 @@ class CursorProvider(BaseProvider):
         licenses = []
 
         for entry in self.manual_data:
-            licenses.append({
-                "external_user_id": entry.get("email", "").lower(),
-                "email": entry.get("email", "").lower(),
-                "license_type": entry.get("plan", "Pro"),
-                "status": "active",
-                "monthly_cost": Decimal("20.00"),
-                "currency": "USD",
-                "metadata": {
-                    "name": entry.get("name"),
-                    "source": "manual_import",
-                },
-            })
+            licenses.append(
+                {
+                    "external_user_id": entry.get("email", "").lower(),
+                    "email": entry.get("email", "").lower(),
+                    "license_type": entry.get("plan", "Pro"),
+                    "status": "active",
+                    "monthly_cost": Decimal("20.00"),
+                    "currency": "USD",
+                    "metadata": {
+                        "name": entry.get("name"),
+                        "source": "manual_import",
+                    },
+                }
+            )
 
         return licenses
 
@@ -279,9 +281,7 @@ class CursorProvider(BaseProvider):
                 elif response.status_code == 401:
                     raise ValueError("Invalid API key")
                 elif response.status_code == 403:
-                    raise ValueError(
-                        "Enterprise feature not available or insufficient permissions"
-                    )
+                    raise ValueError("Enterprise feature not available or insufficient permissions")
                 elif response.status_code == 404:
                     raise ValueError(f"Member {email} not found in team")
                 else:
@@ -312,10 +312,12 @@ class CursorProvider(BaseProvider):
         reader = csv.DictReader(StringIO(csv_content))
 
         for row in reader:
-            users.append({
-                "email": row.get("email", "").strip(),
-                "name": row.get("name", "").strip(),
-                "plan": row.get("plan", "Pro").strip(),
-            })
+            users.append(
+                {
+                    "email": row.get("email", "").strip(),
+                    "name": row.get("name", "").strip(),
+                    "plan": row.get("plan", "Pro").strip(),
+                }
+            )
 
         return users

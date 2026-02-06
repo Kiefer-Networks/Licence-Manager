@@ -125,9 +125,7 @@ class GitLabProvider(BaseProvider):
 
                     # Get email
                     email = (
-                        user.get("email")
-                        or user.get("commit_email")
-                        or user.get("public_email")
+                        user.get("email") or user.get("commit_email") or user.get("public_email")
                     )
 
                     # Determine status
@@ -159,25 +157,27 @@ class GitLabProvider(BaseProvider):
                     is_admin = user.get("is_admin", False)
                     license_type = "GitLab Admin" if is_admin else "GitLab User"
 
-                    licenses.append({
-                        "external_user_id": external_id,
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "gitlab_id": user_id,
-                            "username": username,
-                            "name": user.get("name"),
-                            "avatar_url": user.get("avatar_url"),
-                            "state": state,
-                            "web_url": user.get("web_url"),
-                            "is_admin": is_admin,
-                            "is_using_seat": user.get("using_license_seat", True),
-                            "two_factor_enabled": user.get("two_factor_enabled", False),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": external_id,
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "gitlab_id": user_id,
+                                "username": username,
+                                "name": user.get("name"),
+                                "avatar_url": user.get("avatar_url"),
+                                "state": state,
+                                "web_url": user.get("web_url"),
+                                "is_admin": is_admin,
+                                "is_using_seat": user.get("using_license_seat", True),
+                                "two_factor_enabled": user.get("two_factor_enabled", False),
+                            },
+                        }
+                    )
 
                 logger.info(f"Fetched page {page} with {len(users)} users")
 
@@ -266,24 +266,26 @@ class GitLabProvider(BaseProvider):
 
                     external_id = email.lower() if email else username
 
-                    licenses.append({
-                        "external_user_id": external_id,
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "gitlab_id": user_id,
-                            "username": username,
-                            "name": member.get("name"),
-                            "avatar_url": member.get("avatar_url"),
-                            "access_level": access_level,
-                            "access_level_name": self._get_access_level_name(access_level),
-                            "state": state,
-                            "web_url": member.get("web_url"),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": external_id,
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "gitlab_id": user_id,
+                                "username": username,
+                                "name": member.get("name"),
+                                "avatar_url": member.get("avatar_url"),
+                                "access_level": access_level,
+                                "access_level_name": self._get_access_level_name(access_level),
+                                "state": state,
+                                "web_url": member.get("web_url"),
+                            },
+                        }
+                    )
 
                 if len(members) < per_page:
                     break

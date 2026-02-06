@@ -16,7 +16,7 @@ from licence_api.models.dto.cancellation import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cancellation_service import CancellationService
 
@@ -368,7 +368,9 @@ async def renew_org_license(
         return {
             "success": True,
             "message": "Organization license renewed successfully",
-            "renewal_date": org_license.renewal_date.isoformat() if org_license.renewal_date else None,
+            "renewal_date": org_license.renewal_date.isoformat()
+            if org_license.renewal_date
+            else None,
             "expires_at": org_license.expires_at.isoformat() if org_license.expires_at else None,
             "status": org_license.status,
         }

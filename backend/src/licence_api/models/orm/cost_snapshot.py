@@ -2,7 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
-from uuid import UUID as PyUUID
+from uuid import UUID as PyUUID  # noqa: N811
 
 from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -39,4 +39,6 @@ class CostSnapshotORM(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         provider_info = f"provider={self.provider_id}" if self.provider_id else "total"
-        return f"<CostSnapshot {self.snapshot_date} {provider_info} {self.total_cost} {self.currency}>"
+        return (
+            f"<CostSnapshot {self.snapshot_date} {provider_info} {self.total_cost} {self.currency}>"
+        )

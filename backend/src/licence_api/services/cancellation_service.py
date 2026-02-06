@@ -15,7 +15,7 @@ Architecture Note (MVC-06):
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -84,7 +84,7 @@ class CancellationService:
         if license_orm is None:
             raise ValueError(f"License {license_id} not found")
 
-        license_orm.cancelled_at = datetime.now(timezone.utc)
+        license_orm.cancelled_at = datetime.now(UTC)
         license_orm.cancellation_effective_date = effective_date
         license_orm.cancellation_reason = reason
         license_orm.cancelled_by = cancelled_by
@@ -102,7 +102,9 @@ class CancellationService:
             if slack_token:
                 cancelled_by_email = await self._get_user_email(cancelled_by)
                 await self.notification_service.notify_license_cancelled(
-                    provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                    provider_name=license_orm.provider.display_name
+                    if license_orm.provider
+                    else "Unknown",
                     license_type=license_orm.license_type,
                     user_email=license_orm.external_user_id,
                     cancelled_by=cancelled_by_email,
@@ -145,7 +147,7 @@ class CancellationService:
         if package is None:
             raise ValueError(f"Package {package_id} not found")
 
-        package.cancelled_at = datetime.now(timezone.utc)
+        package.cancelled_at = datetime.now(UTC)
         package.cancellation_effective_date = effective_date
         package.cancellation_reason = reason
         package.cancelled_by = cancelled_by
@@ -206,7 +208,7 @@ class CancellationService:
         if org_license is None:
             raise ValueError(f"Organization license {org_license_id} not found")
 
-        org_license.cancelled_at = datetime.now(timezone.utc)
+        org_license.cancelled_at = datetime.now(UTC)
         org_license.cancellation_effective_date = effective_date
         org_license.cancellation_reason = reason
         org_license.cancelled_by = cancelled_by
@@ -224,7 +226,9 @@ class CancellationService:
             if slack_token:
                 cancelled_by_email = await self._get_user_email(cancelled_by)
                 await self.notification_service.notify_org_license_cancelled(
-                    provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                    provider_name=org_license.provider.display_name
+                    if org_license.provider
+                    else "Unknown",
                     org_license_name=org_license.name,
                     cancelled_by=cancelled_by_email,
                     cancellation_reason=reason,
@@ -288,11 +292,15 @@ class CancellationService:
             if slack_token:
                 renewed_by_email = await self._get_user_email(renewed_by)
                 await self.notification_service.notify_license_renewed(
-                    provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                    provider_name=license_orm.provider.display_name
+                    if license_orm.provider
+                    else "Unknown",
                     license_type=license_orm.license_type,
                     user_email=license_orm.external_user_id,
                     renewed_by=renewed_by_email,
-                    new_expiration_date=new_expiration_date.isoformat() if new_expiration_date else None,
+                    new_expiration_date=new_expiration_date.isoformat()
+                    if new_expiration_date
+                    else None,
                     slack_token=slack_token,
                 )
         except Exception as e:
@@ -406,7 +414,9 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_license_needs_reorder(
-                        provider_name=license_orm.provider.display_name if license_orm.provider else "Unknown",
+                        provider_name=license_orm.provider.display_name
+                        if license_orm.provider
+                        else "Unknown",
                         license_type=license_orm.license_type,
                         user_email=license_orm.external_user_id,
                         flagged_by=flagged_by_email,
@@ -458,7 +468,9 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_package_needs_reorder(
-                        provider_name=package.provider.display_name if package.provider else "Unknown",
+                        provider_name=package.provider.display_name
+                        if package.provider
+                        else "Unknown",
                         package_name=package.license_type or "Unknown",
                         seat_count=package.total_seats or 0,
                         flagged_by=flagged_by_email,
@@ -528,7 +540,9 @@ class CancellationService:
                 renewed_by_email = await self._get_user_email(renewed_by)
                 expiry_date = new_expires_at or new_renewal_date
                 await self.notification_service.notify_org_license_renewed(
-                    provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                    provider_name=org_license.provider.display_name
+                    if org_license.provider
+                    else "Unknown",
                     org_license_name=org_license.name,
                     renewed_by=renewed_by_email,
                     new_expiration_date=expiry_date.isoformat() if expiry_date else None,
@@ -580,7 +594,9 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_org_license_needs_reorder(
-                        provider_name=org_license.provider.display_name if org_license.provider else "Unknown",
+                        provider_name=org_license.provider.display_name
+                        if org_license.provider
+                        else "Unknown",
                         org_license_name=org_license.name,
                         flagged_by=flagged_by_email,
                         slack_token=slack_token,

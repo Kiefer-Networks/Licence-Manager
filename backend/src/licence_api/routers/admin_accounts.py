@@ -17,9 +17,9 @@ from licence_api.models.dto.admin_account import (
     OrphanedAdminAccountsResponse,
 )
 from licence_api.models.dto.license import LicenseResponse
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.services.cache_service import get_cache_service
 from licence_api.utils.validation import validate_sort_by
@@ -77,7 +77,9 @@ async def get_pattern(
     return pattern
 
 
-@router.post("/patterns", response_model=AdminAccountPatternResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/patterns", response_model=AdminAccountPatternResponse, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_pattern(
     request: Request,
@@ -184,7 +186,9 @@ async def list_admin_account_licenses(
     Args:
         owner_id: Filter by owner employee ID (for employee detail page)
     """
-    validated_sort_by = validate_sort_by(sort_by, ALLOWED_ADMIN_LICENSE_SORT_COLUMNS, "external_user_id")
+    validated_sort_by = validate_sort_by(
+        sort_by, ALLOWED_ADMIN_LICENSE_SORT_COLUMNS, "external_user_id"
+    )
     items, total = await service.get_admin_account_licenses(
         search=search,
         provider_id=provider_id,

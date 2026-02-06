@@ -17,9 +17,9 @@ from licence_api.models.dto.import_dto import (
     ImportValidateRequest,
     ImportValidateResponse,
 )
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.import_service import ImportService
 
 router = APIRouter()
@@ -60,9 +60,7 @@ async def download_template(
     return StreamingResponse(
         buffer,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename=license_import_template.csv"
-        },
+        headers={"Content-Disposition": "attachment; filename=license_import_template.csv"},
     )
 
 

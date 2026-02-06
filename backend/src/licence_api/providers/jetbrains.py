@@ -1,7 +1,6 @@
 """JetBrains provider integration."""
 
-from datetime import datetime, timezone
-from decimal import Decimal
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -145,14 +144,16 @@ class JetBrainsProvider(BaseProvider):
                                 assignee_name = assignee.get("name")
                             elif assignee_type == "SERVER":
                                 email = f"server:{assignee.get('uid', 'unknown')}"
-                                assignee_name = f"License Server ({assignee.get('serverType', 'UNKNOWN')})"
+                                assignee_name = (
+                                    f"License Server ({assignee.get('serverType', 'UNKNOWN')})"
+                                )
                             elif assignee_type == "LICENSE_KEY":
                                 email = f"key:{license_id}"
                                 assignee_name = assignee.get("registrationName", "License Key")
 
                         # Determine status
-                        # Note: "unassigned" should be determined by employee_id at the system level,
-                        # not by provider status. All non-suspended licenses are "active".
+                        # Note: "unassigned" should be determined by employee_id at the
+                        # system level, not by provider status. All non-suspended are "active".
                         if is_suspended:
                             status = "inactive"
                         else:
@@ -171,7 +172,6 @@ class JetBrainsProvider(BaseProvider):
 
                         # Get subscription info
                         subscription = lic.get("subscription", {})
-                        perpetual = lic.get("perpetual", {})
                         valid_until = None
                         is_renewed = False
 
@@ -190,28 +190,30 @@ class JetBrainsProvider(BaseProvider):
                         if is_trial:
                             license_type = f"{product_name} (Trial)"
 
-                        licenses.append({
-                            "external_user_id": license_id,
-                            "email": email,
-                            "license_type": license_type,
-                            "status": status,
-                            "monthly_cost": None,  # JetBrains is yearly, cost set at org level
-                            "currency": "USD",
-                            "last_activity_at": last_activity,
-                            "metadata": {
-                                "license_id": license_id,
-                                "product_code": product_code,
-                                "email": email,  # Store email for display
-                                "assignee_name": assignee_name,
-                                "assignee_type": assignee_type,
-                                "team_id": team.get("id"),
-                                "team_name": team.get("name"),
-                                "is_trial": is_trial,
-                                "is_suspended": is_suspended,
-                                "valid_until": valid_until.isoformat() if valid_until else None,
-                                "is_auto_renewed": is_renewed,
-                            },
-                        })
+                        licenses.append(
+                            {
+                                "external_user_id": license_id,
+                                "email": email,
+                                "license_type": license_type,
+                                "status": status,
+                                "monthly_cost": None,  # JetBrains is yearly, cost set at org level
+                                "currency": "USD",
+                                "last_activity_at": last_activity,
+                                "metadata": {
+                                    "license_id": license_id,
+                                    "product_code": product_code,
+                                    "email": email,  # Store email for display
+                                    "assignee_name": assignee_name,
+                                    "assignee_type": assignee_type,
+                                    "team_id": team.get("id"),
+                                    "team_name": team.get("name"),
+                                    "is_trial": is_trial,
+                                    "is_suspended": is_suspended,
+                                    "valid_until": valid_until.isoformat() if valid_until else None,
+                                    "is_auto_renewed": is_renewed,
+                                },
+                            }
+                        )
 
                     # Check if there are more pages
                     if len(data) < per_page:

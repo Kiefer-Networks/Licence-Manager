@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -11,12 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import AVATAR_DIR
 from licence_api.models.domain.provider import ProviderName, SyncStatus
-from licence_api.repositories.provider_repository import ProviderRepository
+from licence_api.repositories.admin_account_pattern_repository import AdminAccountPatternRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
-from licence_api.repositories.service_account_pattern_repository import ServiceAccountPatternRepository
-from licence_api.repositories.service_account_license_type_repository import ServiceAccountLicenseTypeRepository
-from licence_api.repositories.admin_account_pattern_repository import AdminAccountPatternRepository
+from licence_api.repositories.provider_repository import ProviderRepository
+from licence_api.repositories.service_account_license_type_repository import (
+    ServiceAccountLicenseTypeRepository,
+)
+from licence_api.repositories.service_account_pattern_repository import (
+    ServiceAccountPatternRepository,
+)
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
 from licence_api.services.matching_service import MatchingService
@@ -138,7 +142,7 @@ class SyncService:
                 await self.provider_repo.update_sync_status(
                     provider_id,
                     SyncStatus.SUCCESS,
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                 )
                 return {
                     "provider": "manual",
@@ -167,7 +171,7 @@ class SyncService:
             await self.provider_repo.update_sync_status(
                 provider_id,
                 SyncStatus.SUCCESS,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
             )
 
             return result
@@ -267,7 +271,7 @@ class SyncService:
             Dict with sync results
         """
         employees = await provider.fetch_employees()
-        synced_at = datetime.now(timezone.utc)
+        synced_at = datetime.now(UTC)
         created = 0
         updated = 0
 
@@ -407,7 +411,9 @@ class SyncService:
                         avatar_path.write_bytes(avatar_bytes)
                         downloaded += 1
                         if downloaded % 10 == 0:
-                            logger.info(f"Avatar progress: {downloaded} downloaded, {skipped} skipped")
+                            logger.info(
+                                f"Avatar progress: {downloaded} downloaded, {skipped} skipped"
+                            )
                     else:
                         # Could be 429 or no avatar - check if we should retry
                         failed += 1
@@ -417,8 +423,11 @@ class SyncService:
                     error_msg = str(e).lower()
                     if "429" in error_msg or "too many" in error_msg:
                         rate_limited += 1
-                        backoff = base_delay * (2 ** attempt) * 10  # Exponential backoff
-                        logger.warning(f"Rate limited for {hibob_id}, waiting {backoff}s (attempt {attempt + 1}/{max_retries})")
+                        backoff = base_delay * (2**attempt) * 10  # Exponential backoff
+                        logger.warning(
+                            f"Rate limited for {hibob_id}, waiting {backoff}s "
+                            f"(attempt {attempt + 1}/{max_retries})"
+                        )
                         await asyncio.sleep(backoff)
                         if attempt == max_retries - 1:
                             failed += 1
@@ -427,7 +436,10 @@ class SyncService:
                         failed += 1
                         break
 
-        logger.info(f"Avatar sync complete: {downloaded} downloaded, {skipped} skipped, {failed} failed, {rate_limited} rate limited")
+        logger.info(
+            f"Avatar sync complete: {downloaded} downloaded, {skipped} skipped, "
+            f"{failed} failed, {rate_limited} rate limited"
+        )
         return {
             "downloaded": downloaded,
             "skipped": skipped,
@@ -457,7 +469,7 @@ class SyncService:
             Dict with sync results
         """
         licenses = await provider.fetch_licenses()
-        synced_at = datetime.now(timezone.utc)
+        synced_at = datetime.now(UTC)
         created = 0
         updated = 0
 
@@ -502,8 +514,8 @@ class SyncService:
             elif monthly_total > 0:
                 # Fallback: if no max_users configured, log warning
                 logger.warning(
-                    f"Package pricing configured but no max_users in provider_license_info. "
-                    f"Cannot calculate per-license cost."
+                    "Package pricing configured but no max_users in provider_license_info. "
+                    "Cannot calculate per-license cost."
                 )
 
         # Get company domains for matching
@@ -519,9 +531,6 @@ class SyncService:
         admin_patterns = await self.admin_account_pattern_repo.get_all()
         svc_license_types = await self.svc_account_license_type_repo.get_all()
         pattern_matcher = PatternMatcher(svc_patterns, admin_patterns, svc_license_types)
-
-        # Track licenses for batch matching
-        new_licenses: list[tuple[dict, Any]] = []
 
         for lic_data in licenses:
             existing = await self.license_repo.get_by_provider_and_external_id(
@@ -556,8 +565,8 @@ class SyncService:
                     monthly_cost = Decimal("0")
 
             # Use matching service for employee assignment
-            # Use email field if available (e.g., JetBrains provides email separately from license ID)
-            # Fall back to external_user_id (which is typically an email for most providers)
+            # Use email field if available (JetBrains provides email separately from license ID)
+            # Fall back to external_user_id (typically an email for most providers)
             match_identifier = lic_data.get("email") or lic_data["external_user_id"]
 
             # Get username and display name from metadata for matching
@@ -611,7 +620,9 @@ class SyncService:
             admin_account_name = None
             admin_account_owner_id = None
             if not is_service_account:
-                admin_match = pattern_matcher.match_admin_account_email(lic_data["external_user_id"])
+                admin_match = pattern_matcher.match_admin_account_email(
+                    lic_data["external_user_id"]
+                )
                 is_admin_account = admin_match.matched
                 admin_account_name = admin_match.name
                 admin_account_owner_id = admin_match.owner_id

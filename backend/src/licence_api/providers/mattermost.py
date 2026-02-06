@@ -166,9 +166,9 @@ class MattermostProvider(BaseProvider):
                     # Parse dates (Mattermost uses milliseconds)
                     created_at = None
                     if user.get("create_at"):
-                        created_at = datetime.fromtimestamp(
-                            user["create_at"] / 1000
-                        ).replace(tzinfo=None)
+                        created_at = datetime.fromtimestamp(user["create_at"] / 1000).replace(
+                            tzinfo=None
+                        )
 
                     last_activity = None
                     if user.get("last_activity_at"):
@@ -180,27 +180,33 @@ class MattermostProvider(BaseProvider):
                     user_teams = await self._get_user_teams(client, user.get("id"))
                     team_names = [teams_map.get(t, t) for t in user_teams]
 
-                    licenses.append({
-                        "external_user_id": email.lower() if email else username,
-                        "email": email.lower() if email else None,
-                        "license_type": license_type,
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "mattermost_id": user.get("id"),
-                            "username": username,
-                            "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or user.get("nickname"),
-                            "nickname": user.get("nickname"),
-                            "position": user.get("position"),
-                            "roles": roles,
-                            "locale": user.get("locale"),
-                            "timezone": user.get("timezone"),
-                            "teams": team_names,
-                            "auth_service": user.get("auth_service"),
-                            "mfa_active": user.get("mfa_active", False),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": email.lower() if email else username,
+                            "email": email.lower() if email else None,
+                            "license_type": license_type,
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "mattermost_id": user.get("id"),
+                                "username": username,
+                                "name": (
+                                    f"{user.get('first_name', '')} "
+                                    f"{user.get('last_name', '')}".strip()
+                                    or user.get("nickname")
+                                ),
+                                "nickname": user.get("nickname"),
+                                "position": user.get("position"),
+                                "roles": roles,
+                                "locale": user.get("locale"),
+                                "timezone": user.get("timezone"),
+                                "teams": team_names,
+                                "auth_service": user.get("auth_service"),
+                                "mfa_active": user.get("mfa_active", False),
+                            },
+                        }
+                    )
 
                 page += 1
 

@@ -4,8 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, and_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, select
 
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.repositories.base import BaseRepository
@@ -108,9 +107,7 @@ class CostSnapshotRepository(BaseRepository[CostSnapshotORM]):
             conditions.append(CostSnapshotORM.provider_id == provider_id)
 
         result = await self.session.execute(
-            select(CostSnapshotORM)
-            .where(and_(*conditions))
-            .order_by(CostSnapshotORM.snapshot_date)
+            select(CostSnapshotORM).where(and_(*conditions)).order_by(CostSnapshotORM.snapshot_date)
         )
         return list(result.scalars().all())
 

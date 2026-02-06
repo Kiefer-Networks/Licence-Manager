@@ -10,31 +10,32 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import LOGOS_DIR
-from licence_api.constants.provider_logos import get_provider_logo
 from licence_api.database import get_db
+from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
 from licence_api.models.dto.provider import (
     ProviderCreate,
-    ProviderUpdate,
-    ProviderResponse,
     ProviderListResponse,
-    PaymentMethodSummary,
+    ProviderResponse,
+    ProviderUpdate,
 )
-from licence_api.services.payment_method_service import PaymentMethodService
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.encryption import get_encryption_service
-from licence_api.security.rate_limit import limiter, PROVIDER_TEST_CONNECTION_LIMIT, SENSITIVE_OPERATION_LIMIT
-from licence_api.services.audit_service import AuditService, AuditAction, ResourceType
+from licence_api.security.rate_limit import (
+    PROVIDER_TEST_CONNECTION_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
-from licence_api.utils.file_validation import validate_svg_content
-from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.utils.errors import log_sync_connection_error, log_sync_unexpected_error
+from licence_api.utils.file_validation import validate_svg_content
 
 router = APIRouter()
 
@@ -97,17 +98,17 @@ class PublicCredentialsResponse(BaseModel):
 
 # Fields that contain secrets and should never be exposed
 SECRET_CREDENTIAL_FIELDS = {
-    'access_token',
-    'admin_api_key',
-    'api_key',
-    'api_secret',
-    'api_token',
-    'auth_token',
-    'bot_token',
-    'client_secret',
-    'scim_token',
-    'user_token',
-    'service_account_json',
+    "access_token",
+    "admin_api_key",
+    "api_key",
+    "api_secret",
+    "api_token",
+    "auth_token",
+    "bot_token",
+    "client_secret",
+    "scim_token",
+    "user_token",
+    "service_account_json",
 }
 
 
@@ -312,6 +313,7 @@ def validate_logo_signature(content: bytes, extension: str) -> bool:
 
 class LogoUploadResponse(BaseModel):
     """Logo upload response."""
+
     logo_url: str
 
 
@@ -496,15 +498,15 @@ async def test_provider_connection(
         AnthropicProvider,
         AtlassianProvider,
         Auth0Provider,
-        HiBobProvider,
+        CursorProvider,
+        FigmaProvider,
         GoogleWorkspaceProvider,
+        HiBobProvider,
+        JetBrainsProvider,
         MailjetProvider,
         MicrosoftProvider,
         OpenAIProvider,
-        FigmaProvider,
-        CursorProvider,
         SlackProvider,
-        JetBrainsProvider,
         ZoomProvider,
     )
 
@@ -525,7 +527,9 @@ async def test_provider_connection(
         ProviderName.ZOOM: ZoomProvider,
     }
 
-    provider_class = providers.get(ProviderName(body.name) if body.name in [e.value for e in ProviderName] else None)
+    provider_class = providers.get(
+        ProviderName(body.name) if body.name in [e.value for e in ProviderName] else None
+    )
     if provider_class is None:
         return TestConnectionResponse(
             success=False,
@@ -581,12 +585,16 @@ async def trigger_sync(
 
         return SyncResponse(success=True, results=results)
     except (ConnectionError, TimeoutError, OSError) as e:
-        error = await log_sync_connection_error(audit_service, provider_id, current_user, request, e)
+        error = await log_sync_connection_error(
+            audit_service, provider_id, current_user, request, e
+        )
         return SyncResponse(success=False, results=error)
     except ValueError:
         return SyncResponse(success=False, results={"error": "Invalid provider configuration"})
     except Exception as e:
-        error = await log_sync_unexpected_error(audit_service, provider_id, current_user, request, e)
+        error = await log_sync_unexpected_error(
+            audit_service, provider_id, current_user, request, e
+        )
         return SyncResponse(success=False, results=error)
 
 
@@ -625,10 +633,14 @@ async def sync_provider(
             detail="Provider not found",
         )
     except (ConnectionError, TimeoutError, OSError) as e:
-        error = await log_sync_connection_error(audit_service, provider_id, current_user, request, e)
+        error = await log_sync_connection_error(
+            audit_service, provider_id, current_user, request, e
+        )
         return SyncResponse(success=False, results=error)
     except Exception as e:
-        error = await log_sync_unexpected_error(audit_service, provider_id, current_user, request, e)
+        error = await log_sync_unexpected_error(
+            audit_service, provider_id, current_user, request, e
+        )
         return SyncResponse(success=False, results=error)
 
 
@@ -639,7 +651,9 @@ class LicenseTypePricing(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     cost: str = Field(max_length=50)  # Cost per billing cycle
     currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
-    billing_cycle: str = Field(default="yearly", max_length=20)  # yearly, monthly, perpetual, one_time
+    billing_cycle: str = Field(
+        default="yearly", max_length=20
+    )  # yearly, monthly, perpetual, one_time
     payment_frequency: str = Field(default="yearly", max_length=20)  # yearly, monthly, one_time
     next_billing_date: str | None = Field(default=None, max_length=10)  # ISO date string
     notes: str | None = Field(default=None, max_length=2000)
@@ -701,7 +715,10 @@ async def get_provider_license_types(
     provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> LicenseTypesResponse:
-    """Get all license types for a provider with their counts and current pricing. Requires providers.view permission."""
+    """Get all license types for a provider with their counts and current pricing.
+
+    Requires providers.view permission.
+    """
     provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
         raise HTTPException(
@@ -865,7 +882,9 @@ class IndividualLicenseTypePricingRequest(BaseModel):
     pricing: list[LicenseTypePricing] = Field(max_length=500)
 
 
-@router.get("/{provider_id}/individual-license-types", response_model=IndividualLicenseTypesResponse)
+@router.get(
+    "/{provider_id}/individual-license-types", response_model=IndividualLicenseTypesResponse
+)
 async def get_provider_individual_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
@@ -888,7 +907,9 @@ async def get_provider_individual_license_types(
         )
 
     # Get individual license type counts (extracted from combined strings)
-    individual_counts, has_combined = await provider_service.get_individual_license_type_counts(provider_id)
+    individual_counts, has_combined = await provider_service.get_individual_license_type_counts(
+        provider_id
+    )
 
     # Get current individual pricing from config
     individual_pricing_config = (provider.config or {}).get("individual_license_pricing", {})
@@ -978,7 +999,9 @@ async def update_provider_individual_pricing(
     )
 
     # Return updated license types
-    return await get_provider_individual_license_types(provider_id, current_user, provider_repo, provider_service)
+    return await get_provider_individual_license_types(
+        provider_id, current_user, provider_repo, provider_service
+    )
 
 
 @router.post("/sync/avatars", response_model=SyncResponse)
@@ -1026,7 +1049,12 @@ async def resync_avatars(
             resource_id=None,
             user=current_user,
             request=request,
-            details={"action": "avatar_resync", "success": False, "error_code": "CONNECTION_ERROR", "error_type": type(e).__name__},
+            details={
+                "action": "avatar_resync",
+                "success": False,
+                "error_code": "CONNECTION_ERROR",
+                "error_type": type(e).__name__,
+            },
         )
         return SyncResponse(success=False, results={"error": "Connection to HiBob failed"})
     except Exception as e:

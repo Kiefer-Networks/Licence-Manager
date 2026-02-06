@@ -1,7 +1,7 @@
 """Auth0 identity provider integration."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -108,7 +108,10 @@ class Auth0Provider(BaseProvider):
                         "page": page,
                         "per_page": per_page,
                         "include_totals": "true",
-                        "fields": "user_id,email,name,created_at,last_login,blocked,email_verified,identities",
+                        "fields": (
+                            "user_id,email,name,created_at,last_login,"
+                            "blocked,email_verified,identities"
+                        ),
                     },
                     timeout=30.0,
                 )
@@ -120,7 +123,9 @@ class Auth0Provider(BaseProvider):
                 for user in users:
                     # Determine license type based on connection/identity
                     identities = user.get("identities", [])
-                    connection = identities[0].get("connection", "unknown") if identities else "unknown"
+                    connection = (
+                        identities[0].get("connection", "unknown") if identities else "unknown"
+                    )
 
                     # Map connection to license type
                     if connection in ["Username-Password-Authentication", "email"]:
@@ -160,20 +165,22 @@ class Auth0Provider(BaseProvider):
                     if user.get("blocked"):
                         status = "blocked"
 
-                    licenses.append({
-                        "external_user_id": user.get("email") or user.get("user_id"),
-                        "email": user.get("email"),
-                        "license_type": license_type,
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_login,
-                        "metadata": {
-                            "user_id": user.get("user_id"),
-                            "name": user.get("name"),
-                            "email_verified": user.get("email_verified"),
-                            "connection": connection,
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": user.get("email") or user.get("user_id"),
+                            "email": user.get("email"),
+                            "license_type": license_type,
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_login,
+                            "metadata": {
+                                "user_id": user.get("user_id"),
+                                "name": user.get("name"),
+                                "email_verified": user.get("email_verified"),
+                                "connection": connection,
+                            },
+                        }
+                    )
 
                 # Check pagination
                 total = data.get("total", len(users)) if isinstance(data, dict) else len(users)

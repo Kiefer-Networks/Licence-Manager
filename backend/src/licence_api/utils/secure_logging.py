@@ -36,7 +36,8 @@ def sanitize_exception_message(error: Exception) -> str:
     error_msg = re.sub(r"['\"]?(/[a-zA-Z0-9_./\-]+|[A-Z]:\\[^\s'\"]+)['\"]?", "[PATH]", error_msg)
 
     # Remove anything that looks like a connection string
-    error_msg = re.sub(r"(postgresql|mysql|sqlite|mongodb|redis|http|https)://[^\s]+", "[URL]", error_msg)
+    url_pattern = r"(postgresql|mysql|sqlite|mongodb|redis|http|https)://[^\s]+"
+    error_msg = re.sub(url_pattern, "[URL]", error_msg)
 
     # Remove email addresses
     error_msg = re.sub(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", "[EMAIL]", error_msg)
@@ -51,7 +52,12 @@ def sanitize_exception_message(error: Exception) -> str:
     return error_msg
 
 
-def log_error(logger: logging.Logger, message: str, error: Exception | None = None, **kwargs: Any) -> None:
+def log_error(
+    logger: logging.Logger,
+    message: str,
+    error: Exception | None = None,
+    **kwargs: Any,
+) -> None:
     """Log an error with appropriate detail level based on environment.
 
     In debug mode, logs full exception details.
@@ -78,7 +84,12 @@ def log_error(logger: logging.Logger, message: str, error: Exception | None = No
             logger.error(message)
 
 
-def log_warning(logger: logging.Logger, message: str, error: Exception | None = None, **kwargs: Any) -> None:
+def log_warning(
+    logger: logging.Logger,
+    message: str,
+    error: Exception | None = None,
+    **kwargs: Any,
+) -> None:
     """Log a warning with appropriate detail level based on environment.
 
     In debug mode, logs full exception details.

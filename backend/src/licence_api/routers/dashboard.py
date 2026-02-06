@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.dashboard import DashboardResponse
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.report_service import ReportService
 from licence_api.utils.validation import sanitize_department

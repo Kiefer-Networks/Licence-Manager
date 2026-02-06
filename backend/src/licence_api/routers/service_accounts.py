@@ -20,9 +20,9 @@ from licence_api.models.dto.service_account import (
     ServiceAccountPatternListResponse,
     ServiceAccountPatternResponse,
 )
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
 from licence_api.utils.validation import validate_sort_by
@@ -80,7 +80,9 @@ async def get_pattern(
     return pattern
 
 
-@router.post("/patterns", response_model=ServiceAccountPatternResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/patterns", response_model=ServiceAccountPatternResponse, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_pattern(
     request: Request,
@@ -183,7 +185,9 @@ async def list_service_account_licenses(
 
     Requires licenses.view permission.
     """
-    validated_sort_by = validate_sort_by(sort_by, ALLOWED_SERVICE_LICENSE_SORT_COLUMNS, "external_user_id")
+    validated_sort_by = validate_sort_by(
+        sort_by, ALLOWED_SERVICE_LICENSE_SORT_COLUMNS, "external_user_id"
+    )
     items, total = await service.get_service_account_licenses(
         search=search,
         provider_id=provider_id,
@@ -233,7 +237,11 @@ async def get_license_type(
     return entry
 
 
-@router.post("/license-types", response_model=ServiceAccountLicenseTypeResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/license-types",
+    response_model=ServiceAccountLicenseTypeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_license_type(
     request: Request,

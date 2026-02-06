@@ -16,18 +16,18 @@ Architecture Note (MVC-07):
 
 from datetime import date, timedelta
 
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, and_
 
 from licence_api.models.domain.license import LicenseStatus
+from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
 from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
-from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.provider import ProviderORM
-from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.license_package_repository import LicensePackageRepository
+from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
 
 
@@ -173,7 +173,9 @@ class ExpirationService:
                     LicensePackageORM.contract_end.isnot(None),
                     LicensePackageORM.contract_end >= date.today(),
                     LicensePackageORM.contract_end <= cutoff_date,
-                    LicensePackageORM.status.notin_([PackageStatus.EXPIRED, PackageStatus.CANCELLED]),
+                    LicensePackageORM.status.notin_(
+                        [PackageStatus.EXPIRED, PackageStatus.CANCELLED]
+                    ),
                 )
             )
             .order_by(LicensePackageORM.contract_end)
@@ -252,7 +254,9 @@ class ExpirationService:
                     OrganizationLicenseORM.expires_at.isnot(None),
                     OrganizationLicenseORM.expires_at >= date.today(),
                     OrganizationLicenseORM.expires_at <= cutoff_date,
-                    OrganizationLicenseORM.status.notin_([OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED]),
+                    OrganizationLicenseORM.status.notin_(
+                        [OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED]
+                    ),
                 )
             )
             .order_by(OrganizationLicenseORM.expires_at)

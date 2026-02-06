@@ -12,11 +12,17 @@ Architecture Note (MVC-04):
     4. The queries are business-domain specific and unlikely to be reused
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.models.dto.dashboard import (
+    DashboardResponse,
+    ProviderSummary,
+    RecentOffboarding,
+    UnassignedLicense,
+)
 from licence_api.models.dto.report import (
     CancelledLicense,
     CancelledLicensesReport,
@@ -47,17 +53,11 @@ from licence_api.models.dto.report import (
     ProviderUtilization,
     UtilizationReport,
 )
-from licence_api.models.dto.dashboard import (
-    DashboardResponse,
-    ProviderSummary,
-    RecentOffboarding,
-    UnassignedLicense,
-)
-from licence_api.repositories.license_repository import LicenseRepository
+from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.settings_repository import SettingsRepository
-from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
 from licence_api.services.expiration_service import ExpirationService
 from licence_api.utils.domain_check import is_company_email
 
@@ -117,13 +117,17 @@ class ReportService:
         if recent_offboarded:
             # Batch fetch all licenses with providers for offboarded employees
             employee_ids = [emp.id for emp in recent_offboarded]
-            employee_licenses = await self.license_repo.get_licenses_with_providers_for_employees(employee_ids)
+            employee_licenses = await self.license_repo.get_licenses_with_providers_for_employees(
+                employee_ids
+            )
 
             for employee in recent_offboarded:
                 licenses_with_providers = employee_licenses.get(employee.id, [])
                 if licenses_with_providers:
                     # Get unique provider names from the batch result
-                    provider_names = list({provider.display_name for _, provider in licenses_with_providers})
+                    provider_names = list(
+                        {provider.display_name for _, provider in licenses_with_providers}
+                    )
 
                     recent_offboardings.append(
                         RecentOffboarding(
@@ -132,7 +136,9 @@ class ReportService:
                             employee_email=employee.email,
                             termination_date=datetime.combine(
                                 employee.termination_date, datetime.min.time()
-                            ) if employee.termination_date else None,
+                            )
+                            if employee.termination_date
+                            else None,
                             pending_licenses=len(licenses_with_providers),
                             provider_names=provider_names,
                         )
@@ -278,7 +284,7 @@ class ReportService:
         for lic, provider, employee in inactive:
             days_inactive = 0
             if lic.last_activity_at:
-                days_inactive = (datetime.now(timezone.utc) - lic.last_activity_at).days
+                days_inactive = (datetime.now(UTC) - lic.last_activity_at).days
             else:
                 days_inactive = days_threshold + 30  # Assume inactive since forever
 
@@ -334,18 +340,22 @@ class ReportService:
         if offboarded:
             # Batch fetch all licenses with providers to avoid N+1 queries
             employee_ids = [emp.id for emp in offboarded]
-            employee_licenses = await self.license_repo.get_licenses_with_providers_for_employees(employee_ids)
+            employee_licenses = await self.license_repo.get_licenses_with_providers_for_employees(
+                employee_ids
+            )
 
             for employee in offboarded:
                 licenses_with_providers = employee_licenses.get(employee.id, [])
                 if licenses_with_providers:
                     pending_licenses = []
                     for lic, provider in licenses_with_providers:
-                        pending_licenses.append({
-                            "provider": provider.display_name,
-                            "type": lic.license_type or "Unknown",
-                            "external_id": lic.external_user_id,
-                        })
+                        pending_licenses.append(
+                            {
+                                "provider": provider.display_name,
+                                "type": lic.license_type or "Unknown",
+                                "external_id": lic.external_user_id,
+                            }
+                        )
 
                     days_since = 0
                     if employee.termination_date:
@@ -444,9 +454,10 @@ class ReportService:
         Returns:
             ExpiringContractsReport
         """
-        from licence_api.models.orm.license_package import LicensePackageORM
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
+
+        from licence_api.models.orm.license_package import LicensePackageORM
 
         cutoff_date = date.today() + timedelta(days=days_ahead)
 
@@ -502,11 +513,12 @@ class ReportService:
         Returns:
             UtilizationReport
         """
+        from sqlalchemy import and_, case, func, select
+        from sqlalchemy.orm import selectinload
+
+        from licence_api.models.orm.license import LicenseORM
         from licence_api.models.orm.license_package import LicensePackageORM
         from licence_api.models.orm.provider import ProviderORM
-        from licence_api.models.orm.license import LicenseORM
-        from sqlalchemy import select, func, case, and_
-        from sqlalchemy.orm import selectinload
 
         # Get company domains for external email detection
         company_domains = []
@@ -542,22 +554,19 @@ class ReportService:
 
         # Get detailed license stats per provider
         # Count: active, assigned (with employee), unassigned, external, total_cost
-        stats_query = (
-            select(
-                LicenseORM.provider_id,
-                func.count().filter(LicenseORM.status == "active").label("active_count"),
-                func.count().filter(
-                    and_(LicenseORM.status == "active", LicenseORM.employee_id.isnot(None))
-                ).label("assigned_count"),
-                func.count().filter(
-                    and_(LicenseORM.status == "active", LicenseORM.employee_id.is_(None))
-                ).label("unassigned_count"),
-                func.sum(
-                    case((LicenseORM.status == "active", LicenseORM.monthly_cost), else_=Decimal("0"))
-                ).label("total_cost"),
-            )
-            .group_by(LicenseORM.provider_id)
-        )
+        stats_query = select(
+            LicenseORM.provider_id,
+            func.count().filter(LicenseORM.status == "active").label("active_count"),
+            func.count()
+            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.isnot(None)))
+            .label("assigned_count"),
+            func.count()
+            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.is_(None)))
+            .label("unassigned_count"),
+            func.sum(
+                case((LicenseORM.status == "active", LicenseORM.monthly_cost), else_=Decimal("0"))
+            ).label("total_cost"),
+        ).group_by(LicenseORM.provider_id)
         stats_result = await self.session.execute(stats_query)
         provider_stats: dict[str, dict] = {}
         for row in stats_result.all():
@@ -582,8 +591,12 @@ class ReportService:
                 ext_result = await self.session.execute(
                     select(
                         func.count().label("count"),
-                        func.coalesce(func.sum(LicenseORM.monthly_cost), Decimal("0")).label("cost"),
-                    ).select_from(LicenseORM).where(and_(*conditions))
+                        func.coalesce(func.sum(LicenseORM.monthly_cost), Decimal("0")).label(
+                            "cost"
+                        ),
+                    )
+                    .select_from(LicenseORM)
+                    .where(and_(*conditions))
                 )
                 row = ext_result.one()
                 external_by_provider[str(provider_id)] = {
@@ -604,7 +617,9 @@ class ReportService:
 
         for provider_id, provider in all_providers.items():
             pid = str(provider_id)
-            stats = provider_stats.get(pid, {"active": 0, "assigned": 0, "unassigned": 0, "total_cost": Decimal("0")})
+            stats = provider_stats.get(
+                pid, {"active": 0, "assigned": 0, "unassigned": 0, "total_cost": Decimal("0")}
+            )
 
             active = stats["active"]
             assigned = stats["assigned"]
@@ -641,7 +656,9 @@ class ReportService:
                 max_users = license_info.get("max_users")
                 if max_users:
                     purchased = int(max_users)
-                    license_type = license_info.get("sku_name", "").replace("_", " ").title() or None
+                    license_type = (
+                        license_info.get("sku_name", "").replace("_", " ").title() or None
+                    )
 
                 # Get cost from package_pricing
                 if package_pricing.get("cost"):
@@ -660,7 +677,7 @@ class ReportService:
 
             # Calculate utilization (assigned / active is most meaningful)
             if active > 0:
-                utilization = (assigned / active * 100)
+                utilization = assigned / active * 100
             else:
                 utilization = 0
 
@@ -706,7 +723,9 @@ class ReportService:
                         unassigned_seats=unassigned,
                         external_seats=external,
                         utilization_percent=round(utilization, 1),
-                        monthly_cost=round(provider_monthly_cost, 2) if provider_monthly_cost else None,
+                        monthly_cost=round(provider_monthly_cost, 2)
+                        if provider_monthly_cost
+                        else None,
                         monthly_waste=monthly_waste,
                         external_cost=external_cost,
                         currency=currency,
@@ -718,7 +737,7 @@ class ReportService:
 
         # Calculate overall utilization (assigned / active)
         if total_active > 0:
-            overall_util = (total_assigned / total_active * 100)
+            overall_util = total_assigned / total_active * 100
         else:
             overall_util = 0
 
@@ -802,9 +821,6 @@ class ReportService:
         Returns:
             DuplicateAccountsReport
         """
-        from sqlalchemy import select, func
-        from licence_api.models.orm.license import LicenseORM
-        from licence_api.models.orm.provider import ProviderORM
 
         # Get all licenses with email addresses
         results, _ = await self.license_repo.get_all_with_details(limit=10000)
@@ -840,7 +856,9 @@ class ReportService:
                 # Flag as duplicate if same provider has multiple entries
                 providers_seen: dict[str, int] = {}
                 for _, provider, _ in entries:
-                    providers_seen[provider.display_name] = providers_seen.get(provider.display_name, 0) + 1
+                    providers_seen[provider.display_name] = (
+                        providers_seen.get(provider.display_name, 0) + 1
+                    )
 
                 # Only flag if same provider appears multiple times
                 has_true_duplicate = any(count > 1 for count in providers_seen.values())
@@ -898,12 +916,14 @@ class ReportService:
         results, _ = await self.license_repo.get_all_with_details(limit=10000)
 
         # Group by department
-        dept_data: dict[str, dict] = defaultdict(lambda: {
-            "employees": set(),
-            "licenses": 0,
-            "cost": Decimal("0"),
-            "providers": defaultdict(lambda: Decimal("0")),
-        })
+        dept_data: dict[str, dict] = defaultdict(
+            lambda: {
+                "employees": set(),
+                "licenses": 0,
+                "cost": Decimal("0"),
+                "providers": defaultdict(lambda: Decimal("0")),
+            }
+        )
 
         for lic, provider, employee in results:
             if provider.name == "hibob":
@@ -933,21 +953,21 @@ class ReportService:
             cost_per_emp = cost / emp_count if emp_count > 0 else Decimal("0")
 
             # Top 3 providers by cost
-            sorted_providers = sorted(
-                data["providers"].items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:3]
+            sorted_providers = sorted(data["providers"].items(), key=lambda x: x[1], reverse=True)[
+                :3
+            ]
             top_providers = [p[0] for p in sorted_providers]
 
-            departments.append(DepartmentCost(
-                department=dept_name,
-                employee_count=emp_count,
-                license_count=data["licenses"],
-                total_monthly_cost=round(cost, 2),
-                cost_per_employee=round(cost_per_emp, 2),
-                top_providers=top_providers,
-            ))
+            departments.append(
+                DepartmentCost(
+                    department=dept_name,
+                    employee_count=emp_count,
+                    license_count=data["licenses"],
+                    total_monthly_cost=round(cost, 2),
+                    cost_per_employee=round(cost_per_emp, 2),
+                    top_providers=top_providers,
+                )
+            )
 
             total_cost += cost
             total_employees += emp_count
@@ -980,7 +1000,6 @@ class ReportService:
         Returns:
             CostsByEmployeeReport with cost breakdown per employee
         """
-        from collections import defaultdict
         import statistics
 
         # Get all licenses with employee info
@@ -1009,11 +1028,13 @@ class ReportService:
                 }
 
             cost = lic.monthly_cost or Decimal("0")
-            emp_data[emp_id]["licenses"].append(EmployeeLicense(
-                provider_name=provider.display_name,
-                license_type=lic.license_type,
-                monthly_cost=cost if cost > 0 else None,
-            ))
+            emp_data[emp_id]["licenses"].append(
+                EmployeeLicense(
+                    provider_name=provider.display_name,
+                    license_type=lic.license_type,
+                    monthly_cost=cost if cost > 0 else None,
+                )
+            )
             emp_data[emp_id]["cost"] += cost
 
         # Build response
@@ -1030,16 +1051,18 @@ class ReportService:
 
             costs_list.append(float(cost))
 
-            employees.append(EmployeeCost(
-                employee_id=emp_id,
-                employee_name=emp.full_name,
-                employee_email=emp.email,
-                department=emp.department,
-                status=emp.status,
-                license_count=len(data["licenses"]),
-                total_monthly_cost=round(cost, 2),
-                licenses=data["licenses"],
-            ))
+            employees.append(
+                EmployeeCost(
+                    employee_id=emp_id,
+                    employee_name=emp.full_name,
+                    employee_email=emp.email,
+                    department=emp.department,
+                    status=emp.status,
+                    license_count=len(data["licenses"]),
+                    total_monthly_cost=round(cost, 2),
+                    licenses=data["licenses"],
+                )
+            )
 
         # Sort by cost descending
         employees.sort(key=lambda x: x.total_monthly_cost, reverse=True)
@@ -1125,8 +1148,9 @@ class ReportService:
         Returns:
             CancelledLicensesReport
         """
-        from licence_api.models.orm.admin_user import AdminUserORM
         from sqlalchemy import select
+
+        from licence_api.models.orm.admin_user import AdminUserORM
 
         cancelled = await self.expiration_service.get_cancelled_licenses()
         today = date.today()
@@ -1146,7 +1170,9 @@ class ReportService:
         already_effective = 0
 
         for lic, provider, employee in cancelled:
-            is_effective = lic.cancellation_effective_date and lic.cancellation_effective_date <= today
+            is_effective = (
+                lic.cancellation_effective_date and lic.cancellation_effective_date <= today
+            )
             if is_effective:
                 already_effective += 1
             else:
@@ -1164,7 +1190,9 @@ class ReportService:
                     cancelled_at=lic.cancelled_at,
                     cancellation_effective_date=lic.cancellation_effective_date,
                     cancellation_reason=lic.cancellation_reason,
-                    cancelled_by_name=canceller_names.get(lic.cancelled_by) if lic.cancelled_by else None,
+                    cancelled_by_name=canceller_names.get(lic.cancelled_by)
+                    if lic.cancelled_by
+                    else None,
                     monthly_cost=lic.monthly_cost,
                     is_effective=is_effective,
                 )
@@ -1183,21 +1211,20 @@ class ReportService:
         Returns:
             LicenseLifecycleOverview
         """
+        from sqlalchemy import func, select
+
         from licence_api.models.domain.license import LicenseStatus
         from licence_api.models.orm.license import LicenseORM
-        from sqlalchemy import select, func
 
         # Get counts by status
         status_counts = await self.session.execute(
-            select(LicenseORM.status, func.count())
-            .group_by(LicenseORM.status)
+            select(LicenseORM.status, func.count()).group_by(LicenseORM.status)
         )
         counts_by_status = {row[0]: row[1] for row in status_counts.all()}
 
         # Count active licenses
         total_active = counts_by_status.get(LicenseStatus.ACTIVE, 0)
         total_expired = counts_by_status.get(LicenseStatus.EXPIRED, 0)
-        total_cancelled = counts_by_status.get(LicenseStatus.CANCELLED, 0)
 
         # Count licenses needing reorder
         needs_reorder_result = await self.session.execute(
@@ -1268,7 +1295,7 @@ class ReportService:
             # Calculate days inactive
             days_inactive = 0
             if lic.last_activity_at:
-                days_inactive = (datetime.now(timezone.utc) - lic.last_activity_at).days
+                days_inactive = (datetime.now(UTC) - lic.last_activity_at).days
             else:
                 days_inactive = min_days_inactive + 90  # Assume very inactive
 
@@ -1309,7 +1336,9 @@ class ReportService:
             elif employee and employee.status == "active" and days_inactive > 90:
                 # Medium priority: active employee but very inactive license
                 recommendation_type = "reassign"
-                recommendation_reason = f"Active employee not using license for {days_inactive} days"
+                recommendation_reason = (
+                    f"Active employee not using license for {days_inactive} days"
+                )
                 priority = "medium"
             elif days_inactive > 60:
                 # Lower priority: moderately inactive
@@ -1368,9 +1397,7 @@ class ReportService:
         low_count = sum(1 for r in recommendations if r.priority == "low")
 
         # Recalculate savings for limited results
-        limited_monthly_savings = sum(
-            r.monthly_cost or Decimal("0") for r in recommendations
-        )
+        limited_monthly_savings = sum(r.monthly_cost or Decimal("0") for r in recommendations)
 
         return LicenseRecommendationsReport(
             total_recommendations=len(recommendations),

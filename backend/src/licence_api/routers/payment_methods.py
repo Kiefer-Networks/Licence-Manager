@@ -4,12 +4,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from pydantic import BaseModel
-
 from licence_api.models.dto.payment_method import (
     PaymentMethodCreate,
     PaymentMethodListResponse,
@@ -24,9 +23,11 @@ class PaymentMethodUsageResponse(BaseModel):
     payment_method_id: str
     provider_count: int
     providers: list[dict]  # List of {id, name, display_name}
-from licence_api.security.auth import require_permission, Permissions
+
+
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.payment_method_service import PaymentMethodService
 
 router = APIRouter()
@@ -41,7 +42,9 @@ def get_payment_method_service(
 
 @router.get("", response_model=PaymentMethodListResponse)
 async def list_payment_methods(
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodListResponse:
     """List all payment methods."""
@@ -53,7 +56,9 @@ async def list_payment_methods(
 async def create_payment_method(
     request: Request,
     data: PaymentMethodCreate,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_CREATE))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_CREATE))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
@@ -74,7 +79,9 @@ async def create_payment_method(
 @router.get("/{payment_method_id}", response_model=PaymentMethodResponse)
 async def get_payment_method(
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodResponse:
     """Get a payment method by ID."""
@@ -90,7 +97,9 @@ async def get_payment_method(
 @router.get("/{payment_method_id}/usage", response_model=PaymentMethodUsageResponse)
 async def get_payment_method_usage(
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
 ) -> PaymentMethodUsageResponse:
     """Get providers using a specific payment method."""
@@ -109,7 +118,9 @@ async def update_payment_method(
     request: Request,
     payment_method_id: UUID,
     data: PaymentMethodUpdate,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_EDIT))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_EDIT))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
@@ -133,7 +144,9 @@ async def update_payment_method(
 async def delete_payment_method(
     request: Request,
     payment_method_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_DELETE))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_DELETE))
+    ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
     force: bool = False,

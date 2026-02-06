@@ -97,6 +97,7 @@ class ExternalUsersReport(BaseModel):
 
 # Quick Win DTOs
 
+
 class ExpiringContract(BaseModel):
     """Expiring contract entry."""
 

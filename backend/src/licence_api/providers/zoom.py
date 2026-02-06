@@ -44,12 +44,8 @@ class ZoomProvider(BaseProvider):
                 - client_secret: OAuth Client Secret
         """
         super().__init__(credentials)
-        self.account_id = credentials.get("account_id") or credentials.get(
-            "zoom_account_id"
-        )
-        self.client_id = credentials.get("client_id") or credentials.get(
-            "zoom_client_id"
-        )
+        self.account_id = credentials.get("account_id") or credentials.get("zoom_account_id")
+        self.client_id = credentials.get("client_id") or credentials.get("zoom_client_id")
         self.client_secret = credentials.get("client_secret") or credentials.get(
             "zoom_client_secret"
         )
@@ -253,7 +249,10 @@ class ZoomProvider(BaseProvider):
                                 "email": email,
                                 "first_name": user.get("first_name"),
                                 "last_name": user.get("last_name"),
-                                "display_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                                "display_name": (
+                                    f"{user.get('first_name', '')} "
+                                    f"{user.get('last_name', '')}".strip()
+                                ),
                                 "user_type": self.USER_TYPES.get(user_type, "Unknown"),
                                 "user_type_id": user_type,
                                 "role": role,
@@ -315,7 +314,10 @@ class ZoomProvider(BaseProvider):
                                     "email": email,
                                     "first_name": user.get("first_name"),
                                     "last_name": user.get("last_name"),
-                                    "display_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                                    "display_name": (
+                                    f"{user.get('first_name', '')} "
+                                    f"{user.get('last_name', '')}".strip()
+                                ),
                                     "user_type": self.USER_TYPES.get(user_type, "Unknown"),
                                     "original_status": status,
                                 },

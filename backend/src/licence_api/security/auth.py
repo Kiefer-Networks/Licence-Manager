@@ -2,9 +2,8 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from functools import wraps
-from typing import Annotated, Callable
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -35,7 +34,7 @@ def create_access_token(
         JWT token string
     """
     settings = get_settings()
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiration_hours)
+    expire = datetime.now(UTC) + timedelta(hours=settings.jwt_expiration_hours)
 
     payload = {
         "sub": str(user_id),
@@ -43,7 +42,7 @@ def create_access_token(
         "roles": roles,
         "permissions": permissions,
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "type": "access",
         "iss": settings.jwt_issuer,
         "aud": settings.jwt_audience,
@@ -162,8 +161,8 @@ async def get_current_user(
         email=payload["email"],
         roles=payload.get("roles", []),
         permissions=payload.get("permissions", []),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -176,6 +175,7 @@ def require_permission(*required_permissions: str):
     Returns:
         Dependency function
     """
+
     async def permission_dependency(
         current_user: Annotated[AdminUser, Depends(get_current_user)],
     ) -> AdminUser:

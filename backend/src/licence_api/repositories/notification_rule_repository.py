@@ -3,7 +3,6 @@
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.repositories.base import BaseRepository
@@ -37,9 +36,7 @@ class NotificationRuleRepository(BaseRepository[NotificationRuleORM]):
         Returns:
             List of matching notification rules
         """
-        query = select(NotificationRuleORM).where(
-            NotificationRuleORM.event_type == event_type
-        )
+        query = select(NotificationRuleORM).where(NotificationRuleORM.event_type == event_type)
         if enabled_only:
             query = query.where(NotificationRuleORM.enabled == True)
 

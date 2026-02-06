@@ -13,9 +13,7 @@ class PasswordPolicySettings(BaseModel):
     require_uppercase: bool = Field(default=True, description="Require uppercase letters")
     require_lowercase: bool = Field(default=True, description="Require lowercase letters")
     require_numbers: bool = Field(default=True, description="Require numeric digits")
-    require_special_chars: bool = Field(
-        default=True, description="Require special characters"
-    )
+    require_special_chars: bool = Field(default=True, description="Require special characters")
 
     # Expiration and history
     expiry_days: int = Field(

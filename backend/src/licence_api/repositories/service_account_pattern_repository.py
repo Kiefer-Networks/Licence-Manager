@@ -126,9 +126,7 @@ class ServiceAccountPatternRepository(BaseRepository[ServiceAccountPatternORM]):
 
         return results
 
-    async def find_matching_licenses(
-        self, pattern: ServiceAccountPatternORM
-    ) -> list[LicenseORM]:
+    async def find_matching_licenses(self, pattern: ServiceAccountPatternORM) -> list[LicenseORM]:
         """Find all licenses matching a pattern.
 
         Args:

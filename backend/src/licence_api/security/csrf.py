@@ -3,10 +3,10 @@
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import Cookie, Depends, Header, HTTPException, Request, status
+from fastapi import Cookie, Header, HTTPException, Request, status
 
 from licence_api.config import get_settings
 
@@ -33,7 +33,7 @@ def generate_csrf_token() -> tuple[str, str]:
     """
     settings = get_settings()
     token = secrets.token_urlsafe(32)
-    timestamp = int(datetime.now(timezone.utc).timestamp())
+    timestamp = int(datetime.now(UTC).timestamp())
     message = f"{token}{CSRF_TOKEN_DELIMITER}{timestamp}"
     signature = hmac.new(
         settings.jwt_secret.encode(),
@@ -61,8 +61,8 @@ def verify_csrf_token(signed_token: str) -> bool:
         timestamp = int(timestamp_str)
 
         # Check expiry
-        created_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        if datetime.now(timezone.utc) - created_at > CSRF_TOKEN_LIFETIME:
+        created_at = datetime.fromtimestamp(timestamp, tz=UTC)
+        if datetime.now(UTC) - created_at > CSRF_TOKEN_LIFETIME:
             return False
 
         # Verify signature
@@ -147,8 +147,16 @@ async def validate_csrf(
     # Verify cookie matches header token (double submit cookie pattern)
     if csrf_cookie:
         # Extract token part (first component) from signed token
-        header_token = x_csrf_token.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in x_csrf_token else x_csrf_token
-        cookie_token = csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_cookie else csrf_cookie
+        header_token = (
+            x_csrf_token.split(CSRF_TOKEN_DELIMITER)[0]
+            if CSRF_TOKEN_DELIMITER in x_csrf_token
+            else x_csrf_token
+        )
+        cookie_token = (
+            csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0]
+            if CSRF_TOKEN_DELIMITER in csrf_cookie
+            else csrf_cookie
+        )
         if not hmac.compare_digest(header_token, cookie_token):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

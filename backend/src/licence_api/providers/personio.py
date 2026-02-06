@@ -1,7 +1,7 @@
 """Personio HRIS provider integration."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -68,7 +68,7 @@ class PersonioProvider(HRISProvider):
         if (
             self._access_token
             and self._token_expires_at
-            and datetime.now(timezone.utc) < self._token_expires_at
+            and datetime.now(UTC) < self._token_expires_at
         ):
             return self._access_token
 
@@ -85,15 +85,15 @@ class PersonioProvider(HRISProvider):
         data = response.json()
 
         if not data.get("success"):
-            raise ValueError(f"Personio auth failed: {data.get('error', {}).get('message', 'Unknown error')}")
+            raise ValueError(
+                f"Personio auth failed: {data.get('error', {}).get('message', 'Unknown error')}"
+            )
 
         token_data = data.get("data", {})
         self._access_token = token_data.get("token")
 
         # Token expires in 24 hours, but we'll refresh 1 hour early to be safe
-        self._token_expires_at = datetime.now(timezone.utc).replace(
-            hour=23, minute=0, second=0
-        )
+        self._token_expires_at = datetime.now(UTC).replace(hour=23, minute=0, second=0)
 
         logger.info("Personio OAuth token acquired")
         return self._access_token
@@ -158,7 +158,9 @@ class PersonioProvider(HRISProvider):
                 data = response.json()
 
                 if not data.get("success"):
-                    raise ValueError(f"Personio API error: {data.get('error', {}).get('message', 'Unknown')}")
+                    raise ValueError(
+                        f"Personio API error: {data.get('error', {}).get('message', 'Unknown')}"
+                    )
 
                 employee_list = data.get("data", [])
                 if not employee_list:

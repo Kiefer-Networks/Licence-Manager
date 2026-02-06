@@ -153,8 +153,12 @@ class MicrosoftProvider(BaseProvider):
         next_link = f"{self.GRAPH_BASE_URL}/users"
 
         # Select fields we need, include license assignments
+        select_fields = (
+            "id,userPrincipalName,displayName,accountEnabled,createdDateTime,"
+            "signInActivity,assignedLicenses,department,jobTitle"
+        )
         params: dict[str, Any] = {
-            "$select": "id,userPrincipalName,displayName,accountEnabled,createdDateTime,signInActivity,assignedLicenses,department,jobTitle",
+            "$select": select_fields,
             "$top": 999,
         }
 
@@ -215,21 +219,25 @@ class MicrosoftProvider(BaseProvider):
                     # User principal name is the email
                     email = user.get("userPrincipalName", "").lower()
 
-                    licenses.append({
-                        "external_user_id": email,  # Use email as external ID for matching
-                        "email": email,
-                        "license_type": ", ".join(license_names) if license_names else "Microsoft 365",
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "azure_id": user.get("id"),
-                            "name": user.get("displayName"),
-                            "department": user.get("department"),
-                            "job_title": user.get("jobTitle"),
-                            "license_skus": [lic.get("skuId") for lic in assigned_licenses],
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": email,  # Use email as external ID for matching
+                            "email": email,
+                            "license_type": ", ".join(license_names)
+                            if license_names
+                            else "Microsoft 365",
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "azure_id": user.get("id"),
+                                "name": user.get("displayName"),
+                                "department": user.get("department"),
+                                "job_title": user.get("jobTitle"),
+                                "license_skus": [lic.get("skuId") for lic in assigned_licenses],
+                            },
+                        }
+                    )
 
                 # Handle pagination
                 next_link = data.get("@odata.nextLink")

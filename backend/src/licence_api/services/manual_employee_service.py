@@ -1,6 +1,6 @@
 """Manual employee service for managing employees without HRIS."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import Request
@@ -79,7 +79,7 @@ class ManualEmployeeService:
         if await self.employee_repo.email_exists(data.email):
             raise ValueError("An employee with this email already exists")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Generate a unique hibob_id for manual employees
         manual_id = f"manual-{uuid4().hex[:12]}"
@@ -183,7 +183,9 @@ class ManualEmployeeService:
             if data.termination_date != employee_orm.termination_date:
                 update_data["termination_date"] = data.termination_date
                 changes["termination_date"] = {
-                    "old": str(employee_orm.termination_date) if employee_orm.termination_date else None,
+                    "old": str(employee_orm.termination_date)
+                    if employee_orm.termination_date
+                    else None,
                     "new": str(data.termination_date),
                 }
 
@@ -195,7 +197,7 @@ class ManualEmployeeService:
                 changes["manager_email"] = {"old": employee_orm.manager_email, "new": manager_email}
 
         if update_data:
-            update_data["synced_at"] = datetime.now(timezone.utc)
+            update_data["synced_at"] = datetime.now(UTC)
             employee_orm = await self.employee_repo.update(employee_id, **update_data)
 
             # Resolve manager if changed
@@ -284,7 +286,7 @@ class ManualEmployeeService:
         updated = 0
         skipped = 0
         errors: list[str] = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for item in employees:
             try:

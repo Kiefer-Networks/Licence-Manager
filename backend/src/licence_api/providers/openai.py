@@ -22,9 +22,7 @@ class OpenAIProvider(BaseProvider):
                 - org_id: Organization ID
         """
         super().__init__(credentials)
-        self.api_key = credentials.get("admin_api_key") or credentials.get(
-            "openai_admin_api_key"
-        )
+        self.api_key = credentials.get("admin_api_key") or credentials.get("openai_admin_api_key")
         self.org_id = credentials.get("org_id") or credentials.get("openai_org_id")
 
     def _get_headers(self) -> dict[str, str]:
@@ -82,16 +80,18 @@ class OpenAIProvider(BaseProvider):
                 elif member.get("created"):
                     added_at = datetime.fromtimestamp(member["created"])
 
-                licenses.append({
-                    "external_user_id": user.get("id", member.get("id")),
-                    "email": user.get("email", "").lower(),
-                    "license_type": member.get("role", "member"),
-                    "status": "active",
-                    "assigned_at": added_at,
-                    "metadata": {
-                        "name": user.get("name"),
-                        "role": member.get("role"),
-                    },
-                })
+                licenses.append(
+                    {
+                        "external_user_id": user.get("id", member.get("id")),
+                        "email": user.get("email", "").lower(),
+                        "license_type": member.get("role", "member"),
+                        "status": "active",
+                        "assigned_at": added_at,
+                        "metadata": {
+                            "name": user.get("name"),
+                            "role": member.get("role"),
+                        },
+                    }
+                )
 
         return licenses

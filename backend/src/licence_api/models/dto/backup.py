@@ -1,13 +1,16 @@
 """Backup DTOs for export/import functionality."""
 
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
 class BackupExportRequest(BaseModel):
     """Request to create an encrypted backup."""
 
-    password: str = Field(min_length=12, max_length=256, description="Password for encryption (12-256 chars)")
+    password: str = Field(
+        min_length=12, max_length=256, description="Password for encryption (12-256 chars)"
+    )
 
 
 class BackupMetadata(BaseModel):

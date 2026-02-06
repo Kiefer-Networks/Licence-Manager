@@ -2,6 +2,7 @@
 
 import re
 
+
 def _decode_xml_entities(content: bytes) -> bytes:
     """Decode XML/HTML numeric entities in content.
 
@@ -14,9 +15,10 @@ def _decode_xml_entities(content: bytes) -> bytes:
     Returns:
         Content with entities decoded
     """
+
     def replace_entity(match: re.Match) -> bytes:
-        entity = match.group(0).decode('ascii')
-        if entity.startswith('&#x'):
+        entity = match.group(0).decode("ascii")
+        if entity.startswith("&#x"):
             # Hex entity: &#x41; -> 'A'
             char_code = int(entity[3:-1], 16)
         else:
@@ -27,7 +29,7 @@ def _decode_xml_entities(content: bytes) -> bytes:
             return bytes([char_code])
         return match.group(0)
 
-    return re.sub(rb'&#x?[0-9a-fA-F]+;', replace_entity, content)
+    return re.sub(rb"&#x?[0-9a-fA-F]+;", replace_entity, content)
 
 
 def _contains_dangerous_content(content: bytes) -> bool:
@@ -136,7 +138,7 @@ def validate_svg_content(content: bytes) -> bool:
     # Check for HTML/XML entities that could encode dangerous content
     # These could be used to spell out "script", "javascript", etc.
     # Look for hex entities (&#x...) and decimal entities (&#...)
-    entity_pattern = rb'&#x?[0-9a-fA-F]+;'
+    entity_pattern = rb"&#x?[0-9a-fA-F]+;"
     if re.search(entity_pattern, content):
         # Decode entities and check the result
         try:
@@ -173,7 +175,7 @@ def validate_svg_content(content: bytes) -> bool:
     # Find all data: URLs and verify EACH one is a safe image type
     if b"data:" in content_lower:
         # Pattern to find all data: URLs
-        data_urls = re.findall(rb'data:\s*([a-z0-9\-+./]+)', content_lower)
+        data_urls = re.findall(rb"data:\s*([a-z0-9\-+./]+)", content_lower)
         # Only allow specific safe image types
         safe_mime_types = {
             b"image/png",

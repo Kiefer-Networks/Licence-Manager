@@ -57,7 +57,9 @@ class EmployeeService:
         # Get license counts in a single batch query (avoids N+1)
         employee_ids = [emp.id for emp in employees]
         license_counts = await self.license_repo.count_by_employee_ids(employee_ids)
-        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids(employee_ids)
+        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids(
+            employee_ids
+        )
 
         return employees, total, license_counts, admin_account_counts
 
@@ -85,7 +87,9 @@ class EmployeeService:
         license_counts = await self.license_repo.count_by_employee_ids([employee_id])
         license_count = license_counts.get(employee_id, 0)
 
-        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids([employee_id])
+        admin_account_counts = await self.license_repo.count_admin_accounts_by_owner_ids(
+            [employee_id]
+        )
         admin_account_count = admin_account_counts.get(employee_id, 0)
 
         return employee, license_count, admin_account_count

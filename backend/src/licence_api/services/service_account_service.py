@@ -13,19 +13,19 @@ from licence_api.models.dto.service_account import (
     ServiceAccountLicenseTypeListResponse,
     ServiceAccountLicenseTypeResponse,
     ServiceAccountPatternCreate,
-    ServiceAccountPatternResponse,
     ServiceAccountPatternListResponse,
+    ServiceAccountPatternResponse,
 )
-from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
 from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
+from licence_api.models.orm.service_account_pattern import ServiceAccountPatternORM
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.repositories.service_account_pattern_repository import (
-    ServiceAccountPatternRepository,
-)
 from licence_api.repositories.service_account_license_type_repository import (
     ServiceAccountLicenseTypeRepository,
+)
+from licence_api.repositories.service_account_pattern_repository import (
+    ServiceAccountPatternRepository,
 )
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
@@ -232,7 +232,9 @@ class ServiceAccountService:
             patterns_applied=patterns_applied,
         )
 
-    async def check_and_mark_license(self, license_external_user_id: str) -> ServiceAccountPatternORM | None:
+    async def check_and_mark_license(
+        self, license_external_user_id: str
+    ) -> ServiceAccountPatternORM | None:
         """Check if an email matches any pattern and return the matching pattern.
 
         This method is used during sync to automatically mark licenses as service accounts.
@@ -390,7 +392,9 @@ class ServiceAccountService:
             total=len(items),
         )
 
-    async def get_license_type_by_id(self, entry_id: UUID) -> ServiceAccountLicenseTypeResponse | None:
+    async def get_license_type_by_id(
+        self, entry_id: UUID
+    ) -> ServiceAccountLicenseTypeResponse | None:
         """Get a single license type entry by ID.
 
         Args:

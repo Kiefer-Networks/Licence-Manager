@@ -10,19 +10,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import (
-    LicenseResponse,
-    LicenseListResponse,
-    CategorizedLicensesResponse,
-    ServiceAccountUpdate,
     AdminAccountUpdate,
+    CategorizedLicensesResponse,
+    LicenseListResponse,
+    LicenseResponse,
     LicenseTypeUpdate,
+    ServiceAccountUpdate,
 )
-from licence_api.security.auth import get_current_user, require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
-from licence_api.utils.validation import sanitize_department, sanitize_search, sanitize_status, validate_sort_by
+from licence_api.utils.validation import (
+    sanitize_department,
+    sanitize_search,
+    sanitize_status,
+    validate_sort_by,
+)
 
 router = APIRouter()
 
@@ -93,8 +98,13 @@ ALLOWED_LICENSE_STATUSES = {"active", "inactive", "suspended", "pending"}
 
 # Allowed sort columns for licenses (whitelist to prevent injection)
 ALLOWED_LICENSE_SORT_COLUMNS = {
-    "external_user_id", "synced_at", "status", "created_at",
-    "employee_name", "provider_name", "is_external",
+    "external_user_id",
+    "synced_at",
+    "status",
+    "created_at",
+    "employee_name",
+    "provider_name",
+    "is_external",
 }
 
 
@@ -108,7 +118,9 @@ async def list_licenses(
     unassigned: bool = False,
     external: bool = False,
     search: str | None = Query(default=None, max_length=200),
-    department: str | None = Query(default=None, max_length=100, description="Filter by employee department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by employee department"
+    ),
     sort_by: str = Query(default="synced_at", max_length=50),
     sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1, le=10000),
@@ -290,7 +302,9 @@ async def remove_license_from_provider(
 async def bulk_remove_from_provider(
     request: Request,
     body: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
+    ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
@@ -332,7 +346,9 @@ async def bulk_remove_from_provider(
 async def bulk_delete_licenses(
     request: Request,
     body: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
+    ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
@@ -376,7 +392,9 @@ async def bulk_delete_licenses(
 async def bulk_unassign_licenses(
     request: Request,
     body: BulkActionRequest,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))],
+    current_user: Annotated[
+        AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
+    ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
@@ -526,6 +544,7 @@ async def update_license_type(
 
 
 # Match management endpoints
+
 
 @router.post("/{license_id}/match/confirm", response_model=MatchActionResponse)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)

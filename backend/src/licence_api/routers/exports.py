@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.services.export_service import ExportService
 
 router = APIRouter()
@@ -40,7 +40,9 @@ async def export_licenses_csv(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     export_service: Annotated[ExportService, Depends(get_export_service)],
     provider_id: UUID | None = Query(default=None, description="Filter by provider"),
-    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
+    department: str | None = Query(
+        default=None, max_length=100, description="Filter by department"
+    ),
     status: str | None = Query(default=None, max_length=50, description="Filter by status"),
 ) -> Response:
     """Export licenses to CSV format.

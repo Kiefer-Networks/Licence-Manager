@@ -13,12 +13,12 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.provider_file_service import (
-    ProviderFileService,
     VIEWABLE_EXTENSIONS,
+    ProviderFileService,
 )
 
 router = APIRouter()
@@ -26,6 +26,7 @@ router = APIRouter()
 
 class ProviderFileResponse(BaseModel):
     """Provider file response."""
+
     id: UUID
     provider_id: UUID
     filename: str
@@ -43,6 +44,7 @@ class ProviderFileResponse(BaseModel):
 
 class ProviderFilesListResponse(BaseModel):
     """Provider files list response."""
+
     items: list[ProviderFileResponse]
     total: int
 
@@ -99,7 +101,9 @@ async def list_provider_files(
     return ProviderFilesListResponse(items=items, total=len(items))
 
 
-@router.post("/{provider_id}/files", response_model=ProviderFileResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{provider_id}/files", response_model=ProviderFileResponse, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def upload_provider_file(
     request: Request,
@@ -134,7 +138,9 @@ async def upload_provider_file(
             request=request,
         )
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or provider not found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or provider not found"
+        )
 
     ext = Path(file_orm.filename).suffix.lower()
     return ProviderFileResponse(

@@ -1,6 +1,6 @@
 """Manual license service for managing licenses without API."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -97,7 +97,7 @@ class ManualLicenseService:
             raise ValueError("Can only add manual licenses to manual providers")
 
         created_licenses = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for i in range(quantity):
             if license_key and quantity == 1:
@@ -195,7 +195,7 @@ class ManualLicenseService:
             raise ValueError("Maximum 100 licenses per bulk operation")
 
         created_licenses = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for license_key in license_keys:
             metadata = {
@@ -301,7 +301,7 @@ class ManualLicenseService:
         if employee_id is not None:
             update_data["employee_id"] = employee_id
             update_data["status"] = "active"
-            update_data["assigned_at"] = datetime.now(timezone.utc)
+            update_data["assigned_at"] = datetime.now(UTC)
         elif unassign:
             update_data["employee_id"] = None
             update_data["status"] = "unassigned"

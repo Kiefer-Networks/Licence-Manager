@@ -1,11 +1,11 @@
 """Security package."""
 
-from licence_api.security.encryption import EncryptionService
 from licence_api.security.auth import (
+    create_access_token,
     get_current_user,
     require_admin,
-    create_access_token,
 )
+from licence_api.security.encryption import EncryptionService
 
 __all__ = [
     "EncryptionService",

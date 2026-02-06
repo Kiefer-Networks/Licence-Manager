@@ -37,12 +37,8 @@ class SlackProvider(BaseProvider):
                 - user_token: Slack user OAuth token (xoxp-...) for SCIM
         """
         super().__init__(credentials)
-        self.bot_token = credentials.get("bot_token") or credentials.get(
-            "slack_bot_token"
-        )
-        self.user_token = credentials.get("user_token") or credentials.get(
-            "slack_user_token"
-        )
+        self.bot_token = credentials.get("bot_token") or credentials.get("slack_bot_token")
+        self.user_token = credentials.get("user_token") or credentials.get("slack_user_token")
 
     @classmethod
     def _get_http_client(cls) -> httpx.AsyncClient:
@@ -105,12 +101,8 @@ class SlackProvider(BaseProvider):
 
                 # Handle rate limiting
                 if response.status_code == 429:
-                    retry_after = float(
-                        response.headers.get("Retry-After", SLACK_RETRY_DELAY)
-                    )
-                    logger.warning(
-                        f"Slack rate limited on {endpoint}, retry in {retry_after}s"
-                    )
+                    retry_after = float(response.headers.get("Retry-After", SLACK_RETRY_DELAY))
+                    logger.warning(f"Slack rate limited on {endpoint}, retry in {retry_after}s")
                     await asyncio.sleep(retry_after)
                     continue
 
@@ -127,7 +119,7 @@ class SlackProvider(BaseProvider):
 
                 # Retryable error
                 if attempt < SLACK_MAX_RETRIES - 1:
-                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    delay = SLACK_RETRY_DELAY * (2**attempt)
                     logger.warning(f"Slack API error on {endpoint}: {error}, retrying in {delay}s")
                     await asyncio.sleep(delay)
                 else:
@@ -135,7 +127,7 @@ class SlackProvider(BaseProvider):
 
             except httpx.TimeoutException:
                 if attempt < SLACK_MAX_RETRIES - 1:
-                    delay = SLACK_RETRY_DELAY * (2 ** attempt)
+                    delay = SLACK_RETRY_DELAY * (2**attempt)
                     logger.warning(f"Slack timeout on {endpoint}, retrying in {delay}s")
                     await asyncio.sleep(delay)
                 else:
@@ -227,9 +219,7 @@ class SlackProvider(BaseProvider):
             # Check for required OAuth scopes
             scopes = response.headers.get("x-oauth-scopes", "")
             if "users:read.email" not in scopes:
-                logger.warning(
-                    "Missing users:read.email scope - user emails will not be available"
-                )
+                logger.warning("Missing users:read.email scope - user emails will not be available")
         except Exception as e:
             logger.error("Failed to verify Slack authentication: %s", e)
 

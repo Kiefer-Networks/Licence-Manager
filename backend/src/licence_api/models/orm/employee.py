@@ -4,8 +4,8 @@ from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import Date, DateTime, ForeignKey, Index, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from licence_api.models.orm.base import Base, TimestampMixin, UUIDMixin
 
@@ -68,5 +68,7 @@ class EmployeeORM(Base, UUIDMixin, TimestampMixin):
 
 
 # Import here to avoid circular import
+from licence_api.models.orm.employee_external_account import (
+    EmployeeExternalAccountORM,  # noqa: E402, F401
+)
 from licence_api.models.orm.license import LicenseORM  # noqa: E402, F401
-from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM  # noqa: E402, F401

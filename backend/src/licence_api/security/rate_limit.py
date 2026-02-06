@@ -1,7 +1,7 @@
 """Rate limiting configuration for security-sensitive endpoints."""
 
+from collections.abc import Sequence
 from ipaddress import ip_address, ip_network
-from typing import Sequence
 
 from fastapi import Request
 from slowapi import Limiter

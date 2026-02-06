@@ -7,14 +7,14 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.repositories.provider_repository import ProviderRepository
-from licence_api.repositories.settings_repository import SettingsRepository
-from licence_api.repositories.user_repository import UserRepository
 from licence_api.models.dto.password_policy import (
     PasswordPolicyResponse,
     PasswordPolicySettings,
     PasswordValidationResponse,
 )
+from licence_api.repositories.provider_repository import ProviderRepository
+from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_repository import UserRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.notification_service import NotificationService
 
@@ -251,7 +251,11 @@ class SettingsService:
                 resource_id=rule.id,
                 user=user,
                 request=request,
-                details={"action": "create", "event_type": event_type, "slack_channel": slack_channel},
+                details={
+                    "action": "create",
+                    "event_type": event_type,
+                    "slack_channel": slack_channel,
+                },
             )
 
         await self.session.commit()
@@ -428,9 +432,7 @@ class SettingsService:
             strength=strength,
         )
 
-    def _calculate_password_strength(
-        self, password: str, policy: PasswordPolicyResponse
-    ) -> str:
+    def _calculate_password_strength(self, password: str, policy: PasswordPolicyResponse) -> str:
         """Calculate password strength.
 
         Args:

@@ -3,10 +3,8 @@
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.role import RoleORM
 from licence_api.models.orm.role_permission import RolePermissionORM
 from licence_api.models.orm.user_role import UserRoleORM
@@ -28,9 +26,7 @@ class RoleRepository(BaseRepository[RoleORM]):
             RoleORM or None if not found
         """
         result = await self.session.execute(
-            select(RoleORM)
-            .options(selectinload(RoleORM.permissions))
-            .where(RoleORM.code == code)
+            select(RoleORM).options(selectinload(RoleORM.permissions)).where(RoleORM.code == code)
         )
         return result.scalar_one_or_none()
 
@@ -44,9 +40,7 @@ class RoleRepository(BaseRepository[RoleORM]):
             RoleORM with permissions or None
         """
         result = await self.session.execute(
-            select(RoleORM)
-            .options(selectinload(RoleORM.permissions))
-            .where(RoleORM.id == role_id)
+            select(RoleORM).options(selectinload(RoleORM.permissions)).where(RoleORM.id == role_id)
         )
         return result.scalar_one_or_none()
 
@@ -125,9 +119,7 @@ class RoleRepository(BaseRepository[RoleORM]):
 
         # Add new permissions
         for perm_id in permission_ids:
-            self.session.add(
-                RolePermissionORM(role_id=role_id, permission_id=perm_id)
-            )
+            self.session.add(RolePermissionORM(role_id=role_id, permission_id=perm_id))
 
         await self.session.flush()
 
@@ -138,9 +130,7 @@ class RoleRepository(BaseRepository[RoleORM]):
             role_id: Role UUID
             permission_id: Permission UUID
         """
-        self.session.add(
-            RolePermissionORM(role_id=role_id, permission_id=permission_id)
-        )
+        self.session.add(RolePermissionORM(role_id=role_id, permission_id=permission_id))
         await self.session.flush()
 
     async def remove_permission(self, role_id: UUID, permission_id: UUID) -> None:
@@ -166,8 +156,7 @@ class RoleRepository(BaseRepository[RoleORM]):
             Number of users with this role
         """
         result = await self.session.execute(
-            select(func.count(UserRoleORM.user_id))
-            .where(UserRoleORM.role_id == role_id)
+            select(func.count(UserRoleORM.user_id)).where(UserRoleORM.role_id == role_id)
         )
         return result.scalar_one()
 

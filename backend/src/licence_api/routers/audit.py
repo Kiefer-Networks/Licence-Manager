@@ -16,7 +16,7 @@ from licence_api.database import get_db
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.user_repository import UserRepository
-from licence_api.security.auth import require_permission, Permissions
+from licence_api.security.auth import Permissions, require_permission
 from licence_api.services.audit_service import AuditAction, ResourceType
 from licence_api.utils.validation import validate_against_whitelist
 
@@ -27,26 +27,55 @@ MAX_EXPORT_RECORDS = 10000
 
 # Whitelists for audit filter validation
 ALLOWED_ACTIONS = {
-    AuditAction.LOGIN, AuditAction.LOGIN_FAILED, AuditAction.LOGOUT,
-    AuditAction.LOGOUT_ALL, AuditAction.PASSWORD_CHANGE, AuditAction.PASSWORD_RESET,
-    AuditAction.USER_CREATE, AuditAction.USER_UPDATE, AuditAction.USER_DELETE,
-    AuditAction.ROLE_ASSIGN, AuditAction.ROLE_REVOKE,
-    AuditAction.PROVIDER_CREATE, AuditAction.PROVIDER_UPDATE, AuditAction.PROVIDER_DELETE,
-    AuditAction.PROVIDER_SYNC, AuditAction.LICENSE_ASSIGN, AuditAction.LICENSE_UNASSIGN,
-    AuditAction.LICENSE_UPDATE, AuditAction.SETTINGS_UPDATE, AuditAction.EXPORT,
+    AuditAction.LOGIN,
+    AuditAction.LOGIN_FAILED,
+    AuditAction.LOGOUT,
+    AuditAction.LOGOUT_ALL,
+    AuditAction.PASSWORD_CHANGE,
+    AuditAction.PASSWORD_RESET,
+    AuditAction.USER_CREATE,
+    AuditAction.USER_UPDATE,
+    AuditAction.USER_DELETE,
+    AuditAction.ROLE_ASSIGN,
+    AuditAction.ROLE_REVOKE,
+    AuditAction.PROVIDER_CREATE,
+    AuditAction.PROVIDER_UPDATE,
+    AuditAction.PROVIDER_DELETE,
+    AuditAction.PROVIDER_SYNC,
+    AuditAction.LICENSE_ASSIGN,
+    AuditAction.LICENSE_UNASSIGN,
+    AuditAction.LICENSE_UPDATE,
+    AuditAction.SETTINGS_UPDATE,
+    AuditAction.EXPORT,
     AuditAction.IMPORT,
     # Lifecycle actions
-    AuditAction.LICENSE_CANCEL, AuditAction.LICENSE_RENEW, AuditAction.LICENSE_NEEDS_REORDER,
-    AuditAction.PACKAGE_CANCEL, AuditAction.PACKAGE_RENEW, AuditAction.PACKAGE_NEEDS_REORDER,
-    AuditAction.ORG_LICENSE_CANCEL, AuditAction.ORG_LICENSE_RENEW, AuditAction.ORG_LICENSE_NEEDS_REORDER,
+    AuditAction.LICENSE_CANCEL,
+    AuditAction.LICENSE_RENEW,
+    AuditAction.LICENSE_NEEDS_REORDER,
+    AuditAction.PACKAGE_CANCEL,
+    AuditAction.PACKAGE_RENEW,
+    AuditAction.PACKAGE_NEEDS_REORDER,
+    AuditAction.ORG_LICENSE_CANCEL,
+    AuditAction.ORG_LICENSE_RENEW,
+    AuditAction.ORG_LICENSE_NEEDS_REORDER,
 }
 ALLOWED_RESOURCE_TYPES = {
-    ResourceType.USER, ResourceType.ROLE, ResourceType.PERMISSION,
-    ResourceType.PROVIDER, ResourceType.LICENSE, ResourceType.EMPLOYEE,
-    ResourceType.SETTINGS, ResourceType.SETTING, ResourceType.NOTIFICATION_RULE,
-    ResourceType.PAYMENT_METHOD, ResourceType.FILE, ResourceType.SESSION,
-    ResourceType.SERVICE_ACCOUNT_PATTERN, ResourceType.ADMIN_ACCOUNT_PATTERN,
-    ResourceType.LICENSE_PACKAGE, ResourceType.ORG_LICENSE,
+    ResourceType.USER,
+    ResourceType.ROLE,
+    ResourceType.PERMISSION,
+    ResourceType.PROVIDER,
+    ResourceType.LICENSE,
+    ResourceType.EMPLOYEE,
+    ResourceType.SETTINGS,
+    ResourceType.SETTING,
+    ResourceType.NOTIFICATION_RULE,
+    ResourceType.PAYMENT_METHOD,
+    ResourceType.FILE,
+    ResourceType.SESSION,
+    ResourceType.SERVICE_ACCOUNT_PATTERN,
+    ResourceType.ADMIN_ACCOUNT_PATTERN,
+    ResourceType.LICENSE_PACKAGE,
+    ResourceType.ORG_LICENSE,
 }
 
 
@@ -237,25 +266,29 @@ async def export_audit_logs(
         # CSV export
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Timestamp",
-            "User",
-            "Action",
-            "Resource Type",
-            "Resource ID",
-            "Changes",
-            "IP Address",
-        ])
+        writer.writerow(
+            [
+                "Timestamp",
+                "User",
+                "Action",
+                "Resource Type",
+                "Resource ID",
+                "Changes",
+                "IP Address",
+            ]
+        )
         for log in logs:
-            writer.writerow([
-                log.created_at.isoformat(),
-                user_emails.get(log.admin_user_id) if log.admin_user_id else "System",
-                log.action,
-                log.resource_type,
-                str(log.resource_id) if log.resource_id else "",
-                json.dumps(log.changes, ensure_ascii=False) if log.changes else "",
-                str(log.ip_address) if log.ip_address else "",
-            ])
+            writer.writerow(
+                [
+                    log.created_at.isoformat(),
+                    user_emails.get(log.admin_user_id) if log.admin_user_id else "System",
+                    log.action,
+                    log.resource_type,
+                    str(log.resource_id) if log.resource_id else "",
+                    json.dumps(log.changes, ensure_ascii=False) if log.changes else "",
+                    str(log.ip_address) if log.ip_address else "",
+                ]
+            )
         content = output.getvalue()
         return StreamingResponse(
             iter([content]),

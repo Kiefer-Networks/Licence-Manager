@@ -28,9 +28,7 @@ class GoogleWorkspaceProvider(BaseProvider):
             credentials.get("service_account_json")
             or credentials.get("google_service_account_json", "{}")
         )
-        self.admin_email = credentials.get("admin_email") or credentials.get(
-            "google_admin_email"
-        )
+        self.admin_email = credentials.get("admin_email") or credentials.get("google_admin_email")
         self.domain = credentials.get("domain") or credentials.get("google_domain")
         self._access_token: str | None = None
 
@@ -128,7 +126,10 @@ class GoogleWorkspaceProvider(BaseProvider):
 
                     # Parse last login time
                     last_activity = None
-                    if user.get("lastLoginTime") and user["lastLoginTime"] != "1970-01-01T00:00:00.000Z":
+                    if (
+                        user.get("lastLoginTime")
+                        and user["lastLoginTime"] != "1970-01-01T00:00:00.000Z"
+                    ):
                         last_activity = datetime.fromisoformat(
                             user["lastLoginTime"].replace("Z", "+00:00")
                         )
@@ -140,19 +141,21 @@ class GoogleWorkspaceProvider(BaseProvider):
                             user["creationTime"].replace("Z", "+00:00")
                         )
 
-                    licenses.append({
-                        "external_user_id": user["id"],
-                        "email": user["primaryEmail"].lower(),
-                        "license_type": "Google Workspace",
-                        "status": status,
-                        "assigned_at": created_at,
-                        "last_activity_at": last_activity,
-                        "metadata": {
-                            "name": user.get("name", {}).get("fullName"),
-                            "org_unit": user.get("orgUnitPath"),
-                            "is_admin": user.get("isAdmin", False),
-                        },
-                    })
+                    licenses.append(
+                        {
+                            "external_user_id": user["id"],
+                            "email": user["primaryEmail"].lower(),
+                            "license_type": "Google Workspace",
+                            "status": status,
+                            "assigned_at": created_at,
+                            "last_activity_at": last_activity,
+                            "metadata": {
+                                "name": user.get("name", {}).get("fullName"),
+                                "org_unit": user.get("orgUnitPath"),
+                                "is_admin": user.get("isAdmin", False),
+                            },
+                        }
+                    )
 
                 page_token = data.get("nextPageToken")
                 if not page_token:

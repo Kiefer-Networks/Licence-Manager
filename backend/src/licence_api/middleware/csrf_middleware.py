@@ -1,11 +1,12 @@
 """CSRF protection middleware."""
 
 import hmac
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from licence_api.security.csrf import verify_csrf_token, CSRF_TOKEN_DELIMITER
+from licence_api.security.csrf import CSRF_TOKEN_DELIMITER, verify_csrf_token
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -21,13 +22,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """
 
     # Paths that are exempt from CSRF validation (exact match only)
-    EXEMPT_PATHS = frozenset({
-        "/api/v1/auth/csrf-token",  # CSRF token endpoint
-        "/api/v1/auth/login",  # Login needs CSRF but we handle it specially
-        "/api/v1/auth/refresh",  # Token refresh uses httpOnly cookies for security
-        "/api/v1/backup/setup-restore",  # Setup restore is unauthenticated
-        "/health",  # Health check
-    })
+    EXEMPT_PATHS = frozenset(
+        {
+            "/api/v1/auth/csrf-token",  # CSRF token endpoint
+            "/api/v1/auth/login",  # Login needs CSRF but we handle it specially
+            "/api/v1/auth/refresh",  # Token refresh uses httpOnly cookies for security
+            "/api/v1/backup/setup-restore",  # Setup restore is unauthenticated
+            "/health",  # Health check
+        }
+    )
 
     # Safe HTTP methods that don't require CSRF validation
     SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -62,8 +65,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         csrf_cookie = request.cookies.get("csrf_token")
         if csrf_cookie:
             # Extract token part (first component) from signed tokens for comparison
-            header_token = csrf_header.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_header else csrf_header
-            cookie_token = csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0] if CSRF_TOKEN_DELIMITER in csrf_cookie else csrf_cookie
+            if CSRF_TOKEN_DELIMITER in csrf_header:
+                header_token = csrf_header.split(CSRF_TOKEN_DELIMITER)[0]
+            else:
+                header_token = csrf_header
+            if CSRF_TOKEN_DELIMITER in csrf_cookie:
+                cookie_token = csrf_cookie.split(CSRF_TOKEN_DELIMITER)[0]
+            else:
+                cookie_token = csrf_cookie
             if not hmac.compare_digest(header_token, cookie_token):
                 return JSONResponse(
                     status_code=403,

@@ -1,7 +1,6 @@
 """Input validation utilities to prevent injection attacks."""
 
 import re
-from typing import TypeVar
 
 # Maximum lengths for common fields
 MAX_SEARCH_LENGTH = 200
@@ -11,7 +10,6 @@ MAX_SORT_BY_LENGTH = 50
 
 # Pattern for safe text input (letters, numbers, spaces, common punctuation)
 SAFE_TEXT_PATTERN = re.compile(r'^[\w\s\-.,&()\'"/]+$', re.UNICODE)
-
 
 
 def sanitize_search(search: str | None, max_length: int = MAX_SEARCH_LENGTH) -> str | None:
@@ -32,13 +30,15 @@ def sanitize_search(search: str | None, max_length: int = MAX_SEARCH_LENGTH) -> 
 
     # Remove any SQL-like patterns that could be used for injection
     # (SQLAlchemy parameterizes these anyway, but defense in depth)
-    search = search.replace(';', '').replace('--', '')
+    search = search.replace(";", "").replace("--", "")
 
     # Strip leading/trailing whitespace
     return search.strip() or None
 
 
-def sanitize_department(department: str | None, max_length: int = MAX_DEPARTMENT_LENGTH) -> str | None:
+def sanitize_department(
+    department: str | None, max_length: int = MAX_DEPARTMENT_LENGTH
+) -> str | None:
     """Sanitize department filter input.
 
     Args:

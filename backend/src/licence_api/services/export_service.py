@@ -9,8 +9,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
+from licence_api.repositories.license_repository import LicenseRepository
 
 
 def _escape_csv_formula(value: str) -> str:
@@ -66,39 +66,43 @@ class ExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "License ID",
-            "Provider",
-            "External User ID",
-            "License Type",
-            "Status",
-            "Employee Name",
-            "Employee Email",
-            "Employee Department",
-            "Monthly Cost",
-            "Currency",
-            "Last Activity",
-            "Assigned At",
-            "Synced At",
-        ])
+        writer.writerow(
+            [
+                "License ID",
+                "Provider",
+                "External User ID",
+                "License Type",
+                "Status",
+                "Employee Name",
+                "Employee Email",
+                "Employee Department",
+                "Monthly Cost",
+                "Currency",
+                "Last Activity",
+                "Assigned At",
+                "Synced At",
+            ]
+        )
 
         # Data rows (escape string fields to prevent CSV formula injection)
         for lic, provider, employee in results:
-            writer.writerow([
-                str(lic.id),
-                _escape_csv_formula(provider.display_name),
-                _escape_csv_formula(lic.external_user_id),
-                _escape_csv_formula(lic.license_type or ""),
-                lic.status,
-                _escape_csv_formula(employee.full_name) if employee else "",
-                _escape_csv_formula(employee.email) if employee else "",
-                _escape_csv_formula(employee.department) if employee else "",
-                str(lic.monthly_cost) if lic.monthly_cost else "",
-                lic.currency or "EUR",
-                lic.last_activity_at.isoformat() if lic.last_activity_at else "",
-                lic.assigned_at.isoformat() if lic.assigned_at else "",
-                lic.synced_at.isoformat() if lic.synced_at else "",
-            ])
+            writer.writerow(
+                [
+                    str(lic.id),
+                    _escape_csv_formula(provider.display_name),
+                    _escape_csv_formula(lic.external_user_id),
+                    _escape_csv_formula(lic.license_type or ""),
+                    lic.status,
+                    _escape_csv_formula(employee.full_name) if employee else "",
+                    _escape_csv_formula(employee.email) if employee else "",
+                    _escape_csv_formula(employee.department) if employee else "",
+                    str(lic.monthly_cost) if lic.monthly_cost else "",
+                    lic.currency or "EUR",
+                    lic.last_activity_at.isoformat() if lic.last_activity_at else "",
+                    lic.assigned_at.isoformat() if lic.assigned_at else "",
+                    lic.synced_at.isoformat() if lic.synced_at else "",
+                ]
+            )
 
         return output.getvalue()
 
@@ -131,25 +135,29 @@ class ExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "Date",
-            "Total Cost",
-            "License Count",
-            "Active Count",
-            "Unassigned Count",
-            "Currency",
-        ])
+        writer.writerow(
+            [
+                "Date",
+                "Total Cost",
+                "License Count",
+                "Active Count",
+                "Unassigned Count",
+                "Currency",
+            ]
+        )
 
         # Data rows
         for snapshot in snapshots:
-            writer.writerow([
-                snapshot.snapshot_date.isoformat(),
-                str(snapshot.total_cost),
-                snapshot.license_count,
-                snapshot.active_count,
-                snapshot.unassigned_count,
-                snapshot.currency,
-            ])
+            writer.writerow(
+                [
+                    snapshot.snapshot_date.isoformat(),
+                    str(snapshot.total_cost),
+                    snapshot.license_count,
+                    snapshot.active_count,
+                    snapshot.unassigned_count,
+                    snapshot.currency,
+                ]
+            )
 
         # If no snapshots, add current data
         if not snapshots:
@@ -171,14 +179,16 @@ class ExportService:
                 if employee is None:
                     unassigned_count += 1
 
-            writer.writerow([
-                date.today().isoformat(),
-                str(total_cost),
-                total_count,
-                active_count,
-                unassigned_count,
-                "EUR",
-            ])
+            writer.writerow(
+                [
+                    date.today().isoformat(),
+                    str(total_cost),
+                    total_count,
+                    active_count,
+                    unassigned_count,
+                    "EUR",
+                ]
+            )
 
         return output.getvalue()
 
@@ -190,9 +200,11 @@ class ExportService:
         """
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Font, PatternFill
         except ImportError:
-            raise ImportError("openpyxl is required for Excel export. Install it with: pip install openpyxl")
+            raise ImportError(
+                "openpyxl is required for Excel export. Install it with: pip install openpyxl"
+            )
 
         wb = Workbook()
 
@@ -278,9 +290,18 @@ class ExportService:
 
         # Headers
         license_headers = [
-            "License ID", "Provider", "External User ID", "License Type", "Status",
-            "Employee Name", "Employee Email", "Department", "Monthly Cost", "Currency",
-            "Last Activity", "Assigned At"
+            "License ID",
+            "Provider",
+            "External User ID",
+            "License Type",
+            "Status",
+            "Employee Name",
+            "Employee Email",
+            "Department",
+            "Monthly Cost",
+            "Currency",
+            "Last Activity",
+            "Assigned At",
         ]
 
         for col, header in enumerate(license_headers, 1):
@@ -302,10 +323,20 @@ class ExportService:
             ws_licenses.cell(row=row, column=6, value=employee.full_name if employee else "")
             ws_licenses.cell(row=row, column=7, value=employee.email if employee else "")
             ws_licenses.cell(row=row, column=8, value=employee.department if employee else "")
-            ws_licenses.cell(row=row, column=9, value=float(lic.monthly_cost) if lic.monthly_cost else None)
+            ws_licenses.cell(
+                row=row, column=9, value=float(lic.monthly_cost) if lic.monthly_cost else None
+            )
             ws_licenses.cell(row=row, column=10, value=lic.currency or "EUR")
-            ws_licenses.cell(row=row, column=11, value=lic.last_activity_at.strftime("%Y-%m-%d") if lic.last_activity_at else "")
-            ws_licenses.cell(row=row, column=12, value=lic.assigned_at.strftime("%Y-%m-%d") if lic.assigned_at else "")
+            ws_licenses.cell(
+                row=row,
+                column=11,
+                value=lic.last_activity_at.strftime("%Y-%m-%d") if lic.last_activity_at else "",
+            )
+            ws_licenses.cell(
+                row=row,
+                column=12,
+                value=lic.assigned_at.strftime("%Y-%m-%d") if lic.assigned_at else "",
+            )
             row += 1
 
         # Adjust column widths

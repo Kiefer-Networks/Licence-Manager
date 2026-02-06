@@ -170,7 +170,7 @@ class UserNotificationPreferenceResponse(BaseModel):
     slack_channel: str | None = Field(
         default=None,
         max_length=80,  # Slack channel name limit
-        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format: optional #, alphanumeric with - _
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format
     )
 
 
@@ -183,7 +183,7 @@ class UserNotificationPreferenceUpdate(BaseModel):
     slack_channel: str | None = Field(
         default=None,
         max_length=80,  # Slack channel name limit
-        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format: optional #, alphanumeric with - _
+        pattern=r"^#?[a-z0-9][a-z0-9_-]{0,79}$",  # Slack channel format
     )
 
 
@@ -269,7 +269,9 @@ class TotpEnableResponse(BaseModel):
 class TotpDisableRequest(BaseModel):
     """Request to disable TOTP (requires current password)."""
 
-    password: str = Field(min_length=1, max_length=128, description="Current password for verification")
+    password: str = Field(
+        min_length=1, max_length=128, description="Current password for verification"
+    )
 
 
 class TotpStatusResponse(BaseModel):

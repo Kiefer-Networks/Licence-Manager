@@ -165,7 +165,8 @@ class AdobeProvider(BaseProvider):
                         clean_products = []
                         for p in products:
                             # Remove common prefixes/suffixes
-                            clean_name = p.replace("Default ", "").replace(" - Default Configuration", "")
+                            clean_name = p.replace("Default ", "")
+                            clean_name = clean_name.replace(" - Default Configuration", "")
                             clean_products.append(clean_name)
                         license_type = ", ".join(sorted(set(clean_products)))
                     else:

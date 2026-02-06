@@ -1,13 +1,12 @@
 """Employee external account repository."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import and_, func, or_, select
 
-from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
 from licence_api.models.orm.employee import EmployeeORM
+from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
 from licence_api.repositories.base import BaseRepository
 
 
@@ -110,7 +109,7 @@ class EmployeeExternalAccountRepository(BaseRepository[EmployeeExternalAccountOR
             external_username=external_username,
             external_user_id=external_user_id,
             display_name=display_name,
-            linked_at=datetime.now(timezone.utc),
+            linked_at=datetime.now(UTC),
             linked_by_id=linked_by_id,
         )
 
@@ -128,9 +127,7 @@ class EmployeeExternalAccountRepository(BaseRepository[EmployeeExternalAccountOR
         Returns:
             True if deleted, False if not found
         """
-        account = await self.get_by_provider_and_username(
-            provider_type, external_username
-        )
+        account = await self.get_by_provider_and_username(provider_type, external_username)
         if account is None:
             return False
 

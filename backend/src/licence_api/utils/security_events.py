@@ -7,7 +7,7 @@ and compliance purposes.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID
@@ -82,7 +82,7 @@ def log_security_event(
     """
     event_data = {
         "event_type": event_type.value,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "success": success,
         "actor": {
             "user_id": str(user_id) if user_id else None,

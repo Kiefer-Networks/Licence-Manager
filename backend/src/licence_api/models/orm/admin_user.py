@@ -28,13 +28,17 @@ class AdminUserORM(Base, UUIDMixin, TimestampMixin):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Password management
-    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     require_password_change: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # TOTP two-factor authentication
     totp_secret_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    totp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    totp_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     totp_backup_codes_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     # Login tracking

@@ -1,7 +1,7 @@
 """Mailjet email service provider integration."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -98,19 +98,21 @@ class MailjetProvider(BaseProvider):
                         else:
                             license_type = "Sub-Account Key"
 
-                        licenses.append({
-                            "external_user_id": key.get("APIKey") or str(key.get("ID")),
-                            "email": key.get("ContactEmail"),
-                            "license_type": license_type,
-                            "status": status,
-                            "assigned_at": created_at,
-                            "metadata": {
-                                "key_id": key.get("ID"),
-                                "name": key.get("Name"),
-                                "is_master": key.get("IsMaster"),
-                                "runlevel": key.get("Runlevel"),
-                            },
-                        })
+                        licenses.append(
+                            {
+                                "external_user_id": key.get("APIKey") or str(key.get("ID")),
+                                "email": key.get("ContactEmail"),
+                                "license_type": license_type,
+                                "status": status,
+                                "assigned_at": created_at,
+                                "metadata": {
+                                    "key_id": key.get("ID"),
+                                    "name": key.get("Name"),
+                                    "is_master": key.get("IsMaster"),
+                                    "runlevel": key.get("Runlevel"),
+                                },
+                            }
+                        )
 
                     logger.info(f"Fetched {len(api_keys)} API keys from Mailjet")
                 else:
@@ -135,7 +137,7 @@ class MailjetProvider(BaseProvider):
                     for user in users:
                         # Check if already added via API key
                         user_email = user.get("Email")
-                        if user_email and any(l.get("email") == user_email for l in licenses):
+                        if user_email and any(lic.get("email") == user_email for lic in licenses):
                             continue
 
                         created_at = None
@@ -160,20 +162,22 @@ class MailjetProvider(BaseProvider):
                         if user.get("IsBanned"):
                             status = "banned"
 
-                        licenses.append({
-                            "external_user_id": user_email or str(user.get("ID")),
-                            "email": user_email,
-                            "license_type": "User Account",
-                            "status": status,
-                            "assigned_at": created_at,
-                            "last_activity_at": last_login,
-                            "metadata": {
-                                "user_id": user.get("ID"),
-                                "username": user.get("Username"),
-                                "locale": user.get("Locale"),
-                                "timezone": user.get("Timezone"),
-                            },
-                        })
+                        licenses.append(
+                            {
+                                "external_user_id": user_email or str(user.get("ID")),
+                                "email": user_email,
+                                "license_type": "User Account",
+                                "status": status,
+                                "assigned_at": created_at,
+                                "last_activity_at": last_login,
+                                "metadata": {
+                                    "user_id": user.get("ID"),
+                                    "username": user.get("Username"),
+                                    "locale": user.get("Locale"),
+                                    "timezone": user.get("Timezone"),
+                                },
+                            }
+                        )
 
                     logger.info(f"Fetched {len(users)} users from Mailjet")
 
@@ -200,7 +204,7 @@ class MailjetProvider(BaseProvider):
                             continue
 
                         # Check if email already tracked
-                        if any(l.get("email") == sender_email for l in licenses):
+                        if any(lic.get("email") == sender_email for lic in licenses):
                             continue
 
                         created_at = None
@@ -212,18 +216,20 @@ class MailjetProvider(BaseProvider):
                             except Exception:
                                 pass
 
-                        licenses.append({
-                            "external_user_id": f"sender:{sender_email}",
-                            "email": sender_email,
-                            "license_type": "Verified Sender",
-                            "status": "active",
-                            "assigned_at": created_at,
-                            "metadata": {
-                                "sender_id": sender.get("ID"),
-                                "name": sender.get("Name"),
-                                "is_default": sender.get("IsDefaultSender"),
-                            },
-                        })
+                        licenses.append(
+                            {
+                                "external_user_id": f"sender:{sender_email}",
+                                "email": sender_email,
+                                "license_type": "Verified Sender",
+                                "status": "active",
+                                "assigned_at": created_at,
+                                "metadata": {
+                                    "sender_id": sender.get("ID"),
+                                    "name": sender.get("Name"),
+                                    "is_default": sender.get("IsDefaultSender"),
+                                },
+                            }
+                        )
 
                     logger.info(f"Processed {len(senders)} senders from Mailjet")
 
