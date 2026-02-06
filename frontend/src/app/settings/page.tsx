@@ -25,8 +25,7 @@ import {
 import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemSettings } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck, Database } from 'lucide-react';
-import { BackupExportDialog } from '@/components/backup';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, HardDrive, Info, Mail, Server, Lock, ShieldCheck, Database } from 'lucide-react';
 import { BackupsTab } from '@/components/settings/BackupsTab';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -105,9 +104,6 @@ export default function SettingsPage() {
 
   // Active tab state
   const [activeTab, setActiveTab] = useState('general');
-
-  // Backup state
-  const [backupExportDialogOpen, setBackupExportDialogOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -512,7 +508,7 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Toast */}
         {toast && (
-          <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+          <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
             toast.type === 'success' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'
           }`}>
             {toast.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
@@ -1137,58 +1133,9 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* System Backup Section */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">{t('systemBackup')}</h2>
-            </div>
-          </div>
-
-          <div className="border rounded-lg bg-card p-4 space-y-4">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 text-blue-700">
-              <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <div className="text-sm">
-                <p>
-                  {t('backupInfoDescription')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 text-amber-700">
-              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <div className="text-sm">
-                <p className="font-medium">{t('importWarningTitle')}</p>
-                <p className="text-xs mt-1">
-                  {t('importWarningDescription')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setBackupExportDialogOpen(true)}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                {t('createBackupButton')}
-              </Button>
-            </div>
-          </div>
-        </section>
-
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Backup Dialog */}
-      <BackupExportDialog
-        open={backupExportDialogOpen}
-        onOpenChange={setBackupExportDialogOpen}
-        onSuccess={() => showToast('success', t('backupCreatedSuccess'))}
-        onError={(error) => showToast('error', error)}
-      />
 
       {/* Notification Rule Dialog */}
       <Dialog open={ruleDialogOpen} onOpenChange={setRuleDialogOpen}>

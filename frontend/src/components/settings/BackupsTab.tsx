@@ -178,7 +178,8 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
       showToast('success', t('configSaved'));
     } catch (error) {
       handleSilentError('updateBackupPassword', error);
-      showToast('error', tCommon('operationFailed'));
+      const message = error instanceof Error ? error.message : tCommon('operationFailed');
+      showToast('error', message);
     } finally {
       setSavingPassword(false);
     }
@@ -527,6 +528,8 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Min. 12 characters"
+                autoFocus
+                tabIndex={1}
               />
             </div>
             <div className="space-y-2">
@@ -536,11 +539,12 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm password"
+                tabIndex={2}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)} tabIndex={4}>
               {tCommon('cancel')}
             </Button>
             <Button
@@ -550,6 +554,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                 newPassword.length < 12 ||
                 newPassword !== confirmPassword
               }
+              tabIndex={3}
             >
               {savingPassword && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {tCommon('save')}
