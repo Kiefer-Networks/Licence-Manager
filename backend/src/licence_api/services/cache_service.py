@@ -45,6 +45,11 @@ class CacheConfig:
     PREFIX_LICENSE_STATS = "license_stats"
     PREFIX_PAYMENT_METHODS = "payment_methods"
     PREFIX_SETTINGS = "settings"
+    PREFIX_REPORTS = "reports"
+
+
+# Default TTL for reports (5 minutes - they can be expensive)
+REPORT_CACHE_TTL = 300
 
 
 def get_cache_ttl(prefix: str) -> int:
@@ -408,6 +413,55 @@ class CacheService:
         key = self._make_key(CacheConfig.PREFIX_PAYMENT_METHODS)
         return await self.delete(key)
 
+    # Report caching methods
+
+    async def get_report(self, report_name: str, **params: str | int | None) -> dict | None:
+        """Get cached report data.
+
+        Args:
+            report_name: Name of the report (e.g., 'costs', 'utilization')
+            **params: Report parameters to include in cache key
+
+        Returns:
+            Cached report data or None
+        """
+        # Build param string from non-None values
+        param_parts = [f"{k}={v}" for k, v in sorted(params.items()) if v is not None]
+        param_str = "_".join(param_parts) if param_parts else "default"
+        key = self._make_key(CacheConfig.PREFIX_REPORTS, report_name, param_str)
+        return await self.get_json(key)
+
+    async def set_report(
+        self,
+        report_name: str,
+        data: dict | BaseModel,
+        ttl: int | None = None,
+        **params: str | int | None,
+    ) -> bool:
+        """Cache report data.
+
+        Args:
+            report_name: Name of the report
+            data: Report data to cache
+            ttl: Time-to-live in seconds (default: REPORT_CACHE_TTL)
+            **params: Report parameters to include in cache key
+
+        Returns:
+            True if successful
+        """
+        param_parts = [f"{k}={v}" for k, v in sorted(params.items()) if v is not None]
+        param_str = "_".join(param_parts) if param_parts else "default"
+        key = self._make_key(CacheConfig.PREFIX_REPORTS, report_name, param_str)
+        return await self.set_json(key, data, ttl or REPORT_CACHE_TTL)
+
+    async def invalidate_reports(self) -> int:
+        """Invalidate all report caches.
+
+        Returns:
+            Number of keys deleted
+        """
+        return await self.delete_pattern(f"{CacheConfig.PREFIX_REPORTS}:*")
+
     async def invalidate_all(self) -> int:
         """Invalidate all caches.
 
@@ -419,6 +473,7 @@ class CacheService:
         count += await self.invalidate_departments()
         count += await self.invalidate_providers()
         count += await self.invalidate_payment_methods()
+        count += await self.invalidate_reports()
         return count
 
 
