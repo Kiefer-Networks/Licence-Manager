@@ -588,6 +588,28 @@ class ProviderService:
 
         return public_credentials
 
+    async def get_provider_name_and_config(
+        self, provider_id: UUID
+    ) -> tuple[str, dict[str, Any]]:
+        """Get provider name and config by ID.
+
+        Used by pricing/license-type endpoints to access provider config
+        without direct repository access.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Tuple of (provider_name, config)
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+        return provider.name, provider.config or {}
+
     async def get_logo_file_path(
         self, provider_id: UUID, filename: str
     ) -> tuple[Path, str]:

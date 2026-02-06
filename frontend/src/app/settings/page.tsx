@@ -576,7 +576,7 @@ export default function SettingsPage() {
                 <Input
                   value={systemName}
                   onChange={(e) => setSystemName(e.target.value)}
-                  placeholder="License Management System"
+                  placeholder={t('systemNamePlaceholder')}
                   className="mt-1"
                 />
               </div>
@@ -585,7 +585,7 @@ export default function SettingsPage() {
                 <Input
                   value={systemUrl}
                   onChange={(e) => setSystemUrl(e.target.value)}
-                  placeholder="https://licence.example.com"
+                  placeholder={t('systemUrlPlaceholder')}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">{t('systemUrlDescription')}</p>
@@ -1278,7 +1278,7 @@ export default function SettingsPage() {
                 <Input
                   value={emailForm.host}
                   onChange={(e) => setEmailForm({ ...emailForm, host: e.target.value })}
-                  placeholder="smtp.example.com"
+                  placeholder={t('smtpHostPlaceholder')}
                 />
               </div>
               <div className="space-y-2">
@@ -1286,7 +1286,7 @@ export default function SettingsPage() {
                 <Input
                   value={emailForm.port}
                   onChange={(e) => setEmailForm({ ...emailForm, port: parseInt(e.target.value) || 587 })}
-                  placeholder="587"
+                  placeholder={t('smtpPortPlaceholder')}
                 />
               </div>
             </div>
@@ -1296,7 +1296,7 @@ export default function SettingsPage() {
               <Input
                 value={emailForm.username}
                 onChange={(e) => setEmailForm({ ...emailForm, username: e.target.value })}
-                placeholder="user@example.com"
+                placeholder={t('smtpUsernamePlaceholder')}
               />
             </div>
 
@@ -1320,7 +1320,7 @@ export default function SettingsPage() {
                   type="email"
                   value={emailForm.from_email}
                   onChange={(e) => setEmailForm({ ...emailForm, from_email: e.target.value })}
-                  placeholder="noreply@example.com"
+                  placeholder={t('fromEmailPlaceholder')}
                 />
               </div>
               <div className="space-y-2">
@@ -1328,7 +1328,7 @@ export default function SettingsPage() {
                 <Input
                   value={emailForm.from_name}
                   onChange={(e) => setEmailForm({ ...emailForm, from_name: e.target.value })}
-                  placeholder="License Management System"
+                  placeholder={t('fromNamePlaceholder')}
                 />
               </div>
             </div>

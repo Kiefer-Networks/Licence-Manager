@@ -19,7 +19,11 @@ from licence_api.models.dto.license import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.license_service import LicenseService
 from licence_api.services.matching_service import MatchingService
 from licence_api.utils.validation import (
@@ -109,7 +113,9 @@ ALLOWED_LICENSE_SORT_COLUMNS = {
 
 
 @router.get("", response_model=LicenseListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_licenses(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,
@@ -149,7 +155,9 @@ async def list_licenses(
 
 
 @router.get("/categorized", response_model=CategorizedLicensesResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_categorized_licenses(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,
@@ -179,7 +187,9 @@ class PendingSuggestionsResponse(BaseModel):
 
 
 @router.get("/suggestions/pending", response_model=PendingSuggestionsResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_pending_suggestions(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,

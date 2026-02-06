@@ -20,7 +20,6 @@ from licence_api.models.dto.provider import (
     ProviderResponse,
     ProviderUpdate,
 )
-from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.encryption import get_encryption_service
@@ -45,11 +44,6 @@ SYNC_LIMIT = SENSITIVE_OPERATION_LIMIT
 
 
 # Dependency injection functions
-def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
-    """Get ProviderRepository instance."""
-    return ProviderRepository(db)
-
-
 def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
     """Get AuditService instance."""
     return AuditService(db)
@@ -666,15 +660,15 @@ PROVIDER_DEFAULT_LICENSE_TYPES: dict[str, list[str]] = {
 async def get_provider_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> LicenseTypesResponse:
     """Get all license types for a provider with their counts and current pricing.
 
     Requires providers.view permission.
     """
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        provider_name, config = await provider_service.get_provider_name_and_config(provider_id)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
@@ -684,11 +678,11 @@ async def get_provider_license_types(
     type_counts = await provider_service.get_license_type_counts(provider_id)
 
     # Get current pricing from config
-    pricing_config = (provider.config or {}).get("license_pricing", {})
+    pricing_config = config.get("license_pricing", {})
 
     # Add default license types for providers with known types (e.g., Figma)
     # This ensures all license types show up in pricing even if no licenses have that type yet
-    default_types = PROVIDER_DEFAULT_LICENSE_TYPES.get(provider.name, [])
+    default_types = PROVIDER_DEFAULT_LICENSE_TYPES.get(provider_name, [])
     for default_type in default_types:
         if default_type not in type_counts:
             type_counts[default_type] = 0
@@ -726,17 +720,18 @@ async def get_provider_license_types(
 async def get_provider_pricing(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> LicenseTypePricingResponse:
     """Get license type pricing for a provider. Requires providers.view permission."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        _, config = await provider_service.get_provider_name_and_config(provider_id)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    pricing_config = (provider.config or {}).get("license_pricing", {})
+    pricing_config = config.get("license_pricing", {})
     pricing = [
         LicenseTypePricing(
             license_type=lt,
@@ -752,7 +747,7 @@ async def get_provider_pricing(
     ]
 
     # Get package pricing if exists
-    package_pricing_config = (provider.config or {}).get("package_pricing")
+    package_pricing_config = config.get("package_pricing")
     package_pricing = None
     if package_pricing_config:
         package_pricing = PackagePricing(
@@ -773,13 +768,14 @@ async def update_provider_pricing(
     provider_id: UUID,
     body: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        await provider_service.get_provider_name_and_config(provider_id)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
@@ -842,7 +838,6 @@ class IndividualLicenseTypePricingRequest(BaseModel):
 async def get_provider_individual_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> IndividualLicenseTypesResponse:
     """Get individual license types extracted from combined strings.
@@ -853,8 +848,9 @@ async def get_provider_individual_license_types(
 
     Requires providers.view permission.
     """
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        _, config = await provider_service.get_provider_name_and_config(provider_id)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
@@ -866,7 +862,7 @@ async def get_provider_individual_license_types(
     )
 
     # Get current individual pricing from config
-    individual_pricing_config = (provider.config or {}).get("individual_license_pricing", {})
+    individual_pricing_config = config.get("individual_license_pricing", {})
 
     license_types = []
     for license_type, count in individual_counts.items():
@@ -908,7 +904,6 @@ async def update_provider_individual_pricing(
     provider_id: UUID,
     body: IndividualLicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
@@ -924,8 +919,9 @@ async def update_provider_individual_pricing(
 
     Requires providers.edit permission.
     """
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        await provider_service.get_provider_name_and_config(provider_id)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
@@ -954,7 +950,7 @@ async def update_provider_individual_pricing(
 
     # Return updated license types
     return await get_provider_individual_license_types(
-        provider_id, current_user, provider_repo, provider_service
+        provider_id, current_user, provider_service
     )
 
 

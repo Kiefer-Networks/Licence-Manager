@@ -180,3 +180,6 @@ SENSITIVE_OPERATION_LIMIT = _rate_limits["sensitive"]
 BACKUP_EXPORT_LIMIT = "1/hour"
 BACKUP_RESTORE_LIMIT = "1/hour"
 BACKUP_INFO_LIMIT = "10/minute"
+
+# Expensive read operations (prevent DoS from heavy queries)
+EXPENSIVE_READ_LIMIT = "30/minute"
