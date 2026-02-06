@@ -12,6 +12,12 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import get_current_user, require_permission, Permissions
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter, SENSITIVE_OPERATION_LIMIT
+from licence_api.models.dto.password_policy import (
+    PasswordPolicyResponse,
+    PasswordPolicySettings,
+    PasswordValidationRequest,
+    PasswordValidationResponse,
+)
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 
@@ -243,6 +249,61 @@ async def update_threshold_settings(
         request=request,
     )
     return body
+
+
+# Password Policy Endpoints
+
+
+@router.get("/password-policy", response_model=PasswordPolicyResponse)
+async def get_password_policy(
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+) -> PasswordPolicyResponse:
+    """Get password policy settings.
+
+    Returns the current password policy with a warning flag if
+    minimum length is below the recommended 16 characters.
+
+    Requires settings.view permission.
+    """
+    return await service.get_password_policy()
+
+
+@router.put("/password-policy", response_model=PasswordPolicyResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+async def update_password_policy(
+    request: Request,
+    body: PasswordPolicySettings,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+) -> PasswordPolicyResponse:
+    """Update password policy settings.
+
+    Minimum length must be at least 8 characters.
+    A warning will be shown if minimum length is below 16 characters.
+
+    Requires settings.edit permission.
+    """
+    return await service.set_password_policy(
+        policy=body,
+        user=current_user,
+        request=request,
+    )
+
+
+@router.post("/password-policy/validate", response_model=PasswordValidationResponse)
+async def validate_password(
+    body: PasswordValidationRequest,
+    current_user: Annotated[AdminUser, Depends(get_current_user)],
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+) -> PasswordValidationResponse:
+    """Validate a password against the current policy.
+
+    Returns validation result with any errors and password strength indicator.
+    Requires authentication.
+    """
+    return await service.validate_password(body.password)
 
 
 @router.get("/{key}", response_model=dict[str, Any] | None)

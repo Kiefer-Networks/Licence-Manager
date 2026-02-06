@@ -30,6 +30,7 @@ from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.permission_repository import PermissionRepository
 from licence_api.repositories.role_repository import RoleRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
+from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.password import get_password_service
 from licence_api.services.email_service import EmailService
 
@@ -47,8 +48,22 @@ class RbacService:
         self.permission_repo = PermissionRepository(session)
         self.token_repo = RefreshTokenRepository(session)
         self.audit_repo = AuditRepository(session)
+        self.settings_repo = SettingsRepository(session)
         self.password_service = get_password_service()
         self.email_service = EmailService(session)
+
+    async def _get_password_policy(self):
+        """Get password policy from settings.
+
+        Returns:
+            PasswordPolicySettings from database or defaults
+        """
+        from licence_api.models.dto.password_policy import PasswordPolicySettings
+
+        policy_data = await self.settings_repo.get("password_policy")
+        if policy_data is None:
+            return PasswordPolicySettings()
+        return PasswordPolicySettings(**policy_data)
 
     def _build_user_info(self, user) -> UserInfo:
         """Build UserInfo from user ORM object."""
@@ -110,6 +125,9 @@ class RbacService:
         if existing:
             raise UserAlreadyExistsError(request.email)
 
+        # Get password policy from settings
+        password_policy = await self._get_password_policy()
+
         # Check if email is configured
         email_configured = await self.email_service.is_configured()
 
@@ -119,14 +137,18 @@ class RbacService:
         temporary_password: str | None = None
 
         if request.password:
-            # Use provided password
+            # Use provided password - validate against policy
             password = request.password
-            is_valid, errors = self.password_service.validate_password_strength(password)
+            is_valid, errors = self.password_service.validate_password_strength(
+                password, policy=password_policy
+            )
             if not is_valid:
                 raise ValidationError(errors[0])
         elif email_configured:
-            # Auto-generate password for email delivery
-            password = self.password_service.generate_temporary_password()
+            # Auto-generate password for email delivery using policy
+            password = self.password_service.generate_temporary_password(
+                policy=password_policy
+            )
         else:
             # No email and no password provided
             raise ValidationError("Password is required when email is not configured")
@@ -336,8 +358,13 @@ class RbacService:
         if user is None:
             raise UserNotFoundError(str(user_id))
 
-        # Generate new temporary password
-        new_password = self.password_service.generate_temporary_password()
+        # Get password policy from settings
+        password_policy = await self._get_password_policy()
+
+        # Generate new temporary password using policy
+        new_password = self.password_service.generate_temporary_password(
+            policy=password_policy
+        )
 
         # Hash and update password
         password_hash = self.password_service.hash_password(new_password)

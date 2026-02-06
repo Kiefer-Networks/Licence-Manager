@@ -21,6 +21,7 @@ from licence_api.models.dto.auth import (
 )
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
+from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
 from licence_api.repositories.user_notification_preference_repository import UserNotificationPreferenceRepository
 from licence_api.security.auth import (
@@ -54,7 +55,21 @@ class AuthService:
         self.token_repo = RefreshTokenRepository(session)
         self.audit_repo = AuditRepository(session)
         self.notification_pref_repo = UserNotificationPreferenceRepository(session)
+        self.settings_repo = SettingsRepository(session)
         self.password_service = get_password_service()
+
+    async def _get_password_policy(self):
+        """Get password policy from settings.
+
+        Returns:
+            PasswordPolicySettings from database or defaults
+        """
+        from licence_api.models.dto.password_policy import PasswordPolicySettings
+
+        policy_data = await self.settings_repo.get("password_policy")
+        if policy_data is None:
+            return PasswordPolicySettings()
+        return PasswordPolicySettings(**policy_data)
 
     async def authenticate_local(
         self,
@@ -450,19 +465,26 @@ class AuthService:
                 detail="Current password is incorrect",
             )
 
-        # Validate new password strength
-        is_valid, errors = self.password_service.validate_password_strength(new_password)
+        # Get password policy from settings
+        password_policy = await self._get_password_policy()
+
+        # Validate new password strength against policy
+        is_valid, errors = self.password_service.validate_password_strength(
+            new_password, policy=password_policy
+        )
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=errors[0],
             )
 
-        # Check password history
+        # Check password history using policy settings
         history = await self.user_repo.get_password_history(user_id)
         history.append(user.password_hash)  # Include current password
 
-        if self.password_service.check_password_history(new_password, history):
+        if self.password_service.check_password_history(
+            new_password, history, policy=password_policy
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Password was recently used",
