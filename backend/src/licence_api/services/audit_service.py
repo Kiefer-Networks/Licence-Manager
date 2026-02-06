@@ -93,6 +93,8 @@ class AuditAction:
     # Backup
     EXPORT = "export"
     IMPORT = "import"
+    BACKUP_CONFIG_UPDATE = "backup_config_update"
+    BACKUP_DELETE = "backup_delete"
 
     # Lifecycle - Cancellation/Renewal
     LICENSE_CANCEL = "license_cancel"

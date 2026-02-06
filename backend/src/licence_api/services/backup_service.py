@@ -1544,7 +1544,7 @@ class BackupService:
         # Audit log
         if user and self.audit_service:
             await self.audit_service.log(
-                action=AuditAction.UPDATE,
+                action=AuditAction.BACKUP_CONFIG_UPDATE,
                 resource_type=ResourceType.SYSTEM,
                 user=user,
                 request=http_request,
@@ -1855,7 +1855,7 @@ class BackupService:
         # Audit log
         if user and self.audit_service:
             await self.audit_service.log(
-                action=AuditAction.DELETE,
+                action=AuditAction.BACKUP_DELETE,
                 resource_type=ResourceType.SYSTEM,
                 user=user,
                 request=http_request,
