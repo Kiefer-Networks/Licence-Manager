@@ -4,13 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_audit_service, get_email_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import limiter
+from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.email_service import (
     EmailService,
@@ -19,19 +18,6 @@ from licence_api.services.email_service import (
 )
 
 router = APIRouter()
-
-# Rate limit for sensitive operations
-SETTINGS_SENSITIVE_LIMIT = "10/minute"
-
-
-def get_email_service(db: AsyncSession = Depends(get_db)) -> EmailService:
-    """Get EmailService instance."""
-    return EmailService(db)
-
-
-def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
-    """Get AuditService instance."""
-    return AuditService(db)
 
 
 class EmailConfigStatusResponse(BaseModel):
@@ -70,7 +56,7 @@ async def get_email_config(
 
 
 @router.put("", response_model=SmtpConfigResponse)
-@limiter.limit(SETTINGS_SENSITIVE_LIMIT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def set_email_config(
     request: Request,
     body: SmtpConfigRequest,
@@ -120,7 +106,7 @@ async def set_email_config(
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-@limiter.limit(SETTINGS_SENSITIVE_LIMIT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_email_config(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
@@ -147,7 +133,7 @@ async def delete_email_config(
 
 
 @router.post("/test", response_model=TestEmailResponse)
-@limiter.limit(SETTINGS_SENSITIVE_LIMIT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def send_test_email(
     request: Request,
     body: TestEmailRequest,

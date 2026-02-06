@@ -4,9 +4,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_audit_service, get_cancellation_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.cancellation import (
     CancellationRequest,
@@ -21,16 +20,6 @@ from licence_api.services.audit_service import AuditAction, AuditService, Resour
 from licence_api.services.cancellation_service import CancellationService
 
 router = APIRouter()
-
-
-def get_cancellation_service(db: AsyncSession = Depends(get_db)) -> CancellationService:
-    """Get CancellationService instance."""
-    return CancellationService(db)
-
-
-def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
-    """Get AuditService instance."""
-    return AuditService(db)
 
 
 # ==================== LICENSE CANCELLATION ====================

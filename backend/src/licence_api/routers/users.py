@@ -6,10 +6,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import AVATAR_DIR
-from licence_api.database import get_db
+from licence_api.dependencies import get_employee_service, get_manual_employee_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.employee import EmployeeSource
 from licence_api.models.dto.employee import (
@@ -23,7 +22,7 @@ from licence_api.models.dto.employee import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.csrf import CSRFProtected
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.employee_service import EmployeeService
 from licence_api.services.manual_employee_service import ManualEmployeeService
 from licence_api.utils.validation import (
@@ -91,19 +90,11 @@ ALLOWED_EMPLOYEE_SORT_COLUMNS = {
 }
 
 
-def get_employee_service(db: AsyncSession = Depends(get_db)) -> EmployeeService:
-    """Get EmployeeService instance."""
-    return EmployeeService(db)
-
-
-def get_manual_employee_service(db: AsyncSession = Depends(get_db)) -> ManualEmployeeService:
-    """Get ManualEmployeeService instance."""
-    return ManualEmployeeService(db)
-
-
 # Employee endpoints
 @router.get("/employees", response_model=EmployeeListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_employees(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
     status: str | None = None,

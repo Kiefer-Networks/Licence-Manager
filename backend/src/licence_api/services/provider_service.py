@@ -8,24 +8,17 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants import (
+    ALLOWED_LOGO_EXTENSIONS,
+    HRIS_PROVIDER_NAMES,
+    IMAGE_SIGNATURES,
+    MAX_LOGO_SIZE,
+    SECRET_CREDENTIAL_FIELDS,
+)
 from licence_api.constants.paths import PROVIDER_LOGOS_DIR
 from licence_api.constants.provider_logos import get_provider_logo
-from licence_api.utils.file_validation import validate_svg_content
-
-# Logo storage configuration
-LOGOS_DIR = PROVIDER_LOGOS_DIR
-MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2 MB
-ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
-IMAGE_SIGNATURES = {
-    ".png": [b"\x89PNG\r\n\x1a\n"],
-    ".jpg": [b"\xff\xd8\xff"],
-    ".jpeg": [b"\xff\xd8\xff"],
-    ".webp": [b"RIFF"],
-}
-
-# HRIS providers - only one can be active at a time
-HRIS_PROVIDER_NAMES = {"hibob", "personio"}
 from licence_api.models.domain.admin_user import AdminUser
+from licence_api.utils.file_validation import validate_svg_content
 from licence_api.models.dto.provider import (
     PaymentMethodSummary,
     ProviderLicenseStats,
@@ -553,21 +546,6 @@ class ProviderService:
         Raises:
             ValueError: If provider not found
         """
-        # Secret credential fields that should never be exposed
-        SECRET_CREDENTIAL_FIELDS = {
-            "api_key",
-            "api_secret",
-            "access_token",
-            "refresh_token",
-            "token",
-            "secret",
-            "password",
-            "client_secret",
-            "private_key",
-            "service_account_key",
-            "license_key",
-        }
-
         provider = await self.provider_repo.get_by_id(provider_id)
         if provider is None:
             raise ValueError("Provider not found")

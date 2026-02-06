@@ -3,9 +3,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_report_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.dashboard import DashboardResponse
 from licence_api.security.auth import Permissions, require_permission
@@ -14,11 +13,6 @@ from licence_api.services.report_service import ReportService
 from licence_api.utils.validation import sanitize_department
 
 router = APIRouter()
-
-
-def get_report_service(db: AsyncSession = Depends(get_db)) -> ReportService:
-    """Get ReportService instance."""
-    return ReportService(db)
 
 
 @router.get("", response_model=DashboardResponse)

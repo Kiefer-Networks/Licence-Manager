@@ -7,10 +7,19 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.constants import (
+    ALLOWED_LOGO_EXTENSIONS,
+    IMAGE_SIGNATURES,
+    MAX_LOGO_SIZE,
+)
 from licence_api.constants.paths import LOGOS_DIR
-from licence_api.database import get_db
+from licence_api.dependencies import (
+    get_audit_service,
+    get_pricing_service,
+    get_provider_service,
+    get_sync_service,
+)
 from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
@@ -38,31 +47,6 @@ from licence_api.utils.file_validation import validate_svg_content
 
 router = APIRouter()
 
-# Use centralized rate limits
-TEST_CONNECTION_LIMIT = PROVIDER_TEST_CONNECTION_LIMIT
-SYNC_LIMIT = SENSITIVE_OPERATION_LIMIT
-
-
-# Dependency injection functions
-def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
-    """Get AuditService instance."""
-    return AuditService(db)
-
-
-def get_sync_service(db: AsyncSession = Depends(get_db)) -> SyncService:
-    """Get SyncService instance."""
-    return SyncService(db)
-
-
-def get_pricing_service(db: AsyncSession = Depends(get_db)) -> PricingService:
-    """Get PricingService instance."""
-    return PricingService(db)
-
-
-def get_provider_service(db: AsyncSession = Depends(get_db)) -> ProviderService:
-    """Get ProviderService instance."""
-    return ProviderService(db)
-
 
 class TestConnectionRequest(BaseModel):
     """Request to test provider connection."""
@@ -88,22 +72,6 @@ class PublicCredentialsResponse(BaseModel):
     """Response with non-secret credential values."""
 
     credentials: dict[str, str]
-
-
-# Fields that contain secrets and should never be exposed
-SECRET_CREDENTIAL_FIELDS = {
-    "access_token",
-    "admin_api_key",
-    "api_key",
-    "api_secret",
-    "api_token",
-    "auth_token",
-    "bot_token",
-    "client_secret",
-    "scim_token",
-    "user_token",
-    "service_account_json",
-}
 
 
 class TestConnectionResponse(BaseModel):
@@ -246,19 +214,6 @@ async def update_provider(
     return result
 
 
-ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
-MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2MB
-
-# Logo file signatures
-LOGO_SIGNATURES = {
-    ".png": [b"\x89PNG\r\n\x1a\n"],
-    ".jpg": [b"\xff\xd8\xff"],
-    ".jpeg": [b"\xff\xd8\xff"],
-    ".webp": [b"RIFF"],
-    ".svg": [b"<?xml", b"<svg", b"\xef\xbb\xbf<?xml", b"\xef\xbb\xbf<svg"],
-}
-
-
 def validate_logo_signature(content: bytes, extension: str) -> bool:
     """Validate logo file content matches expected signature.
 
@@ -266,7 +221,7 @@ def validate_logo_signature(content: bytes, extension: str) -> bool:
     dangerous elements like scripts or event handlers.
     """
     ext_lower = extension.lower()
-    signatures = LOGO_SIGNATURES.get(ext_lower)
+    signatures = IMAGE_SIGNATURES.get(ext_lower)
     if not signatures:
         return False
 

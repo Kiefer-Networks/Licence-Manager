@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_license_service, get_matching_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import (
     AdminAccountUpdate,
@@ -34,17 +33,6 @@ from licence_api.utils.validation import (
 )
 
 router = APIRouter()
-
-
-# Dependency injection functions
-def get_license_service(db: AsyncSession = Depends(get_db)) -> LicenseService:
-    """Get LicenseService instance."""
-    return LicenseService(db)
-
-
-def get_matching_service(db: AsyncSession = Depends(get_db)) -> MatchingService:
-    """Get MatchingService instance."""
-    return MatchingService(db)
 
 
 class AssignLicenseRequest(BaseModel):

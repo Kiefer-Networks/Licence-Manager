@@ -3,10 +3,9 @@
 from datetime import date, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Query, Request
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_report_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.report import (
     CancelledLicensesReport,
@@ -25,18 +24,16 @@ from licence_api.models.dto.report import (
     UtilizationReport,
 )
 from licence_api.security.auth import Permissions, require_permission
+from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.report_service import ReportService
 
 router = APIRouter()
 
 
-def get_report_service(db: AsyncSession = Depends(get_db)) -> ReportService:
-    """Get ReportService instance."""
-    return ReportService(db)
-
-
 @router.get("/costs", response_model=CostReportResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_cost_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     start_date: date = Query(default=None, description="Report start date"),
@@ -58,7 +55,9 @@ async def get_cost_report(
 
 
 @router.get("/inactive", response_model=InactiveLicenseReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_inactive_license_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     days: int = Query(default=30, ge=1, le=365, description="Days of inactivity threshold"),
@@ -71,7 +70,9 @@ async def get_inactive_license_report(
 
 
 @router.get("/offboarding", response_model=OffboardingReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_offboarding_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(
@@ -83,7 +84,9 @@ async def get_offboarding_report(
 
 
 @router.get("/external-users", response_model=ExternalUsersReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_external_users_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(
@@ -98,7 +101,9 @@ async def get_external_users_report(
 
 
 @router.get("/expiring-contracts", response_model=ExpiringContractsReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_expiring_contracts_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     days: int = Query(default=90, ge=1, le=365, description="Days ahead to check for expiry"),
@@ -111,7 +116,9 @@ async def get_expiring_contracts_report(
 
 
 @router.get("/utilization", response_model=UtilizationReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_utilization_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
 ) -> UtilizationReport:
@@ -124,7 +131,9 @@ async def get_utilization_report(
 
 
 @router.get("/cost-trend", response_model=CostTrendReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_cost_trend_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     months: int = Query(default=6, ge=1, le=24, description="Number of months to show"),
@@ -138,7 +147,9 @@ async def get_cost_trend_report(
 
 
 @router.get("/duplicate-accounts", response_model=DuplicateAccountsReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_duplicate_accounts_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
 ) -> DuplicateAccountsReport:
@@ -154,7 +165,9 @@ async def get_duplicate_accounts_report(
 
 
 @router.get("/costs-by-department", response_model=CostsByDepartmentReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_costs_by_department_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
 ) -> CostsByDepartmentReport:
@@ -167,7 +180,9 @@ async def get_costs_by_department_report(
 
 
 @router.get("/costs-by-employee", response_model=CostsByEmployeeReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_costs_by_employee_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     department: str | None = Query(
@@ -195,7 +210,9 @@ async def get_costs_by_employee_report(
 
 
 @router.get("/expiring-licenses", response_model=ExpiringLicensesReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_expiring_licenses_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     days: int = Query(default=90, ge=1, le=365, description="Days ahead to check for expiry"),
@@ -209,7 +226,9 @@ async def get_expiring_licenses_report(
 
 
 @router.get("/cancelled-licenses", response_model=CancelledLicensesReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_cancelled_licenses_report(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
 ) -> CancelledLicensesReport:
@@ -222,7 +241,9 @@ async def get_cancelled_licenses_report(
 
 
 @router.get("/lifecycle-overview", response_model=LicenseLifecycleOverview)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_lifecycle_overview(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
 ) -> LicenseLifecycleOverview:
@@ -238,7 +259,9 @@ async def get_lifecycle_overview(
 
 
 @router.get("/recommendations", response_model=LicenseRecommendationsReport)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_license_recommendations(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
     min_days_inactive: int = Query(
