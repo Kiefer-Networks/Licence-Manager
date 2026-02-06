@@ -209,12 +209,13 @@ def create_app() -> FastAPI:
     )
     app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
     app.include_router(cancellation.router, prefix="/api/v1", tags=["Cancellation"])
-    app.include_router(settings.router, prefix="/api/v1/settings", tags=["Settings"])
+    # Email settings must be registered before generic settings to avoid route conflict
     app.include_router(
         email_settings.router,
         prefix="/api/v1/settings/email",
         tags=["Email Settings"],
     )
+    app.include_router(settings.router, prefix="/api/v1/settings", tags=["Settings"])
     app.include_router(
         payment_methods.router,
         prefix="/api/v1/payment-methods",
