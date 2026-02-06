@@ -146,6 +146,38 @@ function validateFileUpload(file: File, options: {
   }
 }
 
+/**
+ * Build URLSearchParams from an object, filtering out null/undefined values.
+ * Converts numbers to strings automatically.
+ * Booleans are only included if true (as 'true' string).
+ */
+function buildSearchParams<T extends object>(params: T): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'boolean') {
+      if (value) searchParams.set(key, 'true');
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      searchParams.set(key, String(value));
+    }
+  }
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
+/**
+ * Common list parameters for paginated account license endpoints.
+ */
+interface AccountLicenseListParams {
+  search?: string;
+  provider_id?: string;
+  owner_id?: string;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = true): Promise<T> {
   const method = options.method || 'GET';
   const headers = await getAuthHeaders(method);
@@ -1788,9 +1820,7 @@ export const api = {
 
   // Dashboard
   async getDashboard(department?: string): Promise<DashboardData> {
-    const params = new URLSearchParams();
-    if (department) params.set('department', department);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildSearchParams({ department });
     return fetchApi<DashboardData>(`/dashboard${query}`);
   },
 
@@ -1991,17 +2021,12 @@ export const api = {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
   } = {}): Promise<CategorizedLicensesResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
-    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
-    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
-
-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const query = buildSearchParams(params);
     return fetchApi<CategorizedLicensesResponse>(`/licenses/categorized${query}`);
   },
 
   async getPendingSuggestions(providerId?: string): Promise<{ total: number; items: License[] }> {
-    const query = providerId ? `?provider_id=${providerId}` : '';
+    const query = buildSearchParams({ provider_id: providerId });
     return fetchApi<{ total: number; items: License[] }>(`/licenses/suggestions/pending${query}`);
   },
 
@@ -2018,20 +2043,8 @@ export const api = {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
   }): Promise<LicenseListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
-    if (params.employee_id) searchParams.set('employee_id', params.employee_id);
-    if (params.status) searchParams.set('status', params.status);
-    if (params.unassigned) searchParams.set('unassigned', 'true');
-    if (params.external) searchParams.set('external', 'true');
-    if (params.search) searchParams.set('search', params.search);
-    if (params.department) searchParams.set('department', params.department);
-    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
-    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
-
-    return fetchApi<LicenseListResponse>(`/licenses?${searchParams.toString()}`);
+    const query = buildSearchParams(params);
+    return fetchApi<LicenseListResponse>(`/licenses${query}`);
   },
 
   async removeLicenseFromProvider(licenseId: string): Promise<{ success: boolean; message: string }> {
@@ -2091,23 +2104,8 @@ export const api = {
     });
   },
 
-  async getServiceAccountLicenses(params: {
-    search?: string;
-    provider_id?: string;
-    sort_by?: string;
-    sort_dir?: 'asc' | 'desc';
-    page?: number;
-    page_size?: number;
-  } = {}): Promise<ServiceAccountLicenseListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.search) searchParams.set('search', params.search);
-    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
-    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
-    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-
-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+  async getServiceAccountLicenses(params: AccountLicenseListParams = {}): Promise<ServiceAccountLicenseListResponse> {
+    const query = buildSearchParams(params);
     return fetchApi<ServiceAccountLicenseListResponse>(`/service-accounts/licenses${query}`);
   },
 
@@ -2170,25 +2168,8 @@ export const api = {
     });
   },
 
-  async getAdminAccountLicenses(params: {
-    search?: string;
-    provider_id?: string;
-    owner_id?: string;
-    sort_by?: string;
-    sort_dir?: 'asc' | 'desc';
-    page?: number;
-    page_size?: number;
-  } = {}): Promise<AdminAccountLicenseListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.search) searchParams.set('search', params.search);
-    if (params.provider_id) searchParams.set('provider_id', params.provider_id);
-    if (params.owner_id) searchParams.set('owner_id', params.owner_id);
-    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
-    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-
-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+  async getAdminAccountLicenses(params: AccountLicenseListParams = {}): Promise<AdminAccountLicenseListResponse> {
+    const query = buildSearchParams(params);
     return fetchApi<AdminAccountLicenseListResponse>(`/admin-accounts/licenses${query}`);
   },
 
@@ -2358,17 +2339,8 @@ export const api = {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
   }): Promise<EmployeeListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-    if (params.status) searchParams.set('status', params.status);
-    if (params.department) searchParams.set('department', params.department);
-    if (params.source) searchParams.set('source', params.source);
-    if (params.search) searchParams.set('search', params.search);
-    if (params.sort_by) searchParams.set('sort_by', params.sort_by);
-    if (params.sort_dir) searchParams.set('sort_dir', params.sort_dir);
-
-    return fetchApi<EmployeeListResponse>(`/users/employees?${searchParams.toString()}`);
+    const query = buildSearchParams(params);
+    return fetchApi<EmployeeListResponse>(`/users/employees${query}`);
   },
 
   async getEmployee(employeeId: string): Promise<Employee> {
@@ -2402,10 +2374,8 @@ export const api = {
 
   // Reports
   async getInactiveLicenseReport(days: number = 30, department?: string): Promise<InactiveLicenseReport> {
-    const params = new URLSearchParams();
-    params.set('days', days.toString());
-    if (department) params.set('department', department);
-    return fetchApi<InactiveLicenseReport>(`/reports/inactive?${params.toString()}`);
+    const query = buildSearchParams({ days, department });
+    return fetchApi<InactiveLicenseReport>(`/reports/inactive${query}`);
   },
 
   async getLicenseRecommendations(options?: {
@@ -2414,41 +2384,29 @@ export const api = {
     provider_id?: string;
     limit?: number;
   }): Promise<LicenseRecommendationsReport> {
-    const params = new URLSearchParams();
-    if (options?.min_days_inactive) params.set('min_days_inactive', options.min_days_inactive.toString());
-    if (options?.department) params.set('department', options.department);
-    if (options?.provider_id) params.set('provider_id', options.provider_id);
-    if (options?.limit) params.set('limit', options.limit.toString());
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildSearchParams(options ?? {});
     return fetchApi<LicenseRecommendationsReport>(`/reports/recommendations${query}`);
   },
 
   async getOffboardingReport(department?: string): Promise<OffboardingReport> {
-    const params = new URLSearchParams();
-    if (department) params.set('department', department);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildSearchParams({ department });
     return fetchApi<OffboardingReport>(`/reports/offboarding${query}`);
   },
 
   async getExternalUsersReport(department?: string): Promise<ExternalUsersReport> {
-    const params = new URLSearchParams();
-    if (department) params.set('department', department);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildSearchParams({ department });
     return fetchApi<ExternalUsersReport>(`/reports/external-users${query}`);
   },
 
   async getCostReport(startDate?: string, endDate?: string, department?: string): Promise<CostReport> {
-    const params = new URLSearchParams();
-    if (startDate) params.set('start_date', startDate);
-    if (endDate) params.set('end_date', endDate);
-    if (department) params.set('department', department);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildSearchParams({ start_date: startDate, end_date: endDate, department });
     return fetchApi<CostReport>(`/reports/costs${query}`);
   },
 
   // Quick Win Reports
   async getExpiringContractsReport(days: number = 90): Promise<ExpiringContractsReport> {
-    return fetchApi<ExpiringContractsReport>(`/reports/expiring-contracts?days=${days}`);
+    const query = buildSearchParams({ days });
+    return fetchApi<ExpiringContractsReport>(`/reports/expiring-contracts${query}`);
   },
 
   async getUtilizationReport(): Promise<UtilizationReport> {
@@ -2456,7 +2414,8 @@ export const api = {
   },
 
   async getCostTrendReport(months: number = 6): Promise<CostTrendReport> {
-    return fetchApi<CostTrendReport>(`/reports/cost-trend?months=${months}`);
+    const query = buildSearchParams({ months });
+    return fetchApi<CostTrendReport>(`/reports/cost-trend${query}`);
   },
 
   async getDuplicateAccountsReport(): Promise<DuplicateAccountsReport> {
@@ -2469,16 +2428,14 @@ export const api = {
   },
 
   async getCostsByEmployeeReport(department?: string, minCost?: number, limit: number = 100): Promise<CostsByEmployeeReport> {
-    const params = new URLSearchParams();
-    if (department) params.set('department', department);
-    if (minCost !== undefined) params.set('min_cost', minCost.toString());
-    params.set('limit', limit.toString());
-    return fetchApi<CostsByEmployeeReport>(`/reports/costs-by-employee?${params.toString()}`);
+    const query = buildSearchParams({ department, min_cost: minCost, limit });
+    return fetchApi<CostsByEmployeeReport>(`/reports/costs-by-employee${query}`);
   },
 
   // License Lifecycle Reports
   async getExpiringLicensesReport(days: number = 90): Promise<ExpiringLicensesReport> {
-    return fetchApi<ExpiringLicensesReport>(`/reports/expiring-licenses?days=${days}`);
+    const query = buildSearchParams({ days });
+    return fetchApi<ExpiringLicensesReport>(`/reports/expiring-licenses${query}`);
   },
 
   async getCancelledLicensesReport(): Promise<CancelledLicensesReport> {
@@ -3077,17 +3034,7 @@ export const api = {
     date_to?: string;
     search?: string;
   } = {}): Promise<AuditLogListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-    if (params.action) searchParams.set('action', params.action);
-    if (params.resource_type) searchParams.set('resource_type', params.resource_type);
-    if (params.admin_user_id) searchParams.set('admin_user_id', params.admin_user_id);
-    if (params.date_from) searchParams.set('date_from', params.date_from);
-    if (params.date_to) searchParams.set('date_to', params.date_to);
-    if (params.search) searchParams.set('search', params.search);
-
-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const query = buildSearchParams(params);
     return fetchApi<AuditLogListResponse>(`/audit${query}`);
   },
 

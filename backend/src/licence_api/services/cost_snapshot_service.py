@@ -29,6 +29,7 @@ class CostSnapshotService:
         """Create monthly cost snapshots for all providers and total.
 
         Creates snapshots for the first day of the month.
+        Uses batch statistics query to avoid N+1 queries.
 
         Args:
             snapshot_date: Optional date (defaults to first of current month)
@@ -41,8 +42,12 @@ class CostSnapshotService:
 
         snapshots = []
 
-        # Get all providers
+        # Get all providers and all statistics in batch (2 queries instead of N+1)
         providers = await self.provider_repo.get_all(limit=1000)
+        all_stats = await self.license_repo.get_statistics_all_providers()
+
+        # Build provider lookup for display names
+        provider_lookup = {p.id: p for p in providers}
 
         # Track totals
         total_cost = Decimal("0")
@@ -52,12 +57,18 @@ class CostSnapshotService:
         provider_breakdown = {}
 
         for provider in providers:
-            # Skip HRIS providers (hibob)
-            if provider.name == "hibob":
+            # Skip HRIS providers (hibob, personio)
+            if provider.name in ("hibob", "personio"):
                 continue
 
-            # Get license statistics for this provider
-            stats = await self.license_repo.get_statistics(provider_id=provider.id)
+            # Get pre-fetched statistics for this provider
+            stats = all_stats.get(provider.id, {
+                "total": 0,
+                "by_status": {},
+                "unassigned": 0,
+                "potential_savings": Decimal("0"),
+                "total_monthly_cost": Decimal("0"),
+            })
 
             provider_cost = stats.get("total_monthly_cost", Decimal("0"))
             provider_license_count = stats.get("total", 0)

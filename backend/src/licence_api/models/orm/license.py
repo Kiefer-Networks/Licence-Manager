@@ -118,6 +118,8 @@ class LicenseORM(Base, UUIDMixin, TimestampMixin):
         Index("idx_licenses_last_activity", "last_activity_at"),
         Index("idx_licenses_suggested_employee", "suggested_employee_id"),
         Index("idx_licenses_match_status", "match_status"),
+        Index("idx_licenses_external_user_id", "external_user_id"),
+        Index("idx_licenses_status_external", "status", "external_user_id"),
     )
 
 

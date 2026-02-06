@@ -316,17 +316,24 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             synced_at=synced_at,
         )
 
-    async def get_statistics(self, department: str | None = None) -> dict[str, Any]:
+    async def get_statistics(
+        self,
+        department: str | None = None,
+        provider_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Get license statistics.
 
         Args:
             department: Optional department filter
+            provider_id: Optional provider filter
 
         Returns:
             Dict with license statistics
         """
         # Base queries - join with employee for department filter
         base_query = select(func.count()).select_from(LicenseORM)
+        if provider_id:
+            base_query = base_query.where(LicenseORM.provider_id == provider_id)
         if department:
             base_query = base_query.join(
                 EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
@@ -338,6 +345,8 @@ class LicenseRepository(BaseRepository[LicenseORM]):
 
         # Count by status
         status_query = select(LicenseORM.status, func.count()).group_by(LicenseORM.status)
+        if provider_id:
+            status_query = status_query.where(LicenseORM.provider_id == provider_id)
         if department:
             status_query = status_query.join(
                 EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
@@ -345,27 +354,29 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         status_result = await self.session.execute(status_query)
         by_status = dict(status_result.all())
 
-        # Unassigned count and potential savings (only if no department filter)
+        # Unassigned count and potential savings
+        unassigned_query = select(func.count()).select_from(LicenseORM).where(
+            LicenseORM.employee_id.is_(None)
+        )
+        savings_query = select(func.sum(LicenseORM.monthly_cost)).select_from(LicenseORM).where(
+            LicenseORM.employee_id.is_(None)
+        )
+        if provider_id:
+            unassigned_query = unassigned_query.where(LicenseORM.provider_id == provider_id)
+            savings_query = savings_query.where(LicenseORM.provider_id == provider_id)
         if department:
             unassigned = 0
             potential_savings = Decimal("0")
         else:
-            unassigned_result = await self.session.execute(
-                select(func.count()).select_from(LicenseORM).where(LicenseORM.employee_id.is_(None))
-            )
+            unassigned_result = await self.session.execute(unassigned_query)
             unassigned = unassigned_result.scalar_one()
-
-            # Potential savings = sum of monthly_cost for all unassigned licenses
-            savings_result = await self.session.execute(
-                select(func.sum(LicenseORM.monthly_cost))
-                .select_from(LicenseORM)
-                .where(LicenseORM.employee_id.is_(None))
-            )
+            savings_result = await self.session.execute(savings_query)
             potential_savings = savings_result.scalar_one() or Decimal("0")
 
-        # Total monthly cost - include all licenses regardless of status
-        # (unassigned licenses still cost money)
+        # Total monthly cost
         cost_query = select(func.sum(LicenseORM.monthly_cost)).select_from(LicenseORM)
+        if provider_id:
+            cost_query = cost_query.where(LicenseORM.provider_id == provider_id)
         if department:
             cost_query = cost_query.join(
                 EmployeeORM, LicenseORM.employee_id == EmployeeORM.id
@@ -380,6 +391,58 @@ class LicenseRepository(BaseRepository[LicenseORM]):
             "potential_savings": potential_savings,
             "total_monthly_cost": total_cost,
         }
+
+    async def get_statistics_all_providers(self) -> dict[UUID, dict[str, Any]]:
+        """Get license statistics grouped by provider in a single query.
+
+        Returns all providers' stats in one efficient query instead of N+1.
+
+        Returns:
+            Dict mapping provider_id to statistics dict
+        """
+        # Get counts, costs, and unassigned per provider in single queries
+        stats_query = select(
+            LicenseORM.provider_id,
+            func.count().label("total"),
+            func.sum(LicenseORM.monthly_cost).label("total_cost"),
+            func.count().filter(LicenseORM.employee_id.is_(None)).label("unassigned"),
+            func.sum(LicenseORM.monthly_cost).filter(
+                LicenseORM.employee_id.is_(None)
+            ).label("potential_savings"),
+        ).group_by(LicenseORM.provider_id)
+
+        result = await self.session.execute(stats_query)
+        rows = result.all()
+
+        # Get status counts per provider
+        status_query = select(
+            LicenseORM.provider_id,
+            LicenseORM.status,
+            func.count().label("count"),
+        ).group_by(LicenseORM.provider_id, LicenseORM.status)
+        status_result = await self.session.execute(status_query)
+        status_rows = status_result.all()
+
+        # Build status map: {provider_id: {status: count}}
+        status_map: dict[UUID, dict[str, int]] = {}
+        for provider_id, status, count in status_rows:
+            if provider_id not in status_map:
+                status_map[provider_id] = {}
+            status_map[provider_id][status] = count
+
+        # Build final result
+        stats: dict[UUID, dict[str, Any]] = {}
+        for row in rows:
+            provider_id = row.provider_id
+            stats[provider_id] = {
+                "total": row.total,
+                "by_status": status_map.get(provider_id, {}),
+                "unassigned": row.unassigned or 0,
+                "potential_savings": row.potential_savings or Decimal("0"),
+                "total_monthly_cost": row.total_cost or Decimal("0"),
+            }
+
+        return stats
 
     async def count_by_provider(self) -> dict[UUID, int]:
         """Count licenses by provider.

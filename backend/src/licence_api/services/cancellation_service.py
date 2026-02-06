@@ -93,8 +93,12 @@ class CancellationService:
         if effective_date <= date.today():
             license_orm.status = LicenseStatus.CANCELLED
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = license_orm.provider.display_name if license_orm.provider else "Unknown"
+        license_type = license_orm.license_type
+        external_user_id = license_orm.external_user_id
+
         await self.session.commit()
-        await self.session.refresh(license_orm)
 
         # Send notification (fire-and-forget)
         try:
@@ -102,11 +106,9 @@ class CancellationService:
             if slack_token:
                 cancelled_by_email = await self._get_user_email(cancelled_by)
                 await self.notification_service.notify_license_cancelled(
-                    provider_name=license_orm.provider.display_name
-                    if license_orm.provider
-                    else "Unknown",
-                    license_type=license_orm.license_type,
-                    user_email=license_orm.external_user_id,
+                    provider_name=provider_name,
+                    license_type=license_type,
+                    user_email=external_user_id,
                     cancelled_by=cancelled_by_email,
                     cancellation_reason=reason,
                     slack_token=slack_token,
@@ -156,8 +158,12 @@ class CancellationService:
         if effective_date <= date.today():
             package.status = PackageStatus.CANCELLED
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = package.provider.display_name if package.provider else "Unknown"
+        package_name = package.license_type or "Unknown"
+        seat_count = package.seats or 0
+
         await self.session.commit()
-        await self.session.refresh(package)
 
         # Send notification (fire-and-forget)
         try:
@@ -165,9 +171,9 @@ class CancellationService:
             if slack_token:
                 cancelled_by_email = await self._get_user_email(cancelled_by)
                 await self.notification_service.notify_package_cancelled(
-                    provider_name=package.provider.display_name if package.provider else "Unknown",
-                    package_name=package.license_type or "Unknown",
-                    seat_count=package.seats or 0,
+                    provider_name=provider_name,
+                    package_name=package_name,
+                    seat_count=seat_count,
                     cancelled_by=cancelled_by_email,
                     cancellation_reason=reason,
                     slack_token=slack_token,
@@ -217,8 +223,11 @@ class CancellationService:
         if effective_date <= date.today():
             org_license.status = OrgLicenseStatus.CANCELLED
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = org_license.provider.display_name if org_license.provider else "Unknown"
+        org_license_name = org_license.name
+
         await self.session.commit()
-        await self.session.refresh(org_license)
 
         # Send notification (fire-and-forget)
         try:
@@ -226,10 +235,8 @@ class CancellationService:
             if slack_token:
                 cancelled_by_email = await self._get_user_email(cancelled_by)
                 await self.notification_service.notify_org_license_cancelled(
-                    provider_name=org_license.provider.display_name
-                    if org_license.provider
-                    else "Unknown",
-                    org_license_name=org_license.name,
+                    provider_name=provider_name,
+                    org_license_name=org_license_name,
                     cancelled_by=cancelled_by_email,
                     cancellation_reason=reason,
                     slack_token=slack_token,
@@ -283,8 +290,12 @@ class CancellationService:
             if license_orm.status in (LicenseStatus.CANCELLED, LicenseStatus.EXPIRED):
                 license_orm.status = LicenseStatus.ACTIVE
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = license_orm.provider.display_name if license_orm.provider else "Unknown"
+        license_type = license_orm.license_type
+        external_user_id = license_orm.external_user_id
+
         await self.session.commit()
-        await self.session.refresh(license_orm)
 
         # Send notification (fire-and-forget)
         try:
@@ -292,11 +303,9 @@ class CancellationService:
             if slack_token:
                 renewed_by_email = await self._get_user_email(renewed_by)
                 await self.notification_service.notify_license_renewed(
-                    provider_name=license_orm.provider.display_name
-                    if license_orm.provider
-                    else "Unknown",
-                    license_type=license_orm.license_type,
-                    user_email=license_orm.external_user_id,
+                    provider_name=provider_name,
+                    license_type=license_type,
+                    user_email=external_user_id,
                     renewed_by=renewed_by_email,
                     new_expiration_date=new_expiration_date.isoformat()
                     if new_expiration_date
@@ -352,8 +361,12 @@ class CancellationService:
             if package.status in (PackageStatus.CANCELLED, PackageStatus.EXPIRED):
                 package.status = PackageStatus.ACTIVE
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = package.provider.display_name if package.provider else "Unknown"
+        package_name = package.license_type or "Unknown"
+        seat_count = package.total_seats or 0
+
         await self.session.commit()
-        await self.session.refresh(package)
 
         # Send notification (fire-and-forget)
         try:
@@ -361,9 +374,9 @@ class CancellationService:
             if slack_token:
                 renewed_by_email = await self._get_user_email(renewed_by)
                 await self.notification_service.notify_package_renewed(
-                    provider_name=package.provider.display_name if package.provider else "Unknown",
-                    package_name=package.license_type or "Unknown",
-                    seat_count=package.total_seats or 0,
+                    provider_name=provider_name,
+                    package_name=package_name,
+                    seat_count=seat_count,
                     renewed_by=renewed_by_email,
                     new_contract_end=new_contract_end.isoformat() if new_contract_end else None,
                     slack_token=slack_token,
@@ -404,8 +417,12 @@ class CancellationService:
 
         license_orm.needs_reorder = needs_reorder
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = license_orm.provider.display_name if license_orm.provider else "Unknown"
+        license_type = license_orm.license_type
+        external_user_id = license_orm.external_user_id
+
         await self.session.commit()
-        await self.session.refresh(license_orm)
 
         # Send notification when flagging for reorder (fire-and-forget)
         if needs_reorder and flagged_by:
@@ -414,11 +431,9 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_license_needs_reorder(
-                        provider_name=license_orm.provider.display_name
-                        if license_orm.provider
-                        else "Unknown",
-                        license_type=license_orm.license_type,
-                        user_email=license_orm.external_user_id,
+                        provider_name=provider_name,
+                        license_type=license_type,
+                        user_email=external_user_id,
                         flagged_by=flagged_by_email,
                         slack_token=slack_token,
                     )
@@ -458,8 +473,12 @@ class CancellationService:
 
         package.needs_reorder = needs_reorder
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = package.provider.display_name if package.provider else "Unknown"
+        package_name = package.license_type or "Unknown"
+        seat_count = package.total_seats or 0
+
         await self.session.commit()
-        await self.session.refresh(package)
 
         # Send notification when flagging for reorder (fire-and-forget)
         if needs_reorder and flagged_by:
@@ -468,11 +487,9 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_package_needs_reorder(
-                        provider_name=package.provider.display_name
-                        if package.provider
-                        else "Unknown",
-                        package_name=package.license_type or "Unknown",
-                        seat_count=package.total_seats or 0,
+                        provider_name=provider_name,
+                        package_name=package_name,
+                        seat_count=seat_count,
                         flagged_by=flagged_by_email,
                         slack_token=slack_token,
                     )
@@ -530,20 +547,21 @@ class CancellationService:
             if org_license.status in (OrgLicenseStatus.CANCELLED, OrgLicenseStatus.EXPIRED):
                 org_license.status = OrgLicenseStatus.ACTIVE
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = org_license.provider.display_name if org_license.provider else "Unknown"
+        org_license_name = org_license.name
+        expiry_date = new_expires_at or new_renewal_date
+
         await self.session.commit()
-        await self.session.refresh(org_license)
 
         # Send notification (fire-and-forget)
         try:
             slack_token = await self._get_slack_token()
             if slack_token:
                 renewed_by_email = await self._get_user_email(renewed_by)
-                expiry_date = new_expires_at or new_renewal_date
                 await self.notification_service.notify_org_license_renewed(
-                    provider_name=org_license.provider.display_name
-                    if org_license.provider
-                    else "Unknown",
-                    org_license_name=org_license.name,
+                    provider_name=provider_name,
+                    org_license_name=org_license_name,
                     renewed_by=renewed_by_email,
                     new_expiration_date=expiry_date.isoformat() if expiry_date else None,
                     slack_token=slack_token,
@@ -584,8 +602,11 @@ class CancellationService:
 
         org_license.needs_reorder = needs_reorder
 
+        # Store notification data before commit to avoid extra SELECT after expire
+        provider_name = org_license.provider.display_name if org_license.provider else "Unknown"
+        org_license_name = org_license.name
+
         await self.session.commit()
-        await self.session.refresh(org_license)
 
         # Send notification when flagging for reorder (fire-and-forget)
         if needs_reorder and flagged_by:
@@ -594,10 +615,8 @@ class CancellationService:
                 if slack_token:
                     flagged_by_email = await self._get_user_email(flagged_by)
                     await self.notification_service.notify_org_license_needs_reorder(
-                        provider_name=org_license.provider.display_name
-                        if org_license.provider
-                        else "Unknown",
-                        org_license_name=org_license.name,
+                        provider_name=provider_name,
+                        org_license_name=org_license_name,
                         flagged_by=flagged_by_email,
                         slack_token=slack_token,
                     )
