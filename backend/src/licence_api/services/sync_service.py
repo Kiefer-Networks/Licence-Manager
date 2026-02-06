@@ -161,9 +161,9 @@ class SyncService:
 
             # Sync based on provider type
             if provider.name == ProviderName.HIBOB:
-                result = await self._sync_hibob(provider_impl, provider_id)
+                result = await self._sync_hibob(provider_impl)
             elif provider.name == ProviderName.PERSONIO:
-                result = await self._sync_personio(provider_impl, provider_id)
+                result = await self._sync_personio(provider_impl)
             else:
                 result = await self._sync_license_provider(provider_impl, provider_id)
 
@@ -316,32 +316,22 @@ class SyncService:
 
         return result
 
-    async def _sync_hibob(
-        self,
-        provider,
-        provider_id: UUID,
-    ) -> dict[str, Any]:
+    async def _sync_hibob(self, provider) -> dict[str, Any]:
         """Sync employees from HiBob.
 
         Args:
             provider: HiBob provider instance
-            provider_id: Provider UUID
 
         Returns:
             Dict with sync results
         """
         return await self._sync_hris_employees(provider, "hibob", sync_avatars=True)
 
-    async def _sync_personio(
-        self,
-        provider,
-        provider_id: UUID,
-    ) -> dict[str, Any]:
+    async def _sync_personio(self, provider) -> dict[str, Any]:
         """Sync employees from Personio.
 
         Args:
             provider: Personio provider instance
-            provider_id: Provider UUID
 
         Returns:
             Dict with sync results
