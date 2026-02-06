@@ -107,7 +107,15 @@ class AdminAccountService:
 
         Returns:
             Created AdminAccountPatternResponse
+
+        Raises:
+            ValueError: If a pattern with the same email_pattern already exists
         """
+        # Check for duplicate pattern
+        existing = await self.pattern_repo.get_by_email_pattern(data.email_pattern)
+        if existing:
+            raise ValueError("A pattern with this email pattern already exists")
+
         pattern = await self.pattern_repo.create(
             email_pattern=data.email_pattern,
             name=data.name,

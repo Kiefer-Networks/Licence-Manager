@@ -6,6 +6,8 @@ from collections.abc import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from licence_api.security.rate_limit import get_real_client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,7 +70,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         return response
 
     def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP from request.
+        """Extract client IP from request using trusted proxy validation.
 
         Args:
             request: Incoming request
@@ -76,17 +78,5 @@ class AuditMiddleware(BaseHTTPMiddleware):
         Returns:
             Client IP address
         """
-        # Check for forwarded headers (when behind proxy)
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-
-        real_ip = request.headers.get("x-real-ip")
-        if real_ip:
-            return real_ip
-
-        # Fall back to direct client
-        if request.client:
-            return request.client.host
-
-        return "unknown"
+        # Use centralized IP extraction with trusted proxy validation
+        return get_real_client_ip(request)

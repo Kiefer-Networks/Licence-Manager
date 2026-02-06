@@ -92,19 +92,17 @@ async def create_pattern(
 
     Requires licenses.edit permission.
     """
-    # Check if pattern already exists
-    existing_patterns = await service.get_all_patterns()
-    if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
+    try:
+        return await service.create_pattern(
+            data=data,
+            created_by=current_user.id,
+            request=request,
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A pattern with this value already exists",
+            detail=str(e),
         )
-
-    return await service.create_pattern(
-        data=data,
-        created_by=current_user.id,
-        request=request,
-    )
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)

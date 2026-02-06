@@ -196,6 +196,7 @@ export const Permissions = {
   LICENSES_DELETE: 'licenses.delete',
   LICENSES_ASSIGN: 'licenses.assign',
   LICENSES_BULK: 'licenses.bulk_actions',
+  LICENSES_IMPORT: 'licenses.import',
 
   // Employees (from HiBob)
   USERS_VIEW: 'employees.view',
