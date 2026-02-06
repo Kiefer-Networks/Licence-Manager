@@ -321,12 +321,18 @@ export default function FinancePage() {
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="apple_pay">{t('applePay')}</SelectItem>
                   <SelectItem value="bank_account">{t('bankAccount')}</SelectItem>
+                  <SelectItem value="check">{t('check')}</SelectItem>
                   <SelectItem value="credit_card">{t('creditCard')}</SelectItem>
+                  <SelectItem value="google_pay">{t('googlePay')}</SelectItem>
                   <SelectItem value="invoice">{tCommon('invoice')}</SelectItem>
-                  <SelectItem value="other">{t('otherPayment')}</SelectItem>
+                  <SelectItem value="klarna">{t('klarna')}</SelectItem>
                   <SelectItem value="paypal">{t('paypal')}</SelectItem>
+                  <SelectItem value="sepa">{t('sepa')}</SelectItem>
                   <SelectItem value="stripe">{t('stripe')}</SelectItem>
+                  <SelectItem value="wire_transfer">{t('wireTransfer')}</SelectItem>
+                  <SelectItem value="other">{t('otherPayment')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
