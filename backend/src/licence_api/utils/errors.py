@@ -107,3 +107,48 @@ def raise_bad_request(message: str = "Invalid request") -> NoReturn:
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=message,
     )
+
+
+def raise_conflict(message: str = "Resource already exists") -> NoReturn:
+    """Raise a 409 Conflict error.
+
+    Args:
+        message: The error message to return
+
+    Raises:
+        HTTPException: With 409 status code
+    """
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=message,
+    )
+
+
+def raise_forbidden(message: str = "Access denied") -> NoReturn:
+    """Raise a 403 Forbidden error.
+
+    Args:
+        message: The error message to return
+
+    Raises:
+        HTTPException: With 403 status code
+    """
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=message,
+    )
+
+
+def handle_value_error_as_not_found(entity: str = "Resource") -> NoReturn:
+    """Helper to convert ValueError to 404 HTTPException.
+
+    Args:
+        entity: The name of the entity that was not found
+
+    Raises:
+        HTTPException: With 404 status code
+    """
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"{entity} not found",
+    )

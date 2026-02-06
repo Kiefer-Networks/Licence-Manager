@@ -29,6 +29,7 @@ from licence_api.security.rate_limit import (
     limiter,
 )
 from licence_api.services.backup_service import BackupService
+from licence_api.utils.errors import raise_bad_request, raise_forbidden, raise_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -170,10 +171,7 @@ async def get_backup_info(
     """
     # Validate file
     if file.filename is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No filename provided",
-        )
+        raise_bad_request("No filename provided")
 
     # Read file with streaming size check to prevent memory exhaustion
     content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
@@ -217,32 +215,20 @@ async def setup_restore_backup(
     """
     # Security check: Only allow if no admin users exist
     if await service.has_existing_admin_users():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Setup restore is only available on fresh installations with no existing users",
-        )
+        raise_forbidden("Setup restore is only available on fresh installations with no existing users")
 
     # Validate file
     if file.filename is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No filename provided",
-        )
+        raise_bad_request("No filename provided")
 
     if not file.filename.endswith(".lcbak"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type. Expected .lcbak file",
-        )
+        raise_bad_request("Invalid file type. Expected .lcbak file")
 
     # Read file with streaming size check
     content = await read_upload_with_limit(file, MAX_BACKUP_SIZE)
 
     if len(content) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file",
-        )
+        raise_bad_request("Empty file")
 
     return await service.restore_backup(
         file_data=content,
@@ -328,10 +314,7 @@ async def trigger_backup(
     try:
         result = await service.create_scheduled_backup()
         if result is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Backup not configured. Please set an encryption password first.",
-            )
+            raise_bad_request("Backup not configured. Please set an encryption password first.")
         return result
     except Exception as e:
         logger.error(f"Manual backup failed: {e}", exc_info=True)

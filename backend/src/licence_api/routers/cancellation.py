@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 
 from licence_api.dependencies import get_audit_service, get_cancellation_service
 from licence_api.models.domain.admin_user import AdminUser
@@ -18,6 +18,7 @@ from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cancellation_service import CancellationService
+from licence_api.utils.errors import raise_not_found
 
 router = APIRouter()
 
@@ -67,7 +68,7 @@ async def cancel_license(
             cancelled_by=license_orm.cancelled_by,
         )
     except ValueError:
-        raise HTTPException(status_code=404, detail="License not found")
+        raise_not_found("License")
 
 
 @router.post("/licenses/{license_id}/renew")
@@ -110,7 +111,7 @@ async def renew_license(
             "status": license_orm.status,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="License not found")
+        raise_not_found("License")
 
 
 @router.patch("/licenses/{license_id}/needs-reorder")
@@ -144,7 +145,7 @@ async def set_license_needs_reorder(
             "needs_reorder": license_orm.needs_reorder,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="License not found")
+        raise_not_found("License")
 
 
 # ==================== PACKAGE CANCELLATION ====================
@@ -192,7 +193,7 @@ async def cancel_package(
             cancelled_by=package.cancelled_by,
         )
     except ValueError:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise_not_found("Package")
 
 
 @router.post("/packages/{package_id}/renew")
@@ -235,7 +236,7 @@ async def renew_package(
             "status": package.status,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise_not_found("Package")
 
 
 @router.patch("/packages/{package_id}/needs-reorder")
@@ -269,7 +270,7 @@ async def set_package_needs_reorder(
             "needs_reorder": package.needs_reorder,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise_not_found("Package")
 
 
 # ==================== ORGANIZATION LICENSE CANCELLATION ====================
@@ -317,7 +318,7 @@ async def cancel_org_license(
             cancelled_by=org_license.cancelled_by,
         )
     except ValueError:
-        raise HTTPException(status_code=404, detail="Organization license not found")
+        raise_not_found("Organization license")
 
 
 @router.post("/org-licenses/{org_license_id}/renew")
@@ -364,7 +365,7 @@ async def renew_org_license(
             "status": org_license.status,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="Organization license not found")
+        raise_not_found("Organization license")
 
 
 @router.patch("/org-licenses/{org_license_id}/needs-reorder")
@@ -398,4 +399,4 @@ async def set_org_license_needs_reorder(
             "needs_reorder": org_license.needs_reorder,
         }
     except ValueError:
-        raise HTTPException(status_code=404, detail="Organization license not found")
+        raise_not_found("Organization license")

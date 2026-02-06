@@ -2849,14 +2849,7 @@ export const api = {
     is_active?: boolean;
     role?: string;
   } = {}): Promise<AdminUserListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.page) searchParams.set('page', params.page.toString());
-    if (params.page_size) searchParams.set('page_size', params.page_size.toString());
-    if (params.search) searchParams.set('search', params.search);
-    if (params.is_active !== undefined) searchParams.set('is_active', params.is_active.toString());
-    if (params.role) searchParams.set('role', params.role);
-
-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const query = buildSearchParams(params);
     return fetchApi<AdminUserListResponse>(`/rbac/users${query}`);
   },
 

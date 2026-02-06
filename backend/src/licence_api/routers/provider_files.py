@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from licence_api.services.provider_file_service import (
     VIEWABLE_EXTENSIONS,
     ProviderFileService,
 )
+from licence_api.utils.errors import raise_bad_request, raise_not_found
 
 router = APIRouter()
 
@@ -75,10 +76,7 @@ async def list_provider_files(
     """List all files for a provider."""
     provider = await provider_repo.get_by_id(provider_id)
     if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
+        raise_not_found("Provider")
 
     files = await file_repo.get_by_provider(provider_id)
 
@@ -120,10 +118,7 @@ async def upload_provider_file(
     Note: CSRF protection is explicitly applied via CSRFProtected dependency.
     """
     if file.filename is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No filename provided",
-        )
+        raise_bad_request("No filename provided")
 
     content = await file.read()
 
@@ -138,9 +133,7 @@ async def upload_provider_file(
             request=request,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file or provider not found"
-        )
+        raise_bad_request("Invalid file or provider not found")
 
     ext = Path(file_orm.filename).suffix.lower()
     return ProviderFileResponse(
@@ -169,17 +162,11 @@ async def download_provider_file(
     file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
 
     if file_orm is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found",
-        )
+        raise_not_found("File")
 
     file_path = service.get_file_path(provider_id, file_orm.filename)
     if file_path is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found on disk",
-        )
+        raise_not_found("File on disk")
 
     return FileResponse(
         path=file_path,
@@ -200,24 +187,15 @@ async def view_provider_file(
     file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
 
     if file_orm is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found",
-        )
+        raise_not_found("File")
 
     ext = Path(file_orm.filename).suffix.lower()
     if ext not in VIEWABLE_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This file type cannot be viewed inline. Use download instead.",
-        )
+        raise_bad_request("This file type cannot be viewed inline. Use download instead.")
 
     file_path = service.get_file_path(provider_id, file_orm.filename)
     if file_path is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found on disk",
-        )
+        raise_not_found("File on disk")
 
     return FileResponse(
         path=file_path,
@@ -244,7 +222,4 @@ async def delete_provider_file(
             request=request,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found",
-        )
+        raise_not_found("File")
