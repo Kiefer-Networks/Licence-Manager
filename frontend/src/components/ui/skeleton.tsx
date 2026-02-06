@@ -8,7 +8,7 @@ export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'animate-pulse rounded-md bg-zinc-200/60',
+        'animate-pulse rounded-md bg-muted',
         className
       )}
     />
@@ -41,7 +41,7 @@ export function SkeletonText({
 
 export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn('border rounded-lg p-4 bg-white', className)}>
+    <div className={cn('border rounded-lg p-4 bg-card', className)}>
       <div className="flex items-center gap-3 mb-3">
         <Skeleton className="h-10 w-10 rounded-lg" />
         <div className="flex-1">
@@ -74,9 +74,9 @@ export function SkeletonTable({
   columns?: number;
 }) {
   return (
-    <div className="border rounded-lg overflow-hidden bg-white">
+    <div className="border rounded-lg overflow-hidden bg-card">
       <table className="w-full">
-        <thead className="bg-zinc-50 border-b">
+        <thead className="bg-muted/50 border-b">
           <tr>
             {Array.from({ length: columns }).map((_, i) => (
               <th key={i} className="px-4 py-3 text-left">

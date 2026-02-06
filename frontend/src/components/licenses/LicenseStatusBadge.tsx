@@ -46,7 +46,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="service-account"
         variant="outline"
-        className="text-blue-600 border-blue-200 bg-blue-50"
+        className="text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950"
       >
         <Bot className="h-3 w-3 mr-1" />
         {license.service_account_name || t('serviceAccount')}
@@ -60,7 +60,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="external-guest"
         variant="outline"
-        className="text-green-600 border-green-200 bg-green-50"
+        className="text-green-600 dark:text-green-400 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950"
       >
         <UserCheck className="h-3 w-3 mr-1" />
         {t('externalGuest')}
@@ -75,7 +75,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="suggested"
         variant="outline"
-        className="text-purple-600 border-purple-200 bg-purple-50"
+        className="text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950"
       >
         <HelpCircle className="h-3 w-3 mr-1" />
         {t('suggestedMatch', { name: license.suggested_employee_name, percent: confidence })}
@@ -89,7 +89,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="external-review"
         variant="outline"
-        className="text-orange-600 border-orange-200 bg-orange-50"
+        className="text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950"
       >
         <AlertCircle className="h-3 w-3 mr-1" />
         {t('externalReview')}
@@ -103,7 +103,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="external"
         variant="outline"
-        className="text-orange-600 border-orange-200 bg-orange-50"
+        className="text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950"
       >
         <Globe className="h-3 w-3 mr-1" />
         {t('external')}
@@ -117,7 +117,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="offboarded"
         variant="outline"
-        className="text-red-600 border-red-200 bg-red-50"
+        className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950"
       >
         <Skull className="h-3 w-3 mr-1" />
         {t('offboarded')}
@@ -131,7 +131,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="inactive"
         variant="outline"
-        className="text-zinc-500 border-zinc-200 bg-zinc-50"
+        className="text-muted-foreground border-border bg-muted"
       >
         <UserMinus className="h-3 w-3 mr-1" />
         {t('inactive')}
@@ -145,7 +145,7 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       <Badge
         key="unassigned"
         variant="outline"
-        className="text-amber-600 border-amber-200 bg-amber-50"
+        className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950"
       >
         {t('unassigned')}
       </Badge>

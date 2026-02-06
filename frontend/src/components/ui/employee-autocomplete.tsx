@@ -161,7 +161,7 @@ export function EmployeeAutocomplete({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-zinc-100 rounded"
+              className="p-1 hover:bg-muted rounded"
             >
               <X className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
@@ -173,7 +173,7 @@ export function EmployeeAutocomplete({
       {open && (
         <div
           ref={listRef}
-          className="absolute z-50 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto"
+          className="absolute z-50 mt-1 w-full bg-popover border rounded-md shadow-lg max-h-60 overflow-auto"
         >
           {options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -187,8 +187,8 @@ export function EmployeeAutocomplete({
                 onClick={() => handleSelect(option.id)}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 cursor-pointer text-sm',
-                  index === highlightedIndex && 'bg-zinc-100',
-                  value === option.id && 'bg-zinc-50'
+                  index === highlightedIndex && 'bg-accent',
+                  value === option.id && 'bg-muted/50'
                 )}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
@@ -208,7 +208,7 @@ export function EmployeeAutocomplete({
                   </>
                 )}
                 {value === option.id && (
-                  <Check className="h-4 w-4 text-zinc-900 ml-auto flex-shrink-0" />
+                  <Check className="h-4 w-4 text-foreground ml-auto flex-shrink-0" />
                 )}
               </div>
             ))

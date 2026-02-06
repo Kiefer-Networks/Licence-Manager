@@ -193,17 +193,17 @@ export function ThreeTableLayout({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? tab.highlight ? 'border-amber-500 text-amber-700' : 'border-zinc-900 text-zinc-900'
-                  : 'border-transparent text-muted-foreground hover:text-zinc-900'
+                  ? tab.highlight ? 'border-amber-500 text-amber-700 dark:text-amber-400' : 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              <span className={tab.warning ? 'text-red-500' : tab.highlight ? 'text-amber-500' : ''}>{tab.icon}</span>
-              <span className={tab.warning ? 'text-red-600' : tab.highlight ? 'text-amber-600' : ''}>{tab.label}</span>
+              <span className={tab.warning ? 'text-red-500 dark:text-red-400' : tab.highlight ? 'text-amber-500 dark:text-amber-400' : ''}>{tab.icon}</span>
+              <span className={tab.warning ? 'text-red-600 dark:text-red-400' : tab.highlight ? 'text-amber-600 dark:text-amber-400' : ''}>{tab.label}</span>
               <span
                 className={`px-2 py-0.5 text-xs rounded-full ${
                   activeTab === tab.id
-                    ? tab.warning ? 'bg-red-600 text-white' : tab.highlight ? 'bg-amber-500 text-white' : 'bg-zinc-900 text-white'
-                    : tab.warning ? 'bg-red-100 text-red-700' : tab.highlight ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-600'
+                    ? tab.warning ? 'bg-red-600 text-white' : tab.highlight ? 'bg-amber-500 text-white' : 'bg-primary text-primary-foreground'
+                    : tab.warning ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : tab.highlight ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {tab.count}
@@ -220,13 +220,13 @@ export function ThreeTableLayout({
           {/* Active */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-medium text-amber-600">
+              <Lightbulb className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+              <h3 className="text-sm font-medium text-amber-600 dark:text-amber-400">
                 {t('activeSuggested', { count: suggestedActive.length })}
               </h3>
             </div>
             {suggestedActive.length > 0 ? (
-              <div className="border border-amber-200 rounded-lg overflow-hidden bg-amber-50/30">
+              <div className="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden bg-amber-50/30 dark:bg-amber-950/30">
                 <LicenseTable
                   licenses={suggestedActive}
                   showProvider={showProvider}
@@ -243,8 +243,8 @@ export function ThreeTableLayout({
                 />
               </div>
             ) : (
-              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
-                <p className="text-sm text-emerald-600">{t('allSuggestionsReviewed')}</p>
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">{t('allSuggestionsReviewed')}</p>
               </div>
             )}
           </div>
@@ -278,13 +278,13 @@ export function ThreeTableLayout({
           {/* Active - Critical! */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-              <h3 className="text-sm font-medium text-red-600">
+              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
+              <h3 className="text-sm font-medium text-red-600 dark:text-red-400">
                 {t('activeNotInHRIS', { count: notInHrisActive.length })}
               </h3>
             </div>
             {notInHrisActive.length > 0 ? (
-              <div className="border border-red-200 rounded-lg overflow-hidden">
+              <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
                 <LicenseTable
                   licenses={notInHrisActive}
                   showProvider={showProvider}
@@ -298,8 +298,8 @@ export function ThreeTableLayout({
                 />
               </div>
             ) : (
-              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
-                <p className="text-sm text-emerald-600">{t('allLicensesMatchedToHRIS')}</p>
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">{t('allLicensesMatchedToHRIS')}</p>
               </div>
             )}
           </div>
@@ -330,13 +330,13 @@ export function ThreeTableLayout({
           {/* Active */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Package className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-medium text-amber-600">
+              <Package className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+              <h3 className="text-sm font-medium text-amber-600 dark:text-amber-400">
                 {t('activeUnassigned', { count: unassignedActive.length })}
               </h3>
             </div>
             {unassignedActive.length > 0 ? (
-              <div className="border border-amber-200 rounded-lg overflow-hidden">
+              <div className="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden">
                 <LicenseTable
                   licenses={unassignedActive}
                   showProvider={showProvider}
@@ -350,8 +350,8 @@ export function ThreeTableLayout({
                 />
               </div>
             ) : (
-              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 border-emerald-200">
-                <p className="text-sm text-emerald-600">{t('allLicensesAssigned')}</p>
+              <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground bg-emerald-50/50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">{t('allLicensesAssigned')}</p>
               </div>
             )}
           </div>

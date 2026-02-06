@@ -513,7 +513,7 @@ export default function SettingsPage() {
         {/* Toast */}
         {toast && (
           <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-            toast.type === 'success' ? 'bg-zinc-900 text-white' : 'bg-red-600 text-white'
+            toast.type === 'success' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'
           }`}>
             {toast.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
             {toast.text}
@@ -565,7 +565,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-4">
+          <div className="border rounded-lg bg-card p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
               {t('systemSettingsDescription')}
             </p>
@@ -607,7 +607,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-4">
+          <div className="border rounded-lg bg-card p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
               {t('companyDomainsDescription')}
             </p>
@@ -637,12 +637,12 @@ export default function SettingsPage() {
                   <Badge
                     key={domain}
                     variant="secondary"
-                    className="bg-zinc-100 text-zinc-700 pr-1.5 flex items-center gap-1"
+                    className="bg-muted text-muted-foreground pr-1.5 flex items-center gap-1"
                   >
                     {domain}
                     <button
                       onClick={() => handleRemoveDomain(domain)}
-                      className="ml-1 hover:bg-zinc-200 rounded p-0.5"
+                      className="ml-1 hover:bg-accent rounded p-0.5"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -678,7 +678,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-6">
+          <div className="border rounded-lg bg-card p-4 space-y-6">
             <p className="text-xs text-muted-foreground">
               {t('passwordPolicy.description')}
             </p>
@@ -779,7 +779,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={passwordPolicy.require_uppercase}
                     onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_uppercase: e.target.checked })}
-                    className="rounded border-zinc-300"
+                    className="rounded border-input"
                   />
                   <span className="text-sm">{t('passwordPolicy.requireUppercase')}</span>
                 </label>
@@ -788,7 +788,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={passwordPolicy.require_lowercase}
                     onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_lowercase: e.target.checked })}
-                    className="rounded border-zinc-300"
+                    className="rounded border-input"
                   />
                   <span className="text-sm">{t('passwordPolicy.requireLowercase')}</span>
                 </label>
@@ -797,7 +797,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={passwordPolicy.require_numbers}
                     onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_numbers: e.target.checked })}
-                    className="rounded border-zinc-300"
+                    className="rounded border-input"
                   />
                   <span className="text-sm">{t('passwordPolicy.requireNumbers')}</span>
                 </label>
@@ -806,7 +806,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={passwordPolicy.require_special_chars}
                     onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_special_chars: e.target.checked })}
-                    className="rounded border-zinc-300"
+                    className="rounded border-input"
                   />
                   <span className="text-sm">{t('passwordPolicy.requireSpecialChars')}</span>
                 </label>
@@ -843,7 +843,7 @@ export default function SettingsPage() {
             </Button>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-4">
+          <div className="border rounded-lg bg-card p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
               {t('emailConfigDescription')}
             </p>
@@ -851,12 +851,12 @@ export default function SettingsPage() {
             {/* Email Configuration Status */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className={`h-2 w-2 rounded-full ${emailConfigured ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                <div className={`h-2 w-2 rounded-full ${emailConfigured ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
                 <span className="text-sm font-medium">{emailConfigured ? t('emailConfigured') : t('emailNotConfigured')}</span>
               </div>
 
               {emailConfigured && emailConfig && (
-                <div className="bg-zinc-50 rounded-lg p-3 space-y-2">
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <div>
                       <span className="text-muted-foreground">{t('smtpHost')}:</span>
@@ -914,7 +914,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-4">
+          <div className="border rounded-lg bg-card p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
               {t('slackDescription')}
             </p>
@@ -922,7 +922,7 @@ export default function SettingsPage() {
             {/* Slack Configuration */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className={`h-2 w-2 rounded-full ${slackConfigured ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                <div className={`h-2 w-2 rounded-full ${slackConfigured ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
                 <span className="text-sm font-medium">{slackConfigured ? t('slackConnected') : t('slackNotConnected')}</span>
               </div>
 
@@ -973,18 +973,18 @@ export default function SettingsPage() {
           </div>
 
           {!slackConfigured ? (
-            <div className="border rounded-lg bg-zinc-50 p-4 text-center">
-              <MessageSquare className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
+            <div className="border rounded-lg bg-muted/50 p-4 text-center">
+              <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">{t('configureSlackFirst')}</p>
             </div>
           ) : notificationRules.length > 0 ? (
-            <div className="border rounded-lg bg-white divide-y">
+            <div className="border rounded-lg bg-card divide-y">
               {notificationRules.map((rule) => {
                 const eventType = NOTIFICATION_EVENT_TYPES.find(t => t.value === rule.event_type);
                 return (
                   <div key={rule.id} className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${rule.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-400'}`}>
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${rule.enabled ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
                         <Bell className="h-4 w-4" />
                       </div>
                       <div>
@@ -1003,7 +1003,7 @@ export default function SettingsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-8 w-8 ${rule.enabled ? 'text-emerald-600' : 'text-zinc-400'}`}
+                        className={`h-8 w-8 ${rule.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}
                         onClick={() => handleToggleRule(rule)}
                         title={rule.enabled ? t('disableRule') : t('enableRule')}
                       >
@@ -1022,7 +1022,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="border rounded-lg bg-white p-6 text-center">
-              <Bell className="h-8 w-8 mx-auto text-zinc-300 mb-2" />
+              <Bell className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground">{t('noRulesConfigured')}</p>
             </div>
           )}
@@ -1051,7 +1051,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-6">
+          <div className="border rounded-lg bg-card p-4 space-y-6">
             <p className="text-xs text-muted-foreground">
               {t('thresholdsDescription')}
             </p>
@@ -1146,7 +1146,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-white p-4 space-y-4">
+          <div className="border rounded-lg bg-card p-4 space-y-4">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 text-blue-700">
               <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div className="text-sm">

@@ -278,7 +278,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
           </div>
         </div>
 
-        <div className="border rounded-lg bg-white p-4 space-y-6">
+        <div className="border rounded-lg bg-card p-4 space-y-6">
           <p className="text-xs text-muted-foreground">{t('description')}</p>
 
           {/* Enable Toggle */}
@@ -344,12 +344,12 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
             <Label className="text-xs font-medium">{t('password')}</Label>
             <div className="flex items-center gap-3">
               {config.password_configured ? (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <Badge variant="outline" className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800">
                   <Lock className="h-3 w-3 mr-1" />
                   {t('passwordConfigured')}
                 </Badge>
               ) : (
-                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800">
                   <AlertTriangle className="h-3 w-3 mr-1" />
                   {t('passwordNotConfigured')}
                 </Badge>
@@ -383,7 +383,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
           </div>
         </div>
 
-        <div className="border rounded-lg bg-white p-4 space-y-4">
+        <div className="border rounded-lg bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-4 text-sm">
@@ -414,7 +414,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
             </Button>
           </div>
           {!config.password_configured && (
-            <p className="text-xs text-amber-600">{t('backupNotConfigured')}</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">{t('backupNotConfigured')}</p>
           )}
         </div>
       </section>
@@ -433,7 +433,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
           </div>
         </div>
 
-        <div className="border rounded-lg bg-white divide-y">
+        <div className="border rounded-lg bg-card divide-y">
           {backups.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
               {t('noBackups')}
@@ -452,7 +452,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                     {backup.is_overdue && (
                       <Badge
                         variant="outline"
-                        className="bg-amber-50 text-amber-700 border-amber-200"
+                        className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
                       >
                         {t('overdue')}
                       </Badge>
@@ -501,7 +501,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                       setDeleteDialogOpen(true);
                     }}
                   >
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                   </Button>
                 </div>
               </div>
@@ -589,12 +589,12 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
               <AlertTriangle className="h-5 w-5 text-amber-500" />
               {t('confirmRestore')}
             </DialogTitle>
-            <DialogDescription className="text-red-600 font-medium">
+            <DialogDescription className="text-red-600 dark:text-red-400 font-medium">
               {t('confirmRestoreWarning')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="p-3 bg-zinc-50 rounded-lg text-sm">
+            <div className="p-3 bg-muted rounded-lg text-sm">
               <span className="font-medium">{backupToRestore?.filename}</span>
               <div className="text-xs text-muted-foreground mt-1">
                 {backupToRestore && formatDate(backupToRestore.created_at)}

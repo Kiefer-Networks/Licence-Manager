@@ -36,12 +36,12 @@ export function Breadcrumbs({
           return (
             <li key={index} className="flex items-center">
               {index > 0 && (
-                <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-zinc-400" />
+                <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-muted-foreground" />
               )}
               {item.href && !isLast ? (
                 <Link
                   href={item.href}
-                  className="text-zinc-500 hover:text-zinc-700 transition-colors flex items-center gap-1"
+                  className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
                   {isHome && <Home className="h-3.5 w-3.5" />}
                   {!isHome && item.label}
@@ -50,7 +50,7 @@ export function Breadcrumbs({
                 <span
                   className={cn(
                     'flex items-center gap-1',
-                    isLast ? 'text-zinc-900 font-medium' : 'text-zinc-500'
+                    isLast ? 'text-foreground font-medium' : 'text-muted-foreground'
                   )}
                 >
                   {isHome && <Home className="h-3.5 w-3.5" />}

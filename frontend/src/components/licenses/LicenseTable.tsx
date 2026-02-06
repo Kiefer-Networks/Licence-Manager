@@ -80,7 +80,7 @@ function LicenseTableComponent({
   }, []);
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
-    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-zinc-400" />;
+    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />;
     return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
 
@@ -169,7 +169,7 @@ function LicenseTableComponent({
       />
 
       {/* Table */}
-      <div className="border rounded-lg bg-white overflow-hidden">
+      <div className="border rounded-lg bg-card overflow-hidden">
         {paginatedLicenses.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
             <Key className="h-8 w-8 mb-2 opacity-30" />
@@ -178,14 +178,14 @@ function LicenseTableComponent({
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-zinc-50/50">
+              <tr className="border-b bg-muted/50">
                 {showSelection && (
                   <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === paginatedLicenses.length && paginatedLicenses.length > 0}
                       onChange={onToggleSelectAll}
-                      className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
                   </th>
                 )}
@@ -232,8 +232,8 @@ function LicenseTableComponent({
               {paginatedLicenses.map((license) => (
                 <tr
                   key={license.id}
-                  className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${
-                    selectedIds?.has(license.id) ? 'bg-zinc-50' : ''
+                  className={`border-b last:border-0 hover:bg-muted/50 transition-colors ${
+                    selectedIds?.has(license.id) ? 'bg-muted/50' : ''
                   }`}
                 >
                   {showSelection && (
@@ -242,7 +242,7 @@ function LicenseTableComponent({
                         type="checkbox"
                         checked={selectedIds.has(license.id)}
                         onChange={() => onToggleSelect(license.id)}
-                        className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                       />
                     </td>
                   )}
@@ -296,26 +296,26 @@ function LicenseTableComponent({
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Service account with owner */}
                         {license.is_service_account && license.service_account_owner_id && (
-                          <Link href={`/users/${license.service_account_owner_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                              <span className="text-xs font-medium text-blue-600">{license.service_account_owner_name?.charAt(0) || 'O'}</span>
+                          <Link href={`/users/${license.service_account_owner_id}`} className="flex items-center gap-2 hover:text-foreground group">
+                            <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-800 transition-colors">
+                              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{license.service_account_owner_name?.charAt(0) || 'O'}</span>
                             </div>
                             <span className="hover:underline text-muted-foreground text-xs">{t('owner')}: {license.service_account_owner_name}</span>
                           </Link>
                         )}
                         {/* Regular employee assignment */}
                         {!license.is_service_account && license.employee_id && license.employee_status !== 'offboarded' && (
-                          <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                            <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center group-hover:bg-zinc-200 transition-colors">
+                          <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-foreground group">
+                            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center group-hover:bg-accent transition-colors">
                               <span className="text-xs font-medium">{license.employee_name?.charAt(0)}</span>
                             </div>
                             <span className="hover:underline">{license.employee_name}</span>
                           </Link>
                         )}
                         {!license.is_service_account && license.employee_id && license.employee_status === 'offboarded' && (
-                          <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-zinc-900 group">
-                            <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <span className="text-xs font-medium text-red-600">{license.employee_name?.charAt(0)}</span>
+                          <Link href={`/users/${license.employee_id}`} className="flex items-center gap-2 hover:text-foreground group">
+                            <div className="h-6 w-6 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+                              <span className="text-xs font-medium text-red-600 dark:text-red-400">{license.employee_name?.charAt(0)}</span>
                             </div>
                             <span className="hover:underline text-muted-foreground line-through">{license.employee_name}</span>
                           </Link>
@@ -329,8 +329,8 @@ function LicenseTableComponent({
                       {license.suggested_employee_id ? (
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center">
-                              <Lightbulb className="h-3 w-3 text-amber-600" />
+                            <div className="h-6 w-6 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
+                              <Lightbulb className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-medium">{license.suggested_employee_name}</span>
@@ -345,7 +345,7 @@ function LicenseTableComponent({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950"
                                   onClick={() => onConfirmMatch(license)}
                                   title={t('confirmMatch')}
                                 >
@@ -356,7 +356,7 @@ function LicenseTableComponent({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="h-7 w-7 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                                   onClick={() => onRejectMatch(license)}
                                   title={t('rejectMatch')}
                                 >

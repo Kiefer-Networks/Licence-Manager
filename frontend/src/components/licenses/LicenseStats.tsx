@@ -32,7 +32,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
         </CardContent>
       </Card>
 
-      <Card className={hasNotInHris || hasUnassigned ? 'border-red-200 bg-red-50/30' : ''}>
+      <Card className={hasNotInHris || hasUnassigned ? 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-950/30' : ''}>
         <CardContent className="pt-5 pb-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Users className="h-4 w-4" />
@@ -44,13 +44,13 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
               <span className="text-sm text-muted-foreground">+ {stats.total_external} <span className="text-xs">({t('ext')})</span></span>
             )}
             {(stats.total_service_accounts ?? 0) > 0 && (
-              <span className="text-sm text-blue-600">+ {stats.total_service_accounts} <span className="text-xs">({t('svc')})</span></span>
+              <span className="text-sm text-blue-600 dark:text-blue-400">+ {stats.total_service_accounts} <span className="text-xs">({t('svc')})</span></span>
             )}
             {hasNotInHris && (
-              <span className="text-sm text-red-600 font-medium">+ {stats.total_not_in_hris} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
+              <span className="text-sm text-red-600 dark:text-red-400 font-medium">+ {stats.total_not_in_hris} <span className="text-xs">(⚠ {t('notInHRISShort')})</span></span>
             )}
             {hasUnassigned && (
-              <span className="text-sm text-amber-600 font-medium">+ {stats.total_unassigned} <span className="text-xs">({t('unassignedShort')})</span></span>
+              <span className="text-sm text-amber-600 dark:text-amber-400 font-medium">+ {stats.total_unassigned} <span className="text-xs">({t('unassignedShort')})</span></span>
             )}
           </div>
         </CardContent>
@@ -63,7 +63,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
               <Package className="h-4 w-4" />
               <span className="text-xs font-medium uppercase">{t('available')}</span>
             </div>
-            <p className="text-2xl font-semibold text-emerald-600">{stats.available_seats}</p>
+            <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{stats.available_seats}</p>
           </CardContent>
         </Card>
       )}
@@ -74,7 +74,7 @@ export function LicenseStatsCards({ stats }: LicenseStatsProps) {
             <UserMinus className="h-4 w-4" />
             <span className="text-xs font-medium uppercase">{t('inactive')}</span>
           </div>
-          <p className="text-2xl font-semibold text-zinc-400">{stats.total_inactive}</p>
+          <p className="text-2xl font-semibold text-muted-foreground">{stats.total_inactive}</p>
         </CardContent>
       </Card>
 
