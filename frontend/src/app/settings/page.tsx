@@ -1243,18 +1243,21 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use_tls"
-                checked={emailForm.use_tls}
-                onChange={(e) => setEmailForm({ ...emailForm, use_tls: e.target.checked })}
-                className="rounded border-zinc-300"
-              />
-              <Label htmlFor="use_tls" className="text-xs font-medium cursor-pointer">
-                <ShieldCheck className="h-3.5 w-3.5 inline mr-1" />
-                {t('useTls')}
-              </Label>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="use_tls"
+                  checked={emailForm.use_tls}
+                  onChange={(e) => setEmailForm({ ...emailForm, use_tls: e.target.checked })}
+                  className="rounded border-zinc-300"
+                />
+                <Label htmlFor="use_tls" className="text-xs font-medium cursor-pointer">
+                  <ShieldCheck className="h-3.5 w-3.5 inline mr-1" />
+                  {t('useTls')}
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground ml-5">{t('tlsHint')}</p>
             </div>
 
             <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">

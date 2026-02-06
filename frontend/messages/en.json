@@ -1479,6 +1479,7 @@
     "fromName": "From Name",
     "tlsEnabled": "TLS",
     "useTls": "Use TLS (STARTTLS)",
+    "tlsHint": "Enable for port 587 (STARTTLS). Disable for port 465 (direct SSL).",
     "testEmailPlaceholder": "Enter email address for test",
     "removeEmailConfig": "Remove Configuration",
     "emailConfigSaved": "Email configuration saved",

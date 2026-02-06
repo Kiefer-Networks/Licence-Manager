@@ -1491,6 +1491,7 @@
     "fromName": "Absender-Name",
     "tlsEnabled": "TLS",
     "useTls": "TLS verwenden (STARTTLS)",
+    "tlsHint": "Aktivieren für Port 587 (STARTTLS). Deaktivieren für Port 465 (direktes SSL).",
     "testEmailPlaceholder": "E-Mail-Adresse für Test eingeben",
     "removeEmailConfig": "Konfiguration entfernen",
     "emailConfigSaved": "E-Mail-Konfiguration gespeichert",
