@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
@@ -121,7 +121,6 @@ export default function AuditLogPage() {
   // Load logs when filters change
   useEffect(() => {
     loadLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, actionFilter, resourceTypeFilter, userFilter, debouncedSearch, dateFrom, dateTo]);
 
   const loadFilterOptions = async () => {
@@ -235,9 +234,6 @@ export default function AuditLogPage() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      // Error is re-thrown and will be handled by caller
-      throw err;
     } finally {
       setIsExporting(false);
     }

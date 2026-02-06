@@ -216,13 +216,11 @@ export default function ReportsPage() {
   // Load initial tab on mount
   useEffect(() => {
     loadTabData('utilization');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load data when active tab changes
   useEffect(() => {
     loadTabData(activeTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Reload current tab when department changes (for department-filtered tabs)
@@ -231,7 +229,6 @@ export default function ReportsPage() {
     if (deptFilteredTabs.includes(activeTab) && loadedTabs.has(activeTab)) {
       loadTabData(activeTab, true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDepartment]);
 
   // Reload costs-employee when min cost filter changes
@@ -239,7 +236,6 @@ export default function ReportsPage() {
     if (activeTab === 'costs-employee' && loadedTabs.has('costs-employee')) {
       loadTabData('costs-employee', true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedMinCost]);
 
   return (
