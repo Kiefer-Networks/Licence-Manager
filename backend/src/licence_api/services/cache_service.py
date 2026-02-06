@@ -3,8 +3,11 @@
 import json
 import logging
 from collections.abc import Callable
+from datetime import date, datetime
+from decimal import Decimal
 from functools import wraps
-from typing import TypeVar
+from typing import Any, TypeVar
+from uuid import UUID
 
 import redis.asyncio as redis
 from pydantic import BaseModel
@@ -12,6 +15,21 @@ from pydantic import BaseModel
 from licence_api.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class CacheJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder for cache serialization."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().default(obj)
 
 T = TypeVar("T")
 
@@ -256,7 +274,7 @@ class CacheService:
             if isinstance(value, BaseModel):
                 json_str = value.model_dump_json()
             else:
-                json_str = json.dumps(value)
+                json_str = json.dumps(value, cls=CacheJSONEncoder)
             return await self.set(key, json_str, ttl)
         except (redis.RedisError, TypeError, ValueError) as e:
             logger.error("Cache set_json error: %s", e)
