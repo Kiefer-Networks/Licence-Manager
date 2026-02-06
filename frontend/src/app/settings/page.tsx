@@ -1194,7 +1194,6 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label className="text-xs font-medium">{t('smtpPort')}</Label>
                 <Input
-                  type="number"
                   value={emailForm.port}
                   onChange={(e) => setEmailForm({ ...emailForm, port: parseInt(e.target.value) || 587 })}
                   placeholder="587"
