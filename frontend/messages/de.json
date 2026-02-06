@@ -925,7 +925,10 @@
     "code": "Code",
     "type": "Typ",
     "custom": "Benutzerdefiniert",
-    "system": "System"
+    "system": "System",
+    "viewPermissions": "Berechtigungen anzeigen",
+    "permissionCount": "{count} Berechtigungen",
+    "cannotDeleteRoleWithUsers": "Rolle mit zugewiesenen Benutzern kann nicht gelöscht werden"
   },
   "serviceAccounts": {
     "title": "Service-Accounts",

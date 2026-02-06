@@ -2,13 +2,14 @@
 
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.role import RoleORM
 from licence_api.models.orm.role_permission import RolePermissionORM
+from licence_api.models.orm.user_role import UserRoleORM
 from licence_api.repositories.base import BaseRepository
 
 
@@ -154,6 +155,21 @@ class RoleRepository(BaseRepository[RoleORM]):
             .where(RolePermissionORM.role_id == role_id)
             .where(RolePermissionORM.permission_id == permission_id)
         )
+
+    async def count_users_with_role(self, role_id: UUID) -> int:
+        """Count users assigned to a role.
+
+        Args:
+            role_id: Role UUID
+
+        Returns:
+            Number of users with this role
+        """
+        result = await self.session.execute(
+            select(func.count(UserRoleORM.user_id))
+            .where(UserRoleORM.role_id == role_id)
+        )
+        return result.scalar_one()
 
     async def delete_role(self, role_id: UUID) -> bool:
         """Delete a non-system role.

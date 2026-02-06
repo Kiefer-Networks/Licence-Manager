@@ -10,6 +10,7 @@ from licence_api.exceptions import (
     CannotDeleteSelfError,
     CannotModifySystemRoleError,
     RoleAlreadyExistsError,
+    RoleHasUsersError,
     RoleNotFoundError,
     UserAlreadyExistsError,
     UserNotFoundError,
@@ -596,6 +597,7 @@ class RbacService:
         Raises:
             RoleNotFoundError: If role not found
             CannotModifySystemRoleError: If role is a system role
+            RoleHasUsersError: If role has users assigned
         """
         role = await self.role_repo.get_by_id(role_id)
         if role is None:
@@ -603,6 +605,11 @@ class RbacService:
 
         if role.is_system:
             raise CannotModifySystemRoleError(role.code)
+
+        # Check if role has users assigned
+        user_count = await self.role_repo.count_users_with_role(role_id)
+        if user_count > 0:
+            raise RoleHasUsersError(role.code, user_count)
 
         await self.role_repo.delete_role(role_id)
         await self.session.commit()

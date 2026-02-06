@@ -913,7 +913,10 @@
     "code": "Code",
     "type": "Type",
     "custom": "Custom",
-    "system": "System"
+    "system": "System",
+    "viewPermissions": "View Permissions",
+    "permissionCount": "{count} permissions",
+    "cannotDeleteRoleWithUsers": "Cannot delete role with assigned users"
   },
   "serviceAccounts": {
     "title": "Service Accounts",

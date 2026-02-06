@@ -12,6 +12,7 @@ from licence_api.exceptions import (
     CannotDeleteSelfError,
     CannotModifySystemRoleError,
     RoleAlreadyExistsError,
+    RoleHasUsersError,
     RoleNotFoundError,
     UserAlreadyExistsError,
     UserNotFoundError,
@@ -354,6 +355,11 @@ async def delete_role(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     except CannotModifySystemRoleError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system role")
+    except RoleHasUsersError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete role with assigned users ({e.details.get('user_count', 0)} users)",
+        )
 
 
 # ============================================================================

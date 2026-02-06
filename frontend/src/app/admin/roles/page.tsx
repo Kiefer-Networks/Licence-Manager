@@ -42,6 +42,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { AppLayout } from '@/components/layout/app-layout';
+import { MoreHorizontal } from 'lucide-react';
 
 export default function AdminRolesPage() {
   const t = useTranslations('roles');
@@ -366,23 +367,24 @@ export default function AdminRolesPage() {
                       className="p-0 h-auto"
                       onClick={() => openViewDialog(role)}
                     >
-                      {role.permissions.length} permissions
+                      {t('permissionCount', { count: role.permissions.length })}
                     </Button>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          Actions
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">{tCommon('actions')}</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openViewDialog(role)}>
-                          View Permissions
+                          {t('viewPermissions')}
                         </DropdownMenuItem>
                         {canUpdate && !role.is_system && (
                           <DropdownMenuItem onClick={() => openEditDialog(role)}>
-                            Edit
+                            {tCommon('edit')}
                           </DropdownMenuItem>
                         )}
                         {canDelete && !role.is_system && (
@@ -392,7 +394,7 @@ export default function AdminRolesPage() {
                               className="text-destructive"
                               onClick={() => openDeleteDialog(role)}
                             >
-                              Delete
+                              {tCommon('delete')}
                             </DropdownMenuItem>
                           </>
                         )}

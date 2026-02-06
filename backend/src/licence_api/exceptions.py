@@ -108,3 +108,16 @@ class CannotModifySystemRoleError(LicenceAPIError):
         message = "Cannot modify system role"
         details = {"role_code": role_code} if role_code else {}
         super().__init__(message, details)
+
+
+class RoleHasUsersError(LicenceAPIError):
+    """Raised when trying to delete a role that has users assigned."""
+
+    def __init__(self, role_code: str | None = None, user_count: int = 0) -> None:
+        message = "Cannot delete role with assigned users"
+        details: dict[str, Any] = {}
+        if role_code:
+            details["role_code"] = role_code
+        if user_count > 0:
+            details["user_count"] = user_count
+        super().__init__(message, details)
