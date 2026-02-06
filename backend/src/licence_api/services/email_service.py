@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 _smtp_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="smtp")
 
 SMTP_CONFIG_KEY = "smtp_config"
-SYSTEM_NAME_KEY = "system_name"
+SYSTEM_SETTINGS_KEY = "system_settings"
 DEFAULT_SYSTEM_NAME = "License Management System"
 
 
@@ -74,16 +74,16 @@ class EmailService:
         self.settings_repo = SettingsRepository(session)
         self.encryption = get_encryption_service()
 
-    async def get_system_name(self) -> str:
-        """Get the configured system name.
+    async def get_system_settings(self) -> tuple[str, str | None]:
+        """Get the configured system name and URL.
 
         Returns:
-            System name or default if not configured
+            Tuple of (system_name, system_url)
         """
-        settings = await self.settings_repo.get(SYSTEM_NAME_KEY)
-        if settings and "name" in settings:
-            return settings["name"]
-        return DEFAULT_SYSTEM_NAME
+        settings = await self.settings_repo.get(SYSTEM_SETTINGS_KEY)
+        if settings:
+            return settings.get("name", DEFAULT_SYSTEM_NAME), settings.get("url")
+        return DEFAULT_SYSTEM_NAME, None
 
     async def get_smtp_config(self) -> SmtpConfig | None:
         """Get and decrypt SMTP configuration.
@@ -361,7 +361,13 @@ class EmailService:
 
         try:
             password = self.encryption.decrypt_string(config.password_encrypted)
-            system_name = await self.get_system_name()
+            system_name, system_url = await self.get_system_settings()
+
+            url_html = ""
+            url_text = ""
+            if system_url:
+                url_html = f'<p>System URL: <a href="{system_url}">{system_url}</a></p>'
+                url_text = f"\nSystem URL: {system_url}"
 
             html_body = f"""
             <html>
@@ -369,6 +375,7 @@ class EmailService:
                 <h2>Test Email</h2>
                 <p>This is a test email from {system_name}.</p>
                 <p>If you received this email, your SMTP configuration is working correctly.</p>
+                {url_html}
             </body>
             </html>
             """
@@ -376,6 +383,7 @@ class EmailService:
                 "Test Email\n\n"
                 f"This is a test email from {system_name}.\n"
                 "If you received this email, your SMTP configuration is working correctly."
+                f"{url_text}"
             )
 
             # Create message with proper headers
@@ -435,6 +443,7 @@ class EmailService:
                 "security_notice": "For security reasons, please do not share this email with anyone.",
                 "footer": f"This is an automated message from {system_name}.",
                 "important": "Important",
+                "login_link": "Log in here",
                 # Password reset email
                 "reset_subject": f"{system_name} - Password Reset",
                 "reset_heading": "Password Reset",
@@ -455,6 +464,7 @@ class EmailService:
                 "security_notice": "Aus Sicherheitsgründen teilen Sie diese E-Mail bitte nicht mit anderen.",
                 "footer": f"Dies ist eine automatische Nachricht von {system_name}.",
                 "important": "Wichtig",
+                "login_link": "Hier anmelden",
                 # Password reset email
                 "reset_subject": f"{system_name} - Passwort zurückgesetzt",
                 "reset_heading": "Passwort zurückgesetzt",
@@ -486,14 +496,21 @@ class EmailService:
         Returns:
             True if sent successfully, False otherwise
         """
-        # Get system name and translations for the user's language
-        system_name = await self.get_system_name()
+        # Get system settings and translations for the user's language
+        system_name, system_url = await self.get_system_settings()
         t = self._get_email_translations(language, system_name)
 
         # Escape user-provided data for HTML to prevent XSS
         name_display = html_escape(user_name or to_email)
         safe_email = html_escape(to_email)
         safe_password = html_escape(password)
+
+        # Build login link if URL is configured
+        login_link_html = ""
+        login_link_text = ""
+        if system_url:
+            login_link_html = f'<p style="margin-top: 16px;"><a href="{system_url}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">{t["login_link"]}</a></p>'
+            login_link_text = f"\n{t['login_link']}: {system_url}"
 
         if is_new_user:
             subject = t["new_user_subject"]
@@ -508,6 +525,7 @@ class EmailService:
                     <p style="margin: 8px 0 0 0;"><strong>{t["temp_password_label"]}:</strong></p>
                     <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
+                {login_link_html}
                 <p style="color: #dc2626;"><strong>{t["important"]}:</strong> {t["new_user_warning"]}</p>
                 <p>{t["security_notice"]}</p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
@@ -523,6 +541,7 @@ class EmailService:
 
 {t["email_label"]}: {to_email}
 {t["temp_password_label"]}: {password}
+{login_link_text}
 
 {t["important"].upper()}: {t["new_user_warning"]}
 
@@ -543,6 +562,7 @@ class EmailService:
                     <p style="margin: 8px 0 0 0;"><strong>{t["new_password_label"]}:</strong></p>
                     <p style="font-family: monospace; font-size: 18px; background-color: #fff; padding: 12px; border-radius: 4px; margin: 8px 0;">{safe_password}</p>
                 </div>
+                {login_link_html}
                 <p style="color: #dc2626;"><strong>{t["important"]}:</strong> {t["reset_warning"]}</p>
                 <p>{t["reset_not_requested"]}</p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
@@ -558,6 +578,7 @@ class EmailService:
 
 {t["email_label"]}: {to_email}
 {t["new_password_label"]}: {password}
+{login_link_text}
 
 {t["important"].upper()}: {t["reset_warning"]}
 

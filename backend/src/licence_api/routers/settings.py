@@ -76,14 +76,15 @@ class ThresholdSettings(BaseModel):
 
 DEFAULT_THRESHOLDS = ThresholdSettings()
 
-SYSTEM_NAME_KEY = "system_name"
+SYSTEM_SETTINGS_KEY = "system_settings"
 DEFAULT_SYSTEM_NAME = "License Management System"
 
 
-class SystemNameSettings(BaseModel):
-    """System name settings."""
+class SystemSettings(BaseModel):
+    """System settings including name and URL."""
 
     name: str = Field(default=DEFAULT_SYSTEM_NAME, min_length=1, max_length=100)
+    url: str | None = Field(default=None, max_length=255)
 
 
 class NotificationRuleCreate(BaseModel):
@@ -263,31 +264,34 @@ async def update_threshold_settings(
 # System Name Endpoints
 
 
-@router.get("/system-name", response_model=SystemNameSettings)
-async def get_system_name(
+@router.get("/system", response_model=SystemSettings)
+async def get_system_settings(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
-) -> SystemNameSettings:
-    """Get system name setting."""
-    settings = await service.get(SYSTEM_NAME_KEY)
-    if settings and "name" in settings:
-        return SystemNameSettings(name=settings["name"])
-    return SystemNameSettings()
+) -> SystemSettings:
+    """Get system settings (name and URL)."""
+    settings = await service.get(SYSTEM_SETTINGS_KEY)
+    if settings:
+        return SystemSettings(
+            name=settings.get("name", DEFAULT_SYSTEM_NAME),
+            url=settings.get("url"),
+        )
+    return SystemSettings()
 
 
-@router.put("/system-name", response_model=SystemNameSettings)
+@router.put("/system", response_model=SystemSettings)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
-async def update_system_name(
+async def update_system_settings(
     request: Request,
-    body: SystemNameSettings,
+    body: SystemSettings,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
     _csrf: Annotated[None, Depends(CSRFProtected())],
-) -> SystemNameSettings:
-    """Update system name setting."""
+) -> SystemSettings:
+    """Update system settings (name and URL)."""
     await service.set(
-        key=SYSTEM_NAME_KEY,
-        value={"name": body.name},
+        key=SYSTEM_SETTINGS_KEY,
+        value={"name": body.name, "url": body.url},
         user=current_user,
         request=request,
     )

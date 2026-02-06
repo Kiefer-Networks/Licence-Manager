@@ -1512,11 +1512,12 @@ export interface PasswordChangeRequest {
 }
 
 // ============================================================================
-// System Name Settings Types
+// System Settings Types
 // ============================================================================
 
-export interface SystemNameSettings {
+export interface SystemSettings {
   name: string;
+  url: string | null;
 }
 
 // ============================================================================
@@ -2763,15 +2764,15 @@ export const api = {
   },
 
   // ============================================================================
-  // System Name Settings
+  // System Settings
   // ============================================================================
 
-  async getSystemName(): Promise<SystemNameSettings> {
-    return fetchApi<SystemNameSettings>('/settings/system-name');
+  async getSystemSettings(): Promise<SystemSettings> {
+    return fetchApi<SystemSettings>('/settings/system');
   },
 
-  async updateSystemName(settings: SystemNameSettings): Promise<SystemNameSettings> {
-    return fetchApi<SystemNameSettings>('/settings/system-name', {
+  async updateSystemSettings(settings: SystemSettings): Promise<SystemSettings> {
+    return fetchApi<SystemSettings>('/settings/system', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });

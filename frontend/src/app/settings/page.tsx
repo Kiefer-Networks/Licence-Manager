@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemNameSettings } from '@/lib/api';
+import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemSettings } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, Download, HardDrive, Info, Mail, Server, Lock, ShieldCheck } from 'lucide-react';
@@ -35,9 +35,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // System Name state
+  // System Settings state
   const [systemName, setSystemName] = useState('License Management System');
-  const [savingSystemName, setSavingSystemName] = useState(false);
+  const [systemUrl, setSystemUrl] = useState('');
+  const [savingSystemSettings, setSavingSystemSettings] = useState(false);
 
   // Company Domains state
   const [companyDomains, setCompanyDomains] = useState<string[]>([]);
@@ -109,7 +110,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetchSystemName(),
+      fetchSystemSettings(),
       fetchCompanyDomains(),
       fetchSlackConfig(),
       fetchNotificationRules(),
@@ -119,12 +120,13 @@ export default function SettingsPage() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  async function fetchSystemName() {
+  async function fetchSystemSettings() {
     try {
-      const settings = await api.getSystemName();
+      const settings = await api.getSystemSettings();
       setSystemName(settings.name);
+      setSystemUrl(settings.url || '');
     } catch (error) {
-      handleSilentError('fetchSystemName', error);
+      handleSilentError('fetchSystemSettings', error);
     }
   }
 
@@ -188,20 +190,23 @@ export default function SettingsPage() {
     }
   }
 
-  const handleSaveSystemName = async () => {
+  const handleSaveSystemSettings = async () => {
     if (!systemName.trim()) {
       showToast('error', t('systemNameRequired'));
       return;
     }
-    setSavingSystemName(true);
+    setSavingSystemSettings(true);
     try {
-      await api.updateSystemName({ name: systemName.trim() });
-      showToast('success', t('systemNameSaved'));
+      await api.updateSystemSettings({
+        name: systemName.trim(),
+        url: systemUrl.trim() || null,
+      });
+      showToast('success', t('systemSettingsSaved'));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : t('failedToSave');
       showToast('error', message);
     } finally {
-      setSavingSystemName(false);
+      setSavingSystemSettings(false);
     }
   };
 
@@ -546,31 +551,45 @@ export default function SettingsPage() {
           {/* ============================================ */}
           <TabsContent value="general" className="space-y-8 mt-6">
 
-        {/* System Name Section */}
+        {/* System Settings Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">{t('systemName')}</h2>
+              <h2 className="text-sm font-medium">{t('systemSettings')}</h2>
             </div>
           </div>
 
           <div className="border rounded-lg bg-white p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
-              {t('systemNameDescription')}
+              {t('systemSettingsDescription')}
             </p>
 
-            <div className="flex gap-2">
-              <Input
-                value={systemName}
-                onChange={(e) => setSystemName(e.target.value)}
-                placeholder="License Management System"
-                className="flex-1"
-              />
-              <Button size="sm" onClick={handleSaveSystemName} disabled={savingSystemName}>
-                {savingSystemName ? <Loader2 className="h-4 w-4 animate-spin" /> : tCommon('save')}
-              </Button>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-medium">{t('systemName')}</Label>
+                <Input
+                  value={systemName}
+                  onChange={(e) => setSystemName(e.target.value)}
+                  placeholder="License Management System"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium">{t('systemUrl')}</Label>
+                <Input
+                  value={systemUrl}
+                  onChange={(e) => setSystemUrl(e.target.value)}
+                  placeholder="https://licence.example.com"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t('systemUrlDescription')}</p>
+              </div>
             </div>
+
+            <Button size="sm" onClick={handleSaveSystemSettings} disabled={savingSystemSettings}>
+              {savingSystemSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : tCommon('save')}
+            </Button>
           </div>
         </section>
 
