@@ -16,11 +16,10 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.config import get_settings
 from licence_api.constants.paths import ADMIN_AVATAR_DIR
-from licence_api.database import get_db
+from licence_api.dependencies import get_auth_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     AvatarUploadResponse,
@@ -58,12 +57,6 @@ router = APIRouter()
 
 # CSRF token TTL in seconds (8 hours)
 CSRF_TOKEN_TTL_SECONDS = 8 * 3600
-
-
-# Dependency injection
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
-    """Get AuthService instance."""
-    return AuthService(db)
 
 
 # Available notification event types

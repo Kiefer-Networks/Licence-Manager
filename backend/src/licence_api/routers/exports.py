@@ -7,9 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_export_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.services.export_service import ExportService
@@ -28,11 +27,6 @@ def sanitize_filename_part(value: str, max_length: int = 30) -> str:
     """
     sanitized = SAFE_FILENAME_PATTERN.sub("_", value)
     return sanitized[:max_length]
-
-
-def get_export_service(db: AsyncSession = Depends(get_db)) -> ExportService:
-    """Get ExportService instance."""
-    return ExportService(db)
 
 
 @router.get("/licenses/csv")

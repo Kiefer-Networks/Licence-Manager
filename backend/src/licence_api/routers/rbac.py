@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_rbac_service
 from licence_api.exceptions import (
     CannotDeleteSelfError,
     CannotModifySystemRoleError,
@@ -46,11 +45,6 @@ router = APIRouter()
 
 # Rate limit for sensitive operations
 ADMIN_SENSITIVE_LIMIT = "5/minute"
-
-
-def get_rbac_service(db: AsyncSession = Depends(get_db)) -> RbacService:
-    """Get RbacService instance."""
-    return RbacService(db)
 
 
 # ============================================================================

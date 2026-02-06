@@ -5,9 +5,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_external_account_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.external_account import (
     BulkLinkRequest,
@@ -27,13 +26,6 @@ from licence_api.services.external_account_service import ExternalAccountService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def get_external_account_service(
-    db: AsyncSession = Depends(get_db),
-) -> ExternalAccountService:
-    """Get ExternalAccountService instance."""
-    return ExternalAccountService(db)
 
 
 # Settings endpoint

@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_service_account_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.models.dto.service_account import (
@@ -40,13 +39,6 @@ class ServiceAccountLicenseListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-def get_service_account_service(
-    db: AsyncSession = Depends(get_db),
-) -> ServiceAccountService:
-    """Get ServiceAccountService instance."""
-    return ServiceAccountService(db)
 
 
 @router.get("/patterns", response_model=ServiceAccountPatternListResponse)

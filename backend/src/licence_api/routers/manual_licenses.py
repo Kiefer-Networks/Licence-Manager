@@ -7,9 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_manual_license_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import Permissions, require_permission
@@ -71,11 +70,6 @@ class AssignLicenseRequest(BaseModel):
     """Request to assign a license to an employee."""
 
     employee_id: UUID
-
-
-def get_manual_license_service(db: AsyncSession = Depends(get_db)) -> ManualLicenseService:
-    """Get ManualLicenseService instance."""
-    return ManualLicenseService(db)
 
 
 @router.post("", response_model=list[LicenseResponse])
