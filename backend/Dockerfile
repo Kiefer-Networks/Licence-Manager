@@ -27,6 +27,9 @@ RUN useradd --create-home --shell /bin/bash app
 # Create data directory base (will be mounted as volume)
 RUN mkdir -p /app/data && chown app:app /app/data
 
+# Set data directory for the application
+ENV DATA_DIR=/app/data
+
 USER app
 
 EXPOSE 8000

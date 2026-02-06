@@ -3,11 +3,17 @@
 All file storage paths are defined here to avoid duplication across modules.
 """
 
+import os
 from pathlib import Path
 
-# Base data directory (relative to package root)
-_PACKAGE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_DIR = _PACKAGE_ROOT / "data"
+# Base data directory
+# Use DATA_DIR env var if set (Docker), otherwise use relative path (local dev)
+_ENV_DATA_DIR = os.environ.get("DATA_DIR")
+if _ENV_DATA_DIR:
+    DATA_DIR = Path(_ENV_DATA_DIR)
+else:
+    _PACKAGE_ROOT = Path(__file__).parent.parent.parent.parent
+    DATA_DIR = _PACKAGE_ROOT / "data"
 
 # Avatar directories
 AVATAR_DIR = DATA_DIR / "avatars"
