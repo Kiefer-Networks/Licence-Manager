@@ -27,6 +27,7 @@ import {
   UserCog,
   ScrollText,
   Clock,
+  Wallet,
 } from 'lucide-react';
 import { useAuth, Permissions } from '@/components/auth-provider';
 
@@ -47,6 +48,7 @@ const mainNavigation: NavItem[] = [
   { nameKey: 'lifecycle', href: '/lifecycle', icon: Clock, permission: Permissions.LICENSES_VIEW },
   { nameKey: 'employees', href: '/users', icon: Users, permission: Permissions.USERS_VIEW },
   { nameKey: 'providers', href: '/providers', icon: Package, permission: Permissions.PROVIDERS_VIEW },
+  { nameKey: 'finance', href: '/finance', icon: Wallet, permission: Permissions.PAYMENT_METHODS_VIEW },
   { nameKey: 'reports', href: '/reports', icon: FileText, permission: Permissions.REPORTS_VIEW },
 ];
 
