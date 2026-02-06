@@ -22,6 +22,7 @@ from licence_api.models.orm.user_notification_preference import UserNotification
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.models.orm.service_account_license_type import ServiceAccountLicenseTypeORM
 from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
+from licence_api.models.orm.import_job import ImportJobORM
 
 __all__ = [
     "Base",
@@ -46,4 +47,5 @@ __all__ = [
     "CostSnapshotORM",
     "ServiceAccountLicenseTypeORM",
     "EmployeeExternalAccountORM",
+    "ImportJobORM",
 ]

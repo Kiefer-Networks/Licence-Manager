@@ -438,6 +438,125 @@ export interface ProviderListResponse {
   total: number;
 }
 
+// License Import Types
+export interface ImportCSVOptions {
+  delimiter?: string;
+  encoding?: string;
+  has_header?: boolean;
+  skip_rows?: number;
+  quote_char?: string;
+}
+
+export interface ImportColumnMapping {
+  file_column: string;
+  system_field: string | null;
+}
+
+export interface ImportOptions {
+  error_handling?: 'strict' | 'skip';
+  csv_options?: ImportCSVOptions | null;
+  default_status?: string;
+  default_currency?: string;
+}
+
+export interface ImportUploadResponse {
+  upload_id: string;
+  filename: string;
+  file_size: number;
+  detected_encoding: string;
+  detected_delimiter: string;
+  row_count: number;
+  columns: string[];
+  suggested_mapping: Record<string, string | null>;
+  preview: Record<string, string>[];
+}
+
+export interface ImportRowError {
+  row: number;
+  column: string;
+  value: string;
+  message: string;
+  code: string;
+}
+
+export interface ImportRowWarning {
+  row: number;
+  column: string | null;
+  value: string | null;
+  message: string;
+  code: string;
+}
+
+export interface ImportPreviewRow {
+  row_number: number;
+  data: Record<string, string | number | boolean | null>;
+  has_errors: boolean;
+  has_warnings: boolean;
+  status: string;
+}
+
+export interface ImportSummary {
+  will_create: number;
+  will_skip_duplicates: number;
+  will_skip_errors: number;
+  employees_matched: number;
+  employees_not_found: number;
+}
+
+export interface ImportValidateRequest {
+  upload_id: string;
+  column_mapping: ImportColumnMapping[];
+  options?: ImportOptions;
+}
+
+export interface ImportValidateResponse {
+  is_valid: boolean;
+  can_proceed: boolean;
+  total_rows: number;
+  valid_rows: number;
+  error_count: number;
+  warning_count: number;
+  errors: ImportRowError[];
+  warnings: ImportRowWarning[];
+  preview: ImportPreviewRow[];
+  summary: ImportSummary;
+}
+
+export interface ImportExecuteRequest {
+  upload_id: string;
+  column_mapping: ImportColumnMapping[];
+  options?: ImportOptions;
+  confirmed?: boolean;
+}
+
+export interface ImportExecuteResponse {
+  job_id: string;
+  status: string;
+}
+
+export interface ImportResult {
+  created: number;
+  skipped: number;
+  errors: number;
+  error_details?: ImportRowError[];
+}
+
+export interface ImportJobStatus {
+  job_id: string;
+  provider_id: string;
+  status: string;
+  progress: number;
+  total_rows: number;
+  processed_rows: number;
+  created: number;
+  skipped: number;
+  errors: number;
+  started_at: string | null;
+  completed_at: string | null;
+  error_file_url: string | null;
+  result: ImportResult | null;
+}
+
 export interface License {
   id: string;
   provider_id: string;
@@ -3193,6 +3312,117 @@ export const api = {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Restore failed' }));
       throw new Error(error.detail || 'Restore failed');
+    }
+
+    return response.json();
+  },
+
+  // ============================================================================
+  // License Import
+  // ============================================================================
+
+  /**
+   * Download import template CSV.
+   */
+  async downloadImportTemplate(providerId: string, includeExamples: boolean = true): Promise<Blob> {
+    const response = await fetch(
+      `${API_BASE}/api/v1/providers/${providerId}/import/template?include_examples=${includeExamples}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to download template' }));
+      throw new Error(error.detail || 'Failed to download template');
+    }
+
+    return response.blob();
+  },
+
+  /**
+   * Upload a CSV file for import.
+   */
+  async uploadImportFile(providerId: string, file: File): Promise<ImportUploadResponse> {
+    const csrfTokenValue = await getCsrfToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/api/v1/providers/${providerId}/import/upload`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfTokenValue,
+      },
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Validate import data.
+   */
+  async validateImport(providerId: string, request: ImportValidateRequest): Promise<ImportValidateResponse> {
+    const headers = await getAuthHeaders('POST');
+
+    const response = await fetch(`${API_BASE}/api/v1/providers/${providerId}/import/validate`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Validation failed' }));
+      throw new Error(error.detail || 'Validation failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Execute the import.
+   */
+  async executeImport(providerId: string, request: ImportExecuteRequest): Promise<ImportExecuteResponse> {
+    const headers = await getAuthHeaders('POST');
+
+    const response = await fetch(`${API_BASE}/api/v1/providers/${providerId}/import/execute`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Import failed' }));
+      throw new Error(error.detail || 'Import failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get import job status.
+   */
+  async getImportJobStatus(providerId: string, jobId: string): Promise<ImportJobStatus> {
+    const response = await fetch(
+      `${API_BASE}/api/v1/providers/${providerId}/import/jobs/${jobId}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get job status' }));
+      throw new Error(error.detail || 'Failed to get job status');
     }
 
     return response.json();

@@ -23,7 +23,7 @@ from licence_api.middleware.error_handler import (
     sqlalchemy_exception_handler,
     validation_exception_handler,
 )
-from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, email_settings, exports, external_accounts, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, providers, rbac, reports, service_accounts, settings, users
+from licence_api.routers import admin_accounts, audit, auth, backup, cancellation, dashboard, email_settings, exports, external_accounts, licenses, license_packages, manual_licenses, organization_licenses, payment_methods, provider_files, provider_import, providers, rbac, reports, service_accounts, settings, users
 from licence_api.security.rate_limit import limiter
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
@@ -159,6 +159,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
     app.include_router(providers.router, prefix="/api/v1/providers", tags=["Providers"])
     app.include_router(provider_files.router, prefix="/api/v1/providers", tags=["Provider Files"])
+    app.include_router(provider_import.router, prefix="/api/v1/providers", tags=["Provider Import"])
     app.include_router(license_packages.router, prefix="/api/v1/providers", tags=["License Packages"])
     app.include_router(organization_licenses.router, prefix="/api/v1/providers", tags=["Organization Licenses"])
     app.include_router(licenses.router, prefix="/api/v1/licenses", tags=["Licenses"])

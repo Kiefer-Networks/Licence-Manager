@@ -267,6 +267,7 @@ class Permissions:
     LICENSES_DELETE = "licenses.delete"
     LICENSES_ASSIGN = "licenses.assign"
     LICENSES_BULK_ACTIONS = "licenses.bulk_actions"
+    LICENSES_IMPORT = "licenses.import"
 
     # Employees
     EMPLOYEES_VIEW = "employees.view"

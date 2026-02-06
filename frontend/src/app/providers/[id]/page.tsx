@@ -35,6 +35,7 @@ import { useLocale } from '@/components/locale-provider';
 import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyButton, CopyableText } from '@/components/ui/copy-button';
+import { ImportWizardDialog } from '@/components/import';
 import {
   ArrowLeft,
   Key,
@@ -90,6 +91,9 @@ export default function ProviderDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Import Dialog
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Add License Dialog
   const [addLicenseOpen, setAddLicenseOpen] = useState(false);
@@ -1048,10 +1052,16 @@ export default function ProviderDetailPage() {
               </Button>
             )}
             {isManual && (
-              <Button size="sm" onClick={() => { setAddLicenseOpen(true); setAddLicenseMode('single'); }}>
-                <Plus className="h-4 w-4 mr-1.5" />
-                Add License
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  {t('import.title')}
+                </Button>
+                <Button size="sm" onClick={() => { setAddLicenseOpen(true); setAddLicenseMode('single'); }}>
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Add License
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -2928,6 +2938,18 @@ export default function ProviderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Wizard Dialog */}
+      <ImportWizardDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        providerId={providerId}
+        onSuccess={() => {
+          fetchLicenses();
+          showToast('success', t('import.resultTitle'));
+        }}
+        onError={(error) => showToast('error', error)}
+      />
     </AppLayout>
   );
 }
