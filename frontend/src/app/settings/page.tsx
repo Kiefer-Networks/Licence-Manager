@@ -171,11 +171,13 @@ export default function SettingsPage() {
   async function fetchEmailConfig() {
     try {
       const config = await api.getEmailConfig();
-      if ('host' in config) {
+      if (config && 'host' in config) {
         setEmailConfig(config as SmtpConfig);
         setEmailConfigured(true);
-      } else {
+      } else if (config && 'is_configured' in config) {
         setEmailConfigured(config.is_configured);
+      } else {
+        setEmailConfigured(false);
       }
     } catch (error) {
       handleSilentError('fetchEmailConfig', error);
