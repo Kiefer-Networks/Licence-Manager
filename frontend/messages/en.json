@@ -1567,7 +1567,14 @@
       "providers": "Providers",
       "licenses": "Licenses",
       "employees": "Employees",
-      "backupNotConfigured": "Backup not configured. Please set an encryption password first."
+      "backupNotConfigured": "Backup not configured. Please set an encryption password first.",
+      "searchBackups": "Search backups...",
+      "filterEncryption": "Encryption",
+      "encrypted": "Encrypted",
+      "unencrypted": "Unencrypted",
+      "backupCount": "{count, plural, =0 {No backups} =1 {1 backup} other {# backups}}",
+      "filename": "Filename",
+      "restore": "Restore"
     },
     "passwordPolicy": {
       "title": "Password Policy",

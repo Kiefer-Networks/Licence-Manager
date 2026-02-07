@@ -1579,7 +1579,14 @@
       "providers": "Provider",
       "licenses": "Lizenzen",
       "employees": "Mitarbeiter",
-      "backupNotConfigured": "Backup nicht konfiguriert. Bitte setzen Sie zuerst ein Verschlüsselungspasswort."
+      "backupNotConfigured": "Backup nicht konfiguriert. Bitte setzen Sie zuerst ein Verschlüsselungspasswort.",
+      "searchBackups": "Backups durchsuchen...",
+      "filterEncryption": "Verschlüsselung",
+      "encrypted": "Verschlüsselt",
+      "unencrypted": "Unverschlüsselt",
+      "backupCount": "{count, plural, =0 {Keine Backups} =1 {1 Backup} other {# Backups}}",
+      "filename": "Dateiname",
+      "restore": "Wiederherstellen"
     },
     "passwordPolicy": {
       "title": "Passwort-Richtlinie",

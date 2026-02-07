@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Pagination } from '@/components/ui/pagination';
+import { SearchInput } from '@/components/ui/search-input';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +49,9 @@ import {
   Calendar,
   HardDrive,
   RotateCcw,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
 } from 'lucide-react';
 
 interface BackupsTabProps {
@@ -119,6 +124,14 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
   const [backupToRestore, setBackupToRestore] = useState<StoredBackup | null>(null);
   const [restorePassword, setRestorePassword] = useState('');
   const [restoring, setRestoring] = useState(false);
+
+  // Table state: search, sort, filter, pagination
+  const [search, setSearch] = useState('');
+  const [sortColumn, setSortColumn] = useState<'created_at' | 'size_bytes' | 'filename'>('created_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [filterEncrypted, setFilterEncrypted] = useState<'all' | 'encrypted' | 'unencrypted'>('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const fetchData = useCallback(async () => {
     try {
@@ -259,6 +272,80 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
       setRestoring(false);
     }
   }
+
+  // Sort handler
+  const handleSort = useCallback((column: 'created_at' | 'size_bytes' | 'filename') => {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  }, [sortColumn]);
+
+  // Sort icon component
+  const SortIcon = ({ column }: { column: 'created_at' | 'size_bytes' | 'filename' }) => {
+    if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />;
+    return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
+  };
+
+  // Filter, sort, and paginate backups
+  const filteredBackups = useMemo(() => {
+    let result = backups;
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.filename.toLowerCase().includes(searchLower) ||
+          b.age_description?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Encrypted filter
+    if (filterEncrypted === 'encrypted') {
+      result = result.filter((b) => b.is_encrypted);
+    } else if (filterEncrypted === 'unencrypted') {
+      result = result.filter((b) => !b.is_encrypted);
+    }
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+
+      switch (sortColumn) {
+        case 'created_at':
+          aVal = new Date(a.created_at).getTime();
+          bVal = new Date(b.created_at).getTime();
+          break;
+        case 'size_bytes':
+          aVal = a.size_bytes;
+          bVal = b.size_bytes;
+          break;
+        case 'filename':
+          aVal = a.filename.toLowerCase();
+          bVal = b.filename.toLowerCase();
+          break;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [backups, search, filterEncrypted, sortColumn, sortDirection]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredBackups.length / pageSize);
+  const paginatedBackups = filteredBackups.slice((page - 1) * pageSize, page * pageSize);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterEncrypted]);
 
   if (loading) {
     return (
@@ -434,80 +521,184 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
           </div>
         </div>
 
-        <div className="border rounded-lg bg-card divide-y">
-          {backups.length === 0 ? (
+        {/* Search and Filter */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t('searchBackups')}
+            className="flex-1 min-w-[200px]"
+          />
+          <Select value={filterEncrypted} onValueChange={(v) => setFilterEncrypted(v as typeof filterEncrypted)}>
+            <SelectTrigger className="w-40 h-9 text-sm">
+              <SelectValue placeholder={t('filterEncryption')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{tCommon('all')}</SelectItem>
+              <SelectItem value="encrypted">{t('encrypted')}</SelectItem>
+              <SelectItem value="unencrypted">{t('unencrypted')}</SelectItem>
+            </SelectContent>
+          </Select>
+          {(search || filterEncrypted !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSearch('');
+                setFilterEncrypted('all');
+              }}
+            >
+              {tCommon('clear')}
+            </Button>
+          )}
+          <span className="text-sm text-muted-foreground ml-auto">
+            {t('backupCount', { count: filteredBackups.length })}
+          </span>
+        </div>
+
+        {/* Backups Table */}
+        <div className="border rounded-lg bg-card overflow-hidden">
+          {paginatedBackups.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              {t('noBackups')}
+              {backups.length === 0 ? t('noBackups') : tCommon('noResults')}
             </div>
           ) : (
-            backups.map((backup) => (
-              <div
-                key={backup.id}
-                className="p-4 flex items-center justify-between gap-4"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm truncate">
-                      {backup.filename}
-                    </span>
-                    {backup.is_overdue && (
-                      <Badge
-                        variant="outline"
-                        className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                      >
-                        {t('overdue')}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                    <span>{formatBytes(backup.size_bytes)}</span>
-                    <span>{backup.age_description}</span>
-                    {backup.metadata && (
-                      <span>
-                        {backup.metadata.provider_count} {t('providers')},{' '}
-                        {backup.metadata.license_count} {t('licenses')},{' '}
-                        {backup.metadata.employee_count} {t('employees')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownloadBackup(backup)}
-                    disabled={downloadingId === backup.id}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button
+                      onClick={() => handleSort('filename')}
+                      className="flex items-center gap-1.5 hover:text-foreground"
+                    >
+                      {t('filename')} <SortIcon column="filename" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <button
+                      onClick={() => handleSort('created_at')}
+                      className="flex items-center gap-1.5 hover:text-foreground"
+                    >
+                      {t('createdAt')} <SortIcon column="created_at" />
+                    </button>
+                  </th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">
+                    <button
+                      onClick={() => handleSort('size_bytes')}
+                      className="flex items-center gap-1.5 justify-end hover:text-foreground ml-auto"
+                    >
+                      {t('size')} <SortIcon column="size_bytes" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    {t('metadata')}
+                  </th>
+                  <th className="w-32 px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedBackups.map((backup) => (
+                  <tr
+                    key={backup.id}
+                    className="border-b last:border-0 hover:bg-muted/50 transition-colors"
                   >
-                    {downloadingId === backup.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBackupToRestore(backup);
-                      setRestoreDialogOpen(true);
-                    }}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBackupToDelete(backup);
-                      setDeleteDialogOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                  </Button>
-                </div>
-              </div>
-            ))
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate max-w-[200px]">
+                          {backup.filename}
+                        </span>
+                        {backup.is_encrypted && (
+                          <Lock className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                        )}
+                        {backup.is_overdue && (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                          >
+                            {t('overdue')}
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <div>
+                        <span>{formatDate(backup.created_at)}</span>
+                        <span className="block text-xs">{backup.age_description}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {formatBytes(backup.size_bytes)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {backup.metadata ? (
+                        <span>
+                          {backup.metadata.provider_count} {t('providers')},{' '}
+                          {backup.metadata.license_count} {t('licenses')},{' '}
+                          {backup.metadata.employee_count} {t('employees')}
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleDownloadBackup(backup)}
+                          disabled={downloadingId === backup.id}
+                          title={tCommon('download')}
+                        >
+                          {downloadingId === backup.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            setBackupToRestore(backup);
+                            setRestoreDialogOpen(true);
+                          }}
+                          title={t('restore')}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                          onClick={() => {
+                            setBackupToDelete(backup);
+                            setDeleteDialogOpen(true);
+                          }}
+                          title={tCommon('delete')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
+        </div>
+
+        {/* Pagination */}
+        <div className="mt-4">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={filteredBackups.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       </section>
 
