@@ -376,7 +376,7 @@ async def delete_provider(
 
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
-@limiter.limit(TEST_CONNECTION_LIMIT)
+@limiter.limit(PROVIDER_TEST_CONNECTION_LIMIT)
 async def test_provider_connection(
     request: Request,
     body: TestConnectionRequest,

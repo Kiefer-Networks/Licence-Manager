@@ -1,7 +1,7 @@
 """Add backup permissions.
 
-Revision ID: 028_add_backup_permissions
-Revises: 027_add_composite_indexes
+Revision ID: 029
+Revises: 028
 Create Date: 2026-02-06 12:00:00.000000
 
 """
@@ -14,8 +14,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = "028_add_backup_permissions"
-down_revision: str = "027_add_composite_indexes"
+revision: str = "029"
+down_revision: str = "028"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
