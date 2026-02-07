@@ -1,7 +1,7 @@
 """Add external_user_id indexes for performance.
 
-Revision ID: 030_add_external_user_indexes
-Revises: 029_add_import_jobs_table
+Revision ID: 030
+Revises: 029
 Create Date: 2026-02-06
 
 These indexes optimize queries that filter on external_user_id,
@@ -11,8 +11,8 @@ especially LIKE queries for detecting external email addresses.
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "030_add_external_user_indexes"
-down_revision = "029_add_import_jobs_table"
+revision = "030"
+down_revision = "029"
 branch_labels = None
 depends_on = None
 

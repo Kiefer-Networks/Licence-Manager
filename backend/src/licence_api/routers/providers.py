@@ -459,7 +459,7 @@ async def test_provider_connection(
 
 
 @router.post("/sync", response_model=SyncResponse)
-@limiter.limit(SYNC_LIMIT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def trigger_sync(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
@@ -502,7 +502,7 @@ async def trigger_sync(
 
 
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
-@limiter.limit(SYNC_LIMIT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def sync_provider(
     request: Request,
     provider_id: UUID,
