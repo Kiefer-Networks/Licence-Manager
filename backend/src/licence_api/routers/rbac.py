@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel
 
 from licence_api.dependencies import get_rbac_service
@@ -40,6 +40,12 @@ from licence_api.security.auth import (
 from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter
 from licence_api.services.rbac_service import RbacService
+from licence_api.utils.errors import (
+    raise_bad_request,
+    raise_conflict,
+    raise_forbidden,
+    raise_not_found,
+)
 
 router = APIRouter()
 
@@ -92,9 +98,9 @@ async def create_user(
             user_agent=user_agent,
         )
     except UserAlreadyExistsError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise_conflict("Email already registered")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise_bad_request(str(e))
 
 
 @router.get("/users/{user_id}", response_model=UserInfo)
@@ -106,7 +112,7 @@ async def get_user(
     """Get user by ID."""
     user_info = await service.get_user(user_id)
     if user_info is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
     return user_info
 
 
@@ -124,10 +130,7 @@ async def update_user(
     # Check role management permission
     if body.role_codes is not None:
         if not current_user.has_permission(Permissions.USERS_MANAGE_ROLES):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to manage roles",
-            )
+            raise_forbidden("Insufficient permissions to manage roles")
 
     try:
         return await service.update_user(
@@ -136,9 +139,9 @@ async def update_user(
             current_user=current_user,
         )
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
     except ValidationError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid update data")
+        raise_bad_request("Invalid update data")
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -160,11 +163,9 @@ async def delete_user(
             user_agent=user_agent,
         )
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
     except CannotDeleteSelfError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own account"
-        )
+        raise_bad_request("Cannot delete your own account")
 
 
 @router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
@@ -190,7 +191,7 @@ async def reset_user_password(
             user_agent=user_agent,
         )
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
 
 
 @router.post("/users/{user_id}/unlock")
@@ -207,7 +208,7 @@ async def unlock_user(
         await service.unlock_user(user_id)
         return {"message": "User unlocked successfully"}
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
 
 
 @router.post("/users/{user_id}/disable-totp")
@@ -233,9 +234,9 @@ async def disable_user_totp(
             user_agent=user_agent,
         )
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise_not_found("User not found")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise_bad_request(str(e))
 
 
 @router.get("/users/{user_id}/sessions", response_model=list[SessionInfo])
@@ -267,10 +268,7 @@ async def get_user_sessions(
     has_view_permission = current_user.has_permission(Permissions.USERS_VIEW)
 
     if not is_own_sessions and not has_view_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Viewing other users' sessions requires users.view permission",
-        )
+        raise_forbidden("Viewing other users' sessions requires users.view permission")
 
     sessions = await service.get_user_sessions(user_id)
 
@@ -322,9 +320,9 @@ async def create_role(
     try:
         return await service.create_role(body)
     except RoleAlreadyExistsError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role already exists")
+        raise_conflict("Role already exists")
     except ValidationError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role data")
+        raise_bad_request("Invalid role data")
 
 
 @router.get("/roles/{role_id}", response_model=RoleResponse)
@@ -336,7 +334,7 @@ async def get_role(
     """Get role by ID."""
     role = await service.get_role(role_id)
     if role is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise_not_found("Role not found")
     return role
 
 
@@ -358,11 +356,9 @@ async def update_role(
             current_user=current_user,
         )
     except RoleNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise_not_found("Role not found")
     except CannotModifySystemRoleError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system role"
-        )
+        raise_forbidden("Cannot modify system role")
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -378,17 +374,12 @@ async def delete_role(
     try:
         await service.delete_role(role_id)
     except RoleNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise_not_found("Role not found")
     except CannotModifySystemRoleError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system role"
-        )
+        raise_forbidden("Cannot delete system role")
     except RoleHasUsersError as e:
         user_count = e.details.get("user_count", 0)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete role with assigned users ({user_count} users)",
-        )
+        raise_conflict(f"Cannot delete role with assigned users ({user_count} users)")
 
 
 # ============================================================================
