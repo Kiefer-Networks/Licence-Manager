@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     # Audit settings
     audit_retention_days: int = 365  # How long to keep audit logs
 
+    # Google OAuth settings (optional - leave empty to disable)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""  # e.g., https://app.example.com/api/v1/auth/google/callback
+
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
         """Validate settings for security requirements."""
@@ -180,6 +185,11 @@ class Settings(BaseSettings):
         if not self.trusted_proxies:
             return []
         return [proxy.strip() for proxy in self.trusted_proxies.split(",") if proxy.strip()]
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        """Check if Google OAuth is configured and enabled."""
+        return bool(self.google_client_id and self.google_client_secret and self.google_redirect_uri)
 
 
 @lru_cache

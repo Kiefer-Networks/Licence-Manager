@@ -81,6 +81,7 @@ class RbacService:
             name=user.name,
             picture_url=user.picture_url,
             auth_provider=user.auth_provider,
+            has_google_linked=bool(getattr(user, "google_id", None)),
             is_active=user.is_active,
             require_password_change=user.require_password_change,
             totp_enabled=user.totp_enabled,

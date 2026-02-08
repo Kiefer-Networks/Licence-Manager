@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import selectinload
 
 from licence_api.models.orm.admin_user import AdminUserORM
@@ -34,6 +34,35 @@ class UserRepository(BaseRepository[AdminUserORM]):
             .where(AdminUserORM.email == email)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_google_id(self, google_id: str) -> AdminUserORM | None:
+        """Get admin user by Google ID with roles loaded.
+
+        Args:
+            google_id: Google user ID
+
+        Returns:
+            AdminUserORM or None if not found
+        """
+        result = await self.session.execute(
+            select(AdminUserORM)
+            .options(selectinload(AdminUserORM.roles).selectinload(RoleORM.permissions))
+            .where(AdminUserORM.google_id == google_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def link_google_account(self, user_id: UUID, google_id: str) -> None:
+        """Link a Google account to an existing user.
+
+        Args:
+            user_id: User UUID
+            google_id: Google user ID
+        """
+        await self.session.execute(
+            update(AdminUserORM)
+            .where(AdminUserORM.id == user_id)
+            .values(google_id=google_id, auth_provider="google")
+        )
 
     async def get_with_roles(self, user_id: UUID) -> AdminUserORM | None:
         """Get user with roles and permissions loaded.

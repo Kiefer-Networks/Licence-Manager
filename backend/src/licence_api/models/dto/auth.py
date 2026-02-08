@@ -51,6 +51,7 @@ class UserInfo(BaseModel):
     name: str | None = None
     picture_url: str | None = None
     auth_provider: str
+    has_google_linked: bool = False
     is_active: bool
     require_password_change: bool
     totp_enabled: bool = False

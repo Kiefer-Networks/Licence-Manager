@@ -1428,6 +1428,7 @@ export interface AdminUser {
   name?: string;
   picture_url?: string;
   auth_provider: string;
+  has_google_linked: boolean;
   is_active: boolean;
   require_password_change: boolean;
   totp_enabled: boolean;
@@ -1435,6 +1436,10 @@ export interface AdminUser {
   permissions: string[];  // Permission codes
   last_login_at?: string;
   language?: string;  // ISO 639-1 language code (en, de)
+}
+
+export interface AuthConfig {
+  google_oauth_enabled: boolean;
 }
 
 export interface AdminUserListResponse {
@@ -2594,6 +2599,21 @@ export const api = {
   // ============================================================================
   // Authentication
   // ============================================================================
+
+  async getAuthConfig(): Promise<AuthConfig> {
+    const response = await fetch(`${API_BASE}/api/v1/auth/config`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch auth config');
+    }
+    return response.json();
+  },
+
+  getGoogleLoginUrl(): string {
+    return `${API_BASE}/api/v1/auth/google`;
+  },
 
   async login(email: string, password: string, totpCode?: string): Promise<LoginResponse> {
     // First get CSRF token for the login request

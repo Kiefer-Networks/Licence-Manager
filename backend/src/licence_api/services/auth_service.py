@@ -228,6 +228,134 @@ class AuthService:
             totp_required=False,
         )
 
+    async def authenticate_google(
+        self,
+        google_id: str,
+        email: str,
+        name: str | None = None,
+        picture_url: str | None = None,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> LoginResponse:
+        """Authenticate with Google OAuth.
+
+        Looks up user by Google ID first, then by email.
+        If found by email but not linked, links the Google account.
+
+        Args:
+            google_id: Google user ID (sub claim)
+            email: Google email address
+            name: Google display name
+            picture_url: Google profile picture URL
+            user_agent: User agent string
+            ip_address: IP address
+
+        Returns:
+            LoginResponse with tokens
+
+        Raises:
+            HTTPException: If user not found or disabled
+        """
+        # First try to find by Google ID
+        user = await self.user_repo.get_by_google_id(google_id)
+
+        if user is None:
+            # Try to find by email and link the account
+            user = await self.user_repo.get_by_email(email.lower())
+
+            if user is None:
+                log_security_event(
+                    SecurityEventType.LOGIN_FAILED,
+                    user_email=email,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    success=False,
+                    details={"reason": "google_user_not_found"},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No account found for this email. Please contact an administrator.",
+                )
+
+            # Link Google account to existing user
+            await self.user_repo.link_google_account(user.id, google_id)
+
+            # Update profile info from Google if not set
+            if not user.picture_url and picture_url:
+                user.picture_url = picture_url
+            if not user.name and name:
+                user.name = name
+
+        # Check if account is active
+        if not user.is_active:
+            log_security_event(
+                SecurityEventType.LOGIN_FAILED,
+                user_id=user.id,
+                user_email=email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                success=False,
+                details={"reason": "account_disabled"},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is disabled",
+            )
+
+        # Successful login
+        await self.user_repo.record_successful_login(user.id)
+        log_security_event(
+            SecurityEventType.LOGIN_SUCCESS,
+            user_id=user.id,
+            user_email=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details={"method": "google"},
+        )
+
+        # Get user permissions
+        roles, permissions = self._aggregate_permissions(user)
+
+        # Create tokens
+        settings = get_settings()
+        access_token = create_access_token(
+            user_id=user.id,
+            email=user.email,
+            roles=roles,
+            permissions=permissions,
+        )
+
+        raw_refresh, refresh_hash = create_refresh_token()
+        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
+
+        await self.token_repo.create_token(
+            user_id=user.id,
+            token_hash=refresh_hash,
+            expires_at=expires_at,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+
+        # Audit log
+        await self.audit_repo.log(
+            action="login",
+            resource_type="admin_user",
+            resource_id=user.id,
+            admin_user_id=user.id,
+            changes={"method": "google", "email": user.email},
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        await self.session.commit()
+
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=raw_refresh,
+            expires_in=settings.jwt_expiration_hours * 3600,
+            totp_required=False,
+        )
+
     async def _verify_totp_code(self, user_id: UUID, code: str) -> bool:
         """Verify a TOTP code or backup code.
 

@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from licence_api.config import get_settings
 from licence_api.middleware.audit_middleware import AuditMiddleware
@@ -157,6 +158,9 @@ def create_app() -> FastAPI:
 
     # Security headers middleware (runs last on request, first on response)
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Session middleware for OAuth state (uses JWT secret for signing)
+    app.add_middleware(SessionMiddleware, secret_key=settings.jwt_secret)
 
     # Audit middleware (runs after CSRF on request)
     app.add_middleware(AuditMiddleware)

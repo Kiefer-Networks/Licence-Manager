@@ -1,8 +1,10 @@
 """Authentication router."""
 
+import secrets
 from typing import Annotated
 from uuid import UUID
 
+from authlib.integrations.starlette_client import OAuth
 from fastapi import (
     APIRouter,
     Cookie,
@@ -15,9 +17,30 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from licence_api.config import get_settings
+
+# Initialize OAuth client (lazy initialization)
+_oauth: OAuth | None = None
+
+
+def get_oauth() -> OAuth:
+    """Get or create OAuth client instance."""
+    global _oauth
+    if _oauth is None:
+        _oauth = OAuth()
+        settings = get_settings()
+        if settings.google_oauth_enabled:
+            _oauth.register(
+                name="google",
+                client_id=settings.google_client_id,
+                client_secret=settings.google_client_secret,
+                server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+                client_kwargs={"scope": "openid email profile"},
+            )
+    return _oauth
 from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.dependencies import get_auth_service
 from licence_api.models.domain.admin_user import AdminUser
@@ -252,6 +275,117 @@ async def login_local(
         _set_auth_cookies(response, login_response.access_token, login_response.refresh_token)
 
     return login_response
+
+
+class AuthConfigResponse(BaseModel):
+    """Authentication configuration response."""
+
+    google_oauth_enabled: bool
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+async def get_auth_config() -> AuthConfigResponse:
+    """Get authentication configuration.
+
+    Returns which authentication methods are available.
+    """
+    settings = get_settings()
+    return AuthConfigResponse(google_oauth_enabled=settings.google_oauth_enabled)
+
+
+@router.get("/google")
+@limiter.limit(AUTH_LOGIN_LIMIT)
+async def google_login(request: Request) -> RedirectResponse:
+    """Initiate Google OAuth flow.
+
+    Redirects to Google's authorization page.
+    """
+    settings = get_settings()
+
+    if not settings.google_oauth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google OAuth is not configured",
+        )
+
+    oauth = get_oauth()
+
+    # Generate state for CSRF protection
+    state = secrets.token_urlsafe(32)
+    request.session["oauth_state"] = state
+
+    redirect_uri = settings.google_redirect_uri
+    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+
+
+@router.get("/google/callback")
+@limiter.limit(AUTH_LOGIN_LIMIT)
+async def google_callback(
+    request: Request,
+    response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    user_agent: str | None = Header(default=None),
+) -> RedirectResponse:
+    """Handle Google OAuth callback.
+
+    Exchanges authorization code for tokens and authenticates user.
+    """
+    settings = get_settings()
+
+    if not settings.google_oauth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google OAuth is not configured",
+        )
+
+    oauth = get_oauth()
+
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception:
+        # Redirect to frontend with error
+        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=oauth_failed")
+
+    # Get user info from ID token
+    user_info = token.get("userinfo")
+    if not user_info:
+        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=no_user_info")
+
+    google_id = user_info.get("sub")
+    email = user_info.get("email")
+    name = user_info.get("name")
+    picture = user_info.get("picture")
+
+    if not google_id or not email:
+        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=missing_info")
+
+    ip_address = request.client.host if request.client else None
+
+    try:
+        login_response = await auth_service.authenticate_google(
+            google_id=google_id,
+            email=email,
+            name=name,
+            picture_url=picture,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+    except HTTPException as e:
+        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+        error_msg = "account_not_found" if e.status_code == 403 else "auth_failed"
+        return RedirectResponse(url=f"{frontend_url}/auth/signin?error={error_msg}")
+
+    # Create redirect response to frontend
+    frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+    redirect = RedirectResponse(url=f"{frontend_url}/dashboard", status_code=302)
+
+    # Set auth cookies on the redirect response
+    _set_auth_cookies(redirect, login_response.access_token, login_response.refresh_token)
+
+    return redirect
 
 
 @router.post("/refresh", response_model=TokenResponse)

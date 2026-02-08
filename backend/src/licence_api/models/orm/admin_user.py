@@ -20,6 +20,7 @@ class AdminUserORM(Base, UUIDMixin, TimestampMixin):
     # Authentication fields
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     auth_provider: Mapped[str] = mapped_column(String(50), default="local", nullable=False)
+    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
 
     # Security fields
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
