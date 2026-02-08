@@ -160,7 +160,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
 
     # Session middleware for OAuth state (uses JWT secret for signing)
-    app.add_middleware(SessionMiddleware, secret_key=settings.jwt_secret)
+    app.add_middleware(SessionMiddleware, secret_key=config.jwt_secret)
 
     # Audit middleware (runs after CSRF on request)
     app.add_middleware(AuditMiddleware)
