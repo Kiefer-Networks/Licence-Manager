@@ -18,7 +18,6 @@ from licence_api.exceptions import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
-    PasswordResetResponse,
     RoleCreateRequest,
     RoleResponse,
     RoleUpdateRequest,
@@ -30,17 +29,13 @@ from licence_api.models.dto.auth import (
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.permission_repository import PermissionRepository
 from licence_api.repositories.role_repository import RoleRepository
-from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
-from licence_api.security.password import get_password_service
-from licence_api.services.email_service import EmailService
-from licence_api.utils.security_events import SecurityEventType, log_security_event
 
 logger = logging.getLogger(__name__)
 
 
 class RbacService:
-    """Service for RBAC operations."""
+    """Service for RBAC operations - Google OAuth only."""
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize service with database session."""
@@ -50,22 +45,6 @@ class RbacService:
         self.permission_repo = PermissionRepository(session)
         self.token_repo = RefreshTokenRepository(session)
         self.audit_repo = AuditRepository(session)
-        self.settings_repo = SettingsRepository(session)
-        self.password_service = get_password_service()
-        self.email_service = EmailService(session)
-
-    async def _get_password_policy(self):
-        """Get password policy from settings.
-
-        Returns:
-            PasswordPolicySettings from database or defaults
-        """
-        from licence_api.models.dto.password_policy import PasswordPolicySettings
-
-        policy_data = await self.settings_repo.get("password_policy")
-        if policy_data is None:
-            return PasswordPolicySettings()
-        return PasswordPolicySettings(**policy_data)
 
     def _build_user_info(self, user) -> UserInfo:
         """Build UserInfo from user ORM object."""
@@ -81,12 +60,10 @@ class RbacService:
             name=user.name,
             picture_url=user.picture_url,
             auth_provider=user.auth_provider,
-            has_google_linked=bool(getattr(user, "google_id", None)),
             is_active=user.is_active,
-            require_password_change=user.require_password_change,
-            totp_enabled=user.totp_enabled,
             roles=roles,
             permissions=sorted(permissions),
+            is_superadmin="superadmin" in roles,
             last_login_at=user.last_login_at,
             language=getattr(user, "language", "en") or "en",
             date_format=user.date_format,
@@ -106,10 +83,10 @@ class RbacService:
         http_request: Request | None = None,
         user_agent: str | None = None,
     ) -> UserCreateResponse:
-        """Create a new user with local authentication.
+        """Create a new user for Google OAuth authentication.
 
-        If email is configured, password can be auto-generated and sent via email.
-        If email is not configured, password must be provided in the request.
+        Users are created with email and roles only - no password needed.
+        They authenticate via Google when they first log in.
 
         Args:
             request: User creation request
@@ -118,53 +95,23 @@ class RbacService:
             user_agent: User agent string
 
         Returns:
-            UserCreateResponse with user info and password delivery status
+            UserCreateResponse with user info
 
         Raises:
             UserAlreadyExistsError: If email exists
-            ValidationError: If password invalid or required but not provided
         """
         # Check if email already exists
         existing = await self.user_repo.get_by_email(request.email.lower())
         if existing:
             raise UserAlreadyExistsError(request.email)
 
-        # Get password policy from settings
-        password_policy = await self._get_password_policy()
-
-        # Check if email is configured
-        email_configured = await self.email_service.is_configured()
-
-        # Determine password
-        password: str
-        password_sent_via_email = False
-        temporary_password: str | None = None
-
-        if request.password:
-            # Use provided password - validate against policy
-            password = request.password
-            is_valid, errors = self.password_service.validate_password_strength(
-                password, policy=password_policy
-            )
-            if not is_valid:
-                raise ValidationError(errors[0])
-        elif email_configured:
-            # Auto-generate password for email delivery using policy
-            password = self.password_service.generate_temporary_password(policy=password_policy)
-        else:
-            # No email and no password provided
-            raise ValidationError("Password is required when email is not configured")
-
-        # Hash password
-        password_hash = self.password_service.hash_password(password)
-
-        # Create user with language preference
+        # Create user without password (Google OAuth only)
         user = await self.user_repo.create_user(
             email=request.email.lower(),
-            password_hash=password_hash,
+            password_hash=None,
             name=request.name,
-            auth_provider="local",
-            require_password_change=True,
+            auth_provider="google",
+            require_password_change=False,
             language=request.language,
         )
 
@@ -173,28 +120,6 @@ class RbacService:
             roles = await self.role_repo.get_by_codes(request.role_codes)
             role_ids = [r.id for r in roles]
             await self.user_repo.set_roles(user.id, role_ids, assigned_by=current_user.id)
-
-        # Send password via email if configured and password was auto-generated
-        if email_configured and not request.password:
-            email_sent = await self.email_service.send_password_email(
-                to_email=request.email.lower(),
-                user_name=request.name,
-                password=password,
-                is_new_user=True,
-                language=request.language,
-            )
-            if email_sent:
-                password_sent_via_email = True
-            else:
-                # Email failed but user was created - log warning and return password
-                logger.warning(
-                    f"Failed to send password email to {request.email}, "
-                    "returning password in response"
-                )
-                temporary_password = password
-        elif not request.password:
-            # No email configured, return password in response
-            temporary_password = password
 
         # Audit log
         ip_address = http_request.client.host if http_request and http_request.client else None
@@ -207,7 +132,7 @@ class RbacService:
                 "email": user.email,
                 "name": user.name,
                 "roles": request.role_codes or [],
-                "password_sent_via_email": password_sent_via_email,
+                "auth_provider": "google",
             },
             ip_address=ip_address,
             user_agent=user_agent,
@@ -219,11 +144,7 @@ class RbacService:
         user = await self.user_repo.get_with_roles(user.id)
         user_info = self._build_user_info(user)
 
-        return UserCreateResponse(
-            user=user_info,
-            password_sent_via_email=password_sent_via_email,
-            temporary_password=temporary_password,
-        )
+        return UserCreateResponse(user=user_info)
 
     async def get_user(self, user_id: UUID) -> UserInfo | None:
         """Get user by ID."""
@@ -238,20 +159,7 @@ class RbacService:
         request: UserUpdateRequest,
         current_user: AdminUser,
     ) -> UserInfo:
-        """Update user details.
-
-        Args:
-            user_id: User ID to update
-            request: Update request
-            current_user: Admin user making the update
-
-        Returns:
-            Updated user info
-
-        Raises:
-            UserNotFoundError: If user not found
-            ValidationError: If validation fails
-        """
+        """Update user details."""
         user = await self.user_repo.get_with_roles(user_id)
         if user is None:
             raise UserNotFoundError(str(user_id))
@@ -262,7 +170,6 @@ class RbacService:
 
         # Update fields
         if request.email is not None and request.email != user.email:
-            # Check if email is already taken
             existing = await self.user_repo.get_by_email(request.email)
             if existing is not None:
                 raise UserAlreadyExistsError(request.email)
@@ -276,7 +183,6 @@ class RbacService:
 
         # Update roles if provided
         if request.role_codes is not None:
-            # Prevent removing superadmin role from yourself
             if user_id == current_user.id and "superadmin" in current_user.roles:
                 if "superadmin" not in request.role_codes:
                     raise ValidationError("Cannot remove superadmin role from yourself")
@@ -287,7 +193,6 @@ class RbacService:
 
         await self.session.commit()
 
-        # Fetch updated user
         user = await self.user_repo.get_with_roles(user_id)
         return self._build_user_info(user)
 
@@ -298,19 +203,7 @@ class RbacService:
         http_request: Request | None = None,
         user_agent: str | None = None,
     ) -> None:
-        """Delete a user.
-
-        Args:
-            user_id: User ID to delete
-            current_user: Admin user making the deletion
-            http_request: HTTP request for audit logging
-            user_agent: User agent string
-
-        Raises:
-            CannotDeleteSelfError: If trying to delete self
-            UserNotFoundError: If user not found
-        """
-        # Prevent deleting yourself
+        """Delete a user."""
         if user_id == current_user.id:
             raise CannotDeleteSelfError()
 
@@ -318,7 +211,6 @@ class RbacService:
         if user is None:
             raise UserNotFoundError(str(user_id))
 
-        # Audit log before deletion
         ip_address = http_request.client.host if http_request and http_request.client else None
         await self.audit_repo.log(
             action="delete",
@@ -330,190 +222,8 @@ class RbacService:
             user_agent=user_agent,
         )
 
-        # Delete user
         await self.user_repo.delete_user(user_id)
         await self.session.commit()
-
-    async def reset_user_password(
-        self,
-        user_id: UUID,
-        current_user: AdminUser,
-        http_request: Request | None = None,
-        user_agent: str | None = None,
-    ) -> PasswordResetResponse:
-        """Reset a user's password.
-
-        Generates a new temporary password. If email is configured,
-        sends the password via email. Otherwise, returns the password
-        in the response.
-
-        Args:
-            user_id: User ID to reset password for
-            current_user: Admin user performing reset
-            http_request: HTTP request for audit logging
-            user_agent: User agent string
-
-        Returns:
-            PasswordResetResponse with password delivery status
-
-        Raises:
-            UserNotFoundError: If user not found
-        """
-        user = await self.user_repo.get_by_id(user_id)
-        if user is None:
-            raise UserNotFoundError(str(user_id))
-
-        # Get password policy from settings
-        password_policy = await self._get_password_policy()
-
-        # Generate new temporary password using policy
-        new_password = self.password_service.generate_temporary_password(policy=password_policy)
-
-        # Hash and update password
-        password_hash = self.password_service.hash_password(new_password)
-        await self.user_repo.update_password(
-            user_id,
-            password_hash,
-            require_change=True,
-        )
-
-        # Revoke all sessions
-        await self.token_repo.revoke_all_for_user(user_id)
-
-        # Check if email is configured and try to send password
-        email_configured = await self.email_service.is_configured()
-        password_sent_via_email = False
-        temporary_password: str | None = None
-
-        if email_configured:
-            # Use the user's preferred language for the email
-            user_language = getattr(user, "language", "en") or "en"
-            email_sent = await self.email_service.send_password_email(
-                to_email=user.email,
-                user_name=user.name,
-                password=new_password,
-                is_new_user=False,
-                language=user_language,
-            )
-            if email_sent:
-                password_sent_via_email = True
-            else:
-                # Email failed - log warning and return password
-                logger.warning(
-                    f"Failed to send password reset email to {user.email}, "
-                    "returning password in response"
-                )
-                temporary_password = new_password
-        else:
-            # No email configured, return password in response
-            temporary_password = new_password
-
-        # Audit log
-        ip_address = http_request.client.host if http_request and http_request.client else None
-        await self.audit_repo.log(
-            action="password_reset",
-            resource_type="admin_user",
-            resource_id=user_id,
-            admin_user_id=current_user.id,
-            changes={
-                "target_email": user.email,
-                "require_change": True,
-                "password_sent_via_email": password_sent_via_email,
-            },
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-
-        await self.session.commit()
-
-        return PasswordResetResponse(
-            message="Password reset successfully",
-            password_sent_via_email=password_sent_via_email,
-            temporary_password=temporary_password,
-        )
-
-    async def unlock_user(self, user_id: UUID) -> bool:
-        """Unlock a locked user account.
-
-        Args:
-            user_id: User ID to unlock
-
-        Returns:
-            True if user was unlocked
-
-        Raises:
-            UserNotFoundError: If user not found
-        """
-        user = await self.user_repo.unlock_user(user_id)
-        if user is None:
-            raise UserNotFoundError(str(user_id))
-
-        await self.session.commit()
-        return True
-
-    async def disable_user_totp(
-        self,
-        user_id: UUID,
-        current_user: AdminUser,
-        http_request: Request | None = None,
-        user_agent: str | None = None,
-    ) -> dict[str, str]:
-        """Disable TOTP for a user (admin operation, no password required).
-
-        Args:
-            user_id: User ID to disable TOTP for
-            current_user: Admin user performing the action
-            http_request: HTTP request for audit logging
-            user_agent: User agent string
-
-        Returns:
-            Success message
-
-        Raises:
-            UserNotFoundError: If user not found
-            ValidationError: If TOTP is not enabled
-        """
-        user = await self.user_repo.get_by_id(user_id)
-        if user is None:
-            raise UserNotFoundError(str(user_id))
-
-        if not user.totp_enabled:
-            raise ValidationError("Two-factor authentication is not enabled for this user")
-
-        # Disable TOTP
-        await self.user_repo.disable_totp(user_id)
-
-        # Revoke all sessions to force re-login
-        await self.token_repo.revoke_all_for_user(user_id)
-
-        # Audit log
-        ip_address = http_request.client.host if http_request and http_request.client else None
-        await self.audit_repo.log(
-            action="admin_totp_disabled",
-            resource_type="admin_user",
-            resource_id=user_id,
-            admin_user_id=current_user.id,
-            changes={
-                "target_email": user.email,
-                "disabled_by": current_user.email,
-            },
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-
-        # Security event
-        log_security_event(
-            SecurityEventType.TOTP_DISABLED,
-            user_id=user_id,
-            user_email=user.email,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"disabled_by_admin": str(current_user.id)},
-        )
-
-        await self.session.commit()
-
-        return {"message": "Two-factor authentication disabled successfully"}
 
     # =========================================================================
     # Role Management
@@ -536,23 +246,11 @@ class RbacService:
         ]
 
     async def create_role(self, request: RoleCreateRequest) -> RoleResponse:
-        """Create a custom role.
-
-        Args:
-            request: Role creation request
-
-        Returns:
-            Created role
-
-        Raises:
-            RoleAlreadyExistsError: If role code already exists
-        """
-        # Check if role code already exists
+        """Create a custom role."""
         existing = await self.role_repo.get_by_code(request.code)
         if existing:
             raise RoleAlreadyExistsError(request.code)
 
-        # Create role
         role = await self.role_repo.create_role(
             code=request.code,
             name=request.name,
@@ -561,7 +259,6 @@ class RbacService:
             priority=50,
         )
 
-        # Set permissions
         if request.permission_codes:
             permissions = await self.permission_repo.get_by_codes(request.permission_codes)
             permission_ids = [p.id for p in permissions]
@@ -569,7 +266,6 @@ class RbacService:
 
         await self.session.commit()
 
-        # Fetch updated role
         role = await self.role_repo.get_with_permissions(role.id)
 
         return RoleResponse(
@@ -604,36 +300,20 @@ class RbacService:
         request: RoleUpdateRequest,
         current_user: AdminUser,
     ) -> RoleResponse:
-        """Update a role.
-
-        Args:
-            role_id: Role ID to update
-            request: Update request
-            current_user: Admin user making the update
-
-        Returns:
-            Updated role
-
-        Raises:
-            RoleNotFoundError: If role not found
-            CannotModifySystemRoleError: If trying to modify system role without permission
-        """
+        """Update a role."""
         role = await self.role_repo.get_with_permissions(role_id)
         if role is None:
             raise RoleNotFoundError(str(role_id))
 
-        # System roles can only have permissions changed by superadmin
         if role.is_system and not current_user.is_superadmin():
             raise CannotModifySystemRoleError(role.code)
 
-        # Update fields
         if request.name is not None:
             role.name = request.name
 
         if request.description is not None:
             role.description = request.description
 
-        # Update permissions
         if request.permission_codes is not None:
             permissions = await self.permission_repo.get_by_codes(request.permission_codes)
             permission_ids = [p.id for p in permissions]
@@ -641,7 +321,6 @@ class RbacService:
 
         await self.session.commit()
 
-        # Fetch updated role
         role = await self.role_repo.get_with_permissions(role_id)
 
         return RoleResponse(
@@ -655,16 +334,7 @@ class RbacService:
         )
 
     async def delete_role(self, role_id: UUID) -> None:
-        """Delete a custom role.
-
-        Args:
-            role_id: Role ID to delete
-
-        Raises:
-            RoleNotFoundError: If role not found
-            CannotModifySystemRoleError: If role is a system role
-            RoleHasUsersError: If role has users assigned
-        """
+        """Delete a custom role."""
         role = await self.role_repo.get_by_id(role_id)
         if role is None:
             raise RoleNotFoundError(str(role_id))
@@ -672,7 +342,6 @@ class RbacService:
         if role.is_system:
             raise CannotModifySystemRoleError(role.code)
 
-        # Check if role has users assigned
         user_count = await self.role_repo.count_users_with_role(role_id)
         if user_count > 0:
             raise RoleHasUsersError(role.code, user_count)
@@ -685,30 +354,15 @@ class RbacService:
     # =========================================================================
 
     async def list_permissions(self) -> list:
-        """List all permissions.
-
-        Returns:
-            List of permission ORM objects
-        """
+        """List all permissions."""
         return await self.permission_repo.get_all()
 
     async def get_permission_categories(self) -> list[str]:
-        """Get all permission categories.
-
-        Returns:
-            List of category names
-        """
+        """Get all permission categories."""
         return await self.permission_repo.get_categories()
 
     async def get_permissions_by_category(self, category: str) -> list:
-        """Get permissions for a specific category.
-
-        Args:
-            category: Category name
-
-        Returns:
-            List of permission ORM objects
-        """
+        """Get permissions for a specific category."""
         return await self.permission_repo.get_by_category(category)
 
     # =========================================================================
@@ -716,12 +370,5 @@ class RbacService:
     # =========================================================================
 
     async def get_user_sessions(self, user_id: UUID) -> list:
-        """Get active sessions for a user.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            List of session ORM objects
-        """
+        """Get active sessions for a user."""
         return await self.token_repo.get_active_sessions(user_id)

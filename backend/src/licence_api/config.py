@@ -58,12 +58,6 @@ class Settings(BaseSettings):
     # Security - Refresh Tokens
     refresh_token_days: int = 30
 
-    # Security - Password Policy
-    password_min_length: int = 12
-    password_history_count: int = 5
-    max_login_attempts: int = 5
-    lockout_duration_minutes: int = 30
-
     # Sync settings
     sync_interval_minutes: int = 60
 
@@ -106,6 +100,10 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = ""  # e.g., https://app.example.com/api/v1/auth/google/callback
+
+    # Superadmin email - this user is always allowed to login and auto-promoted to superadmin
+    # Used for zero-config first user setup
+    superadmin_email: str = ""
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":

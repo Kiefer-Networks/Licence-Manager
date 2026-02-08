@@ -1,7 +1,7 @@
 """Security event logging for sensitive operations.
 
 This module provides a dedicated security logger for tracking security-relevant
-events such as authentication attempts, password changes, and role modifications.
+events such as authentication attempts and role modifications.
 These events are logged separately from application logs for security monitoring
 and compliance purposes.
 """
@@ -16,10 +16,9 @@ from uuid import UUID
 class SecurityEventType(str, Enum):
     """Types of security events that are logged."""
 
-    # Authentication events
+    # Authentication events (Google OAuth)
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILED = "login_failed"
-    LOGIN_LOCKED = "login_locked"
     LOGOUT = "logout"
     TOKEN_REFRESH = "token_refresh"
 
@@ -28,11 +27,6 @@ class SecurityEventType(str, Enum):
     USER_DISABLED = "user_disabled"
     USER_ENABLED = "user_enabled"
     USER_DELETED = "user_deleted"
-
-    # Password events
-    PASSWORD_CHANGED = "password_changed"
-    PASSWORD_RESET_REQUESTED = "password_reset_requested"
-    PASSWORD_RESET_COMPLETED = "password_reset_completed"
 
     # Role and permission events
     ROLE_ASSIGNED = "role_assigned"
@@ -45,11 +39,6 @@ class SecurityEventType(str, Enum):
     SESSION_CREATED = "session_created"
     SESSION_REVOKED = "session_revoked"
     ALL_SESSIONS_REVOKED = "all_sessions_revoked"
-
-    # Two-factor authentication events
-    TOTP_ENABLED = "totp_enabled"
-    TOTP_DISABLED = "totp_disabled"
-    TOTP_BACKUP_CODES_REGENERATED = "totp_backup_codes_regenerated"
 
 
 # Create a dedicated security logger with its own handler

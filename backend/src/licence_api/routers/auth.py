@@ -1,4 +1,4 @@
-"""Authentication router."""
+"""Authentication router - Google OAuth only."""
 
 import secrets
 from typing import Annotated
@@ -21,6 +21,31 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from licence_api.config import get_settings
+from licence_api.constants.paths import ADMIN_AVATAR_DIR
+from licence_api.dependencies import get_auth_service
+from licence_api.models.domain.admin_user import AdminUser
+from licence_api.models.dto.auth import (
+    AvatarUploadResponse,
+    LoginResponse,
+    NotificationEventType,
+    ProfileUpdateRequest,
+    RefreshTokenRequest,
+    TokenResponse,
+    UserInfo,
+    UserNotificationPreferenceBulkUpdate,
+    UserNotificationPreferenceResponse,
+    UserNotificationPreferencesResponse,
+    UserNotificationPreferenceUpdate,
+)
+from licence_api.security.auth import get_current_user
+from licence_api.security.csrf import CSRFProtected, generate_csrf_token
+from licence_api.security.rate_limit import (
+    AUTH_LOGIN_LIMIT,
+    AUTH_LOGOUT_LIMIT,
+    AUTH_REFRESH_LIMIT,
+    limiter,
+)
+from licence_api.services.auth_service import AuthService
 
 # Initialize OAuth client (lazy initialization)
 _oauth: OAuth | None = None
@@ -41,40 +66,7 @@ def get_oauth() -> OAuth:
                 client_kwargs={"scope": "openid email profile"},
             )
     return _oauth
-from licence_api.constants.paths import ADMIN_AVATAR_DIR
-from licence_api.dependencies import get_auth_service
-from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.dto.auth import (
-    AvatarUploadResponse,
-    LoginResponse,
-    NotificationEventType,
-    PasswordChangeRequest,
-    ProfileUpdateRequest,
-    RefreshTokenRequest,
-    TokenResponse,
-    TotpBackupCodesResponse,
-    TotpDisableRequest,
-    TotpEnableResponse,
-    TotpLoginRequest,
-    TotpSetupResponse,
-    TotpStatusResponse,
-    TotpVerifyRequest,
-    UserInfo,
-    UserNotificationPreferenceBulkUpdate,
-    UserNotificationPreferenceResponse,
-    UserNotificationPreferencesResponse,
-    UserNotificationPreferenceUpdate,
-)
-from licence_api.security.auth import get_current_user
-from licence_api.security.csrf import CSRFProtected, generate_csrf_token
-from licence_api.security.rate_limit import (
-    AUTH_LOGIN_LIMIT,
-    AUTH_LOGOUT_LIMIT,
-    AUTH_PASSWORD_CHANGE_LIMIT,
-    AUTH_REFRESH_LIMIT,
-    limiter,
-)
-from licence_api.services.auth_service import AuthService
+
 
 router = APIRouter()
 
@@ -146,26 +138,13 @@ EVENT_TYPE_MAP = {e.code: e for e in NOTIFICATION_EVENT_TYPES}
 def _set_auth_cookies(
     response: Response, access_token: str, refresh_token: str | None = None
 ) -> None:
-    """Set authentication cookies on response.
-
-    Uses cookie security settings from configuration.
-
-    Args:
-        response: FastAPI response to set cookies on
-        access_token: JWT access token to store
-        refresh_token: Refresh token to store (optional)
-
-    Returns:
-        None
-    """
+    """Set authentication cookies on response."""
     settings = get_settings()
 
-    # Determine secure flag from config (override in development)
     is_secure = settings.session_cookie_secure
     if settings.environment == "development":
         is_secure = False
 
-    # Set access token cookie (short-lived)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -176,8 +155,6 @@ def _set_auth_cookies(
         path="/",
     )
 
-    # Set refresh token cookie (long-lived)
-    # Path set to / to ensure cookie is sent with all requests for token refresh
     if refresh_token:
         response.set_cookie(
             key="refresh_token",
@@ -191,14 +168,7 @@ def _set_auth_cookies(
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    """Clear authentication cookies.
-
-    Args:
-        response: FastAPI response to clear cookies from
-
-    Returns:
-        None
-    """
+    """Clear authentication cookies."""
     response.delete_cookie(key="access_token", path="/")
     response.delete_cookie(key="refresh_token", path="/")
 
@@ -215,27 +185,27 @@ class CsrfTokenResponse(BaseModel):
     csrf_token: str
 
 
+class AuthConfigResponse(BaseModel):
+    """Authentication configuration response."""
+
+    google_oauth_enabled: bool
+
+
 @router.get("/csrf-token", response_model=CsrfTokenResponse)
 @limiter.limit(AUTH_REFRESH_LIMIT)
 async def get_csrf_token(request: Request, response: Response) -> CsrfTokenResponse:
-    """Get a CSRF token for state-changing requests.
-
-    The token is returned in the response body and also set as a cookie.
-    Include the token in the X-CSRF-Token header for POST/PUT/DELETE requests.
-    """
+    """Get a CSRF token for state-changing requests."""
     settings = get_settings()
     token, signed_token = generate_csrf_token()
 
-    # Determine secure flag from config (override in development)
     is_secure = settings.session_cookie_secure
     if settings.environment == "development":
         is_secure = False
 
-    # Set CSRF cookie (readable by JavaScript for double-submit pattern)
     response.set_cookie(
         key="csrf_token",
         value=signed_token,
-        httponly=False,  # Must be readable by JavaScript for CSRF protection
+        httponly=False,
         secure=is_secure,
         samesite=settings.session_cookie_samesite,
         max_age=CSRF_TOKEN_TTL_SECONDS,
@@ -245,50 +215,9 @@ async def get_csrf_token(request: Request, response: Response) -> CsrfTokenRespo
     return CsrfTokenResponse(csrf_token=signed_token)
 
 
-@router.post("/login", response_model=LoginResponse)
-@limiter.limit(AUTH_LOGIN_LIMIT)
-async def login_local(
-    request: Request,
-    response: Response,
-    body: TotpLoginRequest,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    user_agent: str | None = Header(default=None),
-) -> LoginResponse:
-    """Authenticate with email, password, and optional TOTP code.
-
-    If 2FA is enabled and no TOTP code is provided, returns totp_required=true.
-    If authentication succeeds, returns JWT tokens.
-    Tokens are also set as httpOnly cookies for enhanced security.
-    """
-    ip_address = request.client.host if request.client else None
-
-    login_response = await auth_service.authenticate_local(
-        email=body.email,
-        password=body.password,
-        totp_code=body.totp_code,
-        user_agent=user_agent,
-        ip_address=ip_address,
-    )
-
-    # Set httpOnly cookies for XSS protection (only if tokens were issued)
-    if login_response.access_token:
-        _set_auth_cookies(response, login_response.access_token, login_response.refresh_token)
-
-    return login_response
-
-
-class AuthConfigResponse(BaseModel):
-    """Authentication configuration response."""
-
-    google_oauth_enabled: bool
-
-
 @router.get("/config", response_model=AuthConfigResponse)
 async def get_auth_config() -> AuthConfigResponse:
-    """Get authentication configuration.
-
-    Returns which authentication methods are available.
-    """
+    """Get authentication configuration."""
     settings = get_settings()
     return AuthConfigResponse(google_oauth_enabled=settings.google_oauth_enabled)
 
@@ -296,10 +225,7 @@ async def get_auth_config() -> AuthConfigResponse:
 @router.get("/google")
 @limiter.limit(AUTH_LOGIN_LIMIT)
 async def google_login(request: Request) -> RedirectResponse:
-    """Initiate Google OAuth flow.
-
-    Redirects to Google's authorization page.
-    """
+    """Initiate Google OAuth flow."""
     settings = get_settings()
 
     if not settings.google_oauth_enabled:
@@ -310,7 +236,6 @@ async def google_login(request: Request) -> RedirectResponse:
 
     oauth = get_oauth()
 
-    # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 
@@ -326,10 +251,7 @@ async def google_callback(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     user_agent: str | None = Header(default=None),
 ) -> RedirectResponse:
-    """Handle Google OAuth callback.
-
-    Exchanges authorization code for tokens and authenticates user.
-    """
+    """Handle Google OAuth callback."""
     settings = get_settings()
 
     if not settings.google_oauth_enabled:
@@ -343,11 +265,9 @@ async def google_callback(
     try:
         token = await oauth.google.authorize_access_token(request)
     except Exception:
-        # Redirect to frontend with error
         frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
         return RedirectResponse(url=f"{frontend_url}/auth/signin?error=oauth_failed")
 
-    # Get user info from ID token
     user_info = token.get("userinfo")
     if not user_info:
         frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
@@ -378,11 +298,9 @@ async def google_callback(
         error_msg = "account_not_found" if e.status_code == 403 else "auth_failed"
         return RedirectResponse(url=f"{frontend_url}/auth/signin?error={error_msg}")
 
-    # Create redirect response to frontend
     frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
     redirect = RedirectResponse(url=f"{frontend_url}/dashboard", status_code=302)
 
-    # Set auth cookies on the redirect response
     _set_auth_cookies(redirect, login_response.access_token, login_response.refresh_token)
 
     return redirect
@@ -398,12 +316,7 @@ async def refresh_token(
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     user_agent: str | None = Header(default=None),
 ) -> TokenResponse:
-    """Refresh access token using refresh token.
-
-    Implements refresh token rotation for enhanced security.
-    Accepts refresh token from request body or httpOnly cookie.
-    """
-    # Prefer cookie over body for security
+    """Refresh access token using refresh token."""
     token = refresh_token_cookie
     if not token and body:
         token = body.refresh_token
@@ -421,7 +334,6 @@ async def refresh_token(
         ip_address=ip_address,
     )
 
-    # Update both access and refresh token cookies (rotation)
     _set_auth_cookies(response, token_response.access_token, token_response.refresh_token)
 
     return token_response
@@ -438,11 +350,7 @@ async def logout(
     user_agent: str | None = Header(default=None),
     _csrf: Annotated[None, Depends(CSRFProtected())] = None,
 ) -> dict[str, str]:
-    """Logout and revoke refresh token.
-
-    Accepts refresh token from request body or httpOnly cookie.
-    """
-    # Prefer cookie over body
+    """Logout and revoke refresh token."""
     token = refresh_token_cookie
     if not token and body:
         token = body.refresh_token
@@ -451,7 +359,6 @@ async def logout(
         ip_address = request.client.host if request.client else None
         await auth_service.logout(token, ip_address=ip_address, user_agent=user_agent)
 
-    # Clear auth cookies
     _clear_auth_cookies(response)
 
     return {"message": "Logout successful"}
@@ -469,7 +376,6 @@ async def logout_all_sessions(
     """Logout all sessions for the current user."""
     count = await auth_service.logout_all_sessions(current_user.id)
 
-    # Clear auth cookies
     _clear_auth_cookies(response)
 
     return {"sessions_revoked": count}
@@ -490,131 +396,6 @@ async def get_current_user_info(
         )
 
     return user_info
-
-
-@router.post("/change-password")
-@limiter.limit(AUTH_PASSWORD_CHANGE_LIMIT)
-async def change_password(
-    request: Request,
-    body: PasswordChangeRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> dict[str, str]:
-    """Change current user's password."""
-    ip_address = request.client.host if request.client else None
-    await auth_service.change_password(
-        user_id=current_user.id,
-        current_password=body.current_password,
-        new_password=body.new_password,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-    return {"message": "Password changed successfully"}
-
-
-# TOTP Two-Factor Authentication Endpoints
-
-# Rate limit for TOTP operations (stricter due to security sensitivity)
-AUTH_TOTP_LIMIT = "10/minute"
-
-
-@router.get("/totp/status", response_model=TotpStatusResponse)
-async def get_totp_status(
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> TotpStatusResponse:
-    """Get current TOTP status including backup codes remaining."""
-    return await auth_service.get_totp_status(current_user.id)
-
-
-@router.post("/totp/setup", response_model=TotpSetupResponse)
-@limiter.limit(AUTH_TOTP_LIMIT)
-async def setup_totp(
-    request: Request,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-) -> TotpSetupResponse:
-    """Initialize TOTP setup and get QR code.
-
-    Returns a QR code and secret for the authenticator app.
-    TOTP is not enabled until verified with /totp/verify.
-    """
-    return await auth_service.setup_totp(current_user.id)
-
-
-@router.post("/totp/verify", response_model=TotpEnableResponse)
-@limiter.limit(AUTH_TOTP_LIMIT)
-async def verify_and_enable_totp(
-    request: Request,
-    body: TotpVerifyRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> TotpEnableResponse:
-    """Verify TOTP code and enable two-factor authentication.
-
-    Must be called after /totp/setup with a valid code from the authenticator app.
-    Returns backup codes that should be stored securely.
-    """
-    ip_address = request.client.host if request.client else None
-    return await auth_service.verify_and_enable_totp(
-        user_id=current_user.id,
-        code=body.code,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-
-
-@router.post("/totp/disable")
-@limiter.limit(AUTH_TOTP_LIMIT)
-async def disable_totp(
-    request: Request,
-    body: TotpDisableRequest,
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> dict[str, str]:
-    """Disable two-factor authentication.
-
-    Requires password verification for security.
-    """
-    ip_address = request.client.host if request.client else None
-    await auth_service.disable_totp(
-        user_id=current_user.id,
-        password=body.password,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-    return {"message": "Two-factor authentication disabled successfully"}
-
-
-@router.post("/totp/backup-codes", response_model=TotpBackupCodesResponse)
-@limiter.limit(AUTH_TOTP_LIMIT)
-async def regenerate_backup_codes(
-    request: Request,
-    body: TotpDisableRequest,  # Re-use password request
-    current_user: Annotated[AdminUser, Depends(get_current_user)],
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> TotpBackupCodesResponse:
-    """Regenerate backup codes.
-
-    Requires password verification for security.
-    Previous backup codes will be invalidated.
-    """
-    ip_address = request.client.host if request.client else None
-    return await auth_service.regenerate_backup_codes(
-        user_id=current_user.id,
-        password=body.password,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
 
 
 # Profile Update Endpoints
@@ -649,10 +430,7 @@ async def upload_avatar(
     _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> AvatarUploadResponse:
-    """Upload avatar image for current user.
-
-    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
-    """
+    """Upload avatar image for current user."""
     content = await file.read()
 
     try:
@@ -675,8 +453,6 @@ async def get_avatar(
     current_user: Annotated[AdminUser, Depends(get_current_user)],
 ) -> Response:
     """Get avatar image for a user. Requires authentication."""
-    # FastAPI validates UUID format automatically via type annotation
-    # Try to find avatar with any extension
     for ext in [".jpg", ".png", ".gif", ".webp"]:
         file_path = ADMIN_AVATAR_DIR / f"{user_id}{ext}"
         if file_path.exists():
@@ -725,7 +501,6 @@ async def get_notification_preferences(
     """Get current user's notification preferences."""
     prefs = await auth_service.get_notification_preferences(current_user.id)
 
-    # Build response with event type info
     pref_responses = []
     for pref in prefs:
         event_info = EVENT_TYPE_MAP.get(pref.event_type)
@@ -757,7 +532,6 @@ async def update_notification_preferences(
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserNotificationPreferencesResponse:
     """Update current user's notification preferences (bulk)."""
-    # Convert to list of dicts for bulk upsert
     prefs_data = [
         {
             "event_type": p.event_type,
@@ -770,7 +544,6 @@ async def update_notification_preferences(
 
     prefs = await auth_service.update_notification_preferences_bulk(current_user.id, prefs_data)
 
-    # Build response with event type info
     pref_responses = []
     for pref in prefs:
         event_info = EVENT_TYPE_MAP.get(pref.event_type)

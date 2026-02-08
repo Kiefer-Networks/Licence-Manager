@@ -13,9 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check, Globe, Calendar, Hash, DollarSign, ShieldCheck, ShieldOff, RefreshCw } from 'lucide-react';
-import { TotpSetupDialog, TotpBackupCodesDialog, TotpDisableDialog, TotpRegenerateDialog } from '@/components/totp';
-import { TotpStatusResponse } from '@/lib/api';
+import { Loader2, Bell, MessageSquare, User, Shield, Camera, Trash2, Palette, Sun, Moon, Monitor, Check, Globe, Calendar, Hash, DollarSign } from 'lucide-react';
 import { useTheme } from '@/components/theme-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -51,12 +49,8 @@ export default function ProfilePage() {
   const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
 
   // Security tab state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [securityError, setSecurityError] = useState('');
   const [securitySuccess, setSecuritySuccess] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Notification preferences state
   const [notifPrefs, setNotifPrefs] = useState<UserNotificationPreference[]>([]);
@@ -65,15 +59,6 @@ export default function ProfilePage() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifError, setNotifError] = useState('');
   const [notifSuccess, setNotifSuccess] = useState('');
-
-  // TOTP state
-  const [totpStatus, setTotpStatus] = useState<TotpStatusResponse | null>(null);
-  const [totpLoading, setTotpLoading] = useState(true);
-  const [showTotpSetup, setShowTotpSetup] = useState(false);
-  const [showTotpDisable, setShowTotpDisable] = useState(false);
-  const [showTotpRegenerate, setShowTotpRegenerate] = useState(false);
-  const [showBackupCodes, setShowBackupCodes] = useState(false);
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
   // Initialize name from user
   useEffect(() => {
@@ -105,22 +90,6 @@ export default function ProfilePage() {
       }
     };
     fetchNotificationPreferences();
-  }, []);
-
-  // Fetch TOTP status
-  useEffect(() => {
-    const fetchTotpStatus = async () => {
-      try {
-        const status = await api.getTotpStatus();
-        setTotpStatus(status);
-      } catch {
-        // Error handled silently - TOTP will show as disabled
-        setTotpStatus({ enabled: false, has_backup_codes: false });
-      } finally {
-        setTotpLoading(false);
-      }
-    };
-    fetchTotpStatus();
   }, []);
 
   // Get preference for an event type
@@ -300,38 +269,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle password change
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSecurityError('');
-    setSecuritySuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setSecurityError(t('passwordsDoNotMatch'));
-      return;
-    }
-
-    if (newPassword.length < 12) {
-      setSecurityError(t('passwordTooShort'));
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      await api.changePassword(currentPassword, newPassword);
-      setSecuritySuccess(t('passwordChanged'));
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
-      setSecurityError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleLogoutAllSessions = async () => {
     try {
       const result = await api.logoutAllSessions();
@@ -340,27 +277,6 @@ export default function ProfilePage() {
       const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
       setSecurityError(errorMessage);
     }
-  };
-
-  // TOTP handlers
-  const handleTotpSetupSuccess = (codes: string[]) => {
-    setBackupCodes(codes);
-    setShowBackupCodes(true);
-    setTotpStatus({ enabled: true, has_backup_codes: true, verified_at: new Date().toISOString() });
-    setSecuritySuccess(t('totpSetupSuccess'));
-    refreshUser?.();
-  };
-
-  const handleTotpDisableSuccess = () => {
-    setTotpStatus({ enabled: false, has_backup_codes: false });
-    setSecuritySuccess(t('totpDisableSuccess'));
-    refreshUser?.();
-  };
-
-  const handleTotpRegenerateSuccess = (codes: string[]) => {
-    setBackupCodes(codes);
-    setShowBackupCodes(true);
-    setTotpStatus(prev => prev ? { ...prev, has_backup_codes: true } : prev);
   };
 
   // Handle locale settings save
@@ -743,138 +659,51 @@ export default function ProfilePage() {
 
           {/* Security Tab */}
           <TabsContent value="security" className="space-y-6 mt-6">
-            {/* Change Password */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('changePassword')}</CardTitle>
-                <CardDescription>{t('updatePassword')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleChangePassword} className="space-y-4">
-                  {securityError && (
-                    <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                      {securityError}
-                    </div>
-                  )}
-                  {securitySuccess && (
-                    <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
-                      {securitySuccess}
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">{t('currentPassword')}</Label>
-                    <Input
-                      id="current-password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">{t('newPassword')}</Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      minLength={12}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t('passwordRequirements')}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">{t('confirmNewPassword')}</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      minLength={12}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? t('changing') : t('changePassword')}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+            {securityError && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                {securityError}
+              </div>
+            )}
+            {securitySuccess && (
+              <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
+                {securitySuccess}
+              </div>
+            )}
 
-            {/* Two-Factor Authentication */}
+            {/* Google OAuth Info */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  {totpStatus?.enabled ? (
-                    <ShieldCheck className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <Shield className="h-5 w-5" />
-                  )}
-                  {t('twoFactorAuth')}
+                  <Shield className="h-5 w-5" />
+                  {t('authMethod')}
                 </CardTitle>
-                <CardDescription>{t('twoFactorAuthDescription')}</CardDescription>
+                <CardDescription>{t('authMethodDescription')}</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {totpLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : totpStatus?.enabled ? (
-                  <div className="space-y-4">
-                    {/* Status Badge */}
-                    <div className="flex items-center gap-3">
-                      <Badge variant="default" className="bg-green-600">
-                        {t('totpEnabled')}
-                      </Badge>
-                      {totpStatus.verified_at && (
-                        <span className="text-sm text-muted-foreground">
-                          {t('totpEnabledAt', { date: new Date(totpStatus.verified_at).toLocaleDateString() })}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowTotpRegenerate(true)}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        {t('totpManage')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowTotpDisable(true)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <ShieldOff className="h-4 w-4 mr-2" />
-                        {t('totpDisable')}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Status Badge */}
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary">
-                        {t('totpDisabled')}
-                      </Badge>
-                    </div>
-
-                    {/* Setup Button */}
-                    <Button onClick={() => setShowTotpSetup(true)}>
-                      <ShieldCheck className="h-4 w-4 mr-2" />
-                      {t('totpSetup')}
-                    </Button>
-                  </div>
-                )}
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      fill="#EA4335"
+                    />
+                  </svg>
+                  <span className="font-medium">{t('googleOAuth')}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t('googleOAuthDescription')}
+                </p>
               </CardContent>
             </Card>
 
@@ -1005,28 +834,6 @@ export default function ProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* TOTP Dialogs */}
-      <TotpSetupDialog
-        open={showTotpSetup}
-        onOpenChange={setShowTotpSetup}
-        onSuccess={handleTotpSetupSuccess}
-      />
-      <TotpBackupCodesDialog
-        open={showBackupCodes}
-        onOpenChange={setShowBackupCodes}
-        backupCodes={backupCodes}
-      />
-      <TotpDisableDialog
-        open={showTotpDisable}
-        onOpenChange={setShowTotpDisable}
-        onSuccess={handleTotpDisableSuccess}
-      />
-      <TotpRegenerateDialog
-        open={showTotpRegenerate}
-        onOpenChange={setShowTotpRegenerate}
-        onSuccess={handleTotpRegenerateSuccess}
-      />
 
       {/* Image Crop Dialog */}
       {selectedImageSrc && (

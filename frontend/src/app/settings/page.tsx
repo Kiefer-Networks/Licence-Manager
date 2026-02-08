@@ -22,10 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, PasswordPolicySettings, PasswordPolicyResponse, SystemSettings } from '@/lib/api';
+import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, SystemSettings } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, HardDrive, Info, Mail, Server, Lock, ShieldCheck, Database } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, HardDrive, Info, Mail, Server, Database, ShieldCheck } from 'lucide-react';
 import { BackupsTab } from '@/components/settings/BackupsTab';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -87,21 +87,6 @@ export default function SettingsPage() {
   });
   const [savingThresholds, setSavingThresholds] = useState(false);
 
-  // Password Policy state
-  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicySettings>({
-    min_length: 12,
-    require_uppercase: true,
-    require_lowercase: true,
-    require_numbers: true,
-    require_special_chars: true,
-    expiry_days: 90,
-    history_count: 5,
-    max_failed_attempts: 5,
-    lockout_duration_minutes: 15,
-  });
-  const [passwordPolicyWarning, setPasswordPolicyWarning] = useState(false);
-  const [savingPasswordPolicy, setSavingPasswordPolicy] = useState(false);
-
   // Active tab state
   const [activeTab, setActiveTab] = useState('general');
 
@@ -113,7 +98,6 @@ export default function SettingsPage() {
       fetchNotificationRules(),
       fetchThresholdSettings(),
       fetchEmailConfig(),
-      fetchPasswordPolicy(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -217,46 +201,6 @@ export default function SettingsPage() {
       showToast('error', message);
     } finally {
       setSavingThresholds(false);
-    }
-  };
-
-  async function fetchPasswordPolicy() {
-    try {
-      const policy = await api.getPasswordPolicy();
-      setPasswordPolicy({
-        min_length: policy.min_length,
-        require_uppercase: policy.require_uppercase,
-        require_lowercase: policy.require_lowercase,
-        require_numbers: policy.require_numbers,
-        require_special_chars: policy.require_special_chars,
-        expiry_days: policy.expiry_days,
-        history_count: policy.history_count,
-        max_failed_attempts: policy.max_failed_attempts,
-        lockout_duration_minutes: policy.lockout_duration_minutes,
-      });
-      setPasswordPolicyWarning(policy.length_warning);
-    } catch (error) {
-      handleSilentError('fetchPasswordPolicy', error);
-    }
-  }
-
-  const handleSavePasswordPolicy = async () => {
-    // Validate minimum length
-    if (passwordPolicy.min_length < 8) {
-      showToast('error', t('passwordPolicy.minLengthError'));
-      return;
-    }
-
-    setSavingPasswordPolicy(true);
-    try {
-      const result = await api.updatePasswordPolicy(passwordPolicy);
-      setPasswordPolicyWarning(result.length_warning);
-      showToast('success', t('passwordPolicy.saved'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSave');
-      showToast('error', message);
-    } finally {
-      setSavingPasswordPolicy(false);
     }
   };
 
@@ -524,14 +468,10 @@ export default function SettingsPage() {
 
         {/* Tabs Navigation */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
               {t('tabs.general')}
-            </TabsTrigger>
-            <TabsTrigger value="security" className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" />
-              {t('tabs.security')}
             </TabsTrigger>
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
@@ -653,167 +593,6 @@ export default function SettingsPage() {
               <Button size="sm" onClick={handleSaveDomains} disabled={savingDomains}>
                 {savingDomains ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {tCommon('save')}
-              </Button>
-            </div>
-          </div>
-        </section>
-
-          </TabsContent>
-
-          {/* ============================================ */}
-          {/* SECURITY TAB */}
-          {/* ============================================ */}
-          <TabsContent value="security" className="space-y-8 mt-6">
-
-        {/* Password Policy Section */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Lock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">{t('passwordPolicy.title')}</h2>
-            </div>
-          </div>
-
-          <div className="border rounded-lg bg-card p-4 space-y-6">
-            <p className="text-xs text-muted-foreground">
-              {t('passwordPolicy.description')}
-            </p>
-
-            {/* Warning for min_length < 16 */}
-            {passwordPolicyWarning && (
-              <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-amber-800">
-                  <p className="font-medium">{t('passwordPolicy.lengthWarningTitle')}</p>
-                  <p className="text-xs mt-1">{t('passwordPolicy.lengthWarningDescription')}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Minimum Length */}
-              <div className="space-y-2">
-                <Label htmlFor="min-length">{t('passwordPolicy.minLength')}</Label>
-                <Input
-                  id="min-length"
-                  type="number"
-                  value={passwordPolicy.min_length}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 8;
-                    setPasswordPolicy({ ...passwordPolicy, min_length: Math.max(8, value) });
-                    setPasswordPolicyWarning(value < 16);
-                  }}
-                  min={8}
-                  max={128}
-                />
-                <p className="text-xs text-muted-foreground">{t('passwordPolicy.minLengthHint')}</p>
-              </div>
-
-              {/* Password Expiry */}
-              <div className="space-y-2">
-                <Label htmlFor="expiry-days">{t('passwordPolicy.expiryDays')}</Label>
-                <Input
-                  id="expiry-days"
-                  type="number"
-                  value={passwordPolicy.expiry_days}
-                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, expiry_days: parseInt(e.target.value) || 0 })}
-                  min={0}
-                  max={365}
-                />
-                <p className="text-xs text-muted-foreground">{t('passwordPolicy.expiryDaysHint')}</p>
-              </div>
-
-              {/* History Count */}
-              <div className="space-y-2">
-                <Label htmlFor="history-count">{t('passwordPolicy.historyCount')}</Label>
-                <Input
-                  id="history-count"
-                  type="number"
-                  value={passwordPolicy.history_count}
-                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, history_count: parseInt(e.target.value) || 0 })}
-                  min={0}
-                  max={24}
-                />
-                <p className="text-xs text-muted-foreground">{t('passwordPolicy.historyCountHint')}</p>
-              </div>
-
-              {/* Max Failed Attempts */}
-              <div className="space-y-2">
-                <Label htmlFor="max-attempts">{t('passwordPolicy.maxFailedAttempts')}</Label>
-                <Input
-                  id="max-attempts"
-                  type="number"
-                  value={passwordPolicy.max_failed_attempts}
-                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, max_failed_attempts: parseInt(e.target.value) || 5 })}
-                  min={1}
-                  max={20}
-                />
-                <p className="text-xs text-muted-foreground">{t('passwordPolicy.maxFailedAttemptsHint')}</p>
-              </div>
-
-              {/* Lockout Duration */}
-              <div className="space-y-2">
-                <Label htmlFor="lockout-duration">{t('passwordPolicy.lockoutDuration')}</Label>
-                <Input
-                  id="lockout-duration"
-                  type="number"
-                  value={passwordPolicy.lockout_duration_minutes}
-                  onChange={(e) => setPasswordPolicy({ ...passwordPolicy, lockout_duration_minutes: parseInt(e.target.value) || 15 })}
-                  min={1}
-                  max={1440}
-                />
-                <p className="text-xs text-muted-foreground">{t('passwordPolicy.lockoutDurationHint')}</p>
-              </div>
-            </div>
-
-            {/* Complexity Requirements */}
-            <div className="space-y-3">
-              <Label>{t('passwordPolicy.complexityRequirements')}</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={passwordPolicy.require_uppercase}
-                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_uppercase: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  <span className="text-sm">{t('passwordPolicy.requireUppercase')}</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={passwordPolicy.require_lowercase}
-                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_lowercase: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  <span className="text-sm">{t('passwordPolicy.requireLowercase')}</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={passwordPolicy.require_numbers}
-                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_numbers: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  <span className="text-sm">{t('passwordPolicy.requireNumbers')}</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={passwordPolicy.require_special_chars}
-                    onChange={(e) => setPasswordPolicy({ ...passwordPolicy, require_special_chars: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  <span className="text-sm">{t('passwordPolicy.requireSpecialChars')}</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Save Button */}
-            <div className="pt-4 border-t">
-              <Button onClick={handleSavePasswordPolicy} disabled={savingPasswordPolicy}>
-                {savingPasswordPolicy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {t('passwordPolicy.save')}
               </Button>
             </div>
           </div>

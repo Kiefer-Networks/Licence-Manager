@@ -34,7 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Shield } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { SearchInput } from '@/components/ui/search-input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -56,19 +56,12 @@ export default function AdminUsersPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
-  const [disable2FADialogOpen, setDisable2FADialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
-  const [passwordSentViaEmail, setPasswordSentViaEmail] = useState(false);
-  const [emailConfigured, setEmailConfigured] = useState(false);
-  const [createResult, setCreateResult] = useState<AdminUserCreateResponse | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
     email: '',
     name: '',
-    password: '',
     language: 'en',  // Default to English
     role_codes: [] as string[],
   });
@@ -81,8 +74,6 @@ export default function AdminUsersPage() {
   const canCreate = hasPermission(Permissions.ADMIN_USERS_CREATE);
   const canUpdate = hasPermission(Permissions.ADMIN_USERS_UPDATE);
   const canDelete = hasPermission(Permissions.ADMIN_USERS_DELETE);
-  const canResetPassword = hasPermission(Permissions.ADMIN_USERS_RESET_PASSWORD);
-  const isSuperadmin = currentUser?.is_superadmin ?? false;
 
   useEffect(() => {
     if (!authLoading && !hasPermission(Permissions.ADMIN_USERS_VIEW)) {
@@ -93,17 +84,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     loadData();
-    checkEmailConfig();
   }, []);
-
-  const checkEmailConfig = async () => {
-    try {
-      const configured = await api.isEmailConfigured();
-      setEmailConfigured(configured);
-    } catch {
-      setEmailConfigured(false);
-    }
-  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -136,11 +117,8 @@ export default function AdminUsersPage() {
   };
 
   const openCreateDialog = () => {
-    setFormData({ email: '', name: '', password: '', language: 'en', role_codes: [] });
+    setFormData({ email: '', name: '', language: 'en', role_codes: [] });
     setFormErrors([]);
-    setCreateResult(null);
-    setTemporaryPassword(null);
-    setPasswordSentViaEmail(false);
     setCreateDialogOpen(true);
   };
 
@@ -149,7 +127,6 @@ export default function AdminUsersPage() {
     setFormData({
       email: user.email,
       name: user.name || '',
-      password: '',
       language: user.language || 'en',
       role_codes: user.roles, // Backend returns role codes directly
     });
@@ -162,34 +139,6 @@ export default function AdminUsersPage() {
     setDeleteDialogOpen(true);
   };
 
-  const openResetPasswordDialog = (user: AdminUser) => {
-    setSelectedUser(user);
-    setTemporaryPassword(null);
-    setPasswordSentViaEmail(false);
-    setResetPasswordDialogOpen(true);
-  };
-
-  const openDisable2FADialog = (user: AdminUser) => {
-    setSelectedUser(user);
-    setDisable2FADialogOpen(true);
-  };
-
-  const handleDisable2FA = async () => {
-    if (!selectedUser) return;
-    setIsSubmitting(true);
-
-    try {
-      await api.disableUserTotp(selectedUser.id);
-      setDisable2FADialogOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToDisable2FA');
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleCreateUser = async () => {
     setFormErrors([]);
     setIsSubmitting(true);
@@ -200,24 +149,15 @@ export default function AdminUsersPage() {
         .map(code => roles.find(r => r.code === code)?.id)
         .filter((id): id is string => !!id);
 
-      const result = await api.createAdminUser({
+      await api.createAdminUser({
         email: formData.email,
         name: formData.name || undefined,
-        password: formData.password || undefined,
         language: formData.language,
         role_ids: roleIds,
       });
 
-      setCreateResult(result);
-      setPasswordSentViaEmail(result.password_sent_via_email);
-      setTemporaryPassword(result.temporary_password || null);
-
-      // Only close dialog if password was sent via email
-      if (result.password_sent_via_email) {
-        setCreateDialogOpen(false);
-        await loadData();
-      }
-      // If temporary_password is returned, keep dialog open to show it
+      setCreateDialogOpen(false);
+      await loadData();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('failedToCreate');
       setFormErrors([errorMessage]);
@@ -262,22 +202,6 @@ export default function AdminUsersPage() {
       await loadData();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('failedToDelete');
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!selectedUser) return;
-    setIsSubmitting(true);
-
-    try {
-      const result = await api.resetAdminUserPassword(selectedUser.id);
-      setPasswordSentViaEmail(result.password_sent_via_email);
-      setTemporaryPassword(result.temporary_password || null);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToResetPassword');
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -359,17 +283,9 @@ export default function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       {!user.is_active ? (
                         <Badge variant="secondary">{tCommon('inactive')}</Badge>
-                      ) : user.require_password_change ? (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">{t('passwordChangeRequired')}</Badge>
                       ) : (
                         <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
                       )}
-                      <span
-                        title={user.totp_enabled ? t('twoFactorEnabled') : t('twoFactorDisabled')}
-                        className={user.totp_enabled ? 'text-green-600' : 'text-muted-foreground/40'}
-                      >
-                        <Shield className="h-4 w-4" />
-                      </span>
                       {user.has_google_linked && (
                         <span title={t('googleLinked')} className="text-blue-600">
                           <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -413,16 +329,6 @@ export default function AdminUsersPage() {
                             {tCommon('edit')}
                           </DropdownMenuItem>
                         )}
-                        {canResetPassword && (
-                          <DropdownMenuItem onClick={() => openResetPasswordDialog(user)}>
-                            {t('resetPassword')}
-                          </DropdownMenuItem>
-                        )}
-                        {isSuperadmin && user.totp_enabled && user.id !== currentUser?.id && (
-                          <DropdownMenuItem onClick={() => openDisable2FADialog(user)}>
-                            {t('disable2FA')}
-                          </DropdownMenuItem>
-                        )}
                         {canDelete && user.id !== currentUser?.id && (
                           <>
                             <DropdownMenuSeparator />
@@ -452,33 +358,13 @@ export default function AdminUsersPage() {
       </Card>
 
       {/* Create User Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={(open) => {
-        if (!open && createResult) {
-          loadData();
-        }
-        setCreateDialogOpen(open);
-        if (!open) {
-          setCreateResult(null);
-          setTemporaryPassword(null);
-        }
-      }}>
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('addUser')}</DialogTitle>
-            <DialogDescription>{createResult ? t('userCreated') : t('addUserDescription')}</DialogDescription>
+            <DialogDescription>{t('addUserDescription')}</DialogDescription>
           </DialogHeader>
-          {createResult && createResult.temporary_password ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-md">
-                <Label className="text-sm text-muted-foreground">{t('temporaryPassword')}</Label>
-                <div className="font-mono text-lg mt-1 select-all">{createResult.temporary_password}</div>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {t('sharePasswordSecurely')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
+          <div className="space-y-4">
               {formErrors.length > 0 && (
                 <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
                   {formErrors.map((err, i) => <div key={i}>{err}</div>)}
@@ -519,28 +405,9 @@ export default function AdminUsersPage() {
                   {t('emailLanguageDescription')}
                 </p>
               </div>
-              {!emailConfigured && (
-                <div className="space-y-2">
-                  <Label htmlFor="create-password">{tCommon('password')}</Label>
-                  <Input
-                    id="create-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    minLength={12}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t('passwordRequirementsText')}
-                  </p>
-                </div>
-              )}
-              {emailConfigured && (
-                <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-md">
-                  {t('passwordWillBeSentViaEmail')}
-                </div>
-              )}
+              <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-md">
+                {t('userWillLoginWithGoogle')}
+              </div>
               <div className="space-y-2">
                 <Label>{t('roles')}</Label>
                 <div className="flex flex-wrap gap-2">
@@ -557,25 +424,13 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             </div>
-          )}
           <DialogFooter>
-            {createResult ? (
-              <Button onClick={() => {
-                setCreateDialogOpen(false);
-                setCreateResult(null);
-                setTemporaryPassword(null);
-                loadData();
-              }}>{t('done')}</Button>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button onClick={handleCreateUser} disabled={isSubmitting}>
-                  {isSubmitting ? t('creating') : t('addUser')}
-                </Button>
-              </>
-            )}
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button onClick={handleCreateUser} disabled={isSubmitting}>
+              {isSubmitting ? t('creating') : t('addUser')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -652,64 +507,6 @@ export default function AdminUsersPage() {
         isLoading={isSubmitting}
       />
 
-      {/* Reset Password Dialog */}
-      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('resetPassword')}</DialogTitle>
-            <DialogDescription>
-              {passwordSentViaEmail
-                ? t('passwordSentViaEmail')
-                : temporaryPassword
-                ? t('temporaryPasswordGenerated')
-                : t('resetPasswordFor', { email: selectedUser?.email || '' })}
-            </DialogDescription>
-          </DialogHeader>
-          {passwordSentViaEmail ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-green-50 text-green-700 rounded-md">
-                {t('passwordEmailSentTo', { email: selectedUser?.email || '' })}
-              </div>
-            </div>
-          ) : temporaryPassword ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-md">
-                <Label className="text-sm text-muted-foreground">{t('temporaryPassword')}</Label>
-                <div className="font-mono text-lg mt-1 select-all">{temporaryPassword}</div>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {t('sharePasswordSecurely')}
-              </p>
-            </div>
-          ) : null}
-          <DialogFooter>
-            {temporaryPassword || passwordSentViaEmail ? (
-              <Button onClick={() => setResetPasswordDialogOpen(false)}>{t('done')}</Button>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button onClick={handleResetPassword} disabled={isSubmitting}>
-                  {isSubmitting ? t('resetting') : t('resetPassword')}
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Disable 2FA Dialog */}
-      <ConfirmationDialog
-        open={disable2FADialogOpen}
-        onOpenChange={setDisable2FADialogOpen}
-        title={t('disable2FA')}
-        description={t('disable2FAConfirmation', { email: selectedUser?.email || '' })}
-        confirmLabel={t('disable2FA')}
-        loadingLabel={t('disabling')}
-        onConfirm={handleDisable2FA}
-        isLoading={isSubmitting}
-      />
       </div>
     </AppLayout>
   );

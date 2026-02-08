@@ -19,7 +19,6 @@ from licence_api.exceptions import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
-    PasswordResetResponse,
     PermissionResponse,
     PermissionsByCategory,
     RoleCreateRequest,
@@ -85,10 +84,9 @@ async def create_user(
     _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> UserCreateResponse:
-    """Create a new user with local authentication.
+    """Create a new user for Google OAuth login.
 
-    If email is configured, password can be omitted and will be auto-generated
-    and sent via email. If email is not configured, password is required.
+    Users are created with email and roles only - they authenticate via Google.
     """
     try:
         return await service.create_user(
@@ -127,7 +125,6 @@ async def update_user(
     _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserInfo:
     """Update user details."""
-    # Check role management permission
     if body.role_codes is not None:
         if not current_user.has_permission(Permissions.USERS_MANAGE_ROLES):
             raise_forbidden("Insufficient permissions to manage roles")
@@ -154,7 +151,7 @@ async def delete_user(
     _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> None:
-    """Delete a user. Superadmin only - user deletion is a critical operation."""
+    """Delete a user. Superadmin only."""
     try:
         await service.delete_user(
             user_id=user_id,
@@ -168,102 +165,13 @@ async def delete_user(
         raise_bad_request("Cannot delete your own account")
 
 
-@router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
-@limiter.limit(ADMIN_SENSITIVE_LIMIT)
-async def reset_user_password(
-    request: Request,
-    user_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_superadmin)],
-    service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> PasswordResetResponse:
-    """Reset a user's password (superadmin only). Rate limited.
-
-    Generates a new temporary password. If email is configured, the password
-    is sent via email. Otherwise, it is returned in the response.
-    """
-    try:
-        return await service.reset_user_password(
-            user_id=user_id,
-            current_user=current_user,
-            http_request=request,
-            user_agent=user_agent,
-        )
-    except UserNotFoundError:
-        raise_not_found("User not found")
-
-
-@router.post("/users/{user_id}/unlock")
-@limiter.limit(ADMIN_SENSITIVE_LIMIT)
-async def unlock_user(
-    request: Request,
-    user_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_EDIT))],
-    service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-) -> dict[str, str]:
-    """Unlock a locked user account."""
-    try:
-        await service.unlock_user(user_id)
-        return {"message": "User unlocked successfully"}
-    except UserNotFoundError:
-        raise_not_found("User not found")
-
-
-@router.post("/users/{user_id}/disable-totp")
-@limiter.limit(ADMIN_SENSITIVE_LIMIT)
-async def disable_user_totp(
-    request: Request,
-    user_id: UUID,
-    current_user: Annotated[AdminUser, Depends(require_superadmin)],
-    service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
-    user_agent: str | None = Header(default=None),
-) -> dict[str, str]:
-    """Disable two-factor authentication for a user (superadmin only).
-
-    This is an administrative action that does not require the user's password.
-    All active sessions for the user will be revoked.
-    """
-    try:
-        return await service.disable_user_totp(
-            user_id=user_id,
-            current_user=current_user,
-            http_request=request,
-            user_agent=user_agent,
-        )
-    except UserNotFoundError:
-        raise_not_found("User not found")
-    except ValidationError as e:
-        raise_bad_request(str(e))
-
-
 @router.get("/users/{user_id}/sessions", response_model=list[SessionInfo])
 async def get_user_sessions(
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> list[SessionInfo]:
-    """Get active sessions for a user.
-
-    Permission requirements:
-    - Users can always view their own sessions (user_id == current_user.id)
-    - Viewing other users' sessions requires users.view permission
-
-    Args:
-        user_id: The UUID of the user whose sessions to retrieve
-        current_user: The authenticated user making the request
-        service: The RBAC service instance
-
-    Returns:
-        List of active sessions for the specified user
-
-    Raises:
-        HTTPException 403: If attempting to view another user's sessions without
-            the required users.view permission
-    """
-    # Verify permission: users can view own sessions, others require users.view
+    """Get active sessions for a user."""
     is_own_sessions = user_id == current_user.id
     has_view_permission = current_user.has_permission(Permissions.USERS_VIEW)
 

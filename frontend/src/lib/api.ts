@@ -1430,8 +1430,6 @@ export interface AdminUser {
   auth_provider: string;
   has_google_linked: boolean;
   is_active: boolean;
-  require_password_change: boolean;
-  totp_enabled: boolean;
   roles: string[];  // Role codes
   permissions: string[];  // Permission codes
   last_login_at?: string;
@@ -1450,21 +1448,12 @@ export interface AdminUserListResponse {
 export interface AdminUserCreateRequest {
   email: string;
   name?: string;
-  password?: string;  // Optional when email is configured
   language?: string;  // ISO 639-1 language code (en, de) for email notifications
   role_codes: string[];
 }
 
 export interface AdminUserCreateResponse {
   user: AdminUser;
-  password_sent_via_email: boolean;
-  temporary_password?: string;  // Only returned if email not configured
-}
-
-export interface PasswordResetResponse {
-  message: string;
-  password_sent_via_email: boolean;
-  temporary_password?: string;  // Only returned if email not configured
 }
 
 export interface AdminUserUpdateRequest {
@@ -1497,8 +1486,6 @@ export interface CurrentUserInfo {
   date_format?: string;
   number_format?: string;
   currency?: string;
-  // TOTP two-factor authentication
-  totp_enabled: boolean;
 }
 
 export interface ProfileUpdateRequest {
@@ -1507,46 +1494,6 @@ export interface ProfileUpdateRequest {
   date_format?: string;
   number_format?: string;
   currency?: string;
-}
-
-export interface LoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-  expires_in: number;
-  // TOTP two-factor authentication
-  totp_required?: boolean;
-}
-
-// ============================================================================
-// TOTP Two-Factor Authentication Types
-// ============================================================================
-
-export interface TotpSetupResponse {
-  secret: string;
-  qr_code_data_uri: string;
-  issuer: string;
-  account_name: string;
-}
-
-export interface TotpStatusResponse {
-  enabled: boolean;
-  verified_at?: string;
-  has_backup_codes: boolean;
-}
-
-export interface TotpEnableResponse {
-  enabled: boolean;
-  backup_codes: string[];
-}
-
-export interface TotpBackupCodesResponse {
-  backup_codes: string[];
-}
-
-export interface PasswordChangeRequest {
-  current_password: string;
-  new_password: string;
 }
 
 // ============================================================================
@@ -1601,32 +1548,6 @@ export interface EmailConfigStatus {
 export interface TestEmailResponse {
   success: boolean;
   message: string;
-}
-
-// ============================================================================
-// Password Policy Types
-// ============================================================================
-
-export interface PasswordPolicySettings {
-  min_length: number;
-  require_uppercase: boolean;
-  require_lowercase: boolean;
-  require_numbers: boolean;
-  require_special_chars: boolean;
-  expiry_days: number;
-  history_count: number;
-  max_failed_attempts: number;
-  lockout_duration_minutes: number;
-}
-
-export interface PasswordPolicyResponse extends PasswordPolicySettings {
-  length_warning: boolean;  // True if min_length < 16
-}
-
-export interface PasswordValidationResponse {
-  valid: boolean;
-  errors: string[];
-  strength: 'weak' | 'medium' | 'strong' | 'very_strong';
 }
 
 // ============================================================================
@@ -2615,32 +2536,6 @@ export const api = {
     return `${API_BASE}/api/v1/auth/google`;
   },
 
-  async login(email: string, password: string, totpCode?: string): Promise<LoginResponse> {
-    // First get CSRF token for the login request
-    const csrfTokenValue = await getCsrfToken();
-
-    const body: Record<string, string> = { email, password };
-    if (totpCode) body.totp_code = totpCode;
-
-    const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfTokenValue,
-      },
-      credentials: 'include', // Receive httpOnly cookies
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(error.detail || 'Login failed');
-    }
-
-    // Tokens are now stored in httpOnly cookies by the server
-    return response.json();
-  },
-
   async logout(): Promise<void> {
     try {
       // Server reads refresh token from httpOnly cookie
@@ -2668,16 +2563,6 @@ export const api = {
 
   async getCurrentUser(): Promise<CurrentUserInfo> {
     return fetchApi<CurrentUserInfo>('/auth/me');
-  },
-
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await fetchApi('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({
-        current_password: currentPassword,
-        new_password: newPassword,
-      }),
-    });
   },
 
   // Profile Update
@@ -2746,41 +2631,6 @@ export const api = {
   },
 
   // ============================================================================
-  // TOTP Two-Factor Authentication
-  // ============================================================================
-
-  async getTotpStatus(): Promise<TotpStatusResponse> {
-    return fetchApi<TotpStatusResponse>('/auth/totp/status');
-  },
-
-  async setupTotp(): Promise<TotpSetupResponse> {
-    return fetchApi<TotpSetupResponse>('/auth/totp/setup', {
-      method: 'POST',
-    });
-  },
-
-  async verifyAndEnableTotp(code: string): Promise<TotpEnableResponse> {
-    return fetchApi<TotpEnableResponse>('/auth/totp/verify', {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-    });
-  },
-
-  async disableTotp(password: string): Promise<void> {
-    await fetchApi('/auth/totp/disable', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-  },
-
-  async regenerateBackupCodes(password: string): Promise<TotpBackupCodesResponse> {
-    return fetchApi<TotpBackupCodesResponse>('/auth/totp/backup-codes', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-  },
-
-  // ============================================================================
   // System Settings
   // ============================================================================
 
@@ -2840,25 +2690,6 @@ export const api = {
     return 'is_configured' in config ? config.is_configured : true;
   },
 
-  // Password Policy
-  async getPasswordPolicy(): Promise<PasswordPolicyResponse> {
-    return fetchApi<PasswordPolicyResponse>('/settings/password-policy');
-  },
-
-  async updatePasswordPolicy(policy: PasswordPolicySettings): Promise<PasswordPolicyResponse> {
-    return fetchApi<PasswordPolicyResponse>('/settings/password-policy', {
-      method: 'PUT',
-      body: JSON.stringify(policy),
-    });
-  },
-
-  async validatePassword(password: string): Promise<PasswordValidationResponse> {
-    return fetchApi<PasswordValidationResponse>('/settings/password-policy/validate', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-  },
-
   // ============================================================================
   // RBAC - Admin Users
   // ============================================================================
@@ -2881,7 +2712,6 @@ export const api = {
   async createAdminUser(data: {
     email: string;
     name?: string;
-    password?: string;  // Optional when email is configured
     language?: string;  // ISO 639-1 language code for email
     role_ids: string[];
   }): Promise<AdminUserCreateResponse> {
@@ -2896,7 +2726,6 @@ export const api = {
       body: JSON.stringify({
         email: data.email,
         name: data.name,
-        password: data.password,
         language: data.language,
         role_codes: roleCodes,
       }),
@@ -2931,24 +2760,6 @@ export const api = {
 
   async deleteAdminUser(userId: string): Promise<void> {
     await fetchApi(`/rbac/users/${userId}`, { method: 'DELETE' });
-  },
-
-  async resetAdminUserPassword(userId: string): Promise<PasswordResetResponse> {
-    return fetchApi<PasswordResetResponse>(`/rbac/users/${userId}/reset-password`, {
-      method: 'POST',
-    });
-  },
-
-  async unlockAdminUser(userId: string): Promise<AdminUser> {
-    return fetchApi<AdminUser>(`/rbac/users/${userId}/unlock`, {
-      method: 'POST',
-    });
-  },
-
-  async disableUserTotp(userId: string): Promise<{ message: string }> {
-    return fetchApi<{ message: string }>(`/rbac/users/${userId}/disable-totp`, {
-      method: 'POST',
-    });
   },
 
   async getAdminUserSessions(userId: string): Promise<{ sessions: UserSession[] }> {

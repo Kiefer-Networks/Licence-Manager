@@ -4,21 +4,10 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { useRouter } from 'next/navigation';
 import { api, CurrentUserInfo } from '@/lib/api';
 
-export interface TotpRequiredResult {
-  totpRequired: true;
-}
-
-export interface LoginSuccessResult {
-  totpRequired: false;
-}
-
-export type LoginResult = TotpRequiredResult | LoginSuccessResult;
-
 interface AuthContextType {
   user: CurrentUserInfo | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, totpCode?: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -39,7 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       // With httpOnly cookies, we verify auth by calling the /me endpoint
-      // The server will read the token from the httpOnly cookie
       const userInfo = await api.getCurrentUser();
       setUser(userInfo);
       // Ensure we have a CSRF token for subsequent requests
@@ -60,41 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
   }, [refreshUser]);
-
-  const login = useCallback(async (email: string, password: string, totpCode?: string): Promise<LoginResult> => {
-    // Clear any existing session state before logging in (only on first attempt, not TOTP verification)
-    // This ensures old tokens/state don't persist across logins
-    if (!totpCode) {
-      api.clearAuth();
-    }
-
-    // Get CSRF token first for the login request
-    await api.refreshCsrfToken();
-    const response = await api.login(email, password, totpCode);
-
-    // Check if TOTP verification is required
-    if (response.totp_required) {
-      return { totpRequired: true };
-    }
-
-    // Login successful - fetch user info to verify authentication worked
-    // Note: Cookies are set by the server response, should be available immediately
-    try {
-      const userInfo = await api.getCurrentUser();
-      setUser(userInfo);
-      // Refresh CSRF token after login (new session)
-      await api.refreshCsrfToken();
-    } catch (error) {
-      // If we can't fetch user info after successful login, something is wrong
-      // Clear any partial state and report the error
-      setUser(null);
-      api.clearAuth();
-      throw new Error('Login succeeded but failed to establish session. Please try again.');
-    }
-
-    router.push('/dashboard');
-    return { totpRequired: false };
-  }, [router]);
 
   const logout = useCallback(async () => {
     try {
@@ -140,7 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
-        login,
         logout,
         refreshUser,
         hasPermission,
@@ -174,7 +126,7 @@ export const Permissions = {
   ADMIN_USERS_CREATE: 'users.create',
   ADMIN_USERS_UPDATE: 'users.edit',
   ADMIN_USERS_DELETE: 'users.delete',
-  ADMIN_USERS_RESET_PASSWORD: 'users.manage_roles',
+  ADMIN_USERS_MANAGE_ROLES: 'users.manage_roles',
 
   // Roles
   ROLES_VIEW: 'roles.view',

@@ -144,7 +144,6 @@ def _get_rate_limit_settings() -> dict[str, str]:
         "default": f"{settings.rate_limit_default}/minute",
         "auth_login": f"{settings.rate_limit_auth_login}/minute",
         "auth_refresh": f"{settings.rate_limit_auth_refresh}/minute",
-        "auth_password_change": f"{settings.rate_limit_auth_password_change}/minute",
         "auth_logout": f"{settings.rate_limit_auth_logout}/minute",
         "admin_user_create": f"{settings.rate_limit_admin_user_create}/minute",
         "admin_role_modify": f"{settings.rate_limit_admin_role_modify}/minute",
@@ -166,7 +165,6 @@ limiter = Limiter(
 # Rate limit constants for different endpoint types
 AUTH_LOGIN_LIMIT = _rate_limits["auth_login"]
 AUTH_REFRESH_LIMIT = _rate_limits["auth_refresh"]
-AUTH_PASSWORD_CHANGE_LIMIT = _rate_limits["auth_password_change"]
 AUTH_LOGOUT_LIMIT = _rate_limits["auth_logout"]
 API_DEFAULT_LIMIT = _rate_limits["default"]
 

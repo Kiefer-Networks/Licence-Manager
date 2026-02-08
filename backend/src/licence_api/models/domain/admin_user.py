@@ -10,7 +10,6 @@ from pydantic import BaseModel, EmailStr
 class AuthProvider(StrEnum):
     """Authentication provider types."""
 
-    LOCAL = "local"
     GOOGLE = "google"
 
 
@@ -21,10 +20,8 @@ class AdminUser(BaseModel):
     email: EmailStr
     name: str | None = None
     picture_url: str | None = None
-    auth_provider: AuthProvider = AuthProvider.LOCAL
+    auth_provider: AuthProvider = AuthProvider.GOOGLE
     is_active: bool = True
-    is_locked: bool = False
-    require_password_change: bool = False
     last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
