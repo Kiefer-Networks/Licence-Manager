@@ -966,6 +966,7 @@
     "emailLanguage": "Email Language",
     "emailLanguageDescription": "Language for system emails (password, notifications)",
     "twoFactorEnabled": "2FA enabled",
+    "twoFactorDisabled": "2FA not enabled",
     "disable2FA": "Disable 2FA",
     "disable2FAConfirmation": "Are you sure you want to disable two-factor authentication for {email}? The user will be signed out and need to sign in again.",
     "failedToDisable2FA": "Failed to disable 2FA",

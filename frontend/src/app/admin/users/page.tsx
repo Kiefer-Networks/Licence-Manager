@@ -364,11 +364,12 @@ export default function AdminUsersPage() {
                       ) : (
                         <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
                       )}
-                      {user.totp_enabled && (
-                        <span title={t('twoFactorEnabled')} className="text-green-600">
-                          <Shield className="h-4 w-4" />
-                        </span>
-                      )}
+                      <span
+                        title={user.totp_enabled ? t('twoFactorEnabled') : t('twoFactorDisabled')}
+                        className={user.totp_enabled ? 'text-green-600' : 'text-muted-foreground/40'}
+                      >
+                        <Shield className="h-4 w-4" />
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>

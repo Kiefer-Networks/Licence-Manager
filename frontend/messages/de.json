@@ -978,6 +978,7 @@
     "emailLanguage": "E-Mail-Sprache",
     "emailLanguageDescription": "Sprache für System-E-Mails (Passwort, Benachrichtigungen)",
     "twoFactorEnabled": "2FA aktiviert",
+    "twoFactorDisabled": "2FA nicht aktiviert",
     "disable2FA": "2FA deaktivieren",
     "disable2FAConfirmation": "Sind Sie sicher, dass Sie die Zwei-Faktor-Authentifizierung für {email} deaktivieren möchten? Der Benutzer wird abgemeldet und muss sich erneut anmelden.",
     "failedToDisable2FA": "2FA-Deaktivierung fehlgeschlagen",
