@@ -1428,7 +1428,7 @@ export interface AdminUser {
   name?: string;
   picture_url?: string;
   auth_provider: string;
-  has_google_linked: boolean;
+  has_google_login: boolean;  // True if user has logged in with Google (email cannot be changed)
   is_active: boolean;
   roles: string[];  // Role codes
   permissions: string[];  // Permission codes

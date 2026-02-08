@@ -137,8 +137,10 @@ async def update_user(
         )
     except UserNotFoundError:
         raise_not_found("User not found")
-    except ValidationError:
-        raise_bad_request("Invalid update data")
+    except UserAlreadyExistsError:
+        raise_conflict("Email already registered")
+    except ValidationError as e:
+        raise_bad_request(str(e))
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

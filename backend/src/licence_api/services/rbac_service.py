@@ -65,6 +65,7 @@ class RbacService:
             permissions=sorted(permissions),
             is_superadmin="superadmin" in roles,
             last_login_at=user.last_login_at,
+            has_google_login=user.google_id is not None,
             language=getattr(user, "language", "en") or "en",
             date_format=user.date_format,
             number_format=user.number_format,
@@ -170,6 +171,12 @@ class RbacService:
 
         # Update fields
         if request.email is not None and request.email != user.email:
+            # Prevent email change if user has already logged in with Google
+            if user.google_id is not None:
+                raise ValidationError(
+                    "Email cannot be changed after Google login. "
+                    "The email is linked to the Google account."
+                )
             existing = await self.user_repo.get_by_email(request.email)
             if existing is not None:
                 raise UserAlreadyExistsError(request.email)
@@ -178,8 +185,15 @@ class RbacService:
         if request.name is not None:
             user.name = request.name
 
+        # Handle activation status change
         if request.is_active is not None:
+            was_active = user.is_active
             user.is_active = request.is_active
+
+            # Revoke all sessions when deactivating a user
+            if was_active and not request.is_active:
+                await self.token_repo.revoke_all_for_user(user_id)
+                logger.info(f"Deactivated user {user.email} and revoked all sessions")
 
         # Update roles if provided
         if request.role_codes is not None:

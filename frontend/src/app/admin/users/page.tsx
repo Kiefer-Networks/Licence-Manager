@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -64,6 +65,7 @@ export default function AdminUsersPage() {
     name: '',
     language: 'en',  // Default to English
     role_codes: [] as string[],
+    is_active: true,
   });
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -117,7 +119,7 @@ export default function AdminUsersPage() {
   };
 
   const openCreateDialog = () => {
-    setFormData({ email: '', name: '', language: 'en', role_codes: [] });
+    setFormData({ email: '', name: '', language: 'en', role_codes: [], is_active: true });
     setFormErrors([]);
     setCreateDialogOpen(true);
   };
@@ -129,6 +131,7 @@ export default function AdminUsersPage() {
       name: user.name || '',
       language: user.language || 'en',
       role_codes: user.roles, // Backend returns role codes directly
+      is_active: user.is_active,
     });
     setFormErrors([]);
     setEditDialogOpen(true);
@@ -181,6 +184,7 @@ export default function AdminUsersPage() {
         email: formData.email !== selectedUser.email ? formData.email : undefined,
         name: formData.name || undefined,
         role_ids: roleIds,
+        is_active: formData.is_active !== selectedUser.is_active ? formData.is_active : undefined,
       });
       setEditDialogOpen(false);
       await loadData();
@@ -286,7 +290,7 @@ export default function AdminUsersPage() {
                       ) : (
                         <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
                       )}
-                      {user.has_google_linked && (
+                      {user.has_google_login && (
                         <span title={t('googleLinked')} className="text-blue-600">
                           <svg className="h-4 w-4" viewBox="0 0 24 24">
                             <path
@@ -457,7 +461,13 @@ export default function AdminUsersPage() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
+                disabled={selectedUser?.has_google_login}
               />
+              {selectedUser?.has_google_login && (
+                <p className="text-xs text-muted-foreground">
+                  {t('emailCannotBeChanged')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-name">{t('nameOptional')}</Label>
@@ -483,6 +493,22 @@ export default function AdminUsersPage() {
                 ))}
               </div>
             </div>
+            {/* Active status toggle - cannot deactivate yourself */}
+            {selectedUser && selectedUser.id !== currentUser?.id && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="edit-active">{t('userActive')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('userActiveDescription')}
+                  </p>
+                </div>
+                <Switch
+                  id="edit-active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>

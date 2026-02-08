@@ -34,6 +34,8 @@ class UserInfo(BaseModel):
     permissions: list[str]
     is_superadmin: bool = False
     last_login_at: datetime | None = None
+    # True if user has logged in with Google (email cannot be changed)
+    has_google_login: bool = False
     # Locale preferences
     language: str = "en"
     date_format: str | None = "DD.MM.YYYY"

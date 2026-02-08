@@ -908,7 +908,11 @@
     "emailLanguage": "E-Mail-Sprache",
     "emailLanguageDescription": "Sprache für System-E-Mails (Benachrichtigungen)",
     "googleLinked": "Mit Google verknüpft",
-    "loginViaGoogle": "Anmeldung erfolgt über Google OAuth"
+    "loginViaGoogle": "Anmeldung erfolgt über Google OAuth",
+    "emailCannotBeChanged": "E-Mail kann nach der Google-Anmeldung nicht mehr geändert werden.",
+    "userActive": "Benutzer aktiv",
+    "userActiveDescription": "Deaktivierte Benutzer können sich nicht mehr anmelden.",
+    "userWillLoginWithGoogle": "Der Benutzer meldet sich mit seinem Google-Konto an. Es ist kein Passwort erforderlich."
   },
   "roles": {
     "title": "Rollen",

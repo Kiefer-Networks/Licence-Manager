@@ -908,7 +908,11 @@
     "emailLanguage": "Email Language",
     "emailLanguageDescription": "Language for system emails (notifications)",
     "googleLinked": "Linked with Google",
-    "loginViaGoogle": "Login is via Google OAuth"
+    "loginViaGoogle": "Login is via Google OAuth",
+    "emailCannotBeChanged": "Email cannot be changed after Google login.",
+    "userActive": "User active",
+    "userActiveDescription": "Deactivated users cannot log in.",
+    "userWillLoginWithGoogle": "The user will sign in with their Google account. No password required."
   },
   "roles": {
     "title": "Roles",
