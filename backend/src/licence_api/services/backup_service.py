@@ -67,7 +67,6 @@ from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.models.orm.organization_license import OrganizationLicenseORM
-from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.models.orm.payment_method import PaymentMethodORM
 from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.provider import ProviderORM
@@ -270,7 +269,6 @@ class BackupService:
         """Collect all exportable data from database."""
         # Fetch all entities
         admin_users = await self._fetch_all(AdminUserORM)
-        password_histories = await self._fetch_all(PasswordHistoryORM)
         refresh_tokens = await self._fetch_all(RefreshTokenORM)
         roles = await self._fetch_all(RoleORM)
         permissions = await self._fetch_all(PermissionORM)
@@ -304,7 +302,6 @@ class BackupService:
             "created_at": datetime.now(UTC).isoformat(),
             "metadata": {
                 "admin_user_count": len(admin_users),
-                "password_history_count": len(password_histories),
                 "refresh_token_count": len(refresh_tokens),
                 "role_count": len(roles),
                 "permission_count": len(permissions),
@@ -329,7 +326,6 @@ class BackupService:
             },
             "data": {
                 "admin_users": admin_users_data,
-                "password_histories": [self._orm_to_dict(ph) for ph in password_histories],
                 "refresh_tokens": [self._orm_to_dict(rt) for rt in refresh_tokens],
                 "roles": [self._orm_to_dict(r) for r in roles],
                 "permissions": [self._orm_to_dict(p) for p in permissions],
@@ -811,8 +807,7 @@ class BackupService:
         # 9. Payment methods
         await self.session.execute(delete(PaymentMethodORM))
 
-        # 10. Password history and refresh tokens (depend on admin_users)
-        await self.session.execute(delete(PasswordHistoryORM))
+        # 10. Refresh tokens (depend on admin_users)
         await self.session.execute(delete(RefreshTokenORM))
 
         # 11. Admin users (after all dependencies cleared)
@@ -964,18 +959,7 @@ class BackupService:
             self.session.add(user_orm)
             counts.admin_users += 1
 
-        # 5b. Password histories (depends on admin_users)
-        for ph in data.get("password_histories", []):
-            ph_orm = PasswordHistoryORM(
-                id=UUID(ph["id"]) if isinstance(ph["id"], str) else ph["id"],
-                user_id=UUID(ph["user_id"]) if isinstance(ph["user_id"], str) else ph["user_id"],
-                password_hash=ph["password_hash"],
-                created_at=self._parse_datetime(ph.get("created_at")),
-            )
-            self.session.add(ph_orm)
-            counts.password_histories += 1
-
-        # 5c. Refresh tokens (depends on admin_users)
+        # 5b. Refresh tokens (depends on admin_users)
         for rt in data.get("refresh_tokens", []):
             rt_orm = RefreshTokenORM(
                 id=UUID(rt["id"]) if isinstance(rt["id"], str) else rt["id"],

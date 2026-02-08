@@ -11,7 +11,6 @@ from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.models.orm.organization_license import OrganizationLicenseORM
-from licence_api.models.orm.password_history import PasswordHistoryORM
 from licence_api.models.orm.payment_method import PaymentMethodORM
 from licence_api.models.orm.permission import PermissionORM
 from licence_api.models.orm.provider import ProviderORM
@@ -40,7 +39,6 @@ __all__ = [
     "RolePermissionORM",
     "UserRoleORM",
     "RefreshTokenORM",
-    "PasswordHistoryORM",
     "LicensePackageORM",
     "OrganizationLicenseORM",
     "UserNotificationPreferenceORM",

@@ -18,7 +18,6 @@ class BackupMetadata(BaseModel):
 
     # User and access control
     admin_user_count: int = 0
-    password_history_count: int = 0
     refresh_token_count: int = 0
     role_count: int = 0
     permission_count: int = 0
@@ -70,7 +69,6 @@ class RestoreImportCounts(BaseModel):
 
     # User and access control
     admin_users: int = 0
-    password_histories: int = 0
     refresh_tokens: int = 0
     roles: int = 0
     permissions: int = 0
