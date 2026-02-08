@@ -442,48 +442,17 @@ class BackupService:
         return result
 
     def _admin_user_to_dict(self, user: AdminUserORM) -> dict[str, Any]:
-        """Convert admin user to dict, decrypting TOTP secrets for portability.
-
-        TOTP secrets are stored decrypted in the backup since the backup itself
-        is password-encrypted. This allows backups to be restored on servers
-        with different ENCRYPTION_KEYs.
-        """
-        # Decrypt TOTP secret if present
-        totp_secret = None
-        if user.totp_secret_encrypted:
-            try:
-                totp_secret = self.encryption.decrypt_string(user.totp_secret_encrypted)
-            except ValueError:
-                logger.warning(f"Failed to decrypt TOTP secret for user {user.id}")
-
-        # Decrypt TOTP backup codes if present
-        totp_backup_codes = None
-        if user.totp_backup_codes_encrypted:
-            try:
-                totp_backup_codes = self.encryption.decrypt(user.totp_backup_codes_encrypted)
-            except ValueError:
-                logger.warning(f"Failed to decrypt TOTP backup codes for user {user.id}")
-
+        """Convert admin user to dict for backup (Google OAuth only)."""
         return {
             "id": user.id,
             "email": user.email,
             "name": user.name,
             "picture_url": user.picture_url,
-            # Include password_hash for restore - it's already hashed
-            "password_hash": user.password_hash,
             "auth_provider": user.auth_provider,
+            "google_id": user.google_id,
             "is_active": user.is_active,
-            "is_locked": user.is_locked,
-            "failed_login_attempts": user.failed_login_attempts,
-            "locked_until": user.locked_until,
-            "password_changed_at": user.password_changed_at,
-            "require_password_change": user.require_password_change,
-            # TOTP fields - decrypted for portable backup
-            "totp_secret": totp_secret,  # Decrypted, will be re-encrypted on import
-            "totp_enabled": user.totp_enabled,
-            "totp_verified_at": user.totp_verified_at,
-            "totp_backup_codes": totp_backup_codes,  # Decrypted, will be re-encrypted on import
             "last_login_at": user.last_login_at,
+            "language": user.language,
             "date_format": user.date_format,
             "number_format": user.number_format,
             "currency": user.currency,
@@ -904,52 +873,18 @@ class BackupService:
             self.session.add(role_orm)
             counts.roles += 1
 
-        # 5. Admin users (no dependencies)
+        # 5. Admin users (no dependencies) - Google OAuth only
         for u in data.get("admin_users", []):
-            # Handle TOTP secret: new format (plaintext) or old format (encrypted bytes)
-            totp_secret_encrypted = None
-            if u.get("totp_secret"):
-                # New format: plaintext secret, encrypt with current key
-                totp_secret_encrypted = self.encryption.encrypt_string(u["totp_secret"])
-            elif u.get("totp_secret_encrypted"):
-                # Old format: already encrypted (backward compatibility)
-                totp_secret = u["totp_secret_encrypted"]
-                if isinstance(totp_secret, str):
-                    totp_secret_encrypted = base64.b64decode(totp_secret)
-                else:
-                    totp_secret_encrypted = totp_secret
-
-            # Handle TOTP backup codes: new format (plaintext) or old format (encrypted bytes)
-            totp_backup_codes_encrypted = None
-            if u.get("totp_backup_codes"):
-                # New format: plaintext codes, encrypt with current key
-                totp_backup_codes_encrypted = self.encryption.encrypt(u["totp_backup_codes"])
-            elif u.get("totp_backup_codes_encrypted"):
-                # Old format: already encrypted (backward compatibility)
-                totp_backup_codes = u["totp_backup_codes_encrypted"]
-                if isinstance(totp_backup_codes, str):
-                    totp_backup_codes_encrypted = base64.b64decode(totp_backup_codes)
-                else:
-                    totp_backup_codes_encrypted = totp_backup_codes
-
             user_orm = AdminUserORM(
                 id=UUID(u["id"]) if isinstance(u["id"], str) else u["id"],
                 email=u["email"],
                 name=u.get("name"),
                 picture_url=u.get("picture_url"),
-                password_hash=u.get("password_hash"),
-                auth_provider=u.get("auth_provider", "local"),
+                auth_provider=u.get("auth_provider", "google"),
+                google_id=u.get("google_id"),
                 is_active=u.get("is_active", True),
-                is_locked=u.get("is_locked", False),
-                failed_login_attempts=u.get("failed_login_attempts", 0),
-                locked_until=self._parse_datetime(u.get("locked_until")),
-                password_changed_at=self._parse_datetime(u.get("password_changed_at")),
-                require_password_change=u.get("require_password_change", False),
-                totp_secret_encrypted=totp_secret_encrypted,
-                totp_enabled=u.get("totp_enabled", False),
-                totp_verified_at=self._parse_datetime(u.get("totp_verified_at")),
-                totp_backup_codes_encrypted=totp_backup_codes_encrypted,
                 last_login_at=self._parse_datetime(u.get("last_login_at")),
+                language=u.get("language", "en"),
                 date_format=u.get("date_format", "DD.MM.YYYY"),
                 number_format=u.get("number_format", "de-DE"),
                 currency=u.get("currency", "EUR"),
