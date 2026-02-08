@@ -34,6 +34,7 @@ from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import RefreshTokenRepository, UserRepository
 from licence_api.security.password import get_password_service
 from licence_api.services.email_service import EmailService
+from licence_api.utils.security_events import SecurityEventType, log_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ class RbacService:
             auth_provider=user.auth_provider,
             is_active=user.is_active,
             require_password_change=user.require_password_change,
+            totp_enabled=user.totp_enabled,
             roles=roles,
             permissions=sorted(permissions),
             last_login_at=user.last_login_at,
@@ -447,6 +449,70 @@ class RbacService:
 
         await self.session.commit()
         return True
+
+    async def disable_user_totp(
+        self,
+        user_id: UUID,
+        current_user: AdminUser,
+        http_request: Request | None = None,
+        user_agent: str | None = None,
+    ) -> dict[str, str]:
+        """Disable TOTP for a user (admin operation, no password required).
+
+        Args:
+            user_id: User ID to disable TOTP for
+            current_user: Admin user performing the action
+            http_request: HTTP request for audit logging
+            user_agent: User agent string
+
+        Returns:
+            Success message
+
+        Raises:
+            UserNotFoundError: If user not found
+            ValidationError: If TOTP is not enabled
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(str(user_id))
+
+        if not user.totp_enabled:
+            raise ValidationError("Two-factor authentication is not enabled for this user")
+
+        # Disable TOTP
+        await self.user_repo.disable_totp(user_id)
+
+        # Revoke all sessions to force re-login
+        await self.token_repo.revoke_all_for_user(user_id)
+
+        # Audit log
+        ip_address = http_request.client.host if http_request and http_request.client else None
+        await self.audit_repo.log(
+            action="admin_totp_disabled",
+            resource_type="admin_user",
+            resource_id=user_id,
+            admin_user_id=current_user.id,
+            changes={
+                "target_email": user.email,
+                "disabled_by": current_user.email,
+            },
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Security event
+        log_security_event(
+            SecurityEventType.TOTP_DISABLED,
+            user_id=user_id,
+            user_email=user.email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details={"disabled_by_admin": str(current_user.id)},
+        )
+
+        await self.session.commit()
+
+        return {"message": "Two-factor authentication disabled successfully"}
 
     # =========================================================================
     # Role Management

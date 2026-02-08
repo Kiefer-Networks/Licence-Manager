@@ -1430,6 +1430,7 @@ export interface AdminUser {
   auth_provider: string;
   is_active: boolean;
   require_password_change: boolean;
+  totp_enabled: boolean;
   roles: string[];  // Role codes
   permissions: string[];  // Permission codes
   last_login_at?: string;
@@ -2920,6 +2921,12 @@ export const api = {
 
   async unlockAdminUser(userId: string): Promise<AdminUser> {
     return fetchApi<AdminUser>(`/rbac/users/${userId}/unlock`, {
+      method: 'POST',
+    });
+  },
+
+  async disableUserTotp(userId: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/rbac/users/${userId}/disable-totp`, {
       method: 'POST',
     });
   },

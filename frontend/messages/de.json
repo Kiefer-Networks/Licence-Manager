@@ -976,7 +976,12 @@
     "passwordSentViaEmail": "Passwort per E-Mail gesendet",
     "passwordEmailSentTo": "Ein temporäres Passwort wurde an {email} gesendet.",
     "emailLanguage": "E-Mail-Sprache",
-    "emailLanguageDescription": "Sprache für System-E-Mails (Passwort, Benachrichtigungen)"
+    "emailLanguageDescription": "Sprache für System-E-Mails (Passwort, Benachrichtigungen)",
+    "twoFactorEnabled": "2FA aktiviert",
+    "disable2FA": "2FA deaktivieren",
+    "disable2FAConfirmation": "Sind Sie sicher, dass Sie die Zwei-Faktor-Authentifizierung für {email} deaktivieren möchten? Der Benutzer wird abgemeldet und muss sich erneut anmelden.",
+    "failedToDisable2FA": "2FA-Deaktivierung fehlgeschlagen",
+    "disabling": "Wird deaktiviert..."
   },
   "roles": {
     "title": "Rollen",

@@ -210,6 +210,34 @@ async def unlock_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
+@router.post("/users/{user_id}/disable-totp")
+@limiter.limit(ADMIN_SENSITIVE_LIMIT)
+async def disable_user_totp(
+    request: Request,
+    user_id: UUID,
+    current_user: Annotated[AdminUser, Depends(require_superadmin)],
+    service: Annotated[RbacService, Depends(get_rbac_service)],
+    _csrf: Annotated[None, Depends(CSRFProtected())],
+    user_agent: str | None = Header(default=None),
+) -> dict[str, str]:
+    """Disable two-factor authentication for a user (superadmin only).
+
+    This is an administrative action that does not require the user's password.
+    All active sessions for the user will be revoked.
+    """
+    try:
+        return await service.disable_user_totp(
+            user_id=user_id,
+            current_user=current_user,
+            http_request=request,
+            user_agent=user_agent,
+        )
+    except UserNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/users/{user_id}/sessions", response_model=list[SessionInfo])
 async def get_user_sessions(
     user_id: UUID,

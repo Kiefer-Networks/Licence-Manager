@@ -34,7 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, Shield } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { SearchInput } from '@/components/ui/search-input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -57,6 +57,7 @@ export default function AdminUsersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [disable2FADialogOpen, setDisable2FADialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [passwordSentViaEmail, setPasswordSentViaEmail] = useState(false);
@@ -81,6 +82,7 @@ export default function AdminUsersPage() {
   const canUpdate = hasPermission(Permissions.ADMIN_USERS_UPDATE);
   const canDelete = hasPermission(Permissions.ADMIN_USERS_DELETE);
   const canResetPassword = hasPermission(Permissions.ADMIN_USERS_RESET_PASSWORD);
+  const isSuperadmin = currentUser?.is_superadmin ?? false;
 
   useEffect(() => {
     if (!authLoading && !hasPermission(Permissions.ADMIN_USERS_VIEW)) {
@@ -165,6 +167,27 @@ export default function AdminUsersPage() {
     setTemporaryPassword(null);
     setPasswordSentViaEmail(false);
     setResetPasswordDialogOpen(true);
+  };
+
+  const openDisable2FADialog = (user: AdminUser) => {
+    setSelectedUser(user);
+    setDisable2FADialogOpen(true);
+  };
+
+  const handleDisable2FA = async () => {
+    if (!selectedUser) return;
+    setIsSubmitting(true);
+
+    try {
+      await api.disableUserTotp(selectedUser.id);
+      setDisable2FADialogOpen(false);
+      await loadData();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : t('failedToDisable2FA');
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCreateUser = async () => {
@@ -333,13 +356,20 @@ export default function AdminUsersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {!user.is_active ? (
-                      <Badge variant="secondary">{tCommon('inactive')}</Badge>
-                    ) : user.require_password_change ? (
-                      <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">{t('passwordChangeRequired')}</Badge>
-                    ) : (
-                      <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {!user.is_active ? (
+                        <Badge variant="secondary">{tCommon('inactive')}</Badge>
+                      ) : user.require_password_change ? (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">{t('passwordChangeRequired')}</Badge>
+                      ) : (
+                        <Badge variant="default" className="bg-green-600">{tCommon('active')}</Badge>
+                      )}
+                      {user.totp_enabled && (
+                        <span title={t('twoFactorEnabled')} className="text-green-600">
+                          <Shield className="h-4 w-4" />
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {user.last_login_at
@@ -363,6 +393,11 @@ export default function AdminUsersPage() {
                         {canResetPassword && (
                           <DropdownMenuItem onClick={() => openResetPasswordDialog(user)}>
                             {t('resetPassword')}
+                          </DropdownMenuItem>
+                        )}
+                        {isSuperadmin && user.totp_enabled && user.id !== currentUser?.id && (
+                          <DropdownMenuItem onClick={() => openDisable2FADialog(user)}>
+                            {t('disable2FA')}
                           </DropdownMenuItem>
                         )}
                         {canDelete && user.id !== currentUser?.id && (
@@ -640,6 +675,18 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Disable 2FA Dialog */}
+      <ConfirmationDialog
+        open={disable2FADialogOpen}
+        onOpenChange={setDisable2FADialogOpen}
+        title={t('disable2FA')}
+        description={t('disable2FAConfirmation', { email: selectedUser?.email || '' })}
+        confirmLabel={t('disable2FA')}
+        loadingLabel={t('disabling')}
+        onConfirm={handleDisable2FA}
+        isLoading={isSubmitting}
+      />
       </div>
     </AppLayout>
   );
