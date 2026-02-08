@@ -91,6 +91,7 @@
     "signInWithGoogle": "Sign in with Google",
     "googleAccountNotFound": "No account found for this email address. Please contact an administrator.",
     "googleAuthFailed": "Google sign-in failed. Please try again.",
+    "googleNotConfigured": "Google sign-in is not configured. Please contact the administrator.",
     "unauthorized": "Unauthorized",
     "accessDenied": "Access Denied",
     "noPermission": "You do not have permission to access this page",

@@ -91,6 +91,7 @@
     "signInWithGoogle": "Mit Google anmelden",
     "googleAccountNotFound": "Kein Konto für diese E-Mail-Adresse gefunden. Bitte kontaktieren Sie einen Administrator.",
     "googleAuthFailed": "Google-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "googleNotConfigured": "Google-Anmeldung ist nicht konfiguriert. Bitte kontaktieren Sie den Administrator.",
     "unauthorized": "Nicht autorisiert",
     "accessDenied": "Zugriff verweigert",
     "noPermission": "Sie haben keine Berechtigung, auf diese Seite zuzugreifen",
