@@ -105,6 +105,10 @@ services:
       ENVIRONMENT: production
       LOG_LEVEL: WARNING
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      # Google OAuth (optional)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     volumes:
       - backend_data:/app/data
       - ${BACKUP_PATH:-./backups}:/app/data/backups
