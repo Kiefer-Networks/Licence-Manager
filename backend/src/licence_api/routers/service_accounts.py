@@ -20,7 +20,6 @@ from licence_api.models.dto.service_account import (
     ServiceAccountPatternResponse,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
@@ -81,7 +80,6 @@ async def create_pattern(
     data: ServiceAccountPatternCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ServiceAccountPatternResponse:
     """Create a new service account pattern.
 
@@ -109,7 +107,6 @@ async def delete_pattern(
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a service account pattern.
 
@@ -141,7 +138,6 @@ async def apply_patterns(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ApplyPatternsResponse:
     """Apply all patterns to all licenses.
 
@@ -240,7 +236,6 @@ async def create_license_type(
     data: ServiceAccountLicenseTypeCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ServiceAccountLicenseTypeResponse:
     """Create a new service account license type.
 
@@ -268,7 +263,6 @@ async def delete_license_type(
     entry_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a service account license type.
 
@@ -300,7 +294,6 @@ async def apply_license_types(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ApplyLicenseTypesResponse:
     """Apply all license type rules to all licenses.
 

@@ -21,7 +21,6 @@ from licence_api.models.dto.employee import (
     ManagerInfo,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.employee_service import EmployeeService
 from licence_api.services.manual_employee_service import ManualEmployeeService
@@ -235,7 +234,6 @@ async def create_employee(
     body: EmployeeCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_CREATE))],
     service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> EmployeeResponse:
     """Create a new manual employee. Requires employees.create permission."""
     try:
@@ -259,7 +257,6 @@ async def update_employee(
     body: EmployeeUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
     service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> EmployeeResponse:
     """Update a manual employee. Requires employees.edit permission.
 
@@ -287,7 +284,6 @@ async def delete_employee(
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_DELETE))],
     service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Delete a manual employee. Requires employees.delete permission.
 
@@ -315,7 +311,6 @@ async def bulk_import_employees(
     body: EmployeeBulkImport,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_CREATE))],
     service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> EmployeeBulkImportResponse:
     """Bulk import employees. Requires employees.create permission.
 

@@ -12,7 +12,6 @@ from licence_api.dependencies import get_manual_license_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.manual_license_service import ManualLicenseService
 
@@ -79,7 +78,6 @@ async def create_manual_licenses(
     body: ManualLicenseCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> list[LicenseResponse]:
     """Create one or more manual licenses. Requires licenses.create permission."""
     try:
@@ -110,7 +108,6 @@ async def create_manual_licenses_bulk(
     body: ManualLicenseBulkCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_CREATE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> list[LicenseResponse]:
     """Create multiple manual licenses with individual keys. Requires licenses.create permission."""
     try:
@@ -140,7 +137,6 @@ async def update_manual_license(
     body: ManualLicenseUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Update a manual license. Requires licenses.edit permission."""
     try:
@@ -175,7 +171,6 @@ async def assign_manual_license(
     body: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Assign a manual license to an employee. Requires licenses.assign permission."""
     try:
@@ -198,7 +193,6 @@ async def unassign_manual_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Unassign a manual license from an employee. Requires licenses.assign permission."""
     try:
@@ -218,7 +212,6 @@ async def delete_manual_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Delete a manual license. Requires licenses.delete permission."""
     try:

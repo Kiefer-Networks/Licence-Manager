@@ -14,7 +14,6 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.provider_file_service import (
     VIEWABLE_EXTENSIONS,
@@ -108,14 +107,13 @@ async def upload_provider_file(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
     description: str | None = Form(default=None, max_length=2000),
     category: str | None = Form(default=None, max_length=100),
 ) -> ProviderFileResponse:
     """Upload a file for a provider. Admin only.
 
-    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
+    Note: CSRF protection is handled by CSRFMiddleware.
     """
     if file.filename is None:
         raise_bad_request("No filename provided")
@@ -211,7 +209,6 @@ async def delete_provider_file(
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_DELETE))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a provider file. Requires providers.delete permission."""
     try:

@@ -36,7 +36,6 @@ from licence_api.security.auth import (
     require_permission,
     require_superadmin,
 )
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import limiter
 from licence_api.services.rbac_service import RbacService
 from licence_api.utils.errors import (
@@ -81,7 +80,6 @@ async def create_user(
     body: UserCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> UserCreateResponse:
     """Create a new user for Google OAuth login.
@@ -122,7 +120,6 @@ async def update_user(
     body: UserUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserInfo:
     """Update user details."""
     if body.role_codes is not None:
@@ -150,7 +147,6 @@ async def delete_user(
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_superadmin)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     user_agent: str | None = Header(default=None),
 ) -> None:
     """Delete a user. Superadmin only."""
@@ -224,7 +220,6 @@ async def create_role(
     body: RoleCreateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_CREATE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RoleResponse:
     """Create a custom role."""
     try:
@@ -256,7 +251,6 @@ async def update_role(
     body: RoleUpdateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_EDIT))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RoleResponse:
     """Update a role."""
     try:
@@ -278,7 +272,6 @@ async def delete_role(
     role_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_DELETE))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a custom role."""
     try:

@@ -14,7 +14,6 @@ from licence_api.models.dto.cancellation import (
     RenewRequest,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.cancellation_service import CancellationService
@@ -35,7 +34,6 @@ async def cancel_license(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel a license.
 
@@ -80,7 +78,6 @@ async def renew_license(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew a license by setting a new expiration date.
 
@@ -123,7 +120,6 @@ async def set_license_needs_reorder(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for a license."""
     try:
@@ -160,7 +156,6 @@ async def cancel_package(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel a license package.
 
@@ -205,7 +200,6 @@ async def renew_package(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew a license package by setting a new contract end date.
 
@@ -248,7 +242,6 @@ async def set_package_needs_reorder(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for a package."""
     try:
@@ -285,7 +278,6 @@ async def cancel_org_license(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> CancellationResponse:
     """Cancel an organization license.
 
@@ -330,7 +322,6 @@ async def renew_org_license(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Renew an organization license by setting new renewal/expiration dates.
 
@@ -377,7 +368,6 @@ async def set_org_license_needs_reorder(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[CancellationService, Depends(get_cancellation_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict:
     """Set the needs_reorder flag for an organization license."""
     try:

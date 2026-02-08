@@ -15,7 +15,6 @@ from licence_api.models.dto.license_package import (
     LicensePackageUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.license_package_service import LicensePackageService
 from licence_api.utils.errors import raise_bad_request, raise_not_found
@@ -51,7 +50,6 @@ async def create_license_package(
     data: LicensePackageCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicensePackageResponse:
     """Create a new license package."""
     try:
@@ -74,7 +72,6 @@ async def update_license_package(
     data: LicensePackageUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicensePackageResponse:
     """Update a license package."""
     try:
@@ -97,7 +94,6 @@ async def delete_license_package(
     package_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[LicensePackageService, Depends(get_license_package_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete a license package. Requires licenses.delete permission."""
     try:

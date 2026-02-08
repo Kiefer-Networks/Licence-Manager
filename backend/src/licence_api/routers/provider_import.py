@@ -18,7 +18,6 @@ from licence_api.models.dto.import_dto import (
     ImportValidateResponse,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.import_service import ImportService
 
@@ -72,7 +71,6 @@ async def upload_import_file(
     file: UploadFile,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_IMPORT))],
     service: Annotated[ImportService, Depends(get_import_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ImportUploadResponse:
     """Upload a CSV file for import.
 
@@ -113,7 +111,6 @@ async def validate_import(
     data: ImportValidateRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_IMPORT))],
     service: Annotated[ImportService, Depends(get_import_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ImportValidateResponse:
     """Validate import data and get preview.
 
@@ -154,7 +151,6 @@ async def execute_import(
     data: ImportExecuteRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_IMPORT))],
     service: Annotated[ImportService, Depends(get_import_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ImportExecuteResponse:
     """Execute the import and create licenses.
 

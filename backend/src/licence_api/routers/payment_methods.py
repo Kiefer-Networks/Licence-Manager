@@ -26,7 +26,6 @@ class PaymentMethodUsageResponse(BaseModel):
 
 
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.payment_method_service import PaymentMethodService
 
@@ -60,7 +59,6 @@ async def create_payment_method(
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_CREATE))
     ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
     """Create a new payment method. Requires payment_methods.create permission."""
     try:
@@ -122,7 +120,6 @@ async def update_payment_method(
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_EDIT))
     ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> PaymentMethodResponse:
     """Update a payment method. Requires payment_methods.edit permission."""
     try:
@@ -148,7 +145,6 @@ async def delete_payment_method(
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_DELETE))
     ],
     service: Annotated[PaymentMethodService, Depends(get_payment_method_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     force: bool = False,
 ) -> None:
     """Delete a payment method.

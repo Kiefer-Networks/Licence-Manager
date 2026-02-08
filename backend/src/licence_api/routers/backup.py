@@ -21,7 +21,6 @@ from licence_api.models.dto.backup import (
     StoredBackup,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
     BACKUP_EXPORT_LIMIT,
     BACKUP_INFO_LIMIT,
@@ -99,7 +98,6 @@ async def create_backup(
     body: BackupExportRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> Response:
     """Create an encrypted backup of all system data.
 
@@ -157,7 +155,6 @@ async def get_backup_info(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SYSTEM_ADMIN))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> BackupInfoResponse:
     """Get information about a backup file without decrypting.
@@ -167,7 +164,7 @@ async def get_backup_info(
 
     Requires system.admin permission.
 
-    Note: CSRF protection is explicitly applied via CSRFProtected dependency.
+    Note: CSRF protection is handled by CSRFMiddleware.
     """
     # Validate file
     if file.filename is None:
@@ -265,7 +262,6 @@ async def update_backup_config(
         AdminUser, Depends(require_permission(Permissions.BACKUPS_CONFIGURE))
     ],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BackupConfig:
     """Update backup configuration.
 
@@ -303,7 +299,6 @@ async def trigger_backup(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_CREATE))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> StoredBackup:
     """Trigger a manual backup.
 
@@ -360,7 +355,6 @@ async def delete_backup(
     backup_id: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_DELETE))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, str]:
     """Delete a stored backup.
 
@@ -388,7 +382,6 @@ async def restore_from_backup(
     body: RestoreFromStoredRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_RESTORE))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RestoreResponse:
     """Restore system from a stored backup.
 

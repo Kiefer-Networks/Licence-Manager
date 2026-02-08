@@ -8,7 +8,6 @@ from pydantic import BaseModel, EmailStr
 from licence_api.dependencies import get_audit_service, get_email_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.email_service import (
@@ -63,7 +62,6 @@ async def set_email_config(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[EmailService, Depends(get_email_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> SmtpConfigResponse:
     """Save SMTP configuration.
 
@@ -112,7 +110,6 @@ async def delete_email_config(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[EmailService, Depends(get_email_service)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete SMTP configuration."""
     deleted = await service.delete_smtp_config()
@@ -139,7 +136,6 @@ async def send_test_email(
     body: TestEmailRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[EmailService, Depends(get_email_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> TestEmailResponse:
     """Send a test email to verify SMTP configuration."""
     success, message = await service.send_test_email(body.to_email)

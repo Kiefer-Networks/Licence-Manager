@@ -17,7 +17,6 @@ from licence_api.models.dto.license import (
     ServiceAccountUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import (
     EXPENSIVE_READ_LIMIT,
     SENSITIVE_OPERATION_LIMIT,
@@ -224,7 +223,6 @@ async def assign_license(
     body: AssignLicenseRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Manually assign a license to an employee. Requires licenses.assign permission."""
     license = await license_service.assign_license_to_employee(
@@ -248,7 +246,6 @@ async def unassign_license(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Unassign a license from an employee. Requires licenses.assign permission."""
     license = await license_service.unassign_license(
@@ -271,7 +268,6 @@ async def remove_license_from_provider(
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> RemoveMemberResponse:
     """Remove a user from the provider system. Requires licenses.delete permission.
 
@@ -304,7 +300,6 @@ async def bulk_remove_from_provider(
         AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
     ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
     """Remove multiple users from their provider systems. Requires licenses.bulk_actions permission.
 
@@ -348,7 +343,6 @@ async def bulk_delete_licenses(
         AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
     ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
     """Delete multiple licenses from the database. Requires licenses.bulk_actions permission.
 
@@ -394,7 +388,6 @@ async def bulk_unassign_licenses(
         AdminUser, Depends(require_permission(Permissions.LICENSES_BULK_ACTIONS))
     ],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkActionResponse:
     """Unassign multiple licenses from employees. Requires licenses.bulk_actions permission.
 
@@ -439,7 +432,6 @@ async def update_service_account_status(
     data: ServiceAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Mark or unmark a license as a service account. Requires licenses.edit permission.
 
@@ -477,7 +469,6 @@ async def update_admin_account_status(
     data: AdminAccountUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Mark or unmark a license as an admin account. Requires licenses.edit permission.
 
@@ -518,7 +509,6 @@ async def update_license_type(
     data: LicenseTypeUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> LicenseResponse:
     """Update the license type for a license. Requires licenses.edit permission.
 
@@ -552,7 +542,6 @@ async def confirm_match(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> MatchActionResponse:
     """Confirm a suggested match for a license. Requires licenses.assign permission.
 
@@ -588,7 +577,6 @@ async def reject_match(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> MatchActionResponse:
     """Reject a suggested match for a license. Requires licenses.assign permission.
 
@@ -623,7 +611,6 @@ async def mark_as_external_guest(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> MatchActionResponse:
     """Mark a license as belonging to an external guest. Requires licenses.edit permission.
 
@@ -659,7 +646,6 @@ async def manual_assign_match(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_ASSIGN))],
     matching_service: Annotated[MatchingService, Depends(get_matching_service)],
     license_service: Annotated[LicenseService, Depends(get_license_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> MatchActionResponse:
     """Manually assign a license to an employee.
 

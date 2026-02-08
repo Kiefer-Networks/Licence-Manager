@@ -21,7 +21,6 @@ from licence_api.models.dto.external_account import (
     UsernameMatchingSettingUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.services.external_account_service import ExternalAccountService
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,6 @@ async def update_username_matching_setting(
     data: UsernameMatchingSettingUpdate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UsernameMatchingSettingResponse:
     """Update username matching feature setting."""
     enabled = await service.set_username_matching_enabled(
@@ -99,7 +97,6 @@ async def link_external_account(
     data: ExternalAccountCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ExternalAccountResponse:
     """Link an external account to an employee."""
     try:
@@ -138,7 +135,6 @@ async def unlink_external_account(
     account_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Unlink an external account."""
     deleted = await service.unlink_account_by_id(
@@ -176,7 +172,6 @@ async def bulk_link_accounts(
     data: BulkLinkRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_EDIT))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> BulkLinkResponse:
     """Bulk link multiple external accounts."""
     linked = 0

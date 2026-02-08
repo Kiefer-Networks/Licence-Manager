@@ -38,7 +38,6 @@ from licence_api.models.dto.auth import (
     UserNotificationPreferenceUpdate,
 )
 from licence_api.security.auth import get_current_user
-from licence_api.security.csrf import CSRFProtected, generate_csrf_token
 from licence_api.security.rate_limit import (
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
@@ -348,7 +347,6 @@ async def logout(
     auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     user_agent: str | None = Header(default=None),
-    _csrf: Annotated[None, Depends(CSRFProtected())] = None,
 ) -> dict[str, str]:
     """Logout and revoke refresh token."""
     token = refresh_token_cookie
@@ -371,7 +369,6 @@ async def logout_all_sessions(
     response: Response,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, int]:
     """Logout all sessions for the current user."""
     count = await auth_service.logout_all_sessions(current_user.id)
@@ -408,7 +405,6 @@ async def update_profile(
     body: ProfileUpdateRequest,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserInfo:
     """Update current user's profile (name and locale preferences)."""
     return await auth_service.update_profile(
@@ -427,7 +423,6 @@ async def upload_avatar(
     request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
     file: UploadFile = File(...),
 ) -> AvatarUploadResponse:
     """Upload avatar image for current user."""
@@ -483,7 +478,6 @@ async def delete_avatar(
     request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> dict[str, str]:
     """Delete current user's avatar."""
     await auth_service.delete_avatar(current_user.id)
@@ -529,7 +523,6 @@ async def update_notification_preferences(
     body: UserNotificationPreferenceBulkUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserNotificationPreferencesResponse:
     """Update current user's notification preferences (bulk)."""
     prefs_data = [
@@ -575,7 +568,6 @@ async def update_single_notification_preference(
     body: UserNotificationPreferenceUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> UserNotificationPreferenceResponse:
     """Update a single notification preference."""
     if event_type not in EVENT_TYPE_MAP:

@@ -17,7 +17,6 @@ from licence_api.models.dto.admin_account import (
 )
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.csrf import CSRFProtected
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.services.cache_service import get_cache_service
@@ -78,7 +77,6 @@ async def create_pattern(
     data: AdminAccountPatternCreate,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> AdminAccountPatternResponse:
     """Create a new admin account pattern.
 
@@ -104,7 +102,6 @@ async def delete_pattern(
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> None:
     """Delete an admin account pattern.
 
@@ -136,7 +133,6 @@ async def apply_patterns(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_EDIT))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
-    _csrf: Annotated[None, Depends(CSRFProtected())],
 ) -> ApplyAdminPatternsResponse:
     """Apply all patterns to all licenses.
 
