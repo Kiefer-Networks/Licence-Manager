@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Link2, Bot, ShieldCheck } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
-import { REMOVABLE_PROVIDERS } from '@/lib/constants';
+import { isRemovableProvider } from '@/lib/constants';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
 
 interface LicenseTableRowProps {
@@ -41,7 +41,7 @@ export const LicenseTableRow = memo(function LicenseTableRow({
   const tServiceAccounts = useTranslations('serviceAccounts');
   const tAdminAccounts = useTranslations('adminAccounts');
 
-  const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
+  const isRemovable = provider && isRemovableProvider(provider.name);
 
   return (
     <tr className={`border-b last:border-0 hover:bg-zinc-50/50 transition-colors ${isSelected ? 'bg-zinc-50' : ''}`}>

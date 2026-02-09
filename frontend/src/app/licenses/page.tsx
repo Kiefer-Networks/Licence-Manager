@@ -6,7 +6,6 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { License, Provider, api } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
-import { REMOVABLE_PROVIDERS } from '@/lib/constants';
 import {
   LicenseStatsCards,
   LicenseFilters,

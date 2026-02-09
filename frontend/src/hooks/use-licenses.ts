@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { api, License, Provider, CategorizedLicensesResponse } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
-import { REMOVABLE_PROVIDERS } from '@/lib/constants';
+import { isRemovableProvider } from '@/lib/constants';
 
 export type LicenseTab = 'assigned' | 'not_in_hris' | 'unassigned' | 'external';
 
@@ -232,7 +232,7 @@ export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn
   const removableLicenses = useMemo(
     () => selectedLicenses.filter(l => {
       const provider = providers.find(p => p.id === l.provider_id);
-      return provider && REMOVABLE_PROVIDERS.includes(provider.name);
+      return provider && isRemovableProvider(provider.name);
     }),
     [selectedLicenses, providers]
   );

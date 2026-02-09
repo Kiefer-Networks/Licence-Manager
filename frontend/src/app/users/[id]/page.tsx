@@ -49,7 +49,7 @@ import {
   Unlink,
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
-import { REMOVABLE_PROVIDERS } from '@/lib/constants';
+import { isRemovableProvider } from '@/lib/constants';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
 
@@ -454,7 +454,7 @@ export default function UserDetailPage() {
                   {licenses.map((license) => {
                     const provider = providers.find(p => p.id === license.provider_id);
                     const isManual = provider?.config?.provider_type === 'manual' || provider?.name === 'manual';
-                    const isRemovable = provider && REMOVABLE_PROVIDERS.includes(provider.name);
+                    const isRemovable = provider && isRemovableProvider(provider.name);
 
                     return (
                       <tr key={license.id} className="border-b last:border-0 hover:bg-zinc-50/50">
