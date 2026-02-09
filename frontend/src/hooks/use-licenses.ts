@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { api, License, Provider, CategorizedLicensesResponse } from '@/lib/api';
 import { handleSilentError } from '@/lib/error-handler';
+import { REMOVABLE_PROVIDERS } from '@/lib/constants';
 
 export type LicenseTab = 'assigned' | 'not_in_hris' | 'unassigned' | 'external';
 
@@ -77,9 +78,6 @@ function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
   return debouncedValue;
 }
-
-// Providers that support remote member removal
-const REMOVABLE_PROVIDERS = ['cursor'];
 
 export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn {
   const { initialProvider = 'all', initialTab = 'assigned' } = options;

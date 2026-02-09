@@ -198,8 +198,6 @@ class AuthService:
             user_agent=user_agent,
         )
 
-        await self.session.commit()
-
         return LoginResponse(
             access_token=access_token,
             refresh_token=raw_refresh,
@@ -263,8 +261,6 @@ class AuthService:
             ip_address=ip_address or token_record.ip_address,
         )
 
-        await self.session.commit()
-
         return TokenResponse(
             access_token=access_token,
             refresh_token=raw_refresh,
@@ -291,13 +287,10 @@ class AuthService:
                 user_agent=user_agent,
             )
             await self.token_repo.revoke_token(token_record.id)
-            await self.session.commit()
 
     async def logout_all_sessions(self, user_id: UUID) -> int:
         """Logout all sessions for a user."""
-        count = await self.token_repo.revoke_all_for_user(user_id)
-        await self.session.commit()
-        return count
+        return await self.token_repo.revoke_all_for_user(user_id)
 
     async def get_user_info(self, user_id: UUID) -> UserInfo | None:
         """Get user info by ID."""
@@ -410,8 +403,6 @@ class AuthService:
                 currency=currency,
             )
 
-        await self.session.commit()
-
         user_info = await self.get_user_info(user_id)
         if user_info is None:
             raise HTTPException(
@@ -458,7 +449,6 @@ class AuthService:
 
         picture_url = f"/api/v1/auth/avatar/{user_id}"
         await self.user_repo.update_avatar(user_id, picture_url)
-        await self.session.commit()
 
         return picture_url
 
@@ -473,7 +463,6 @@ class AuthService:
                     log_warning(logger, "Failed to delete avatar file", e)
 
         await self.user_repo.update_avatar(user_id, None)
-        await self.session.commit()
 
     # Notification preference methods
 
@@ -487,9 +476,7 @@ class AuthService:
         preferences: list[dict[str, Any]],
     ) -> list:
         """Update notification preferences in bulk."""
-        prefs = await self.notification_pref_repo.bulk_upsert(user_id, preferences)
-        await self.session.commit()
-        return prefs
+        return await self.notification_pref_repo.bulk_upsert(user_id, preferences)
 
     async def update_notification_preference(
         self,
@@ -500,12 +487,10 @@ class AuthService:
         slack_channel: str | None = None,
     ):
         """Update a single notification preference."""
-        pref = await self.notification_pref_repo.upsert(
+        return await self.notification_pref_repo.upsert(
             user_id=user_id,
             event_type=event_type,
             enabled=enabled,
             slack_dm=slack_dm,
             slack_channel=slack_channel,
         )
-        await self.session.commit()
-        return pref

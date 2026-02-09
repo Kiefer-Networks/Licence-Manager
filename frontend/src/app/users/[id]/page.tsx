@@ -49,10 +49,9 @@ import {
   Unlink,
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
+import { REMOVABLE_PROVIDERS } from '@/lib/constants';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
-
-const REMOVABLE_PROVIDERS = ['cursor'];
 
 export default function UserDetailPage() {
   const params = useParams();
@@ -61,7 +60,7 @@ export default function UserDetailPage() {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const tEmployees = useTranslations('employees');
-  const { formatDate } = useLocale();
+  const { formatDate, formatCurrency } = useLocale();
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -408,7 +407,7 @@ export default function UserDetailPage() {
                 <DollarSign className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase">{t('monthlyCost')}</span>
               </div>
-              <p className="text-2xl font-semibold">EUR {totalMonthlyCost.toFixed(2)}</p>
+              <p className="text-2xl font-semibold">{formatCurrency(totalMonthlyCost)}</p>
             </CardContent>
           </Card>
           <Card>

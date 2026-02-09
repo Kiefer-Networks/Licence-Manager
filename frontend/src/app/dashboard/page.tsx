@@ -562,7 +562,7 @@ export default function DashboardPage() {
                       <td className="px-4 py-2.5 text-muted-foreground">{license.provider_name}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{license.license_type || '-'}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">
-                        EUR {Number(license.monthly_cost || 0).toFixed(2)}
+                        {formatCurrency(license.monthly_cost)}
                       </td>
                     </tr>
                   ))}

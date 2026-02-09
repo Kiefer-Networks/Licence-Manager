@@ -13,9 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Link2, Bot, ShieldCheck } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
+import { REMOVABLE_PROVIDERS } from '@/lib/constants';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
-
-const REMOVABLE_PROVIDERS = ['cursor'];
 
 interface LicenseTableRowProps {
   license: License;
