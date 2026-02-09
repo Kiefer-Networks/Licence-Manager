@@ -1,5 +1,6 @@
 """Import service for license imports from CSV files."""
 
+import csv
 import logging
 import os
 import tempfile
@@ -127,8 +128,13 @@ class ImportService:
         # Parse the file
         try:
             parsed = parse_csv_file(content, max_rows=MAX_IMPORT_ROWS)
-        except Exception as e:
-            raise ValueError(f"Failed to parse CSV file: {str(e)}")
+        except UnicodeDecodeError:
+            raise ValueError("Invalid file encoding. Please use UTF-8 encoded CSV files.")
+        except csv.Error:
+            raise ValueError("Invalid CSV format. Please check the file structure.")
+        except Exception:
+            # Don't expose internal error details to prevent information disclosure
+            raise ValueError("Failed to parse CSV file. Please check the file format.")
 
         if parsed["total_rows"] > MAX_IMPORT_ROWS:
             raise ValueError(

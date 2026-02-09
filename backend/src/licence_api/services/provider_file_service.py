@@ -1,7 +1,9 @@
 """Provider file service for managing provider documents."""
 
+import io
 import logging
 import uuid
+import zipfile
 from pathlib import Path
 from uuid import UUID
 
@@ -99,22 +101,88 @@ class ProviderFileService:
 
     @staticmethod
     def validate_file_signature(content: bytes, extension: str) -> bool:
-        """Validate file content matches expected signature for extension."""
+        """Validate file content matches expected signature for extension.
+
+        Includes polyglot detection for ZIP-based formats to ensure the file
+        is actually the claimed type and not a disguised malicious file.
+        """
         ext_lower = extension.lower()
         signatures = FILE_SIGNATURES.get(ext_lower)
 
         if not signatures:
             raise ValueError(f"No signature defined for extension: {ext_lower}")
 
+        # WebP requires special handling (RIFF container)
         if ext_lower == ".webp":
             if content.startswith(b"RIFF") and len(content) > 12 and content[8:12] == b"WEBP":
                 return True
             return False
 
+        # Check basic signature
+        sig_match = False
         for sig in signatures:
             if content.startswith(sig):
+                sig_match = True
+                break
+
+        if not sig_match:
+            return False
+
+        # ZIP-based formats need additional validation to prevent polyglots
+        zip_extensions = {".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp"}
+        if ext_lower in zip_extensions:
+            return ProviderFileService._validate_zip_format(content, ext_lower)
+
+        return True
+
+    @staticmethod
+    def _validate_zip_format(content: bytes, extension: str) -> bool:
+        """Validate ZIP-based document formats by checking internal structure.
+
+        This prevents polyglot attacks where a malicious file masquerades as
+        a valid Office/OpenDocument file.
+        """
+        try:
+            with zipfile.ZipFile(io.BytesIO(content), "r") as zf:
+                namelist = zf.namelist()
+
+                # Office Open XML formats (.docx, .xlsx, .pptx)
+                if extension in {".docx", ".xlsx", ".pptx"}:
+                    # Must contain [Content_Types].xml
+                    if "[Content_Types].xml" not in namelist:
+                        return False
+                    # Must contain _rels folder
+                    if not any(n.startswith("_rels/") for n in namelist):
+                        return False
+                    # Format-specific checks
+                    if extension == ".docx":
+                        return any(n.startswith("word/") for n in namelist)
+                    elif extension == ".xlsx":
+                        return any(n.startswith("xl/") for n in namelist)
+                    elif extension == ".pptx":
+                        return any(n.startswith("ppt/") for n in namelist)
+
+                # OpenDocument formats (.odt, .ods, .odp)
+                elif extension in {".odt", ".ods", ".odp"}:
+                    # Must contain mimetype file
+                    if "mimetype" not in namelist:
+                        return False
+                    # Must contain content.xml
+                    if "content.xml" not in namelist:
+                        return False
+                    # Verify mimetype content matches extension
+                    mimetype = zf.read("mimetype").decode("utf-8", errors="ignore").strip()
+                    expected_mimes = {
+                        ".odt": "application/vnd.oasis.opendocument.text",
+                        ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+                        ".odp": "application/vnd.oasis.opendocument.presentation",
+                    }
+                    if mimetype != expected_mimes.get(extension):
+                        return False
+
                 return True
-        return False
+        except (zipfile.BadZipFile, KeyError, UnicodeDecodeError):
+            return False
 
     @staticmethod
     def get_safe_mime_type(extension: str, fallback: str = "application/octet-stream") -> str:

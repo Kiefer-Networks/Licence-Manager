@@ -17,6 +17,43 @@ from licence_api.services.settings_service import SettingsService
 router = APIRouter()
 
 
+def _validate_setting_recursive(
+    data: Any, max_depth: int = 5, current_depth: int = 0, max_items: int = 50
+) -> None:
+    """Recursively validate dict/list structures to prevent DoS attacks.
+
+    Args:
+        data: Data to validate
+        max_depth: Maximum nesting depth
+        current_depth: Current recursion depth
+        max_items: Maximum items per dict/list
+    """
+    if current_depth > max_depth:
+        raise ValueError(f"Setting nesting too deep (max {max_depth} levels)")
+
+    if isinstance(data, dict):
+        if len(data) > max_items:
+            raise ValueError(f"Too many setting fields (max {max_items})")
+        for key, value in data.items():
+            if not isinstance(key, str):
+                raise ValueError("Setting keys must be strings")
+            if len(key) > 100:
+                raise ValueError("Setting key too long (max 100 chars)")
+            _validate_setting_recursive(value, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, list):
+        if len(data) > max_items:
+            raise ValueError(f"Too many items in setting list (max {max_items})")
+        for item in data:
+            _validate_setting_recursive(item, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, str):
+        if len(data) > 10000:
+            raise ValueError("Setting value too long (max 10000 chars)")
+    elif isinstance(data, (int, float, bool, type(None))):
+        pass
+    else:
+        raise ValueError(f"Invalid setting value type: {type(data).__name__}")
+
+
 class SettingValue(BaseModel):
     """Setting value wrapper."""
 
@@ -25,14 +62,8 @@ class SettingValue(BaseModel):
     @field_validator("value")
     @classmethod
     def validate_value_size(cls, v: dict[str, Any]) -> dict[str, Any]:
-        """Validate dict size and content to prevent DoS."""
-        for key, val in v.items():
-            if len(key) > 100:
-                raise ValueError("Key too long (max 100)")
-            if isinstance(val, str) and len(val) > 10000:
-                raise ValueError("Value too long (max 10000)")
-            if isinstance(val, dict) and len(val) > 50:
-                raise ValueError("Nested dict too large (max 50 keys)")
+        """Validate dict size and content recursively to prevent DoS."""
+        _validate_setting_recursive(v)
         return v
 
 

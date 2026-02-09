@@ -56,15 +56,46 @@ class TestConnectionRequest(BaseModel):
     @field_validator("credentials")
     @classmethod
     def validate_credentials_size(cls, v: dict[str, Any]) -> dict[str, Any]:
-        """Validate credentials dict size and content."""
-        if len(v) > 20:
-            raise ValueError("Too many credential fields")
-        for key, value in v.items():
-            if len(key) > 100:
-                raise ValueError("Credential key too long")
-            if isinstance(value, str) and len(value) > 10000:
-                raise ValueError("Credential value too long")
+        """Validate credentials dict size and content recursively."""
+        _validate_dict_recursive(v, max_depth=3, current_depth=0)
         return v
+
+
+def _validate_dict_recursive(
+    data: Any, max_depth: int = 3, current_depth: int = 0, max_items: int = 20
+) -> None:
+    """Recursively validate dict/list structures to prevent DoS attacks.
+
+    Args:
+        data: The data structure to validate
+        max_depth: Maximum nesting depth allowed
+        current_depth: Current recursion depth
+        max_items: Maximum number of items per collection
+    """
+    if current_depth > max_depth:
+        raise ValueError(f"Credential nesting too deep (max {max_depth} levels)")
+
+    if isinstance(data, dict):
+        if len(data) > max_items:
+            raise ValueError(f"Too many credential fields (max {max_items})")
+        for key, value in data.items():
+            if not isinstance(key, str):
+                raise ValueError("Credential keys must be strings")
+            if len(key) > 100:
+                raise ValueError("Credential key too long (max 100 chars)")
+            _validate_dict_recursive(value, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, list):
+        if len(data) > max_items:
+            raise ValueError(f"Too many items in credential list (max {max_items})")
+        for item in data:
+            _validate_dict_recursive(item, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, str):
+        if len(data) > 10000:
+            raise ValueError("Credential value too long (max 10000 chars)")
+    elif isinstance(data, (int, float, bool, type(None))):
+        pass  # Primitive types are allowed
+    else:
+        raise ValueError(f"Invalid credential value type: {type(data).__name__}")
 
 
 class PublicCredentialsResponse(BaseModel):
