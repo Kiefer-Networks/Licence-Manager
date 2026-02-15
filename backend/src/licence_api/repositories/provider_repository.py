@@ -105,6 +105,24 @@ class ProviderRepository(BaseRepository[ProviderORM]):
         )
         return result.scalar_one()
 
+    async def get_enabled_excluding(self, exclude_name: str) -> list[ProviderORM]:
+        """Get all enabled providers excluding one by name.
+
+        Args:
+            exclude_name: Provider name to exclude
+
+        Returns:
+            List of enabled providers
+        """
+        from sqlalchemy import and_
+
+        result = await self.session.execute(
+            select(ProviderORM).where(
+                and_(ProviderORM.enabled == True, ProviderORM.name != exclude_name)
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_by_payment_method(self, payment_method_id: UUID) -> list[ProviderORM]:
         """Get providers using a specific payment method.
 

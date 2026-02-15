@@ -4,7 +4,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 
 from licence_api.dependencies import get_external_account_service
 from licence_api.models.domain.admin_user import AdminUser
@@ -202,8 +202,8 @@ async def bulk_link_accounts(
 # Lookup by external username
 @router.get("/external-accounts/lookup/{provider_type}/{username}")
 async def lookup_by_external_username(
-    provider_type: str,
-    username: str,
+    provider_type: Annotated[str, Path(max_length=50, pattern=r"^[a-z0-9_-]+$")],
+    username: Annotated[str, Path(max_length=255)],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
 ) -> dict:

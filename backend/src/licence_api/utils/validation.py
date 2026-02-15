@@ -1,6 +1,7 @@
 """Input validation utilities to prevent injection attacks."""
 
 import re
+from typing import Any
 
 # Maximum lengths for common fields
 MAX_SEARCH_LENGTH = 200
@@ -162,3 +163,47 @@ def escape_like_wildcards(value: str) -> str:
         'test\\_value'
     """
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def validate_dict_recursive(
+    data: Any, max_depth: int = 3, current_depth: int = 0, max_items: int = 20
+) -> None:
+    """Recursively validate dict/list structures to prevent DoS attacks.
+
+    Ensures that nested data structures do not exceed configurable depth
+    and item count limits. Validates that all keys are strings and all
+    values are of allowed types.
+
+    Args:
+        data: The data structure to validate
+        max_depth: Maximum nesting depth allowed
+        current_depth: Current recursion depth
+        max_items: Maximum number of items per collection
+
+    Raises:
+        ValueError: If validation fails
+    """
+    if current_depth > max_depth:
+        raise ValueError(f"Credential nesting too deep (max {max_depth} levels)")
+
+    if isinstance(data, dict):
+        if len(data) > max_items:
+            raise ValueError(f"Too many credential fields (max {max_items})")
+        for key, value in data.items():
+            if not isinstance(key, str):
+                raise ValueError("Credential keys must be strings")
+            if len(key) > 100:
+                raise ValueError("Credential key too long (max 100 chars)")
+            validate_dict_recursive(value, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, list):
+        if len(data) > max_items:
+            raise ValueError(f"Too many items in credential list (max {max_items})")
+        for item in data:
+            validate_dict_recursive(item, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, str):
+        if len(data) > 10000:
+            raise ValueError("Credential value too long (max 10000 chars)")
+    elif isinstance(data, (int, float, bool, type(None))):
+        pass  # Primitive types are allowed
+    else:
+        raise ValueError(f"Invalid credential value type: {type(data).__name__}")

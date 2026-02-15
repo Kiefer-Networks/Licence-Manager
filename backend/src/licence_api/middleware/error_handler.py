@@ -1,4 +1,7 @@
-"""Global error handling middleware to prevent information disclosure."""
+"""Global error handling middleware to prevent information disclosure.
+
+Error responses follow RFC 7807 (Problem Details for HTTP APIs).
+"""
 
 import logging
 import os
@@ -12,7 +15,64 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from licence_api.config import get_settings
 
+# RFC 7807 Content-Type header
+PROBLEM_JSON_MEDIA_TYPE = "application/problem+json"
+
 logger = logging.getLogger(__name__)
+
+# RFC 7807 error type URIs mapped to status codes
+ERROR_TYPE_MAP = {
+    400: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1",
+    401: "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1",
+    403: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
+    404: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4",
+    405: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.5",
+    409: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
+    422: "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
+    429: "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+    500: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1",
+    502: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.3",
+    503: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.4",
+}
+
+
+def _problem_response(
+    request: Request,
+    status_code: int,
+    title: str,
+    detail: str,
+    cors_headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    """Create an RFC 7807 Problem Details JSON response.
+
+    See: https://datatracker.ietf.org/doc/html/rfc7807
+
+    Args:
+        request: The incoming request
+        status_code: HTTP status code
+        title: Short human-readable summary of the problem type
+        detail: Human-readable explanation specific to this occurrence
+        cors_headers: Optional CORS headers
+
+    Returns:
+        JSONResponse with application/problem+json content type
+    """
+    headers = dict(cors_headers or {})
+    headers["Content-Type"] = PROBLEM_JSON_MEDIA_TYPE
+
+    body: dict[str, Any] = {
+        "type": ERROR_TYPE_MAP.get(status_code, "about:blank"),
+        "title": title,
+        "status": status_code,
+        "detail": detail,
+        "instance": str(request.url.path),
+    }
+
+    return JSONResponse(
+        status_code=status_code,
+        content=body,
+        headers=headers,
+    )
 
 
 def _get_cors_headers(request: Request) -> dict[str, str]:
@@ -157,105 +217,88 @@ def sanitize_error_detail(detail: Any, status_code: int) -> str:
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    """Handle HTTP exceptions with sanitized messages.
+    """Handle HTTP exceptions with sanitized messages per RFC 7807.
 
     Args:
         request: FastAPI request
         exc: HTTP exception
 
     Returns:
-        JSONResponse with sanitized error
+        JSONResponse with RFC 7807 Problem Details
     """
     settings = get_settings()
     cors_headers = _get_cors_headers(request)
+    # Preserve exception headers (e.g., WWW-Authenticate)
+    if exc.headers:
+        cors_headers = {**cors_headers, **exc.headers}
+    title = SAFE_ERROR_MESSAGES.get(exc.status_code, "Request failed")
 
     # In debug mode, return original detail
     if settings.debug:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers=cors_headers,
-        )
+        return _problem_response(request, exc.status_code, title, str(exc.detail), cors_headers)
 
     # Sanitize error message
     safe_detail = sanitize_error_detail(exc.detail, exc.status_code)
 
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": safe_detail},
-        headers=cors_headers,
-    )
+    return _problem_response(request, exc.status_code, title, safe_detail, cors_headers)
 
 
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    """Handle validation exceptions with sanitized messages.
+    """Handle validation exceptions with sanitized messages per RFC 7807.
 
     Args:
         request: FastAPI request
         exc: Validation exception
 
     Returns:
-        JSONResponse with sanitized error
+        JSONResponse with RFC 7807 Problem Details
     """
     settings = get_settings()
     cors_headers = _get_cors_headers(request)
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    title = "Invalid input data"
 
     # Log the full error for debugging
     logger.warning(f"Validation error for {request.url}: {exc.errors()}")
 
     # In debug mode, return full details
     if settings.debug:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"detail": exc.errors()},
-            headers=cors_headers,
+        return _problem_response(
+            request, status_code, title, str(exc.errors()), cors_headers
         )
 
     # Sanitize validation errors
-    safe_detail = sanitize_error_detail(exc.errors(), status.HTTP_422_UNPROCESSABLE_ENTITY)
+    safe_detail = sanitize_error_detail(exc.errors(), status_code)
 
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": safe_detail},
-        headers=cors_headers,
-    )
+    return _problem_response(request, status_code, title, safe_detail, cors_headers)
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle unexpected exceptions without leaking information.
+    """Handle unexpected exceptions without leaking information per RFC 7807.
 
     Args:
         request: FastAPI request
         exc: Unexpected exception
 
     Returns:
-        JSONResponse with generic error
+        JSONResponse with RFC 7807 Problem Details
     """
     settings = get_settings()
     cors_headers = _get_cors_headers(request)
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    title = SAFE_ERROR_MESSAGES[500]
 
     # Log the full error for debugging
     logger.error(f"Unhandled exception for {request.url}: {exc}", exc_info=True)
 
     # In debug mode, return more details
     if settings.debug:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": str(exc),
-                "type": type(exc).__name__,
-            },
-            headers=cors_headers,
-        )
+        return _problem_response(request, status_code, title, str(exc), cors_headers)
 
     # Return generic error message
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": SAFE_ERROR_MESSAGES[500]},
-        headers=cors_headers,
-    )
+    return _problem_response(request, status_code, title, title, cors_headers)
 
 
 def sanitize_error_for_audit(error: Exception) -> dict[str, str]:
@@ -341,32 +384,37 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
     # Check for integrity errors (duplicates, foreign key violations)
     if isinstance(exc, IntegrityError):
         if "unique" in str(exc).lower() or "duplicate" in str(exc).lower():
-            return JSONResponse(
-                status_code=status.HTTP_409_CONFLICT,
-                content={"detail": "Resource already exists"},
-                headers=cors_headers,
+            return _problem_response(
+                request,
+                status.HTTP_409_CONFLICT,
+                "Conflict with existing resource",
+                "Resource already exists",
+                cors_headers,
             )
         if "foreign key" in str(exc).lower():
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"detail": "Referenced resource not found"},
-                headers=cors_headers,
+            return _problem_response(
+                request,
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid request",
+                "Referenced resource not found",
+                cors_headers,
             )
 
     # In debug mode, return more details
     if settings.debug:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": "Database error",
-                "type": type(exc).__name__,
-            },
-            headers=cors_headers,
+        return _problem_response(
+            request,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Database error",
+            type(exc).__name__,
+            cors_headers,
         )
 
     # Return generic error message
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Database error occurred"},
-        headers=cors_headers,
+    return _problem_response(
+        request,
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "Database error",
+        "Database error occurred",
+        cors_headers,
     )

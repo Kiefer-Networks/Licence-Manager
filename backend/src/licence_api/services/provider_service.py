@@ -697,3 +697,72 @@ class ProviderService:
         await self.session.commit()
 
         return True
+
+    @staticmethod
+    async def test_connection(name: str, credentials: dict[str, Any]) -> tuple[bool, str]:
+        """Test provider connection with given credentials.
+
+        Instantiates the appropriate provider class and tests connectivity.
+        Uses a hardcoded allowlist of provider classes to mitigate SSRF risk.
+
+        Args:
+            name: Provider name (e.g., "google_workspace", "slack")
+            credentials: Provider credentials dict
+
+        Returns:
+            Tuple of (success, message)
+        """
+        # Manual providers don't need connection test
+        if name == "manual":
+            return True, "Manual provider - no connection test needed"
+
+        from licence_api.providers import (
+            AdobeProvider,
+            AnthropicProvider,
+            AtlassianProvider,
+            Auth0Provider,
+            CursorProvider,
+            FigmaProvider,
+            GoogleWorkspaceProvider,
+            HiBobProvider,
+            JetBrainsProvider,
+            MailjetProvider,
+            MicrosoftProvider,
+            OpenAIProvider,
+            SlackProvider,
+            ZoomProvider,
+        )
+
+        from licence_api.models.domain.provider import ProviderName
+
+        providers = {
+            ProviderName.ADOBE: AdobeProvider,
+            ProviderName.ANTHROPIC: AnthropicProvider,
+            ProviderName.ATLASSIAN: AtlassianProvider,
+            ProviderName.AUTH0: Auth0Provider,
+            ProviderName.HIBOB: HiBobProvider,
+            ProviderName.GOOGLE_WORKSPACE: GoogleWorkspaceProvider,
+            ProviderName.MAILJET: MailjetProvider,
+            ProviderName.MICROSOFT: MicrosoftProvider,
+            ProviderName.OPENAI: OpenAIProvider,
+            ProviderName.FIGMA: FigmaProvider,
+            ProviderName.CURSOR: CursorProvider,
+            ProviderName.SLACK: SlackProvider,
+            ProviderName.JETBRAINS: JetBrainsProvider,
+            ProviderName.ZOOM: ZoomProvider,
+        }
+
+        provider_class = providers.get(
+            ProviderName(name) if name in [e.value for e in ProviderName] else None
+        )
+        if provider_class is None:
+            return False, f"Unknown provider: {name}"
+
+        try:
+            provider = provider_class(credentials)
+            success = await provider.test_connection()
+            return success, "Connection successful" if success else "Connection failed"
+        except (ValueError, KeyError, TypeError):
+            return False, "Invalid provider configuration. Please check your credentials."
+        except (ConnectionError, TimeoutError, OSError):
+            return False, "Connection failed. Please verify your credentials and network."

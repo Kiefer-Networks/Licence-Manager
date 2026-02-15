@@ -630,21 +630,10 @@ class MatchingService:
         Returns:
             List of (license, suggested_employee) tuples
         """
-        from sqlalchemy import select
-
-        query = (
-            select(LicenseORM, EmployeeORM)
-            .outerjoin(EmployeeORM, LicenseORM.suggested_employee_id == EmployeeORM.id)
-            .where(LicenseORM.match_status == MATCH_STATUS_SUGGESTED)
+        return await self.license_repo.get_suggested_matches(
+            provider_id=provider_id,
+            limit=limit,
         )
-
-        if provider_id:
-            query = query.where(LicenseORM.provider_id == provider_id)
-
-        query = query.order_by(LicenseORM.match_confidence.desc()).limit(limit)
-
-        result = await self.session.execute(query)
-        return list(result.all())
 
     async def get_external_for_review(
         self,
@@ -660,17 +649,10 @@ class MatchingService:
         Returns:
             List of licenses with external_review status
         """
-        from sqlalchemy import select
-
-        query = select(LicenseORM).where(LicenseORM.match_status == MATCH_STATUS_EXTERNAL_REVIEW)
-
-        if provider_id:
-            query = query.where(LicenseORM.provider_id == provider_id)
-
-        query = query.order_by(LicenseORM.external_user_id).limit(limit)
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
+        return await self.license_repo.get_external_for_review(
+            provider_id=provider_id,
+            limit=limit,
+        )
 
     # =========================================================================
     # Methods with commit (for use from routers)

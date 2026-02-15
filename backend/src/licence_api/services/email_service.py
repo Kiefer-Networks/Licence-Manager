@@ -150,9 +150,21 @@ class EmailService:
 
         Args:
             request: SMTP configuration request
+
+        Raises:
+            HTTPException: If this is initial configuration and no password is provided
         """
         # Get existing config to preserve password if not provided
         existing_config = await self.settings_repo.get(SMTP_CONFIG_KEY)
+
+        # Validate: password is required for initial configuration
+        if existing_config is None and not request.password:
+            from fastapi import HTTPException, status
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required for initial SMTP configuration",
+            )
         password_encrypted: bytes | None = None
 
         if request.password:
@@ -333,14 +345,14 @@ class EmailService:
                 partial(self._send_email_sync, config, password, to_email, msg),
             )
 
-            logger.info(f"Email sent successfully to {to_email}")
+            logger.info("Email sent successfully")
             return True
 
         except smtplib.SMTPException as e:
-            logger.error(f"SMTP error sending email to {to_email}: {e}")
+            logger.error(f"SMTP error sending email: {e}")
             return False
         except Exception as e:
-            logger.error(f"Error sending email to {to_email}: {e}")
+            logger.error(f"Error sending email: {e}")
             return False
 
     async def send_test_email(self, to_email: str) -> tuple[bool, str]:

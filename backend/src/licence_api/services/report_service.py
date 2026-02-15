@@ -3,13 +3,10 @@
 Architecture Note (MVC-04):
     This service performs complex reporting and analytics operations that involve
     specialized aggregations, multi-table joins, and business-specific calculations.
-    While it uses repositories where possible, some methods may use direct SQLAlchemy
-    queries for complex reporting scenarios that don't fit the standard repository
-    pattern. This is an accepted exception for reporting/analytics services, as:
-    1. Report queries are read-only and don't modify state
-    2. They often require specialized aggregations not suitable for generic repos
-    3. Performance optimization may require query-specific tuning
-    4. The queries are business-domain specific and unlikely to be reused
+    All database access is delegated to the appropriate repositories
+    (LicenseRepository, EmployeeRepository, ProviderRepository, etc.).
+    The service layer focuses on business logic, data transformation, and
+    report composition.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -55,9 +52,11 @@ from licence_api.models.dto.report import (
 )
 from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.repositories.license_package_repository import LicensePackageRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.repositories.settings_repository import SettingsRepository
+from licence_api.repositories.user_repository import UserRepository
 from licence_api.services.expiration_service import ExpirationService
 from licence_api.utils.domain_check import is_company_email
 
@@ -73,6 +72,8 @@ class ReportService:
         self.provider_repo = ProviderRepository(session)
         self.settings_repo = SettingsRepository(session)
         self.snapshot_repo = CostSnapshotRepository(session)
+        self.package_repo = LicensePackageRepository(session)
+        self.user_repo = UserRepository(session)
         self.expiration_service = ExpirationService(session)
 
     async def get_dashboard(self, department: str | None = None) -> DashboardResponse:
@@ -454,22 +455,11 @@ class ReportService:
         Returns:
             ExpiringContractsReport
         """
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-
-        from licence_api.models.orm.license_package import LicensePackageORM
-
         cutoff_date = date.today() + timedelta(days=days_ahead)
-
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(LicensePackageORM.contract_end.isnot(None))
-            .where(LicensePackageORM.contract_end <= cutoff_date)
-            .where(LicensePackageORM.contract_end >= date.today())
-            .order_by(LicensePackageORM.contract_end)
+        packages = await self.package_repo.get_expiring_contracts(
+            cutoff_date=cutoff_date,
+            today=date.today(),
         )
-        packages = list(result.scalars().all())
 
         contracts = []
         for pkg in packages:
@@ -513,96 +503,39 @@ class ReportService:
         Returns:
             UtilizationReport
         """
-        from sqlalchemy import and_, case, func, select
-        from sqlalchemy.orm import selectinload
-
-        from licence_api.models.orm.license import LicenseORM
         from licence_api.models.orm.license_package import LicensePackageORM
-        from licence_api.models.orm.provider import ProviderORM
 
         # Get company domains for external email detection
-        company_domains = []
+        company_domains: list[str] = []
         domains_setting = await self.settings_repo.get("company_domains")
         if domains_setting:
             company_domains = domains_setting.get("domains", [])
 
         # Get all enabled providers (except hibob)
-        all_providers_result = await self.session.execute(
-            select(ProviderORM).where(
-                and_(ProviderORM.enabled == True, ProviderORM.name != "hibob")
-            )
-        )
-        all_providers = {p.id: p for p in all_providers_result.scalars().all()}
+        enabled_providers = await self.provider_repo.get_enabled_excluding("hibob")
+        all_providers = {p.id: p for p in enabled_providers}
 
         # Get manual packages
-        packages_result = await self.session.execute(
-            select(LicensePackageORM).options(selectinload(LicensePackageORM.provider))
-        )
+        all_packages = await self.package_repo.get_all_with_providers()
         packages_by_provider: dict[str, list[LicensePackageORM]] = {}
-        for pkg in packages_result.scalars().all():
+        for pkg in all_packages:
             pid = str(pkg.provider_id)
             if pid not in packages_by_provider:
                 packages_by_provider[pid] = []
             packages_by_provider[pid].append(pkg)
 
-        # Build external email condition for SQL
-        external_conditions = []
-        for domain in company_domains:
-            external_conditions.append(
-                ~func.lower(LicenseORM.external_user_id).like(f"%@{domain.lower()}")
-            )
-
-        # Get detailed license stats per provider
-        # Count: active, assigned (with employee), unassigned, external, total_cost
-        stats_query = select(
-            LicenseORM.provider_id,
-            func.count().filter(LicenseORM.status == "active").label("active_count"),
-            func.count()
-            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.isnot(None)))
-            .label("assigned_count"),
-            func.count()
-            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.is_(None)))
-            .label("unassigned_count"),
-            func.sum(
-                case((LicenseORM.status == "active", LicenseORM.monthly_cost), else_=Decimal("0"))
-            ).label("total_cost"),
-        ).group_by(LicenseORM.provider_id)
-        stats_result = await self.session.execute(stats_query)
-        provider_stats: dict[str, dict] = {}
-        for row in stats_result.all():
-            provider_stats[str(row.provider_id)] = {
-                "active": row.active_count or 0,
-                "assigned": row.assigned_count or 0,
-                "unassigned": row.unassigned_count or 0,
-                "total_cost": row.total_cost or Decimal("0"),
-            }
+        # Get detailed license stats per provider via repository
+        provider_stats = await self.license_repo.get_utilization_stats()
 
         # Count external licenses and their costs per provider
         external_by_provider: dict[str, dict] = {}
         if company_domains:
             for provider_id in all_providers.keys():
-                # Build NOT LIKE conditions for all company domains
-                conditions = [LicenseORM.provider_id == provider_id, LicenseORM.status == "active"]
-                conditions.append(LicenseORM.external_user_id.like("%@%"))  # Must be email
-                for domain in company_domains:
-                    conditions.append(
-                        ~func.lower(LicenseORM.external_user_id).like(f"%@{domain.lower()}")
-                    )
-                ext_result = await self.session.execute(
-                    select(
-                        func.count().label("count"),
-                        func.coalesce(func.sum(LicenseORM.monthly_cost), Decimal("0")).label(
-                            "cost"
-                        ),
-                    )
-                    .select_from(LicenseORM)
-                    .where(and_(*conditions))
+                ext_data = await self.license_repo.count_external_by_provider(
+                    provider_id=provider_id,
+                    company_domains=company_domains,
                 )
-                row = ext_result.one()
-                external_by_provider[str(provider_id)] = {
-                    "count": row.count or 0,
-                    "cost": row.cost or Decimal("0"),
-                }
+                external_by_provider[str(provider_id)] = ext_data
 
         # Build report
         providers_list = []
@@ -1148,22 +1081,14 @@ class ReportService:
         Returns:
             CancelledLicensesReport
         """
-        from sqlalchemy import select
-
-        from licence_api.models.orm.admin_user import AdminUserORM
-
         cancelled = await self.expiration_service.get_cancelled_licenses()
         today = date.today()
 
-        # Get canceller names
+        # Get canceller names via repository
         canceller_ids = [lic.cancelled_by for lic, _, _ in cancelled if lic.cancelled_by]
         canceller_names: dict = {}
         if canceller_ids:
-            result = await self.session.execute(
-                select(AdminUserORM).where(AdminUserORM.id.in_(canceller_ids))
-            )
-            for admin in result.scalars().all():
-                canceller_names[admin.id] = admin.name or admin.email
+            canceller_names = await self.user_repo.get_names_by_ids(canceller_ids)
 
         licenses = []
         pending_effective = 0
@@ -1211,26 +1136,17 @@ class ReportService:
         Returns:
             LicenseLifecycleOverview
         """
-        from sqlalchemy import func, select
-
         from licence_api.models.domain.license import LicenseStatus
-        from licence_api.models.orm.license import LicenseORM
 
-        # Get counts by status
-        status_counts = await self.session.execute(
-            select(LicenseORM.status, func.count()).group_by(LicenseORM.status)
-        )
-        counts_by_status = {row[0]: row[1] for row in status_counts.all()}
+        # Get counts by status via repository
+        counts_by_status = await self.license_repo.count_by_status()
 
         # Count active licenses
         total_active = counts_by_status.get(LicenseStatus.ACTIVE, 0)
         total_expired = counts_by_status.get(LicenseStatus.EXPIRED, 0)
 
-        # Count licenses needing reorder
-        needs_reorder_result = await self.session.execute(
-            select(func.count()).select_from(LicenseORM).where(LicenseORM.needs_reorder == True)
-        )
-        total_needs_reorder = needs_reorder_result.scalar() or 0
+        # Count licenses needing reorder via repository
+        total_needs_reorder = await self.license_repo.count_needs_reorder()
 
         # Get expiring licenses (within 90 days)
         expiring_report = await self.get_expiring_licenses_report(days_ahead=90)

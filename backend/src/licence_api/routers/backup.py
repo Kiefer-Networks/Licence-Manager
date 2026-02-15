@@ -4,12 +4,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_backup_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.backup import (
     BackupConfig,
@@ -84,13 +83,6 @@ async def read_upload_with_limit(
     return b"".join(chunks)
 
 
-def get_backup_service(
-    db: AsyncSession = Depends(get_db),
-) -> BackupService:
-    """Get BackupService instance."""
-    return BackupService(db)
-
-
 @router.post("/export")
 @limiter.limit(BACKUP_EXPORT_LIMIT)
 async def create_backup(
@@ -106,7 +98,7 @@ async def create_backup(
     Returns encrypted backup file as application/octet-stream.
     """
     try:
-        logger.info(f"Starting backup for user {current_user.email}")
+        logger.info(f"Starting backup for user_id={current_user.id}")
         backup_data = await service.create_backup(
             password=body.password,
             user=current_user,
@@ -293,7 +285,7 @@ async def list_backups(
     return await service.list_stored_backups()
 
 
-@router.post("/trigger", response_model=StoredBackup)
+@router.post("/trigger", response_model=StoredBackup, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/hour")
 async def trigger_backup(
     request: Request,
@@ -323,9 +315,9 @@ async def trigger_backup(
 @limiter.limit(BACKUP_INFO_LIMIT)
 async def download_backup(
     request: Request,
-    backup_id: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],
     service: Annotated[BackupService, Depends(get_backup_service)],
+    backup_id: str = Path(pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
 ) -> Response:
     """Download a stored backup file.
 
@@ -348,14 +340,14 @@ async def download_backup(
         )
 
 
-@router.delete("/{backup_id}")
+@router.delete("/{backup_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
 async def delete_backup(
     request: Request,
-    backup_id: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_DELETE))],
     service: Annotated[BackupService, Depends(get_backup_service)],
-) -> dict[str, str]:
+    backup_id: str = Path(pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
+) -> None:
     """Delete a stored backup.
 
     Requires backups.delete permission.
@@ -366,7 +358,7 @@ async def delete_backup(
             user=current_user,
             http_request=request,
         )
-        return {"status": "deleted"}
+        return None
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -378,10 +370,10 @@ async def delete_backup(
 @limiter.limit(BACKUP_RESTORE_LIMIT)
 async def restore_from_backup(
     request: Request,
-    backup_id: str,
     body: RestoreFromStoredRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_RESTORE))],
     service: Annotated[BackupService, Depends(get_backup_service)],
+    backup_id: str = Path(pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
 ) -> RestoreResponse:
     """Restore system from a stored backup.
 

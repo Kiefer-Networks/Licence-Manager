@@ -1,19 +1,12 @@
 """Providers router."""
 
-from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from licence_api.constants import (
-    ALLOWED_LOGO_EXTENSIONS,
-    IMAGE_SIGNATURES,
-    MAX_LOGO_SIZE,
-)
-from licence_api.constants.paths import LOGOS_DIR
 from licence_api.dependencies import (
     get_audit_service,
     get_pricing_service,
@@ -22,7 +15,6 @@ from licence_api.dependencies import (
 )
 from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.domain.provider import ProviderName
 from licence_api.models.dto.provider import (
     ProviderCreate,
     ProviderListResponse,
@@ -30,7 +22,6 @@ from licence_api.models.dto.provider import (
     ProviderUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.encryption import get_encryption_service
 from licence_api.security.rate_limit import (
     PROVIDER_TEST_CONNECTION_LIMIT,
     SENSITIVE_OPERATION_LIMIT,
@@ -42,7 +33,7 @@ from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.errors import log_sync_connection_error, log_sync_unexpected_error
-from licence_api.utils.file_validation import validate_svg_content
+from licence_api.utils.validation import validate_dict_recursive
 
 router = APIRouter()
 
@@ -57,45 +48,8 @@ class TestConnectionRequest(BaseModel):
     @classmethod
     def validate_credentials_size(cls, v: dict[str, Any]) -> dict[str, Any]:
         """Validate credentials dict size and content recursively."""
-        _validate_dict_recursive(v, max_depth=3, current_depth=0)
+        validate_dict_recursive(v, max_depth=3, current_depth=0)
         return v
-
-
-def _validate_dict_recursive(
-    data: Any, max_depth: int = 3, current_depth: int = 0, max_items: int = 20
-) -> None:
-    """Recursively validate dict/list structures to prevent DoS attacks.
-
-    Args:
-        data: The data structure to validate
-        max_depth: Maximum nesting depth allowed
-        current_depth: Current recursion depth
-        max_items: Maximum number of items per collection
-    """
-    if current_depth > max_depth:
-        raise ValueError(f"Credential nesting too deep (max {max_depth} levels)")
-
-    if isinstance(data, dict):
-        if len(data) > max_items:
-            raise ValueError(f"Too many credential fields (max {max_items})")
-        for key, value in data.items():
-            if not isinstance(key, str):
-                raise ValueError("Credential keys must be strings")
-            if len(key) > 100:
-                raise ValueError("Credential key too long (max 100 chars)")
-            _validate_dict_recursive(value, max_depth, current_depth + 1, max_items)
-    elif isinstance(data, list):
-        if len(data) > max_items:
-            raise ValueError(f"Too many items in credential list (max {max_items})")
-        for item in data:
-            _validate_dict_recursive(item, max_depth, current_depth + 1, max_items)
-    elif isinstance(data, str):
-        if len(data) > 10000:
-            raise ValueError("Credential value too long (max 10000 chars)")
-    elif isinstance(data, (int, float, bool, type(None))):
-        pass  # Primitive types are allowed
-    else:
-        raise ValueError(f"Invalid credential value type: {type(data).__name__}")
 
 
 class PublicCredentialsResponse(BaseModel):
@@ -242,36 +196,8 @@ async def update_provider(
     return result
 
 
-def validate_logo_signature(content: bytes, extension: str) -> bool:
-    """Validate logo file content matches expected signature.
-
-    For SVG files, also validates that the content doesn't contain
-    dangerous elements like scripts or event handlers.
-    """
-    ext_lower = extension.lower()
-    signatures = IMAGE_SIGNATURES.get(ext_lower)
-    if not signatures:
-        return False
-
-    # Special handling for WEBP
-    if ext_lower == ".webp":
-        if content.startswith(b"RIFF") and len(content) > 12 and content[8:12] == b"WEBP":
-            return True
-        return False
-
-    # Special handling for SVG (text-based)
-    if ext_lower == ".svg":
-        # Check first 1000 bytes for SVG indicators
-        header = content[:1000].lower()
-        if not (b"<svg" in header or b"<?xml" in header):
-            return False
-        # Validate SVG content for dangerous elements
-        return validate_svg_content(content)
-
-    for sig in signatures:
-        if content.startswith(sig):
-            return True
-    return False
+# Maximum logo file size: 5MB
+MAX_LOGO_SIZE = 5 * 1024 * 1024
 
 
 class LogoUploadResponse(BaseModel):
@@ -300,7 +226,12 @@ async def upload_provider_logo(
             detail="No filename provided",
         )
 
-    content = await file.read()
+    content = await file.read(MAX_LOGO_SIZE + 1)
+    if len(content) > MAX_LOGO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Logo file too large. Maximum size: {MAX_LOGO_SIZE // 1024 // 1024}MB",
+        )
 
     try:
         logo_url = await provider_service.upload_logo(
@@ -321,7 +252,7 @@ async def upload_provider_logo(
 @router.get("/{provider_id}/logo/{filename}")
 async def get_provider_logo_file(
     provider_id: UUID,
-    filename: str,
+    filename: Annotated[str, Path(max_length=100, pattern=r"^[a-zA-Z0-9_.-]+$")],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> FileResponse:
@@ -413,73 +344,8 @@ async def test_provider_connection(
     provider classes. External API URLs are defined within each provider class, not
     by user input. User-provided credentials are only used for authentication.
     """
-    # Manual providers don't need connection test
-    if body.name == "manual":
-        return TestConnectionResponse(
-            success=True,
-            message="Manual provider - no connection test needed",
-        )
-
-    from licence_api.providers import (
-        AdobeProvider,
-        AnthropicProvider,
-        AtlassianProvider,
-        Auth0Provider,
-        CursorProvider,
-        FigmaProvider,
-        GoogleWorkspaceProvider,
-        HiBobProvider,
-        JetBrainsProvider,
-        MailjetProvider,
-        MicrosoftProvider,
-        OpenAIProvider,
-        SlackProvider,
-        ZoomProvider,
-    )
-
-    providers = {
-        ProviderName.ADOBE: AdobeProvider,
-        ProviderName.ANTHROPIC: AnthropicProvider,
-        ProviderName.ATLASSIAN: AtlassianProvider,
-        ProviderName.AUTH0: Auth0Provider,
-        ProviderName.HIBOB: HiBobProvider,
-        ProviderName.GOOGLE_WORKSPACE: GoogleWorkspaceProvider,
-        ProviderName.MAILJET: MailjetProvider,
-        ProviderName.MICROSOFT: MicrosoftProvider,
-        ProviderName.OPENAI: OpenAIProvider,
-        ProviderName.FIGMA: FigmaProvider,
-        ProviderName.CURSOR: CursorProvider,
-        ProviderName.SLACK: SlackProvider,
-        ProviderName.JETBRAINS: JetBrainsProvider,
-        ProviderName.ZOOM: ZoomProvider,
-    }
-
-    provider_class = providers.get(
-        ProviderName(body.name) if body.name in [e.value for e in ProviderName] else None
-    )
-    if provider_class is None:
-        return TestConnectionResponse(
-            success=False,
-            message=f"Unknown provider: {body.name}",
-        )
-
-    try:
-        provider = provider_class(body.credentials)
-        success = await provider.test_connection()
-        return TestConnectionResponse(
-            success=success,
-            message="Connection successful" if success else "Connection failed",
-        )
-    except (ValueError, KeyError, TypeError):
-        return TestConnectionResponse(
-            success=False,
-            message="Invalid provider configuration. Please check your credentials.",
-        )
-    except (ConnectionError, TimeoutError, OSError):
-        return TestConnectionResponse(
-            success=False,
-            message="Connection failed. Please verify your credentials and network.",
-        )
+    success, message = await ProviderService.test_connection(body.name, body.credentials)
+    return TestConnectionResponse(success=success, message=message)
 
 
 @router.post("/sync", response_model=SyncResponse)
@@ -622,73 +488,32 @@ class LicenseTypesResponse(BaseModel):
     license_types: list[LicenseTypeInfo]
 
 
-# Default license types for providers where types are known but may not be auto-detected
-PROVIDER_DEFAULT_LICENSE_TYPES: dict[str, list[str]] = {
-    "figma": [
-        "Figma Viewer",
-        "Figma Collaborator",
-        "Figma Dev Mode",
-        "Figma Full Seat",
-    ],
-}
-
-
 @router.get("/{provider_id}/license-types", response_model=LicenseTypesResponse)
 async def get_provider_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> LicenseTypesResponse:
     """Get all license types for a provider with their counts and current pricing.
 
     Requires providers.view permission.
     """
     try:
-        provider_name, config = await provider_service.get_provider_name_and_config(provider_id)
+        result = await pricing_service.get_license_type_overview(provider_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    # Get license type counts
-    type_counts = await provider_service.get_license_type_counts(provider_id)
-
-    # Get current pricing from config
-    pricing_config = config.get("license_pricing", {})
-
-    # Add default license types for providers with known types (e.g., Figma)
-    # This ensures all license types show up in pricing even if no licenses have that type yet
-    default_types = PROVIDER_DEFAULT_LICENSE_TYPES.get(provider_name, [])
-    for default_type in default_types:
-        if default_type not in type_counts:
-            type_counts[default_type] = 0
-
-    license_types = []
-    for license_type, count in type_counts.items():
-        price_info = pricing_config.get(license_type)
-        pricing = None
-        if price_info:
-            pricing = LicenseTypePricing(
-                license_type=license_type,
-                display_name=price_info.get("display_name"),
-                cost=price_info.get("cost", "0"),
-                currency=price_info.get("currency", "EUR"),
-                billing_cycle=price_info.get("billing_cycle", "yearly"),
-                payment_frequency=price_info.get("payment_frequency", "yearly"),
-                next_billing_date=price_info.get("next_billing_date"),
-                notes=price_info.get("notes"),
-            )
-        license_types.append(
-            LicenseTypeInfo(
-                license_type=license_type,
-                count=count,
-                pricing=pricing,
-            )
+    license_types = [
+        LicenseTypeInfo(
+            license_type=lt["license_type"],
+            count=lt["count"],
+            pricing=LicenseTypePricing(**lt["pricing"]) if lt["pricing"] else None,
         )
-
-    # Sort by count descending
-    license_types.sort(key=lambda x: x.count, reverse=True)
+        for lt in result["license_types"]
+    ]
 
     return LicenseTypesResponse(license_types=license_types)
 
@@ -697,43 +522,19 @@ async def get_provider_license_types(
 async def get_provider_pricing(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> LicenseTypePricingResponse:
     """Get license type pricing for a provider. Requires providers.view permission."""
     try:
-        _, config = await provider_service.get_provider_name_and_config(provider_id)
+        result = await pricing_service.get_pricing_overview(provider_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    pricing_config = config.get("license_pricing", {})
-    pricing = [
-        LicenseTypePricing(
-            license_type=lt,
-            display_name=info.get("display_name"),
-            cost=info.get("cost", "0"),
-            currency=info.get("currency", "EUR"),
-            billing_cycle=info.get("billing_cycle", "yearly"),
-            payment_frequency=info.get("payment_frequency", "yearly"),
-            next_billing_date=info.get("next_billing_date"),
-            notes=info.get("notes"),
-        )
-        for lt, info in pricing_config.items()
-    ]
-
-    # Get package pricing if exists
-    package_pricing_config = config.get("package_pricing")
-    package_pricing = None
-    if package_pricing_config:
-        package_pricing = PackagePricing(
-            cost=package_pricing_config.get("cost", "0"),
-            currency=package_pricing_config.get("currency", "EUR"),
-            billing_cycle=package_pricing_config.get("billing_cycle", "yearly"),
-            next_billing_date=package_pricing_config.get("next_billing_date"),
-            notes=package_pricing_config.get("notes"),
-        )
+    pricing = [LicenseTypePricing(**p) for p in result["pricing"]]
+    package_pricing = PackagePricing(**result["package_pricing"]) if result["package_pricing"] else None
 
     return LicenseTypePricingResponse(pricing=pricing, package_pricing=package_pricing)
 
@@ -745,18 +546,9 @@ async def update_provider_pricing(
     provider_id: UUID,
     body: LicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
-    try:
-        await provider_service.get_provider_name_and_config(provider_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
     # Build pricing config
     pricing_config = PricingService.build_pricing_config_dict(body.pricing)
 
@@ -772,13 +564,20 @@ async def update_provider_pricing(
         }
 
     # Use pricing service to update (handles audit logging and commit)
-    await pricing_service.update_license_pricing(
-        provider_id=provider_id,
-        pricing_config=pricing_config,
-        package_pricing=package_pricing,
-        user=current_user,
-        request=request,
-    )
+    # Raises ValueError if provider not found
+    try:
+        await pricing_service.update_license_pricing(
+            provider_id=provider_id,
+            pricing_config=pricing_config,
+            package_pricing=package_pricing,
+            user=current_user,
+            request=request,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
 
     return LicenseTypePricingResponse(
         pricing=body.pricing,
@@ -814,7 +613,7 @@ class IndividualLicenseTypePricingRequest(BaseModel):
 async def get_provider_individual_license_types(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+    pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> IndividualLicenseTypesResponse:
     """Get individual license types extracted from combined strings.
 
@@ -825,51 +624,26 @@ async def get_provider_individual_license_types(
     Requires providers.view permission.
     """
     try:
-        _, config = await provider_service.get_provider_name_and_config(provider_id)
+        result = await pricing_service.get_individual_license_type_overview(provider_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    # Get individual license type counts (extracted from combined strings)
-    individual_counts, has_combined = await provider_service.get_individual_license_type_counts(
-        provider_id
-    )
-
-    # Get current individual pricing from config
-    individual_pricing_config = config.get("individual_license_pricing", {})
-
-    license_types = []
-    for license_type, count in individual_counts.items():
-        price_info = individual_pricing_config.get(license_type)
-        pricing = None
-        if price_info:
-            pricing = LicenseTypePricing(
-                license_type=license_type,
-                display_name=price_info.get("display_name"),
-                cost=price_info.get("cost", "0"),
-                currency=price_info.get("currency", "EUR"),
-                billing_cycle=price_info.get("billing_cycle", "monthly"),
-                payment_frequency=price_info.get("payment_frequency", "monthly"),
-                next_billing_date=price_info.get("next_billing_date"),
-                notes=price_info.get("notes"),
-            )
-        license_types.append(
-            IndividualLicenseTypeInfo(
-                license_type=license_type,
-                display_name=price_info.get("display_name") if price_info else None,
-                user_count=count,
-                pricing=pricing,
-            )
+    license_types = [
+        IndividualLicenseTypeInfo(
+            license_type=lt["license_type"],
+            display_name=lt["display_name"],
+            user_count=lt["user_count"],
+            pricing=LicenseTypePricing(**lt["pricing"]) if lt["pricing"] else None,
         )
-
-    # Sort by user count descending
-    license_types.sort(key=lambda x: x.user_count, reverse=True)
+        for lt in result["license_types"]
+    ]
 
     return IndividualLicenseTypesResponse(
         license_types=license_types,
-        has_combined_types=has_combined,
+        has_combined_types=result["has_combined_types"],
     )
 
 
@@ -880,7 +654,6 @@ async def update_provider_individual_pricing(
     provider_id: UUID,
     body: IndividualLicenseTypePricingRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_EDIT))],
-    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> IndividualLicenseTypesResponse:
     """Update individual license type pricing.
@@ -894,14 +667,6 @@ async def update_provider_individual_pricing(
 
     Requires providers.edit permission.
     """
-    try:
-        await provider_service.get_provider_name_and_config(provider_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Provider not found",
-        )
-
     # Build individual pricing config
     individual_pricing_config = {}
     for p in body.pricing:
@@ -916,16 +681,23 @@ async def update_provider_individual_pricing(
         }
 
     # Use pricing service to update (handles audit logging and commit)
-    await pricing_service.update_individual_license_pricing(
-        provider_id=provider_id,
-        individual_pricing_config=individual_pricing_config,
-        user=current_user,
-        request=request,
-    )
+    # Raises ValueError if provider not found
+    try:
+        await pricing_service.update_individual_license_pricing(
+            provider_id=provider_id,
+            individual_pricing_config=individual_pricing_config,
+            user=current_user,
+            request=request,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
 
     # Return updated license types
     return await get_provider_individual_license_types(
-        provider_id, current_user, provider_service
+        provider_id, current_user, pricing_service
     )
 
 

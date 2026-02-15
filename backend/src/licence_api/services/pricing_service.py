@@ -2,7 +2,7 @@
 
 import copy
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import Request
@@ -14,6 +14,16 @@ from licence_api.services.audit_service import AuditAction, AuditService, Resour
 
 if TYPE_CHECKING:
     from licence_api.models.domain.admin_user import AdminUser
+
+# Default license types for providers where types are known but may not be auto-detected
+PROVIDER_DEFAULT_LICENSE_TYPES: dict[str, list[str]] = {
+    "figma": [
+        "Figma Viewer",
+        "Figma Collaborator",
+        "Figma Dev Mode",
+        "Figma Full Seat",
+    ],
+}
 
 
 class PricingService:
@@ -198,6 +208,190 @@ class PricingService:
             )
 
         await self.session.commit()
+
+    # =========================================================================
+    # Read / Overview methods
+    # =========================================================================
+
+    async def get_license_type_overview(
+        self, provider_id: UUID
+    ) -> dict[str, Any]:
+        """Get all license types for a provider with counts and current pricing.
+
+        Merges license type counts with pricing configuration and default types.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dict with license_types list, sorted by count descending
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        provider_name = provider.name
+        config = provider.config or {}
+
+        # Get license type counts
+        type_counts = await self.license_repo.get_license_type_counts(provider_id)
+
+        # Get current pricing from config
+        pricing_config = config.get("license_pricing", {})
+
+        # Add default license types for providers with known types (e.g., Figma)
+        default_types = PROVIDER_DEFAULT_LICENSE_TYPES.get(provider_name, [])
+        for default_type in default_types:
+            if default_type not in type_counts:
+                type_counts[default_type] = 0
+
+        license_types = []
+        for license_type, count in type_counts.items():
+            price_info = pricing_config.get(license_type)
+            pricing = None
+            if price_info:
+                pricing = {
+                    "license_type": license_type,
+                    "display_name": price_info.get("display_name"),
+                    "cost": price_info.get("cost", "0"),
+                    "currency": price_info.get("currency", "EUR"),
+                    "billing_cycle": price_info.get("billing_cycle", "yearly"),
+                    "payment_frequency": price_info.get("payment_frequency", "yearly"),
+                    "next_billing_date": price_info.get("next_billing_date"),
+                    "notes": price_info.get("notes"),
+                }
+            license_types.append(
+                {
+                    "license_type": license_type,
+                    "count": count,
+                    "pricing": pricing,
+                }
+            )
+
+        # Sort by count descending
+        license_types.sort(key=lambda x: x["count"], reverse=True)
+
+        return {"license_types": license_types}
+
+    async def get_pricing_overview(
+        self, provider_id: UUID
+    ) -> dict[str, Any]:
+        """Get license type pricing for a provider.
+
+        Assembles pricing data from provider config into a structured response.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dict with pricing list and optional package_pricing
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        config = provider.config or {}
+        pricing_config = config.get("license_pricing", {})
+
+        pricing = [
+            {
+                "license_type": lt,
+                "display_name": info.get("display_name"),
+                "cost": info.get("cost", "0"),
+                "currency": info.get("currency", "EUR"),
+                "billing_cycle": info.get("billing_cycle", "yearly"),
+                "payment_frequency": info.get("payment_frequency", "yearly"),
+                "next_billing_date": info.get("next_billing_date"),
+                "notes": info.get("notes"),
+            }
+            for lt, info in pricing_config.items()
+        ]
+
+        # Get package pricing if exists
+        package_pricing_config = config.get("package_pricing")
+        package_pricing = None
+        if package_pricing_config:
+            package_pricing = {
+                "cost": package_pricing_config.get("cost", "0"),
+                "currency": package_pricing_config.get("currency", "EUR"),
+                "billing_cycle": package_pricing_config.get("billing_cycle", "yearly"),
+                "next_billing_date": package_pricing_config.get("next_billing_date"),
+                "notes": package_pricing_config.get("notes"),
+            }
+
+        return {"pricing": pricing, "package_pricing": package_pricing}
+
+    async def get_individual_license_type_overview(
+        self, provider_id: UUID
+    ) -> dict[str, Any]:
+        """Get individual license types extracted from combined strings with pricing.
+
+        For providers like Microsoft 365 where users have multiple licenses stored as
+        comma-separated strings, this extracts and counts each individual license type
+        separately.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Dict with license_types list and has_combined_types flag
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+
+        config = provider.config or {}
+
+        # Get individual license type counts (extracted from combined strings)
+        individual_counts = await self.license_repo.get_individual_license_type_counts(
+            provider_id
+        )
+        raw_counts = await self.license_repo.get_license_type_counts(provider_id)
+        has_combined = any("," in lt for lt in raw_counts.keys())
+
+        # Get current individual pricing from config
+        individual_pricing_config = config.get("individual_license_pricing", {})
+
+        license_types = []
+        for license_type, count in individual_counts.items():
+            price_info = individual_pricing_config.get(license_type)
+            pricing = None
+            if price_info:
+                pricing = {
+                    "license_type": license_type,
+                    "display_name": price_info.get("display_name"),
+                    "cost": price_info.get("cost", "0"),
+                    "currency": price_info.get("currency", "EUR"),
+                    "billing_cycle": price_info.get("billing_cycle", "monthly"),
+                    "payment_frequency": price_info.get("payment_frequency", "monthly"),
+                    "next_billing_date": price_info.get("next_billing_date"),
+                    "notes": price_info.get("notes"),
+                }
+            license_types.append(
+                {
+                    "license_type": license_type,
+                    "display_name": price_info.get("display_name") if price_info else None,
+                    "user_count": count,
+                    "pricing": pricing,
+                }
+            )
+
+        # Sort by user count descending
+        license_types.sort(key=lambda x: x["user_count"], reverse=True)
+
+        return {
+            "license_types": license_types,
+            "has_combined_types": has_combined,
+        }
 
     @staticmethod
     def calculate_monthly_cost(cost: Decimal, billing_cycle: str) -> Decimal:

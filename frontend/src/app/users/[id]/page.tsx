@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -24,16 +23,11 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api, Employee, License, Provider, ExternalAccount, ExternalAccountCreate } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { CopyableText } from '@/components/ui/copy-button';
 import {
-  ArrowLeft,
   Key,
-  User,
   Mail,
-  Building2,
   Calendar,
   Loader2,
   CheckCircle2,
@@ -52,222 +46,52 @@ import { formatMonthlyCost } from '@/lib/format';
 import { isRemovableProvider } from '@/lib/constants';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
+import { useEmployeeDetail } from '@/hooks/use-employee-detail';
 
 export default function UserDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const employeeId = params.id as string;
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const tEmployees = useTranslations('employees');
   const { formatDate, formatCurrency } = useLocale();
 
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [licenses, setLicenses] = useState<License[]>([]);
-  const [ownedAdminAccounts, setOwnedAdminAccounts] = useState<License[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Assign License Dialog
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [availableLicenses, setAvailableLicenses] = useState<License[]>([]);
-  const [selectedLicenseId, setSelectedLicenseId] = useState('');
-  const [loadingAvailable, setLoadingAvailable] = useState(false);
-
-  // Remove Dialog
-  const [removeDialog, setRemoveDialog] = useState<License | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
-
-  // Unassign Dialog
-  const [unassignDialog, setUnassignDialog] = useState<License | null>(null);
-
-  // External Accounts
-  const [externalAccounts, setExternalAccounts] = useState<ExternalAccount[]>([]);
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [selectedProviderType, setSelectedProviderType] = useState('');
-  const [externalUsername, setExternalUsername] = useState('');
-  const [unlinkDialog, setUnlinkDialog] = useState<ExternalAccount | null>(null);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const fetchEmployee = useCallback(async () => {
-    try {
-      const data = await api.getEmployee(employeeId);
-      setEmployee(data);
-    } catch (error) {
-      handleSilentError('fetchEmployee', error);
-    }
-  }, [employeeId]);
-
-  const fetchLicenses = useCallback(async () => {
-    try {
-      const data = await api.getLicenses({ employee_id: employeeId, page_size: 100 });
-      setLicenses(data.items);
-    } catch (error) {
-      handleSilentError('fetchLicenses', error);
-    }
-  }, [employeeId]);
-
-  const fetchProviders = useCallback(async () => {
-    try {
-      const data = await api.getProviders();
-      setProviders(data.items);
-    } catch (error) {
-      handleSilentError('fetchProviders', error);
-    }
-  }, []);
-
-  const fetchOwnedAdminAccounts = useCallback(async () => {
-    try {
-      const data = await api.getAdminAccountLicenses({ owner_id: employeeId, page_size: 100 });
-      setOwnedAdminAccounts(data.items);
-    } catch (error) {
-      handleSilentError('fetchOwnedAdminAccounts', error);
-    }
-  }, [employeeId]);
-
-  const fetchExternalAccounts = useCallback(async () => {
-    try {
-      const accounts = await api.getEmployeeExternalAccounts(employeeId);
-      setExternalAccounts(accounts);
-    } catch (error) {
-      handleSilentError('fetchExternalAccounts', error);
-    }
-  }, [employeeId]);
-
-  useEffect(() => {
-    Promise.all([fetchEmployee(), fetchLicenses(), fetchProviders(), fetchOwnedAdminAccounts(), fetchExternalAccounts()]).finally(() =>
-      setLoading(false)
-    );
-  }, [fetchEmployee, fetchLicenses, fetchProviders, fetchOwnedAdminAccounts, fetchExternalAccounts]);
-
-  const openAssignDialog = async () => {
-    setAssignDialogOpen(true);
-    setLoadingAvailable(true);
-    try {
-      // Get unassigned licenses from all providers
-      const data = await api.getLicenses({ unassigned: true, page_size: 200 });
-      setAvailableLicenses(data.items);
-    } catch (error) {
-      handleSilentError('fetchAvailableLicenses', error);
-    } finally {
-      setLoadingAvailable(false);
-    }
-  };
-
-  const handleAssignLicense = async () => {
-    if (!selectedLicenseId) return;
-    setActionLoading(true);
-    try {
-      await api.assignManualLicense(selectedLicenseId, employeeId);
-      showToast('success', t('licenseAssigned'));
-      setAssignDialogOpen(false);
-      setSelectedLicenseId('');
-      await fetchLicenses();
-      await fetchEmployee();
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : t('failedToAssign'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleUnassignLicense = async () => {
-    if (!unassignDialog) return;
-    setActionLoading(true);
-    try {
-      // Check if it's a manual license
-      const license = unassignDialog;
-      const provider = providers.find(p => p.id === license.provider_id);
-      const isManual = provider?.config?.provider_type === 'manual' || provider?.name === 'manual';
-
-      if (isManual) {
-        await api.unassignManualLicense(license.id);
-      } else {
-        await api.bulkUnassignLicenses([license.id]);
-      }
-      showToast('success', t('licenseUnassigned'));
-      setUnassignDialog(null);
-      await fetchLicenses();
-      await fetchEmployee();
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : t('failedToUnassign'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleRemoveFromProvider = async () => {
-    if (!removeDialog) return;
-    setActionLoading(true);
-    try {
-      const result = await api.removeLicenseFromProvider(removeDialog.id);
-      if (result.success) {
-        showToast('success', t('removedFromProvider'));
-        setRemoveDialog(null);
-        await fetchLicenses();
-        await fetchEmployee();
-      } else {
-        showToast('error', result.message);
-      }
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : t('failedToRemove'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleLinkExternalAccount = async () => {
-    if (!selectedProviderType || !externalUsername.trim()) return;
-    setActionLoading(true);
-    try {
-      await api.linkExternalAccount(employeeId, {
-        provider_type: selectedProviderType,
-        external_username: externalUsername.trim(),
-      });
-      showToast('success', tEmployees('accountLinked'));
-      setLinkDialogOpen(false);
-      setSelectedProviderType('');
-      setExternalUsername('');
-      await fetchExternalAccounts();
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to link account');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleUnlinkExternalAccount = async () => {
-    if (!unlinkDialog) return;
-    setActionLoading(true);
-    try {
-      await api.unlinkExternalAccount(employeeId, unlinkDialog.id);
-      showToast('success', tEmployees('accountUnlinked'));
-      setUnlinkDialog(null);
-      await fetchExternalAccounts();
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to unlink account');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Stats
-  const licenseMonthlyCost = licenses.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
-  const adminAccountsMonthlyCost = ownedAdminAccounts.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
-  const totalMonthlyCost = licenseMonthlyCost + adminAccountsMonthlyCost;
-  const manualProviders = providers.filter(p => p.config?.provider_type === 'manual' || p.name === 'manual');
-
-  // Get unique provider types that can be linked (non-manual providers)
-  const linkableProviderTypes = Array.from(new Set(
-    providers
-      .filter(p => p.config?.provider_type !== 'manual' && p.name !== 'manual')
-      .map(p => p.name)
-  ));
+  const {
+    employee,
+    licenses,
+    ownedAdminAccounts,
+    providers,
+    externalAccounts,
+    loading,
+    toast,
+    assignDialogOpen,
+    setAssignDialogOpen,
+    availableLicenses,
+    selectedLicenseId,
+    setSelectedLicenseId,
+    loadingAvailable,
+    openAssignDialog,
+    handleAssignLicense,
+    removeDialog,
+    setRemoveDialog,
+    actionLoading,
+    handleRemoveFromProvider,
+    unassignDialog,
+    setUnassignDialog,
+    handleUnassignLicense,
+    linkDialogOpen,
+    setLinkDialogOpen,
+    selectedProviderType,
+    setSelectedProviderType,
+    externalUsername,
+    setExternalUsername,
+    unlinkDialog,
+    setUnlinkDialog,
+    handleLinkExternalAccount,
+    handleUnlinkExternalAccount,
+    totalMonthlyCost,
+    linkableProviderTypes,
+  } = useEmployeeDetail(employeeId, t, tCommon, tEmployees);
 
   if (loading) {
     return (

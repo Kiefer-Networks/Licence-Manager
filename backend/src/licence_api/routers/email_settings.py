@@ -68,13 +68,7 @@ async def set_email_config(
     Password is encrypted before storage. If password is not provided,
     the existing password is preserved (for updating other settings).
     """
-    # Check if this is new config without password
     is_new = not await service.is_configured()
-    if is_new and not body.password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password is required for initial SMTP configuration",
-        )
 
     await service.save_smtp_config(body)
 

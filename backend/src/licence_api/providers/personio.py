@@ -214,7 +214,7 @@ class PersonioProvider(HRISProvider):
         email = get_attr("email", "")
 
         if not personio_id or not email:
-            logger.warning(f"Skipping Personio employee without ID or email: {attrs}")
+            logger.warning("Skipping Personio employee without ID or email")
             return None
 
         # Build full name

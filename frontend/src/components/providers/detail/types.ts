@@ -169,7 +169,6 @@ export interface SettingsTabProps {
   setShowCredentialsEdit: (value: boolean) => void;
   savingCredentials: boolean;
   onSaveCredentials: () => Promise<void>;
-  onTestConnection: () => Promise<void>;
   onDeleteProvider: () => void;
   t: (key: string) => string;
   tCommon: (key: string) => string;

@@ -2,6 +2,7 @@
 
 import hashlib
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -34,15 +35,20 @@ def create_access_token(
         JWT token string
     """
     settings = get_settings()
-    expire = datetime.now(UTC) + timedelta(hours=settings.jwt_expiration_hours)
+    now = datetime.now(UTC)
+    expire = now + timedelta(hours=settings.jwt_expiration_hours)
 
+    # RFC 7519: Use NumericDate (seconds since epoch) for temporal claims.
+    # Include nbf (not before) and jti (JWT ID) for replay protection.
     payload = {
         "sub": str(user_id),
         "email": email,
         "roles": roles,
         "permissions": permissions,
-        "exp": expire,
-        "iat": datetime.now(UTC),
+        "exp": int(expire.timestamp()),
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "jti": str(uuid.uuid4()),
         "type": "access",
         "iss": settings.jwt_issuer,
         "aud": settings.jwt_audience,
@@ -101,6 +107,7 @@ def decode_token(token: str) -> dict:
                 "require_iat": True,
                 "require_exp": True,
                 "require_sub": True,
+                "require_nbf": True,
             },
         )
         return payload
@@ -108,6 +115,7 @@ def decode_token(token: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -154,6 +162,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return AdminUser(

@@ -1058,6 +1058,282 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         )
         return list(result.scalars().all())
 
+    async def get_external_ids_by_provider(self, provider_id: UUID) -> set[str]:
+        """Get all existing external_user_ids for a provider.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            Set of existing external_user_ids
+        """
+        result = await self.session.execute(
+            select(LicenseORM.external_user_id).where(LicenseORM.provider_id == provider_id)
+        )
+        return {row[0] for row in result.all()}
+
+    async def get_suggested_matches(
+        self,
+        provider_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list:
+        """Get licenses with suggested employee matches.
+
+        Args:
+            provider_id: Optional provider filter
+            limit: Maximum results
+
+        Returns:
+            List of (license, suggested_employee) tuples
+        """
+        query = (
+            select(LicenseORM, EmployeeORM)
+            .outerjoin(EmployeeORM, LicenseORM.suggested_employee_id == EmployeeORM.id)
+            .where(LicenseORM.match_status == "suggested")
+        )
+
+        if provider_id:
+            query = query.where(LicenseORM.provider_id == provider_id)
+
+        query = query.order_by(LicenseORM.match_confidence.desc()).limit(limit)
+
+        result = await self.session.execute(query)
+        return list(result.all())
+
+    async def get_external_for_review(
+        self,
+        provider_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[LicenseORM]:
+        """Get external licenses pending review.
+
+        Args:
+            provider_id: Optional provider filter
+            limit: Maximum results
+
+        Returns:
+            List of licenses with external_review status
+        """
+        query = select(LicenseORM).where(LicenseORM.match_status == "external_review")
+
+        if provider_id:
+            query = query.where(LicenseORM.provider_id == provider_id)
+
+        query = query.order_by(LicenseORM.external_user_id).limit(limit)
+
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_utilization_stats(self) -> dict[str, dict]:
+        """Get license utilization statistics grouped by provider.
+
+        Returns per-provider counts of active, assigned, unassigned licenses
+        and total cost for active licenses.
+
+        Returns:
+            Dict mapping provider_id string to stats dict with keys:
+            active, assigned, unassigned, total_cost
+        """
+        from decimal import Decimal
+
+        from sqlalchemy import case
+
+        stats_query = select(
+            LicenseORM.provider_id,
+            func.count().filter(LicenseORM.status == "active").label("active_count"),
+            func.count()
+            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.isnot(None)))
+            .label("assigned_count"),
+            func.count()
+            .filter(and_(LicenseORM.status == "active", LicenseORM.employee_id.is_(None)))
+            .label("unassigned_count"),
+            func.sum(
+                case((LicenseORM.status == "active", LicenseORM.monthly_cost), else_=Decimal("0"))
+            ).label("total_cost"),
+        ).group_by(LicenseORM.provider_id)
+
+        stats_result = await self.session.execute(stats_query)
+        provider_stats: dict[str, dict] = {}
+        for row in stats_result.all():
+            provider_stats[str(row.provider_id)] = {
+                "active": row.active_count or 0,
+                "assigned": row.assigned_count or 0,
+                "unassigned": row.unassigned_count or 0,
+                "total_cost": row.total_cost or Decimal("0"),
+            }
+        return provider_stats
+
+    async def count_external_by_provider(
+        self,
+        provider_id: UUID,
+        company_domains: list[str],
+    ) -> dict[str, int | Decimal]:
+        """Count external licenses and their cost for a provider.
+
+        Args:
+            provider_id: Provider UUID
+            company_domains: List of company email domains (lowercase)
+
+        Returns:
+            Dict with 'count' and 'cost' keys
+        """
+        from decimal import Decimal
+
+        from sqlalchemy import literal
+
+        conditions = [
+            LicenseORM.provider_id == provider_id,
+            LicenseORM.status == "active",
+            LicenseORM.external_user_id.like("%@%"),
+        ]
+        for domain in company_domains:
+            conditions.append(
+                ~func.lower(LicenseORM.external_user_id).like(f"%@{domain.lower()}")
+            )
+
+        result = await self.session.execute(
+            select(
+                func.count().label("count"),
+                func.coalesce(func.sum(LicenseORM.monthly_cost), literal(Decimal("0"))).label(
+                    "cost"
+                ),
+            )
+            .select_from(LicenseORM)
+            .where(and_(*conditions))
+        )
+        row = result.one()
+        return {
+            "count": row.count or 0,
+            "cost": row.cost or Decimal("0"),
+        }
+
+    async def get_by_id_with_provider(self, license_id: UUID) -> LicenseORM | None:
+        """Get a license by ID with provider eagerly loaded.
+
+        Args:
+            license_id: License UUID
+
+        Returns:
+            LicenseORM with provider loaded, or None if not found
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(LicenseORM)
+            .options(selectinload(LicenseORM.provider))
+            .where(LicenseORM.id == license_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_expiring_with_details(
+        self,
+        days_ahead: int = 90,
+    ) -> list[tuple["LicenseORM", "ProviderORM", "EmployeeORM | None"]]:
+        """Get licenses expiring within specified days with provider and employee details.
+
+        Args:
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of tuples (license, provider, employee)
+        """
+        from datetime import date, timedelta
+
+        from licence_api.models.domain.license import LicenseStatus
+
+        cutoff_date = date.today() + timedelta(days=days_ahead)
+
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            .where(
+                and_(
+                    LicenseORM.expires_at.isnot(None),
+                    LicenseORM.expires_at >= date.today(),
+                    LicenseORM.expires_at <= cutoff_date,
+                    LicenseORM.status.notin_([LicenseStatus.EXPIRED, LicenseStatus.CANCELLED]),
+                )
+            )
+            .order_by(LicenseORM.expires_at)
+        )
+        return list(result.all())
+
+    async def get_needing_reorder_with_details(
+        self,
+    ) -> list[tuple["LicenseORM", "ProviderORM", "EmployeeORM | None"]]:
+        """Get licenses marked as needing reorder with provider and employee details.
+
+        Returns:
+            List of tuples (license, provider, employee)
+        """
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            .where(LicenseORM.needs_reorder == True)
+            .order_by(LicenseORM.expires_at.nulls_last())
+        )
+        return list(result.all())
+
+    async def get_cancelled_with_details(
+        self,
+    ) -> list[tuple["LicenseORM", "ProviderORM", "EmployeeORM | None"]]:
+        """Get all cancelled licenses with provider and employee details.
+
+        Returns:
+            List of tuples (license, provider, employee)
+        """
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            .where(LicenseORM.cancelled_at.isnot(None))
+            .order_by(LicenseORM.cancellation_effective_date)
+        )
+        return list(result.all())
+
+    async def get_expired_with_details(
+        self,
+    ) -> list[tuple["LicenseORM", "ProviderORM", "EmployeeORM | None"]]:
+        """Get all expired licenses with provider and employee details.
+
+        Returns:
+            List of tuples (license, provider, employee)
+        """
+        from licence_api.models.domain.license import LicenseStatus
+
+        result = await self.session.execute(
+            select(LicenseORM, ProviderORM, EmployeeORM)
+            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
+            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
+            .where(LicenseORM.status == LicenseStatus.EXPIRED)
+            .order_by(LicenseORM.expires_at)
+        )
+        return list(result.all())
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Get counts of licenses grouped by status.
+
+        Returns:
+            Dict mapping status to count
+        """
+        result = await self.session.execute(
+            select(LicenseORM.status, func.count()).group_by(LicenseORM.status)
+        )
+        return {row[0]: row[1] for row in result.all()}
+
+    async def count_needs_reorder(self) -> int:
+        """Count licenses that need reorder.
+
+        Returns:
+            Number of licenses with needs_reorder flag set
+        """
+        result = await self.session.execute(
+            select(func.count()).select_from(LicenseORM).where(LicenseORM.needs_reorder == True)
+        )
+        return result.scalar() or 0
+
     async def get_orphaned_admin_accounts(
         self,
     ) -> list[tuple[LicenseORM, EmployeeORM, ProviderORM]]:

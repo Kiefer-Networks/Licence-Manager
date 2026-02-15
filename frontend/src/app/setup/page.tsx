@@ -1,185 +1,44 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api, BackupRestoreResponse } from '@/lib/api';
 import { CheckCircle, Circle, ArrowRight, Upload, FileArchive, Eye, EyeOff, AlertTriangle, Loader2 } from 'lucide-react';
-
-type SetupStep = 'restore' | 'welcome' | 'hibob' | 'providers' | 'complete';
-
-interface SetupStatus {
-  is_complete: boolean;
-}
+import { useSetup } from '@/hooks/use-setup';
 
 export default function SetupPage() {
   const t = useTranslations('setup');
   const tProviders = useTranslations('providers');
   const tSettings = useTranslations('settings');
-  const router = useRouter();
-  const [step, setStep] = useState<SetupStep>('restore');
-  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // HiBob credentials - cleared on unmount for security
-  const [hibobAuthToken, setHibobAuthToken] = useState('');
-
-  // Backup restore state
-  const [backupFile, setBackupFile] = useState<File | null>(null);
-  const [backupPassword, setBackupPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [restoreResult, setRestoreResult] = useState<BackupRestoreResponse | null>(null);
-
-  // Clear sensitive data on unmount to prevent memory exposure
-  useEffect(() => {
-    return () => {
-      setHibobAuthToken('');
-      setBackupPassword('');
-    };
-  }, []);
-
-  useEffect(() => {
-    async function checkStatus() {
-      try {
-        const status = await api.getSetupStatus();
-        setSetupStatus(status);
-        if (status.is_complete) {
-          router.push('/dashboard');
-        }
-      } catch {
-        // Silently handle - user will see setup page
-      }
-    }
-    checkStatus();
-  }, [router]);
-
-  const handleFileSelect = (selectedFile: File) => {
-    if (selectedFile.name.endsWith('.lcbak')) {
-      setBackupFile(selectedFile);
-      setError(null);
-    } else {
-      setError(tSettings('selectBackupFile'));
-      setBackupFile(null);
-    }
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      handleFileSelect(droppedFile);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleRestore = async () => {
-    if (!backupFile || backupPassword.length < 8) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await api.setupRestoreBackup(backupFile, backupPassword);
-      setRestoreResult(result);
-
-      if (result.success) {
-        // Redirect to dashboard after successful restore
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
-      } else {
-        setError(result.error || tSettings('restoreFailed'));
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : tSettings('restoreFailed');
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSkipRestore = () => {
-    setStep('welcome');
-  };
-
-  const handleHibobSetup = async () => {
-    setLoading(true);
-    setError(null);
-
-    // Copy token for use, then clear from state immediately for security
-    const token = hibobAuthToken;
-
-    try {
-      // Test connection first
-      const testResult = await api.testProviderConnection('hibob', {
-        auth_token: token,
-      });
-
-      if (!testResult.success) {
-        setError(testResult.message);
-        return;
-      }
-
-      // Create provider
-      await api.createProvider({
-        name: 'hibob',
-        display_name: tProviders('hibob'),
-        credentials: {
-          auth_token: token,
-        },
-      });
-
-      // Clear sensitive data from state after successful submission
-      setHibobAuthToken('');
-      setStep('providers');
-    } catch (err: unknown) {
-      // Sanitize error message - don't expose internal details
-      const message = err instanceof Error ? err.message : t('configurationFailed');
-      setError(message.includes('token') ? t('invalidCredentials') : message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSkipProviders = () => {
-    setStep('complete');
-  };
-
-  const handleComplete = async () => {
-    // Trigger initial sync (non-blocking, errors are logged server-side)
-    try {
-      await api.triggerSync();
-    } catch {
-      // Sync failures are handled server-side, don't block navigation
-    }
-    router.push('/dashboard');
-  };
-
-  const steps = [
-    { id: 'restore', label: t('restoreBackup') },
-    { id: 'welcome', label: t('welcome') },
-    { id: 'hibob', label: tProviders('hibob') },
-    { id: 'providers', label: tProviders('title') },
-    { id: 'complete', label: t('complete') },
-  ];
-
-  const currentStepIndex = steps.findIndex((s) => s.id === step);
+  const {
+    step,
+    setStep,
+    loading,
+    error,
+    steps,
+    currentStepIndex,
+    hibobAuthToken,
+    setHibobAuthToken,
+    backupFile,
+    backupPassword,
+    setBackupPassword,
+    showPassword,
+    setShowPassword,
+    isDragging,
+    restoreResult,
+    handleFileSelect,
+    handleDrop,
+    handleDragOver,
+    handleDragLeave,
+    handleRestore,
+    handleSkipRestore,
+    handleHibobSetup,
+    handleSkipProviders,
+    handleComplete,
+  } = useSetup(t, tProviders, tSettings);
 
   return (
     <div className="min-h-screen bg-muted/50 py-12">

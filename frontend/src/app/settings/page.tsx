@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -22,420 +21,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, NotificationRule, NOTIFICATION_EVENT_TYPES, ThresholdSettings, SmtpConfig, SmtpConfigRequest, SystemSettings } from '@/lib/api';
+import { NOTIFICATION_EVENT_TYPES } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { handleSilentError } from '@/lib/error-handler';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, AlertTriangle, MessageSquare, Bell, Send, Hash, Power, Settings2, HardDrive, Info, Mail, Server, Database, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Globe, X, MessageSquare, Bell, Send, Hash, Power, Settings2, HardDrive, Info, Mail, Database, ShieldCheck } from 'lucide-react';
 import { BackupsTab } from '@/components/settings/BackupsTab';
 import { Textarea } from '@/components/ui/textarea';
+import { useSettings } from '@/hooks/use-settings';
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // System Settings state
-  const [systemName, setSystemName] = useState('License Management System');
-  const [systemUrl, setSystemUrl] = useState('');
-  const [savingSystemSettings, setSavingSystemSettings] = useState(false);
-
-  // Company Domains state
-  const [companyDomains, setCompanyDomains] = useState<string[]>([]);
-  const [newDomain, setNewDomain] = useState('');
-  const [savingDomains, setSavingDomains] = useState(false);
-
-  // Slack/Notification state
-  const [slackBotToken, setSlackBotToken] = useState('');
-  const [slackConfigured, setSlackConfigured] = useState(false);
-  const [savingSlack, setSavingSlack] = useState(false);
-  const [testingSlack, setTestingSlack] = useState(false);
-  const [testChannel, setTestChannel] = useState('');
-  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
-  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<NotificationRule | null>(null);
-  const [ruleForm, setRuleForm] = useState({
-    event_type: '',
-    slack_channel: '',
-    template: '',
-  });
-
-  // Email/SMTP state
-  const [emailConfig, setEmailConfig] = useState<SmtpConfig | null>(null);
-  const [emailConfigured, setEmailConfigured] = useState(false);
-  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [testingEmail, setTestingEmail] = useState(false);
-  const [testEmailAddress, setTestEmailAddress] = useState('');
-  const [emailForm, setEmailForm] = useState({
-    host: '',
-    port: 587,
-    username: '',
-    password: '',
-    from_email: '',
-    from_name: 'License Management System',
-    use_tls: true,
-  });
-
-  // Threshold Settings state
-  const [thresholds, setThresholds] = useState<ThresholdSettings>({
-    inactive_days: 30,
-    expiring_days: 90,
-    low_utilization_percent: 70,
-    cost_increase_percent: 20,
-    max_unassigned_licenses: 10,
-  });
-  const [savingThresholds, setSavingThresholds] = useState(false);
-
-  // Active tab state
-  const [activeTab, setActiveTab] = useState('general');
-
-  useEffect(() => {
-    Promise.all([
-      fetchSystemSettings(),
-      fetchCompanyDomains(),
-      fetchSlackConfig(),
-      fetchNotificationRules(),
-      fetchThresholdSettings(),
-      fetchEmailConfig(),
-    ]).finally(() => setLoading(false));
-  }, []);
-
-  async function fetchSystemSettings() {
-    try {
-      const settings = await api.getSystemSettings();
-      setSystemName(settings.name);
-      setSystemUrl(settings.url || '');
-    } catch (error) {
-      handleSilentError('fetchSystemSettings', error);
-    }
-  }
-
-  async function fetchCompanyDomains() {
-    try {
-      const domains = await api.getCompanyDomains();
-      setCompanyDomains(domains);
-    } catch (error) {
-      handleSilentError('fetchCompanyDomains', error);
-    }
-  }
-
-  async function fetchSlackConfig() {
-    try {
-      const config = await api.getSlackConfig();
-      setSlackConfigured(config.configured);
-    } catch (error) {
-      handleSilentError('fetchSlackConfig', error);
-    }
-  }
-
-  async function fetchNotificationRules() {
-    try {
-      const rules = await api.getNotificationRules();
-      setNotificationRules(rules);
-    } catch (error) {
-      handleSilentError('fetchNotificationRules', error);
-    }
-  }
-
-  async function fetchThresholdSettings() {
-    try {
-      const settings = await api.getThresholdSettings();
-      if (settings) {
-        setThresholds({
-          inactive_days: settings.inactive_days ?? 30,
-          expiring_days: settings.expiring_days ?? 90,
-          low_utilization_percent: settings.low_utilization_percent ?? 70,
-          cost_increase_percent: settings.cost_increase_percent ?? 20,
-          max_unassigned_licenses: settings.max_unassigned_licenses ?? 10,
-        });
-      }
-    } catch (error) {
-      handleSilentError('fetchThresholdSettings', error);
-    }
-  }
-
-  async function fetchEmailConfig() {
-    try {
-      const config = await api.getEmailConfig();
-      if (config && 'host' in config) {
-        setEmailConfig(config as SmtpConfig);
-        setEmailConfigured(true);
-      } else if (config && 'is_configured' in config) {
-        setEmailConfigured(config.is_configured);
-      } else {
-        setEmailConfigured(false);
-      }
-    } catch (error) {
-      handleSilentError('fetchEmailConfig', error);
-    }
-  }
-
-  const handleSaveSystemSettings = async () => {
-    if (!systemName.trim()) {
-      showToast('error', t('systemNameRequired'));
-      return;
-    }
-    setSavingSystemSettings(true);
-    try {
-      await api.updateSystemSettings({
-        name: systemName.trim(),
-        url: systemUrl.trim() || null,
-      });
-      showToast('success', t('systemSettingsSaved'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSave');
-      showToast('error', message);
-    } finally {
-      setSavingSystemSettings(false);
-    }
-  };
-
-  const handleSaveThresholds = async () => {
-    setSavingThresholds(true);
-    try {
-      await api.updateThresholdSettings(thresholds);
-      showToast('success', t('thresholdsUpdated'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSave');
-      showToast('error', message);
-    } finally {
-      setSavingThresholds(false);
-    }
-  };
-
-  // Email configuration handlers
-  const handleOpenEmailDialog = () => {
-    if (emailConfig) {
-      setEmailForm({
-        host: emailConfig.host,
-        port: emailConfig.port,
-        username: emailConfig.username,
-        password: '',
-        from_email: emailConfig.from_email,
-        from_name: emailConfig.from_name || 'License Management System',
-        use_tls: emailConfig.use_tls,
-      });
-    } else {
-      setEmailForm({
-        host: '',
-        port: 587,
-        username: '',
-        password: '',
-        from_email: '',
-        from_name: 'License Management System',
-        use_tls: true,
-      });
-    }
-    setEmailDialogOpen(true);
-  };
-
-  const handleSaveEmailConfig = async () => {
-    if (!emailForm.host || !emailForm.username || !emailForm.from_email) {
-      showToast('error', t('fillRequiredFields'));
-      return;
-    }
-    // Password required for new config
-    if (!emailConfigured && !emailForm.password) {
-      showToast('error', t('emailPasswordRequired'));
-      return;
-    }
-    setSavingEmail(true);
-    try {
-      const request: SmtpConfigRequest = {
-        host: emailForm.host,
-        port: emailForm.port,
-        username: emailForm.username,
-        password: emailForm.password || undefined,
-        from_email: emailForm.from_email,
-        from_name: emailForm.from_name,
-        use_tls: emailForm.use_tls,
-      };
-      await api.setEmailConfig(request);
-      await fetchEmailConfig();
-      setEmailDialogOpen(false);
-      showToast('success', t('emailConfigSaved'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSaveEmailConfig');
-      showToast('error', message);
-    } finally {
-      setSavingEmail(false);
-    }
-  };
-
-  const handleDeleteEmailConfig = async () => {
-    try {
-      await api.deleteEmailConfig();
-      setEmailConfig(null);
-      setEmailConfigured(false);
-      showToast('success', t('emailConfigDeleted'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToDeleteEmailConfig');
-      showToast('error', message);
-    }
-  };
-
-  const handleTestEmail = async () => {
-    if (!testEmailAddress.trim()) {
-      showToast('error', t('enterTestEmailAddress'));
-      return;
-    }
-    setTestingEmail(true);
-    try {
-      const result = await api.testEmail(testEmailAddress);
-      if (result.success) {
-        showToast('success', result.message);
-      } else {
-        showToast('error', result.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSendTestEmail');
-      showToast('error', message);
-    } finally {
-      setTestingEmail(false);
-    }
-  };
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // Company Domains handlers
-  const handleAddDomain = () => {
-    const domain = newDomain.trim().toLowerCase();
-    if (!domain) return;
-    if (companyDomains.includes(domain)) {
-      showToast('error', t('domainAlreadyExists'));
-      return;
-    }
-    setCompanyDomains([...companyDomains, domain]);
-    setNewDomain('');
-  };
-
-  const handleRemoveDomain = (domain: string) => {
-    setCompanyDomains(companyDomains.filter((d) => d !== domain));
-  };
-
-  const handleSaveDomains = async () => {
-    setSavingDomains(true);
-    try {
-      await api.setCompanyDomains(companyDomains);
-      showToast('success', t('companyDomainsSaved'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSaveDomains');
-      showToast('error', message);
-    } finally {
-      setSavingDomains(false);
-    }
-  };
-  // Slack handlers
-  const handleSaveSlackConfig = async () => {
-    if (!slackBotToken.trim()) {
-      showToast('error', t('enterSlackToken'));
-      return;
-    }
-    setSavingSlack(true);
-    try {
-      await api.setSlackConfig({ bot_token: slackBotToken });
-      setSlackConfigured(true);
-      setSlackBotToken('');
-      showToast('success', t('slackConfigSaved'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSaveSlackConfig');
-      showToast('error', message);
-    } finally {
-      setSavingSlack(false);
-    }
-  };
-
-  const handleTestSlack = async () => {
-    if (!testChannel.trim()) {
-      showToast('error', t('enterChannelName'));
-      return;
-    }
-    setTestingSlack(true);
-    try {
-      const result = await api.testSlackNotification(testChannel.startsWith('#') ? testChannel : `#${testChannel}`);
-      if (result.success) {
-        showToast('success', result.message);
-      } else {
-        showToast('error', result.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSendTest');
-      showToast('error', message);
-    } finally {
-      setTestingSlack(false);
-    }
-  };
-
-  // Notification rule handlers
-  const handleOpenRuleDialog = (rule?: NotificationRule) => {
-    if (rule) {
-      setEditingRule(rule);
-      setRuleForm({
-        event_type: rule.event_type,
-        slack_channel: rule.slack_channel,
-        template: rule.template || '',
-      });
-    } else {
-      setEditingRule(null);
-      setRuleForm({ event_type: '', slack_channel: '', template: '' });
-    }
-    setRuleDialogOpen(true);
-  };
-
-  const handleSaveRule = async () => {
-    if (!ruleForm.event_type || !ruleForm.slack_channel) {
-      showToast('error', t('fillRequiredFields'));
-      return;
-    }
-    try {
-      const channel = ruleForm.slack_channel.startsWith('#') ? ruleForm.slack_channel : `#${ruleForm.slack_channel}`;
-      if (editingRule) {
-        await api.updateNotificationRule(editingRule.id, {
-          slack_channel: channel,
-          template: ruleForm.template || undefined,
-        });
-        showToast('success', t('ruleUpdated'));
-      } else {
-        await api.createNotificationRule({
-          event_type: ruleForm.event_type,
-          slack_channel: channel,
-          template: ruleForm.template || undefined,
-        });
-        showToast('success', t('ruleCreatedSuccess'));
-      }
-      await fetchNotificationRules();
-      setRuleDialogOpen(false);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToSaveRule');
-      showToast('error', message);
-    }
-  };
-
-  const handleToggleRule = async (rule: NotificationRule) => {
-    try {
-      await api.updateNotificationRule(rule.id, { enabled: !rule.enabled });
-      await fetchNotificationRules();
-      showToast('success', rule.enabled ? t('ruleDisabled') : t('ruleEnabled'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToUpdateRule');
-      showToast('error', message);
-    }
-  };
-
-  const handleDeleteRule = async (id: string) => {
-    try {
-      await api.deleteNotificationRule(id);
-      await fetchNotificationRules();
-      showToast('success', t('ruleDeleted'));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('failedToDeleteRule');
-      showToast('error', message);
-    }
-  };
+  const {
+    loading,
+    toast,
+    showToast,
+    activeTab,
+    setActiveTab,
+    systemName,
+    setSystemName,
+    systemUrl,
+    setSystemUrl,
+    savingSystemSettings,
+    handleSaveSystemSettings,
+    companyDomains,
+    newDomain,
+    setNewDomain,
+    savingDomains,
+    handleAddDomain,
+    handleRemoveDomain,
+    handleSaveDomains,
+    slackBotToken,
+    setSlackBotToken,
+    slackConfigured,
+    savingSlack,
+    testingSlack,
+    testChannel,
+    setTestChannel,
+    handleSaveSlackConfig,
+    handleTestSlack,
+    emailConfig,
+    emailConfigured,
+    emailDialogOpen,
+    setEmailDialogOpen,
+    savingEmail,
+    testingEmail,
+    testEmailAddress,
+    setTestEmailAddress,
+    emailForm,
+    setEmailForm,
+    handleOpenEmailDialog,
+    handleSaveEmailConfig,
+    handleDeleteEmailConfig,
+    handleTestEmail,
+    notificationRules,
+    ruleDialogOpen,
+    setRuleDialogOpen,
+    editingRule,
+    ruleForm,
+    setRuleForm,
+    handleOpenRuleDialog,
+    handleSaveRule,
+    handleToggleRule,
+    handleDeleteRule,
+    thresholds,
+    setThresholds,
+    savingThresholds,
+    handleSaveThresholds,
+  } = useSettings(t, tCommon);
 
   if (loading) {
     return (
@@ -809,7 +462,7 @@ export default function SettingsPage() {
           {/* BACKUPS TAB */}
           {/* ============================================ */}
           <TabsContent value="backups" className="space-y-8 mt-6">
-            <BackupsTab showToast={(type, message) => setToast({ type, text: message })} />
+            <BackupsTab showToast={(type, message) => showToast(type, message)} />
           </TabsContent>
 
           {/* ============================================ */}

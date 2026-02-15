@@ -71,7 +71,7 @@ class AssignLicenseRequest(BaseModel):
     employee_id: UUID
 
 
-@router.post("", response_model=list[LicenseResponse])
+@router.post("", response_model=list[LicenseResponse], status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses(
     request: Request,
@@ -101,7 +101,7 @@ async def create_manual_licenses(
         )
 
 
-@router.post("/bulk", response_model=list[LicenseResponse])
+@router.post("/bulk", response_model=list[LicenseResponse], status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_manual_licenses_bulk(
     request: Request,
@@ -205,14 +205,14 @@ async def unassign_manual_license(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
 
 
-@router.delete("/{license_id}")
+@router.delete("/{license_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_manual_license(
     request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_DELETE))],
     service: Annotated[ManualLicenseService, Depends(get_manual_license_service)],
-) -> dict:
+) -> None:
     """Delete a manual license. Requires licenses.delete permission."""
     try:
         await service.delete_license(
@@ -220,6 +220,6 @@ async def delete_manual_license(
             user=current_user,
             request=request,
         )
-        return {"success": True, "message": "License deleted"}
+        return None
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")

@@ -2,20 +2,17 @@
 
 This service synchronizes system roles with current permissions on startup,
 ensuring that new permissions are automatically assigned to the appropriate roles.
+It delegates all database queries to PermissionRepository and RoleRepository.
 """
 
 import logging
-from typing import TYPE_CHECKING
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-if TYPE_CHECKING:
-    pass
-
 from licence_api.models.orm.permission import PermissionORM
-from licence_api.models.orm.role import RoleORM
 from licence_api.models.orm.role_permission import RolePermissionORM
+from licence_api.repositories.permission_repository import PermissionRepository
+from licence_api.repositories.role_repository import RoleRepository
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +39,8 @@ class PermissionSyncService:
             session: Database session
         """
         self.session = session
+        self.permission_repo = PermissionRepository(session)
+        self.role_repo = RoleRepository(session)
 
     async def sync_system_roles(self) -> dict[str, int]:
         """Synchronize system roles with current permissions.
@@ -54,16 +53,11 @@ class PermissionSyncService:
             "auditor_added": 0,
         }
 
-        # Get all permissions
-        permissions_result = await self.session.execute(select(PermissionORM))
-        all_permissions = list(permissions_result.scalars().all())
-        permission_map = {p.code: p.id for p in all_permissions}
+        # Get all permissions via repository
+        all_permissions = await self.permission_repo.get_all()
 
-        # Get system roles
-        roles_result = await self.session.execute(
-            select(RoleORM).where(RoleORM.is_system == True)  # noqa: E712
-        )
-        system_roles = {r.code: r for r in roles_result.scalars().all()}
+        # Get system roles via repository
+        system_roles = await self.role_repo.get_system_roles()
 
         # Sync admin role
         if "admin" in system_roles:
@@ -133,13 +127,8 @@ class PermissionSyncService:
         Returns:
             Number of permissions added
         """
-        # Get existing role permissions
-        existing_result = await self.session.execute(
-            select(RolePermissionORM.permission_id).where(
-                RolePermissionORM.role_id == role_id
-            )
-        )
-        existing_perm_ids = set(existing_result.scalars().all())
+        # Get existing role permissions via repository
+        existing_perm_ids = await self.role_repo.get_permission_ids_for_role(role_id)
 
         # Find missing permissions
         added = 0

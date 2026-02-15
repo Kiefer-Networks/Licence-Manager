@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 class ExternalAccountBase(BaseModel):
     """Base external account model."""
 
-    provider_type: str = Field(..., description="Provider type (e.g., 'huggingface')")
-    external_username: str = Field(..., description="Username in the external system")
-    external_user_id: str | None = Field(None, description="ID in the external system")
-    display_name: str | None = Field(None, description="Display name from external system")
+    provider_type: str = Field(..., max_length=50, description="Provider type (e.g., 'huggingface')")
+    external_username: str = Field(..., max_length=255, description="Username in the external system")
+    external_user_id: str | None = Field(None, max_length=255, description="ID in the external system")
+    display_name: str | None = Field(None, max_length=255, description="Display name from external system")
 
 
 class ExternalAccountCreate(ExternalAccountBase):
@@ -68,7 +68,7 @@ class SuggestionsResponse(BaseModel):
 class BulkLinkRequest(BaseModel):
     """Request for bulk linking accounts."""
 
-    links: list[ExternalAccountCreate]
+    links: list[ExternalAccountCreate] = Field(max_length=100)
 
 
 class BulkLinkResponse(BaseModel):

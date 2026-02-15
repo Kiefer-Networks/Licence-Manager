@@ -273,3 +273,44 @@ def get_extension_from_content_type(content_type: str) -> str:
         "image/webp": ".webp",
     }
     return type_to_ext.get(content_type, ".jpg")
+
+
+def validate_logo_signature(content: bytes, extension: str) -> bool:
+    """Validate logo file content matches expected file signature.
+
+    Checks magic bytes for binary image formats and validates SVG content
+    for dangerous elements like scripts or event handlers.
+
+    Args:
+        content: The raw file content bytes
+        extension: File extension including the dot (e.g., ".png", ".svg")
+
+    Returns:
+        True if file signature is valid, False otherwise.
+    """
+    from licence_api.constants import IMAGE_SIGNATURES
+
+    ext_lower = extension.lower()
+    signatures = IMAGE_SIGNATURES.get(ext_lower)
+    if not signatures:
+        return False
+
+    # Special handling for WEBP
+    if ext_lower == ".webp":
+        if content.startswith(b"RIFF") and len(content) > 12 and content[8:12] == b"WEBP":
+            return True
+        return False
+
+    # Special handling for SVG (text-based)
+    if ext_lower == ".svg":
+        # Check first 1000 bytes for SVG indicators
+        header = content[:1000].lower()
+        if not (b"<svg" in header or b"<?xml" in header):
+            return False
+        # Validate SVG content for dangerous elements
+        return validate_svg_content(content)
+
+    for sig in signatures:
+        if content.startswith(sig):
+            return True
+    return False

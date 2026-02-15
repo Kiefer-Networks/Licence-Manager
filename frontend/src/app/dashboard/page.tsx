@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,8 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, DashboardData, PaymentMethod, LicenseLifecycleOverview } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import { SkeletonDashboard } from '@/components/ui/skeleton';
 import {
   Users,
@@ -34,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
+import { useDashboard } from '@/hooks/use-dashboard';
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
@@ -43,77 +41,25 @@ export default function DashboardPage() {
   const tEmployees = useTranslations('employees');
   const { formatDate, formatCurrency, formatNumber } = useLocale();
 
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [expiringPaymentMethods, setExpiringPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [lifecycleOverview, setLifecycleOverview] = useState<LicenseLifecycleOverview | null>(null);
-
-  useEffect(() => {
-    Promise.all([
-      api.getDepartments(),
-      api.getPaymentMethods(),
-      api.getLicenseLifecycleOverview(),
-    ]).then(([depts, methods, lifecycle]) => {
-      setDepartments(depts);
-      setExpiringPaymentMethods(methods.items.filter((m) => m.is_expiring));
-      setLifecycleOverview(lifecycle);
-    }).catch((e) => handleSilentError('loadInitialData', e));
-  }, []);
-
-  useEffect(() => {
-    fetchDashboard();
-  }, [selectedDepartment]);
-
-  async function fetchDashboard() {
-    try {
-      const dept = selectedDepartment !== 'all' ? selectedDepartment : undefined;
-      const data = await api.getDashboard(dept);
-      setDashboard(data);
-    } catch (error) {
-      handleSilentError('fetchDashboard', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      const result = await api.triggerSync();
-      await fetchDashboard();
-      showToast(result.success ? 'success' : 'error', result.success ? tProviders('syncSuccess') : tProviders('syncFailed'));
-    } catch {
-      showToast('error', tProviders('syncFailed'));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const hrisProviders = useMemo(
-    () => dashboard?.providers.filter((p) => p.name === 'hibob') || [],
-    [dashboard?.providers]
-  );
-  const licenseProviders = useMemo(
-    () => dashboard?.providers
-      ?.filter((p) => p.name !== 'hibob')
-      .sort((a, b) => a.display_name.localeCompare(b.display_name)) || [],
-    [dashboard?.providers]
-  );
-
-  const totalLicenses = dashboard?.total_licenses || 0;
-  const unassignedCount = dashboard?.unassigned_licenses || 0;
-  const externalCount = dashboard?.external_licenses || 0;
-  const potentialSavings = Number(dashboard?.potential_savings || 0);
-  const totalCost = Number(dashboard?.total_monthly_cost || 0);
+  const {
+    dashboard,
+    loading,
+    syncing,
+    toast,
+    departments,
+    selectedDepartment,
+    setSelectedDepartment,
+    expiringPaymentMethods,
+    lifecycleOverview,
+    hrisProviders,
+    licenseProviders,
+    totalLicenses,
+    unassignedCount,
+    externalCount,
+    potentialSavings,
+    totalCost,
+    handleSync,
+  } = useDashboard({ tProviders });
 
   if (loading) {
     return (

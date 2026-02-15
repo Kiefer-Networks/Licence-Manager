@@ -198,6 +198,35 @@ class ProviderFileService:
         except (ValueError, RuntimeError):
             return False
 
+    async def list_files(self, provider_id: UUID) -> list["ProviderFileORM"]:
+        """List all files for a provider.
+
+        Args:
+            provider_id: Provider UUID
+
+        Returns:
+            List of ProviderFileORM
+
+        Raises:
+            ValueError: If provider not found
+        """
+        provider = await self.provider_repo.get_by_id(provider_id)
+        if provider is None:
+            raise ValueError("Provider not found")
+        return await self.file_repo.get_by_provider(provider_id)
+
+    async def get_file(self, provider_id: UUID, file_id: UUID) -> "ProviderFileORM | None":
+        """Get a specific file for a provider.
+
+        Args:
+            provider_id: Provider UUID
+            file_id: File UUID
+
+        Returns:
+            ProviderFileORM or None if not found
+        """
+        return await self.file_repo.get_by_provider_and_id(provider_id, file_id)
+
     async def upload_file(
         self,
         provider_id: UUID,

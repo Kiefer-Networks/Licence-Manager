@@ -4,15 +4,12 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_provider_file_service
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.repositories.provider_file_repository import ProviderFileRepository
-from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.provider_file_service import (
@@ -20,6 +17,9 @@ from licence_api.services.provider_file_service import (
     ProviderFileService,
 )
 from licence_api.utils.errors import raise_bad_request, raise_not_found
+
+# Maximum provider file upload size: 50MB
+MAX_PROVIDER_FILE_SIZE = 50 * 1024 * 1024
 
 router = APIRouter()
 
@@ -49,35 +49,17 @@ class ProviderFilesListResponse(BaseModel):
     total: int
 
 
-# Dependency injection functions
-def get_provider_repository(db: AsyncSession = Depends(get_db)) -> ProviderRepository:
-    """Get ProviderRepository instance."""
-    return ProviderRepository(db)
-
-
-def get_provider_file_repository(db: AsyncSession = Depends(get_db)) -> ProviderFileRepository:
-    """Get ProviderFileRepository instance."""
-    return ProviderFileRepository(db)
-
-
-def get_provider_file_service(db: AsyncSession = Depends(get_db)) -> ProviderFileService:
-    """Get ProviderFileService instance."""
-    return ProviderFileService(db)
-
-
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
 async def list_provider_files(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    provider_repo: Annotated[ProviderRepository, Depends(get_provider_repository)],
-    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
+    service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> ProviderFilesListResponse:
     """List all files for a provider."""
-    provider = await provider_repo.get_by_id(provider_id)
-    if provider is None:
+    try:
+        files = await service.list_files(provider_id)
+    except ValueError:
         raise_not_found("Provider")
-
-    files = await file_repo.get_by_provider(provider_id)
 
     items = [
         ProviderFileResponse(
@@ -118,7 +100,12 @@ async def upload_provider_file(
     if file.filename is None:
         raise_bad_request("No filename provided")
 
-    content = await file.read()
+    content = await file.read(MAX_PROVIDER_FILE_SIZE + 1)
+    if len(content) > MAX_PROVIDER_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {MAX_PROVIDER_FILE_SIZE // 1024 // 1024}MB",
+        )
 
     try:
         file_orm = await service.upload_file(
@@ -153,11 +140,10 @@ async def download_provider_file(
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
     """Download a provider file."""
-    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
+    file_orm = await service.get_file(provider_id, file_id)
 
     if file_orm is None:
         raise_not_found("File")
@@ -178,11 +164,10 @@ async def view_provider_file(
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
-    file_repo: Annotated[ProviderFileRepository, Depends(get_provider_file_repository)],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
 ) -> FileResponse:
     """View a provider file inline in browser (PDFs and images only)."""
-    file_orm = await file_repo.get_by_provider_and_id(provider_id, file_id)
+    file_orm = await service.get_file(provider_id, file_id)
 
     if file_orm is None:
         raise_not_found("File")

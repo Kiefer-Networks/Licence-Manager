@@ -15,8 +15,8 @@ export interface LicensesTabProps {
   onServiceAccount: (license: License) => void;
   onAdminAccount: (license: License) => void;
   onLicenseType?: (license: License) => void;
-  onConfirmMatch: (licenseId: string, employeeId: string) => void;
-  onRejectMatch: (licenseId: string, employeeId: string) => void;
+  onConfirmMatch: (license: License) => void;
+  onRejectMatch: (license: License) => void;
   t: (key: string) => string;
 }
 

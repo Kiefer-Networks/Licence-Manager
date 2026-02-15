@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
-import { api, Role, Permission, PermissionsByCategory, PermissionCategory } from '@/lib/api';
+import { Permission } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/tabs';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MoreHorizontal } from 'lucide-react';
+import { useAdminRoles } from '@/hooks/use-admin-roles';
 
 export default function AdminRolesPage() {
   const t = useTranslations('roles');
@@ -50,27 +51,37 @@ export default function AdminRolesPage() {
   const router = useRouter();
   const { hasPermission, isLoading: authLoading } = useAuth();
 
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [permissionsByCategory, setPermissionsByCategory] = useState<PermissionsByCategory>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  // Dialog states
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-
-  // Form states
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    description: '',
-    permission_ids: [] as string[],
-  });
-  const [formErrors, setFormErrors] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    roles,
+    permissionsByCategory,
+    isLoading,
+    error,
+    setError,
+    createDialogOpen,
+    setCreateDialogOpen,
+    editDialogOpen,
+    setEditDialogOpen,
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    viewDialogOpen,
+    setViewDialogOpen,
+    selectedRole,
+    formData,
+    setFormData,
+    formErrors,
+    isSubmitting,
+    openCreateDialog,
+    openEditDialog,
+    openViewDialog,
+    openDeleteDialog,
+    handleCreateRole,
+    handleUpdateRole,
+    handleDeleteRole,
+    togglePermission,
+    toggleCategoryPermissions,
+    selectAllPermissions,
+    clearAllPermissions,
+  } = useAdminRoles(t, tCommon);
 
   const canCreate = hasPermission(Permissions.ROLES_CREATE);
   const canUpdate = hasPermission(Permissions.ROLES_UPDATE);
@@ -82,159 +93,6 @@ export default function AdminRolesPage() {
       return;
     }
   }, [authLoading, hasPermission, router]);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [rolesResponse, permissionsResponse] = await Promise.all([
-        api.getRoles(),
-        api.getPermissionsByCategory(),
-      ]);
-      setRoles(rolesResponse.items);
-      setPermissionsByCategory(permissionsResponse);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : tCommon('operationFailed');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getAllPermissionIds = (): string[] => {
-    return Object.values(permissionsByCategory).flatMap(perms => perms.map(p => p.id));
-  };
-
-  const openCreateDialog = () => {
-    setFormData({ code: '', name: '', description: '', permission_ids: [] });
-    setFormErrors([]);
-    setCreateDialogOpen(true);
-  };
-
-  const openEditDialog = (role: Role) => {
-    setSelectedRole(role);
-    // Role.permissions is an array of permission codes (strings)
-    // We need to convert them to permission IDs for the form
-    const allPermissions = Object.values(permissionsByCategory).flat();
-    const permissionIds = role.permissions
-      .map(code => allPermissions.find(p => p.code === code)?.id)
-      .filter((id): id is string => !!id);
-
-    setFormData({
-      code: role.code,
-      name: role.name,
-      description: role.description || '',
-      permission_ids: permissionIds,
-    });
-    setFormErrors([]);
-    setEditDialogOpen(true);
-  };
-
-  const openViewDialog = (role: Role) => {
-    setSelectedRole(role);
-    setViewDialogOpen(true);
-  };
-
-  const openDeleteDialog = (role: Role) => {
-    setSelectedRole(role);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleCreateRole = async () => {
-    setFormErrors([]);
-    setIsSubmitting(true);
-
-    try {
-      await api.createRole({
-        code: formData.code,
-        name: formData.name,
-        description: formData.description || undefined,
-        permission_ids: formData.permission_ids,
-      });
-      setCreateDialogOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToCreate');
-      setFormErrors([errorMessage]);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdateRole = async () => {
-    if (!selectedRole) return;
-    setFormErrors([]);
-    setIsSubmitting(true);
-
-    try {
-      await api.updateRole(selectedRole.id, {
-        name: formData.name,
-        description: formData.description || undefined,
-        permission_ids: formData.permission_ids,
-      });
-      setEditDialogOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToUpdate');
-      setFormErrors([errorMessage]);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteRole = async () => {
-    if (!selectedRole) return;
-    setIsSubmitting(true);
-
-    try {
-      await api.deleteRole(selectedRole.id);
-      setDeleteDialogOpen(false);
-      await loadData();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('failedToDelete');
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const togglePermission = (permissionId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: prev.permission_ids.includes(permissionId)
-        ? prev.permission_ids.filter(id => id !== permissionId)
-        : [...prev.permission_ids, permissionId],
-    }));
-  };
-
-  const toggleCategoryPermissions = (category: string) => {
-    const categoryPermissionIds = permissionsByCategory[category]?.map(p => p.id) || [];
-    const allSelected = categoryPermissionIds.every(id => formData.permission_ids.includes(id));
-
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: allSelected
-        ? prev.permission_ids.filter(id => !categoryPermissionIds.includes(id))
-        : Array.from(new Set([...prev.permission_ids, ...categoryPermissionIds])),
-    }));
-  };
-
-  const selectAllPermissions = () => {
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: getAllPermissionIds(),
-    }));
-  };
-
-  const clearAllPermissions = () => {
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: [],
-    }));
-  };
 
   if (authLoading || isLoading) {
     return (

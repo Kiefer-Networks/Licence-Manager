@@ -73,6 +73,33 @@ class RoleRepository(BaseRepository[RoleORM]):
         )
         return list(result.scalars().all())
 
+    async def get_system_roles(self) -> dict[str, RoleORM]:
+        """Get all system roles keyed by code.
+
+        Returns:
+            Dict mapping role code to RoleORM for system roles
+        """
+        result = await self.session.execute(
+            select(RoleORM).where(RoleORM.is_system == True)  # noqa: E712
+        )
+        return {r.code: r for r in result.scalars().all()}
+
+    async def get_permission_ids_for_role(self, role_id: UUID) -> set[UUID]:
+        """Get the set of permission IDs currently assigned to a role.
+
+        Args:
+            role_id: Role UUID
+
+        Returns:
+            Set of permission UUIDs assigned to the role
+        """
+        result = await self.session.execute(
+            select(RolePermissionORM.permission_id).where(
+                RolePermissionORM.role_id == role_id
+            )
+        )
+        return set(result.scalars().all())
+
     async def create_role(
         self,
         code: str,

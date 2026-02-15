@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import hashlib
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -7,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -62,7 +63,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Cache-Control"] = "no-store, max-age=0"
+        # Only set default Cache-Control if the route did not set its own.
+        # This allows routes like avatar to use "public, max-age=3600".
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+        # Add Vary header for correct cache behavior per RFC 7231 Section 7.1.4
+        response.headers.setdefault("Vary", "Accept, Authorization, Origin")
         # Content Security Policy
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
@@ -95,6 +101,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await NotificationService.close_client()
     await SlackProvider.close_client()
+
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Custom rate limit handler returning RFC 7807 Problem Details."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "type": "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+            "title": "Too many requests",
+            "status": 429,
+            "detail": "Rate limit exceeded",
+            "instance": request.url.path,
+        },
+        headers={"Content-Type": "application/problem+json"},
+    )
 
 
 def create_app() -> FastAPI:
@@ -159,8 +180,9 @@ def create_app() -> FastAPI:
     # Security headers middleware (runs last on request, first on response)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Session middleware for OAuth state (uses JWT secret for signing)
-    app.add_middleware(SessionMiddleware, secret_key=config.jwt_secret)
+    # Session middleware for OAuth state (uses a derived key, separate from JWT secret)
+    session_secret = hashlib.sha256(f"session:{config.jwt_secret}".encode()).hexdigest()
+    app.add_middleware(SessionMiddleware, secret_key=session_secret)
 
     # Audit middleware (runs after CSRF on request)
     app.add_middleware(AuditMiddleware)

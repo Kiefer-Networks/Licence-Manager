@@ -95,7 +95,13 @@ PBKDF2_ITERATIONS = 600000
 
 
 class BackupService:
-    """Service for creating and restoring encrypted system backups."""
+    """Service for creating and restoring encrypted system backups.
+
+    Architectural Exception: This service intentionally uses direct database access
+    rather than individual repository classes. Backup/restore operations are inherently
+    cross-cutting system operations that need raw table access for bulk export, atomic
+    multi-table deletion, and ordered re-insertion with foreign key integrity.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize backup service with database session."""

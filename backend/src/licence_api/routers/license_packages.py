@@ -4,9 +4,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_license_package_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license_package import (
     LicensePackageCreate,
@@ -22,13 +21,6 @@ from licence_api.utils.errors import raise_bad_request, raise_not_found
 router = APIRouter()
 
 
-def get_license_package_service(
-    db: AsyncSession = Depends(get_db),
-) -> LicensePackageService:
-    """Get LicensePackageService instance."""
-    return LicensePackageService(db)
-
-
 @router.get("/{provider_id}/packages", response_model=LicensePackageListResponse)
 async def list_license_packages(
     provider_id: UUID,
@@ -42,7 +34,7 @@ async def list_license_packages(
         raise_not_found("Provider")
 
 
-@router.post("/{provider_id}/packages", response_model=LicensePackageResponse)
+@router.post("/{provider_id}/packages", response_model=LicensePackageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_license_package(
     request: Request,

@@ -2,6 +2,7 @@
 
 import hmac
 
+from fastapi import HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -49,16 +50,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Get CSRF token from header
         csrf_header = request.headers.get("X-CSRF-Token")
         if not csrf_header:
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "CSRF token missing"},
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF token missing",
             )
 
         # Verify token signature and expiry
         if not verify_csrf_token(csrf_header):
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Invalid or expired CSRF token"},
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or expired CSRF token",
             )
 
         # Optional: Verify cookie matches header (double submit pattern)
@@ -74,9 +75,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             else:
                 cookie_token = csrf_cookie
             if not hmac.compare_digest(header_token, cookie_token):
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "CSRF token mismatch"},
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="CSRF token mismatch",
                 )
 
         return await call_next(request)

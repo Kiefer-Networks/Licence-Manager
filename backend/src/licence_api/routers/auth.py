@@ -1,7 +1,12 @@
 """Authentication router - Google OAuth only."""
 
+import base64
+import hashlib
+import logging
 import secrets
+import urllib.parse
 from typing import Annotated
+from urllib.parse import urlencode
 from uuid import UUID
 
 from authlib.integrations.starlette_client import OAuth
@@ -12,6 +17,7 @@ from fastapi import (
     File,
     Header,
     HTTPException,
+    Path,
     Request,
     Response,
     UploadFile,
@@ -20,8 +26,9 @@ from fastapi import (
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 from licence_api.config import get_settings
-from licence_api.constants.paths import ADMIN_AVATAR_DIR
 from licence_api.dependencies import get_auth_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
@@ -38,6 +45,7 @@ from licence_api.models.dto.auth import (
     UserNotificationPreferenceUpdate,
 )
 from licence_api.security.auth import get_current_user
+from licence_api.security.csrf import generate_csrf_token
 from licence_api.security.rate_limit import (
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
@@ -45,6 +53,23 @@ from licence_api.security.rate_limit import (
     limiter,
 )
 from licence_api.services.auth_service import AuthService
+
+
+def _get_frontend_url() -> str:
+    """Get the frontend URL from settings."""
+    settings = get_settings()
+    return settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+
+
+def _auth_redirect(error: str) -> RedirectResponse:
+    """Create a redirect to the signin page with a URL-encoded error parameter.
+
+    Compliant with RFC 3986 Section 2.1 for proper percent-encoding.
+    """
+    frontend_url = _get_frontend_url()
+    query = urlencode({"error": error})
+    return RedirectResponse(url=urllib.parse.urljoin(frontend_url, f"/auth/signin?{query}"))
+
 
 # Initialize OAuth client (lazy initialization)
 _oauth: OAuth | None = None
@@ -168,8 +193,24 @@ def _set_auth_cookies(
 
 def _clear_auth_cookies(response: Response) -> None:
     """Clear authentication cookies."""
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/")
+    settings = get_settings()
+    is_secure = settings.session_cookie_secure
+    if settings.environment == "development":
+        is_secure = False
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        secure=is_secure,
+        samesite=settings.session_cookie_samesite,
+        httponly=settings.session_cookie_httponly,
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/",
+        secure=is_secure,
+        samesite=settings.session_cookie_samesite,
+        httponly=settings.session_cookie_httponly,
+    )
 
 
 class LogoutRequest(BaseModel):
@@ -238,8 +279,23 @@ async def google_login(request: Request) -> RedirectResponse:
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 
+    # RFC 7636: PKCE - Generate code_verifier and code_challenge
+    code_verifier = secrets.token_urlsafe(64)
+    request.session["pkce_code_verifier"] = code_verifier
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest())
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+
     redirect_uri = settings.google_redirect_uri
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri,
+        state=state,
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+    )
 
 
 @router.get("/google/callback")
@@ -250,7 +306,11 @@ async def google_callback(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     user_agent: str | None = Header(default=None),
 ) -> RedirectResponse:
-    """Handle Google OAuth callback."""
+    """Handle Google OAuth callback.
+
+    Validates the OAuth state parameter per RFC 6749 Section 10.12
+    to prevent CSRF attacks during the authorization flow.
+    """
     settings = get_settings()
 
     if not settings.google_oauth_enabled:
@@ -259,18 +319,33 @@ async def google_callback(
             detail="Google OAuth is not configured",
         )
 
+    # RFC 6749 Section 10.12: Validate state parameter to prevent CSRF
+    stored_state = request.session.pop("oauth_state", None)
+    received_state = request.query_params.get("state")
+
+    if not stored_state or not received_state:
+        logger.warning("OAuth callback missing state parameter")
+        return _auth_redirect("oauth_state_missing")
+
+    if not secrets.compare_digest(stored_state, received_state):
+        logger.warning("OAuth callback state mismatch (possible CSRF)")
+        return _auth_redirect("oauth_state_mismatch")
+
+    # RFC 7636: Retrieve PKCE code_verifier from session
+    code_verifier = request.session.pop("pkce_code_verifier", None)
+
     oauth = get_oauth()
 
     try:
-        token = await oauth.google.authorize_access_token(request)
+        token = await oauth.google.authorize_access_token(
+            request, code_verifier=code_verifier
+        )
     except Exception:
-        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
-        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=oauth_failed")
+        return _auth_redirect("oauth_failed")
 
     user_info = token.get("userinfo")
     if not user_info:
-        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
-        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=no_user_info")
+        return _auth_redirect("no_user_info")
 
     google_id = user_info.get("sub")
     email = user_info.get("email")
@@ -278,8 +353,7 @@ async def google_callback(
     picture = user_info.get("picture")
 
     if not google_id or not email:
-        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
-        return RedirectResponse(url=f"{frontend_url}/auth/signin?error=missing_info")
+        return _auth_redirect("missing_info")
 
     ip_address = request.client.host if request.client else None
 
@@ -293,12 +367,11 @@ async def google_callback(
             ip_address=ip_address,
         )
     except HTTPException as e:
-        frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
         error_msg = "account_not_found" if e.status_code == 403 else "auth_failed"
-        return RedirectResponse(url=f"{frontend_url}/auth/signin?error={error_msg}")
+        return _auth_redirect(error_msg)
 
-    frontend_url = settings.cors_origins_list[0] if settings.cors_origins_list else "/"
-    redirect = RedirectResponse(url=f"{frontend_url}/dashboard", status_code=302)
+    frontend_url = _get_frontend_url()
+    redirect = RedirectResponse(url=urllib.parse.urljoin(frontend_url, "/dashboard"), status_code=302)
 
     _set_auth_cookies(redirect, login_response.access_token, login_response.refresh_token)
 
@@ -324,6 +397,7 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token required",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     ip_address = request.client.host if request.client else None
@@ -417,6 +491,10 @@ async def update_profile(
     )
 
 
+# Maximum avatar file size: 5MB
+MAX_AVATAR_SIZE = 5 * 1024 * 1024
+
+
 @router.post("/me/avatar", response_model=AvatarUploadResponse)
 @limiter.limit(AUTH_REFRESH_LIMIT)
 async def upload_avatar(
@@ -426,7 +504,12 @@ async def upload_avatar(
     file: UploadFile = File(...),
 ) -> AvatarUploadResponse:
     """Upload avatar image for current user."""
-    content = await file.read()
+    content = await file.read(MAX_AVATAR_SIZE + 1)
+    if len(content) > MAX_AVATAR_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Avatar file too large. Maximum size: {MAX_AVATAR_SIZE // 1024 // 1024}MB",
+        )
 
     try:
         picture_url = await auth_service.upload_avatar(
@@ -446,25 +529,17 @@ async def upload_avatar(
 async def get_avatar(
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> Response:
     """Get avatar image for a user. Requires authentication."""
-    for ext in [".jpg", ".png", ".gif", ".webp"]:
-        file_path = ADMIN_AVATAR_DIR / f"{user_id}{ext}"
-        if file_path.exists():
-            content_type = "image/jpeg"
-            if ext == ".png":
-                content_type = "image/png"
-            elif ext == ".gif":
-                content_type = "image/gif"
-            elif ext == ".webp":
-                content_type = "image/webp"
-
-            content = file_path.read_bytes()
-            return Response(
-                content=content,
-                media_type=content_type,
-                headers={"Cache-Control": "public, max-age=3600"},
-            )
+    result = auth_service.get_avatar_file(user_id)
+    if result is not None:
+        content, content_type = result
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -472,16 +547,16 @@ async def get_avatar(
     )
 
 
-@router.delete("/me/avatar")
+@router.delete("/me/avatar", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(AUTH_REFRESH_LIMIT)
 async def delete_avatar(
     request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> dict[str, str]:
+) -> None:
     """Delete current user's avatar."""
     await auth_service.delete_avatar(current_user.id)
-    return {"message": "Avatar deleted successfully"}
+    return None
 
 
 # Notification Preferences Endpoints
@@ -564,7 +639,7 @@ async def update_notification_preferences(
 @limiter.limit(AUTH_REFRESH_LIMIT)
 async def update_single_notification_preference(
     request: Request,
-    event_type: str,
+    event_type: Annotated[str, Path(max_length=50, pattern=r"^[a-z_]+$")],
     body: UserNotificationPreferenceUpdate,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],

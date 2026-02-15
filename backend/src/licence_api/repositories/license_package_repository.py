@@ -197,6 +197,116 @@ class LicensePackageRepository(BaseRepository[LicensePackageORM]):
         await self.session.delete(package)
         await self.session.flush()
 
+    async def get_expiring_contracts(
+        self,
+        cutoff_date: date,
+        today: date,
+    ) -> list[LicensePackageORM]:
+        """Get packages with contracts expiring before cutoff.
+
+        Args:
+            cutoff_date: Expiry cutoff date
+            today: Current date
+
+        Returns:
+            List of expiring packages with loaded providers
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(LicensePackageORM)
+            .options(selectinload(LicensePackageORM.provider))
+            .where(LicensePackageORM.contract_end.isnot(None))
+            .where(LicensePackageORM.contract_end <= cutoff_date)
+            .where(LicensePackageORM.contract_end >= today)
+            .order_by(LicensePackageORM.contract_end)
+        )
+        return list(result.scalars().all())
+
+    async def get_all_with_providers(self) -> list[LicensePackageORM]:
+        """Get all license packages with their providers eagerly loaded.
+
+        Returns:
+            List of all license packages with provider relationship loaded
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(LicensePackageORM).options(selectinload(LicensePackageORM.provider))
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id_with_provider(self, package_id: "UUID") -> LicensePackageORM | None:
+        """Get a package by ID with provider eagerly loaded.
+
+        Args:
+            package_id: Package UUID
+
+        Returns:
+            LicensePackageORM with provider loaded, or None if not found
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(LicensePackageORM)
+            .options(selectinload(LicensePackageORM.provider))
+            .where(LicensePackageORM.id == package_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_expiring_with_provider(
+        self,
+        days_ahead: int = 90,
+    ) -> list[LicensePackageORM]:
+        """Get packages with contracts expiring within specified days.
+
+        Args:
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of LicensePackageORM with provider loaded
+        """
+        from datetime import date, timedelta
+
+        from sqlalchemy.orm import selectinload
+
+        from licence_api.models.orm.license_package import PackageStatus
+
+        cutoff_date = date.today() + timedelta(days=days_ahead)
+
+        result = await self.session.execute(
+            select(LicensePackageORM)
+            .options(selectinload(LicensePackageORM.provider))
+            .where(
+                and_(
+                    LicensePackageORM.contract_end.isnot(None),
+                    LicensePackageORM.contract_end >= date.today(),
+                    LicensePackageORM.contract_end <= cutoff_date,
+                    LicensePackageORM.status.notin_(
+                        [PackageStatus.EXPIRED, PackageStatus.CANCELLED]
+                    ),
+                )
+            )
+            .order_by(LicensePackageORM.contract_end)
+        )
+        return list(result.scalars().all())
+
+    async def get_cancelled_with_provider(self) -> list[LicensePackageORM]:
+        """Get all cancelled packages with provider loaded.
+
+        Returns:
+            List of LicensePackageORM with provider loaded
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(LicensePackageORM)
+            .options(selectinload(LicensePackageORM.provider))
+            .where(LicensePackageORM.cancelled_at.isnot(None))
+            .order_by(LicensePackageORM.cancellation_effective_date)
+        )
+        return list(result.scalars().all())
+
     # =========================================================================
     # Expiration methods (MVC-02 fix)
     # =========================================================================

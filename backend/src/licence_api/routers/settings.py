@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_notification_service, get_settings_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, get_current_user, require_permission
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
@@ -175,17 +174,6 @@ class TestNotificationResponse(BaseModel):
     message: str
 
 
-# Dependency injection
-def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
-    """Get SettingsService instance."""
-    return SettingsService(db)
-
-
-def get_notification_service(db: AsyncSession = Depends(get_db)) -> NotificationService:
-    """Get NotificationService instance."""
-    return NotificationService(db)
-
-
 @router.get("/status", response_model=SetupStatusResponse)
 @limiter.limit("30/minute")
 async def get_setup_status(
@@ -351,9 +339,9 @@ async def set_setting(
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_setting(
     request: Request,
-    key: str,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
+    key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_.]*$"),
 ) -> None:
     """Delete a setting. Requires settings.delete permission."""
     deleted = await service.delete(

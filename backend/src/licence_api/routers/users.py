@@ -1,16 +1,13 @@
 """Users router - Employee management (HiBob employees, not admin users)."""
 
-import base64
 import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from licence_api.constants.paths import AVATAR_DIR
 from licence_api.dependencies import get_employee_service, get_manual_employee_service
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.domain.employee import EmployeeSource
 from licence_api.models.dto.employee import (
     EmployeeBulkImport,
     EmployeeBulkImportResponse,
@@ -18,7 +15,6 @@ from licence_api.models.dto.employee import (
     EmployeeListResponse,
     EmployeeResponse,
     EmployeeUpdate,
-    ManagerInfo,
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
@@ -33,40 +29,6 @@ from licence_api.utils.validation import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def get_avatar_base64(hibob_id: str) -> str | None:
-    """Load avatar from filesystem and return as base64 data URL.
-
-    Args:
-        hibob_id: HiBob employee ID
-
-    Returns:
-        Base64 data URL string or None if no avatar exists
-    """
-    # Validate hibob_id to prevent path traversal
-    if not hibob_id or "/" in hibob_id or "\\" in hibob_id or ".." in hibob_id:
-        return None
-
-    avatar_path = AVATAR_DIR / f"{hibob_id}.jpg"
-
-    # Ensure resolved path is within AVATAR_DIR
-    try:
-        resolved = avatar_path.resolve()
-        if not resolved.is_relative_to(AVATAR_DIR.resolve()):
-            return None
-    except (ValueError, RuntimeError):
-        return None
-
-    if not avatar_path.exists():
-        return None
-
-    try:
-        avatar_bytes = avatar_path.read_bytes()
-        b64 = base64.b64encode(avatar_bytes).decode("utf-8")
-        return f"data:image/jpeg;base64,{b64}"
-    except OSError:
-        return None
 
 
 # Allowed status values for employees
@@ -113,57 +75,13 @@ async def list_employees(
     sanitized_source = sanitize_status(source, ALLOWED_EMPLOYEE_SOURCES)
     validated_sort_by = validate_sort_by(sort_by, ALLOWED_EMPLOYEE_SORT_COLUMNS, "full_name")
 
-    offset = (page - 1) * page_size
-    employees, total, license_counts, admin_account_counts = await employee_service.list_employees(
+    return await employee_service.list_employees_response(
         status=sanitized_status,
         department=sanitized_department,
         source=sanitized_source,
         search=sanitized_search,
         sort_by=validated_sort_by,
         sort_dir=sort_dir,
-        offset=offset,
-        limit=page_size,
-    )
-
-    # Collect manager IDs and load managers in batch
-    manager_ids = [emp.manager_id for emp in employees if emp.manager_id]
-    managers_by_id = await employee_service.get_employees_by_ids(manager_ids) if manager_ids else {}
-
-    items = []
-    for emp in employees:
-        manager_info = None
-        if emp.manager_id and emp.manager_id in managers_by_id:
-            mgr = managers_by_id[emp.manager_id]
-            manager_info = ManagerInfo(
-                id=mgr.id,
-                email=mgr.email,
-                full_name=mgr.full_name,
-                avatar=get_avatar_base64(mgr.hibob_id),
-            )
-
-        items.append(
-            EmployeeResponse(
-                id=emp.id,
-                hibob_id=emp.hibob_id,
-                email=emp.email,
-                full_name=emp.full_name,
-                department=emp.department,
-                status=emp.status,
-                source=emp.source,
-                start_date=emp.start_date,
-                termination_date=emp.termination_date,
-                avatar=get_avatar_base64(emp.hibob_id),
-                license_count=license_counts.get(emp.id, 0),
-                owned_admin_account_count=admin_account_counts.get(emp.id, 0),
-                manager=manager_info,
-                synced_at=emp.synced_at,
-                is_manual=emp.source == EmployeeSource.MANUAL,
-            )
-        )
-
-    return EmployeeListResponse(
-        items=items,
-        total=total,
         page=page,
         page_size=page_size,
     )
@@ -185,49 +103,18 @@ async def get_employee(
     employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
 ) -> EmployeeResponse:
     """Get a single employee by ID."""
-    result = await employee_service.get_employee(employee_id)
-    if result is None:
+    response = await employee_service.get_employee_response(employee_id)
+    if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Employee not found",
         )
 
-    employee, license_count, admin_account_count = result
-
-    # Load manager if present
-    manager_info = None
-    if employee.manager_id:
-        managers = await employee_service.get_employees_by_ids([employee.manager_id])
-        if employee.manager_id in managers:
-            mgr = managers[employee.manager_id]
-            manager_info = ManagerInfo(
-                id=mgr.id,
-                email=mgr.email,
-                full_name=mgr.full_name,
-                avatar=get_avatar_base64(mgr.hibob_id),
-            )
-
-    return EmployeeResponse(
-        id=employee.id,
-        hibob_id=employee.hibob_id,
-        email=employee.email,
-        full_name=employee.full_name,
-        department=employee.department,
-        status=employee.status,
-        source=employee.source,
-        start_date=employee.start_date,
-        termination_date=employee.termination_date,
-        avatar=get_avatar_base64(employee.hibob_id),
-        license_count=license_count,
-        owned_admin_account_count=admin_account_count,
-        manager=manager_info,
-        synced_at=employee.synced_at,
-        is_manual=employee.source == EmployeeSource.MANUAL,
-    )
+    return response
 
 
 # Manual employee management endpoints
-@router.post("/employees", response_model=EmployeeResponse)
+@router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_employee(
     request: Request,
@@ -277,14 +164,14 @@ async def update_employee(
         )
 
 
-@router.delete("/employees/{employee_id}")
+@router.delete("/employees/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def delete_employee(
     request: Request,
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_DELETE))],
     service: Annotated[ManualEmployeeService, Depends(get_manual_employee_service)],
-) -> dict:
+) -> None:
     """Delete a manual employee. Requires employees.delete permission.
 
     Only employees with source='manual' can be deleted.
@@ -296,7 +183,7 @@ async def delete_employee(
             user=current_user,
             request=request,
         )
-        return {"success": True, "message": "Employee deleted"}
+        return None
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

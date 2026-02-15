@@ -154,6 +154,63 @@ class OrganizationLicenseRepository(BaseRepository[OrganizationLicenseORM]):
         await self.session.delete(license_orm)
         await self.session.flush()
 
+    async def get_by_id_with_provider(
+        self, org_license_id: UUID
+    ) -> OrganizationLicenseORM | None:
+        """Get an organization license by ID with provider eagerly loaded.
+
+        Args:
+            org_license_id: Organization license UUID
+
+        Returns:
+            OrganizationLicenseORM with provider loaded, or None if not found
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(OrganizationLicenseORM)
+            .options(selectinload(OrganizationLicenseORM.provider))
+            .where(OrganizationLicenseORM.id == org_license_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_expiring_with_provider(
+        self,
+        days_ahead: int = 90,
+    ) -> list[OrganizationLicenseORM]:
+        """Get organization licenses expiring within specified days.
+
+        Args:
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of OrganizationLicenseORM with provider loaded
+        """
+        from datetime import date, timedelta
+
+        from sqlalchemy.orm import selectinload
+
+        from licence_api.models.orm.organization_license import OrgLicenseStatus
+
+        cutoff_date = date.today() + timedelta(days=days_ahead)
+
+        result = await self.session.execute(
+            select(OrganizationLicenseORM)
+            .options(selectinload(OrganizationLicenseORM.provider))
+            .where(
+                and_(
+                    OrganizationLicenseORM.expires_at.isnot(None),
+                    OrganizationLicenseORM.expires_at >= date.today(),
+                    OrganizationLicenseORM.expires_at <= cutoff_date,
+                    OrganizationLicenseORM.status.notin_(
+                        [OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED]
+                    ),
+                )
+            )
+            .order_by(OrganizationLicenseORM.expires_at)
+        )
+        return list(result.scalars().all())
+
     # =========================================================================
     # Expiration methods (MVC-02 fix)
     # =========================================================================

@@ -31,6 +31,7 @@ from licence_api.models.dto.import_dto import (
 from licence_api.models.orm.import_job import ImportJobORM
 from licence_api.models.orm.license import LicenseORM
 from licence_api.repositories.employee_repository import EmployeeRepository
+from licence_api.repositories.import_job_repository import ImportJobRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
@@ -81,6 +82,7 @@ class ImportService:
         self.license_repo = LicenseRepository(session)
         self.employee_repo = EmployeeRepository(session)
         self.provider_repo = ProviderRepository(session)
+        self.import_job_repo = ImportJobRepository(session)
         self.audit_service = AuditService(session)
 
     async def upload_file(
@@ -115,8 +117,8 @@ class ImportService:
         if not filename_lower.endswith(".csv"):
             raise ValueError("Only CSV files are supported")
 
-        # Read file content
-        content = await file.read()
+        # Read file content with bounded read to prevent memory exhaustion
+        content = await file.read(MAX_FILE_SIZE + 1)
         file_size = len(content)
 
         if file_size == 0:
@@ -607,15 +609,7 @@ class ImportService:
         Returns:
             ImportJobStatus or None if not found
         """
-        from sqlalchemy import select
-
-        result = await self.session.execute(
-            select(ImportJobORM).where(
-                ImportJobORM.id == job_id,
-                ImportJobORM.provider_id == provider_id,
-            )
-        )
-        job = result.scalar_one_or_none()
+        job = await self.import_job_repo.get_by_provider_and_id(provider_id, job_id)
 
         if job is None:
             return None
@@ -710,12 +704,7 @@ class ImportService:
         Returns:
             Set of existing external_user_ids
         """
-        from sqlalchemy import select
-
-        result = await self.session.execute(
-            select(LicenseORM.external_user_id).where(LicenseORM.provider_id == provider_id)
-        )
-        return {row[0] for row in result.all()}
+        return await self.license_repo.get_external_ids_by_provider(provider_id)
 
     async def _process_row(
         self,

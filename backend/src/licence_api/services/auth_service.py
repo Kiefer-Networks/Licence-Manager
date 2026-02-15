@@ -1,5 +1,6 @@
 """Authentication service - Google OAuth only."""
 
+import base64
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -9,7 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.config import get_settings
-from licence_api.constants.paths import ADMIN_AVATAR_DIR
+from licence_api.constants.paths import ADMIN_AVATAR_DIR, AVATAR_DIR
 from licence_api.models.dto.auth import (
     LoginResponse,
     TokenResponse,
@@ -35,6 +36,40 @@ from licence_api.utils.secure_logging import log_error, log_warning
 from licence_api.utils.security_events import SecurityEventType, log_security_event
 
 logger = logging.getLogger(__name__)
+
+
+def get_avatar_base64(hibob_id: str) -> str | None:
+    """Load avatar from filesystem and return as base64 data URL.
+
+    Args:
+        hibob_id: HiBob employee ID
+
+    Returns:
+        Base64 data URL string or None if no avatar exists
+    """
+    # Validate hibob_id to prevent path traversal
+    if not hibob_id or "/" in hibob_id or "\\" in hibob_id or ".." in hibob_id:
+        return None
+
+    avatar_path = AVATAR_DIR / f"{hibob_id}.jpg"
+
+    # Ensure resolved path is within AVATAR_DIR
+    try:
+        resolved = avatar_path.resolve()
+        if not resolved.is_relative_to(AVATAR_DIR.resolve()):
+            return None
+    except (ValueError, RuntimeError):
+        return None
+
+    if not avatar_path.exists():
+        return None
+
+    try:
+        avatar_bytes = avatar_path.read_bytes()
+        b64 = base64.b64encode(avatar_bytes).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64}"
+    except OSError:
+        return None
 
 MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -102,7 +137,7 @@ class AuthService:
                         name=name,
                         picture_url=picture_url,
                     )
-                    logger.info(f"Auto-created superadmin user: {email_lower}")
+                    logger.info("Auto-created superadmin user")
                 else:
                     log_security_event(
                         SecurityEventType.LOGIN_FAILED,
@@ -218,12 +253,14 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         if token_record.expires_at < datetime.now(UTC):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token expired",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Get user with roles
@@ -232,6 +269,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found or inactive",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Revoke the old refresh token (one-time use)
@@ -374,7 +412,7 @@ class AuthService:
                 await self.user_repo.add_role(user.id, superadmin_role.id)
                 # Refresh user's roles
                 user = await self.user_repo.get_with_roles(user.id)
-                logger.info(f"Auto-assigned superadmin role to: {user.email}")
+                logger.info(f"Auto-assigned superadmin role to user_id={user.id}")
 
     # Profile management methods
 
@@ -451,6 +489,31 @@ class AuthService:
         await self.user_repo.update_avatar(user_id, picture_url)
 
         return picture_url
+
+    def get_avatar_file(self, user_id: UUID) -> tuple[bytes, str] | None:
+        """Read avatar file from filesystem for a user.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Tuple of (content_bytes, content_type) or None if no avatar exists
+        """
+        for ext in [".jpg", ".png", ".gif", ".webp"]:
+            file_path = ADMIN_AVATAR_DIR / f"{user_id}{ext}"
+            if file_path.exists():
+                content_type = "image/jpeg"
+                if ext == ".png":
+                    content_type = "image/png"
+                elif ext == ".gif":
+                    content_type = "image/gif"
+                elif ext == ".webp":
+                    content_type = "image/webp"
+
+                content = file_path.read_bytes()
+                return content, content_type
+
+        return None
 
     async def delete_avatar(self, user_id: UUID) -> None:
         """Delete user avatar."""

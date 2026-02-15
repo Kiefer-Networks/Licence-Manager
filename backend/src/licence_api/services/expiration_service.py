@@ -2,23 +2,15 @@
 
 Architecture Note (MVC-07):
     This service handles automated expiration detection and status updates across
-    multiple entity types. While it uses repositories for standard operations, some
-    methods use direct SQLAlchemy queries because:
-    1. Expiration checks require complex date-based filtering with multiple conditions
-    2. Batch status updates need to modify multiple records efficiently
-    3. Queries join licenses with providers and employees for notification context
-    4. Performance-critical scheduled task that runs periodically
-    5. Read operations for analytics don't require repository abstraction
-
-    The service combines repository usage (where appropriate) with direct queries
-    (for complex analytics) following the patterns established in report_service.py.
+    multiple entity types. It delegates all database queries to the appropriate
+    repositories (LicenseRepository, LicensePackageRepository,
+    OrganizationLicenseRepository) and keeps only transaction management
+    (commit/flush) and business logic in the service layer.
 """
 
-from datetime import date, timedelta
+from datetime import date
 
-from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from licence_api.models.domain.license import LicenseStatus
 from licence_api.models.orm.employee import EmployeeORM
@@ -133,23 +125,7 @@ class ExpirationService:
         Returns:
             List of tuples (license, provider, employee)
         """
-        cutoff_date = date.today() + timedelta(days=days_ahead)
-
-        result = await self.session.execute(
-            select(LicenseORM, ProviderORM, EmployeeORM)
-            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
-            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
-            .where(
-                and_(
-                    LicenseORM.expires_at.isnot(None),
-                    LicenseORM.expires_at >= date.today(),
-                    LicenseORM.expires_at <= cutoff_date,
-                    LicenseORM.status.notin_([LicenseStatus.EXPIRED, LicenseStatus.CANCELLED]),
-                )
-            )
-            .order_by(LicenseORM.expires_at)
-        )
-        return list(result.all())
+        return await self.license_repo.get_expiring_with_details(days_ahead=days_ahead)
 
     async def get_expiring_packages(
         self,
@@ -163,24 +139,7 @@ class ExpirationService:
         Returns:
             List of LicensePackageORM
         """
-        cutoff_date = date.today() + timedelta(days=days_ahead)
-
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(
-                and_(
-                    LicensePackageORM.contract_end.isnot(None),
-                    LicensePackageORM.contract_end >= date.today(),
-                    LicensePackageORM.contract_end <= cutoff_date,
-                    LicensePackageORM.status.notin_(
-                        [PackageStatus.EXPIRED, PackageStatus.CANCELLED]
-                    ),
-                )
-            )
-            .order_by(LicensePackageORM.contract_end)
-        )
-        return list(result.scalars().all())
+        return await self.package_repo.get_expiring_with_provider(days_ahead=days_ahead)
 
     async def get_licenses_needing_reorder(
         self,
@@ -190,14 +149,7 @@ class ExpirationService:
         Returns:
             List of tuples (license, provider, employee)
         """
-        result = await self.session.execute(
-            select(LicenseORM, ProviderORM, EmployeeORM)
-            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
-            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
-            .where(LicenseORM.needs_reorder == True)
-            .order_by(LicenseORM.expires_at.nulls_last())
-        )
-        return list(result.all())
+        return await self.license_repo.get_needing_reorder_with_details()
 
     async def get_cancelled_licenses(
         self,
@@ -207,14 +159,7 @@ class ExpirationService:
         Returns:
             List of tuples (license, provider, employee)
         """
-        result = await self.session.execute(
-            select(LicenseORM, ProviderORM, EmployeeORM)
-            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
-            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
-            .where(LicenseORM.cancelled_at.isnot(None))
-            .order_by(LicenseORM.cancellation_effective_date)
-        )
-        return list(result.all())
+        return await self.license_repo.get_cancelled_with_details()
 
     async def get_cancelled_packages(
         self,
@@ -224,13 +169,7 @@ class ExpirationService:
         Returns:
             List of LicensePackageORM
         """
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(LicensePackageORM.cancelled_at.isnot(None))
-            .order_by(LicensePackageORM.cancellation_effective_date)
-        )
-        return list(result.scalars().all())
+        return await self.package_repo.get_cancelled_with_provider()
 
     async def get_expiring_org_licenses(
         self,
@@ -244,24 +183,7 @@ class ExpirationService:
         Returns:
             List of OrganizationLicenseORM
         """
-        cutoff_date = date.today() + timedelta(days=days_ahead)
-
-        result = await self.session.execute(
-            select(OrganizationLicenseORM)
-            .options(selectinload(OrganizationLicenseORM.provider))
-            .where(
-                and_(
-                    OrganizationLicenseORM.expires_at.isnot(None),
-                    OrganizationLicenseORM.expires_at >= date.today(),
-                    OrganizationLicenseORM.expires_at <= cutoff_date,
-                    OrganizationLicenseORM.status.notin_(
-                        [OrgLicenseStatus.EXPIRED, OrgLicenseStatus.CANCELLED]
-                    ),
-                )
-            )
-            .order_by(OrganizationLicenseORM.expires_at)
-        )
-        return list(result.scalars().all())
+        return await self.org_license_repo.get_expiring_with_provider(days_ahead=days_ahead)
 
     async def get_expired_licenses(
         self,
@@ -271,11 +193,4 @@ class ExpirationService:
         Returns:
             List of tuples (license, provider, employee)
         """
-        result = await self.session.execute(
-            select(LicenseORM, ProviderORM, EmployeeORM)
-            .join(ProviderORM, LicenseORM.provider_id == ProviderORM.id)
-            .outerjoin(EmployeeORM, LicenseORM.employee_id == EmployeeORM.id)
-            .where(LicenseORM.status == LicenseStatus.EXPIRED)
-            .order_by(LicenseORM.expires_at)
-        )
-        return list(result.all())
+        return await self.license_repo.get_expired_with_details()

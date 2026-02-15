@@ -4,9 +4,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_organization_license_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.organization_license import (
     OrganizationLicenseCreate,
@@ -22,13 +21,6 @@ from licence_api.utils.errors import raise_not_found
 router = APIRouter()
 
 
-def get_organization_license_service(
-    db: AsyncSession = Depends(get_db),
-) -> OrganizationLicenseService:
-    """Get OrganizationLicenseService instance."""
-    return OrganizationLicenseService(db)
-
-
 @router.get("/{provider_id}/org-licenses", response_model=OrganizationLicenseListResponse)
 async def list_organization_licenses(
     provider_id: UUID,
@@ -42,7 +34,7 @@ async def list_organization_licenses(
         raise_not_found("Provider")
 
 
-@router.post("/{provider_id}/org-licenses", response_model=OrganizationLicenseResponse)
+@router.post("/{provider_id}/org-licenses", response_model=OrganizationLicenseResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def create_organization_license(
     request: Request,

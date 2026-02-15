@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_payment_method_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.payment_method import (
     PaymentMethodCreate,
@@ -30,13 +29,6 @@ from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.payment_method_service import PaymentMethodService
 
 router = APIRouter()
-
-
-def get_payment_method_service(
-    db: AsyncSession = Depends(get_db),
-) -> PaymentMethodService:
-    """Get PaymentMethodService instance."""
-    return PaymentMethodService(db)
 
 
 @router.get("", response_model=PaymentMethodListResponse)

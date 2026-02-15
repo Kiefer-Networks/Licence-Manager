@@ -155,6 +155,23 @@ class UserRepository(BaseRepository[AdminUserORM]):
         )
         return result.scalar_one()
 
+    async def get_names_by_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
+        """Get display names (or email fallback) for multiple user IDs.
+
+        Args:
+            user_ids: List of user UUIDs
+
+        Returns:
+            Dict mapping user ID to display name (or email if name is empty)
+        """
+        if not user_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(AdminUserORM).where(AdminUserORM.id.in_(user_ids))
+        )
+        return {admin.id: admin.name or admin.email for admin in result.scalars().all()}
+
     async def get_emails_by_ids(self, user_ids: set[UUID]) -> dict[UUID, str]:
         """Get email addresses for multiple user IDs."""
         if not user_ids:

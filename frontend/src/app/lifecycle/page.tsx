@@ -1,35 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  api,
-  LicenseLifecycleOverview,
-  ExpiringLicense,
-  CancelledLicense,
-} from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
+import { ExpiringLicense, CancelledLicense } from '@/lib/api';
 import { SkeletonCard } from '@/components/ui/skeleton';
 import {
   Clock,
   XCircle,
-  AlertTriangle,
   CheckCircle2,
   RefreshCw,
   Ban,
   ShoppingCart,
-  ExternalLink,
-  Calendar,
 } from 'lucide-react';
 import { CancellationDialog } from '@/components/licenses/CancellationDialog';
 import { RenewDialog } from '@/components/licenses/RenewDialog';
 import { useLocale } from '@/components/locale-provider';
+import { useLifecycle } from '@/hooks/use-lifecycle';
 
 export default function LifecyclePage() {
   const t = useTranslations('lifecycle');
@@ -37,75 +28,24 @@ export default function LifecyclePage() {
   const tProviders = useTranslations('providers');
   const tCommon = useTranslations('common');
   const { formatDate, formatCurrency } = useLocale();
-  const [overview, setOverview] = useState<LicenseLifecycleOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('expiring');
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Dialog states
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
-  const [selectedLicense, setSelectedLicense] = useState<ExpiringLicense | CancelledLicense | null>(null);
-
-  useEffect(() => {
-    fetchOverview();
-  }, []);
-
-  async function fetchOverview() {
-    try {
-      const data = await api.getLicenseLifecycleOverview();
-      setOverview(data);
-    } catch (error) {
-      handleSilentError('fetchLifecycleOverview', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const handleCancel = async (effectiveDate: string, reason: string) => {
-    if (!selectedLicense) return;
-    try {
-      await api.cancelLicense(selectedLicense.license_id, {
-        effective_date: effectiveDate,
-        reason: reason || undefined,
-      });
-      showToast('success', t('licenseCancelled'));
-      fetchOverview();
-    } catch (error) {
-      showToast('error', t('failedToCancel'));
-    }
-  };
-
-  const handleRenew = async (newExpirationDate: string, clearCancellation: boolean) => {
-    if (!selectedLicense) return;
-    try {
-      await api.renewLicense(selectedLicense.license_id, {
-        new_expiration_date: newExpirationDate,
-        clear_cancellation: clearCancellation,
-      });
-      showToast('success', t('licenseRenewed'));
-      fetchOverview();
-    } catch (error) {
-      showToast('error', t('failedToRenew'));
-    }
-  };
-
-  const handleToggleNeedsReorder = async (license: ExpiringLicense) => {
-    try {
-      await api.setLicenseNeedsReorder(license.license_id, !license.needs_reorder);
-      showToast('success', license.needs_reorder ? t('removedFromReorder') : t('addedToReorder'));
-      fetchOverview();
-    } catch (error) {
-      showToast('error', t('failedToUpdate'));
-    }
-  };
-
-  const needsReorderLicenses = overview?.expiring_licenses.filter(l => l.needs_reorder) || [];
+  const {
+    overview,
+    needsReorderLicenses,
+    loading,
+    toast,
+    activeTab,
+    setActiveTab,
+    cancelDialogOpen,
+    setCancelDialogOpen,
+    renewDialogOpen,
+    setRenewDialogOpen,
+    selectedLicense,
+    setSelectedLicense,
+    handleCancel,
+    handleRenew,
+    handleToggleNeedsReorder,
+  } = useLifecycle(t);
 
   if (loading) {
     return (

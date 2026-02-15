@@ -5,9 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_import_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.import_dto import (
     ImportExecuteRequest,
@@ -22,13 +21,6 @@ from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.import_service import ImportService
 
 router = APIRouter()
-
-
-def get_import_service(
-    db: AsyncSession = Depends(get_db),
-) -> ImportService:
-    """Get ImportService instance."""
-    return ImportService(db)
 
 
 @router.get("/{provider_id}/import/template")

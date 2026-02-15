@@ -63,7 +63,7 @@ async def export_licenses_csv(
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         },
     )
 
@@ -91,7 +91,7 @@ async def export_costs_csv(
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         },
     )
 
@@ -117,6 +117,6 @@ async def export_full_report_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         },
     )

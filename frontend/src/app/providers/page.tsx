@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -24,107 +23,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, Provider } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
-
-const hrisProviderTypes = [
-  { value: 'hibob', label: 'HiBob', fields: ['auth_token'] },
-  { value: 'personio', label: 'Personio', fields: ['client_id', 'client_secret'] },
-];
-
-const licenseProviderTypes = [
-  { value: '1password', label: '1Password', fields: ['api_token', 'sign_in_address'], type: 'api' },
-  { value: 'adobe', label: 'Adobe Creative Cloud', fields: ['client_id', 'client_secret', 'org_id', 'technical_account_id'], type: 'api' },
-  { value: 'anthropic', label: 'Anthropic (Claude)', fields: ['admin_api_key'], type: 'api' },
-  { value: 'atlassian', label: 'Atlassian (Confluence/Jira)', fields: ['api_token', 'org_id', 'admin_email'], type: 'api' },
-  { value: 'auth0', label: 'Auth0', fields: ['domain', 'client_id', 'client_secret'], type: 'api' },
-  { value: 'cursor', label: 'Cursor', fields: ['api_key'], type: 'api' },
-  { value: 'figma', label: 'Figma', fields: ['scim_token', 'tenant_id'], type: 'api' },
-  { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
-  { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'base_url'], type: 'api' },
-  { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api' },
-  { value: 'huggingface', label: 'Hugging Face', fields: ['access_token', 'organization'], type: 'api' },
-  { value: 'jetbrains', label: 'JetBrains', fields: ['api_key', 'customer_code'], type: 'api' },
-  { value: 'mailjet', label: 'Mailjet', fields: ['api_key', 'api_secret'], type: 'api' },
-  { value: 'mattermost', label: 'Mattermost', fields: ['access_token', 'server_url'], type: 'api' },
-  { value: 'microsoft', label: 'Microsoft 365 / Azure AD', fields: ['tenant_id', 'client_id', 'client_secret'], type: 'api' },
-  { value: 'miro', label: 'Miro', fields: ['access_token', 'org_id'], type: 'api' },
-  { value: 'openai', label: 'OpenAI', fields: ['admin_api_key', 'org_id'], type: 'api' },
-  { value: 'slack', label: 'Slack', fields: ['bot_token', 'user_token'], type: 'api' },
-  { value: 'zoom', label: 'Zoom', fields: ['account_id', 'client_id', 'client_secret'], type: 'api' },
-  { value: 'manual', label: 'manual', fields: [], type: 'manual' },
-];
-
-// Keys for translatable credential field labels
-const FIELD_LABEL_KEYS: Record<string, string> = {
-  account_id: 'accountId',
-  access_token: 'accessToken',
-  admin_api_key: 'adminApiKey',
-  admin_email: 'adminEmail',
-  api_key: 'apiKey',
-  api_secret: 'apiSecret',
-  api_token: 'apiToken',
-  auth_token: 'authToken',
-  base_url: 'baseUrl',
-  bot_token: 'botToken',
-  client_id: 'clientId',
-  client_secret: 'clientSecret',
-  customer_code: 'customerCode',
-  domain: 'domainField',
-  group_id: 'groupId',
-  org_id: 'orgId',
-  org_name: 'orgName',
-  organization: 'organization',
-  server_url: 'serverUrl',
-  service_account_json: 'serviceAccountJson',
-  sign_in_address: 'signInAddress',
-  technical_account_id: 'technicalAccountId',
-  tenant_id: 'tenantId',
-  user_token: 'userToken',
-};
-
-// Documentation links for providers (not translated)
-const PROVIDER_LINKS: Record<string, string> = {
-  '1password': 'https://support.1password.com/scim/',
-  adobe: 'https://developer.adobe.com/developer-console/docs/guides/services/services-add-api-oauth-s2s/',
-  atlassian: 'https://support.atlassian.com/organization-administration/docs/manage-an-organization-with-the-admin-apis/',
-  cursor: 'https://cursor.sh/settings/team',
-  figma: 'https://www.figma.com/developers/api#access-tokens',
-  github: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
-  gitlab: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
-  google_workspace: 'https://developers.google.com/admin-sdk/directory/v1/guides/delegation',
-  hibob: 'https://apidocs.hibob.com/reference/getting-started',
-  huggingface: 'https://huggingface.co/docs/hub/en/api',
-  personio: 'https://developer.personio.de/docs/getting-started-with-the-personio-api',
-  jetbrains: 'https://sales.jetbrains.com/hc/en-gb/articles/207240845-What-is-a-Customer-Code-',
-  mattermost: 'https://developers.mattermost.com/integrate/reference/personal-access-token/',
-  microsoft: 'https://learn.microsoft.com/en-us/graph/auth-register-app-v2',
-  miro: 'https://developers.miro.com/docs/getting-started',
-  openai: 'https://platform.openai.com/docs/api-reference/organization',
-  slack: 'https://api.slack.com/authentication/basics',
-  anthropic: 'https://docs.anthropic.com/en/api/admin-api',
-  auth0: 'https://auth0.com/docs/api/management/v2',
-  mailjet: 'https://dev.mailjet.com/email/guides/getting-started/',
-  zoom: 'https://developers.zoom.us/docs/internal-apps/',
-};
-
-// Provider types that have setup instructions
-const PROVIDERS_WITH_SETUP = [
-  '1password', 'adobe', 'anthropic', 'atlassian', 'auth0', 'cursor', 'figma',
-  'github', 'gitlab', 'google_workspace', 'hibob', 'huggingface', 'jetbrains',
-  'mailjet', 'mattermost', 'microsoft', 'miro', 'openai', 'personio', 'slack', 'zoom'
-];
-
-const getFieldLabel = (field: string, t: (key: string) => string) => {
-  const key = FIELD_LABEL_KEYS[field];
-  if (key) {
-    return t(key);
-  }
-  return field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-};
+import {
+  useProviders,
+  hrisProviderTypes,
+  licenseProviderTypes,
+  PROVIDER_LINKS,
+  PROVIDERS_WITH_SETUP,
+  getFieldLabel,
+} from '@/hooks/use-providers';
 
 export default function ProvidersPage() {
   const t = useTranslations('providers');
@@ -132,208 +41,45 @@ export default function ProvidersPage() {
   const tLicenses = useTranslations('licenses');
   const tSetup = useTranslations('providerSetup');
   const { formatDate } = useLocale();
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
-  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
-  const [dialogMode, setDialogMode] = useState<'hris' | 'license'>('license');
-  const [newProviderType, setNewProviderType] = useState('');
-  const [newProviderName, setNewProviderName] = useState('');
-  const [credentials, setCredentials] = useState<Record<string, string>>({});
-  const [manualConfig, setManualConfig] = useState({
-    license_model: 'license_based',
-  });
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [syncingProviderId, setSyncingProviderId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchProviders();
-  }, []);
-
-  // Clear sensitive credentials on unmount to prevent memory exposure
-  useEffect(() => {
-    return () => {
-      setCredentials({});
-    };
-  }, []);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  async function fetchProviders() {
-    try {
-      const data = await api.getProviders();
-      setProviders(data.items);
-    } catch (error) {
-      handleSilentError('fetchProviders', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const hrisProviderNames = hrisProviderTypes.map((p) => p.value);
-  const hrisProviders = providers.filter((p) => hrisProviderNames.includes(p.name));
-  const licenseProviders = providers.filter((p) => !hrisProviderNames.includes(p.name)).sort((a, b) => a.display_name.localeCompare(b.display_name));
-
-  const getProviderFields = (providerName: string) => {
-    const hrisType = hrisProviderTypes.find((p) => p.value === providerName);
-    if (hrisType) return hrisType.fields;
-    return licenseProviderTypes.find((p) => p.value === providerName)?.fields || [];
-  };
-
-  const handleOpenAddDialog = (mode: 'hris' | 'license') => {
-    setDialogMode(mode);
-    setNewProviderType('');
-    setNewProviderName('');
-    setCredentials({});
-    setManualConfig({
-      license_model: 'license_based',
-    });
-    setLogoFile(null);
-    setLogoPreview(null);
-    setError(null);
-    setAddDialogOpen(true);
-  };
-
-  const isManualProvider = (providerType: string) => providerType === 'manual';
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLogoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const clearLogo = () => {
-    setLogoFile(null);
-    setLogoPreview(null);
-  };
-
-  const handleOpenEditDialog = (provider: Provider) => {
-    setEditingProvider(provider);
-    setNewProviderName(provider.display_name);
-    setCredentials({});
-    setLogoFile(null);
-    setLogoPreview(provider.logo_url || null);
-    setError(null);
-    setEditDialogOpen(true);
-  };
-
-  const handleAddProvider = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const providerType = newProviderType;
-      const isManual = isManualProvider(providerType);
-
-      const config: { provider_type?: string; license_model?: string } = {};
-      if (isManual) {
-        config.provider_type = 'manual';
-        config.license_model = manualConfig.license_model;
-      }
-
-      const newProvider = await api.createProvider({
-        name: providerType,
-        display_name: newProviderName,
-        credentials: isManual ? {} : credentials,
-        config: Object.keys(config).length > 0 ? config : undefined,
-      });
-
-      // Upload logo if provided (for manual providers)
-      // Logo upload failure is non-critical - provider was created successfully
-      if (isManual && logoFile) {
-        try {
-          await api.uploadProviderLogo(newProvider.id, logoFile);
-        } catch {
-          // Logo upload failed but provider was created - continue silently
-        }
-      }
-
-      await fetchProviders();
-      setAddDialogOpen(false);
-      showToast('success', `${newProviderName} added`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('failedToCreate'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUpdateProvider = async () => {
-    if (!editingProvider) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updates: { display_name?: string; credentials?: Record<string, string> } = {
-        display_name: newProviderName,
-      };
-      // Only include credentials if any were changed
-      const hasCredentials = Object.values(credentials).some((v) => v);
-      if (hasCredentials) {
-        updates.credentials = credentials;
-      }
-      await api.updateProvider(editingProvider.id, updates);
-
-      // Upload logo if a new file was selected (for manual providers)
-      // Logo upload failure is non-critical - provider was updated successfully
-      const isManual = editingProvider.config?.provider_type === 'manual' || editingProvider.name === 'manual';
-      if (isManual && logoFile) {
-        try {
-          await api.uploadProviderLogo(editingProvider.id, logoFile);
-        } catch {
-          // Logo upload failed but provider was updated - continue silently
-        }
-      }
-
-      await fetchProviders();
-      setEditDialogOpen(false);
-      showToast('success', t('providerUpdated'));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('failedToUpdate'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteProvider = async () => {
-    if (!deletingProvider) return;
-    try {
-      await api.deleteProvider(deletingProvider.id);
-      await fetchProviders();
-      setDeleteDialogOpen(false);
-      setDeletingProvider(null);
-      showToast('success', t('providerDeleted'));
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : t('failedToDelete'));
-    }
-  };
-
-  const handleSyncProvider = async (providerId: string) => {
-    setSyncingProviderId(providerId);
-    try {
-      const result = await api.syncProvider(providerId);
-      await fetchProviders();
-      showToast(result.success ? 'success' : 'error', result.success ? t('syncSuccess') : t('syncFailed'));
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : t('syncFailed'));
-    } finally {
-      setSyncingProviderId(null);
-    }
-  };
+  const {
+    hrisProviders,
+    licenseProviders,
+    loading,
+    addDialogOpen,
+    setAddDialogOpen,
+    editDialogOpen,
+    setEditDialogOpen,
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    deletingProvider,
+    setDeletingProvider,
+    editingProvider,
+    dialogMode,
+    newProviderType,
+    setNewProviderType,
+    newProviderName,
+    setNewProviderName,
+    credentials,
+    setCredentials,
+    manualConfig,
+    setManualConfig,
+    logoPreview,
+    saving,
+    error,
+    syncingProviderId,
+    toast,
+    getProviderFields,
+    handleOpenAddDialog,
+    handleOpenEditDialog,
+    handleAddProvider,
+    handleUpdateProvider,
+    handleDeleteProvider,
+    handleSyncProvider,
+    handleLogoChange,
+    clearLogo,
+    isManualProvider,
+  } = useProviders({ t, tCommon });
 
   if (loading) {
     return (

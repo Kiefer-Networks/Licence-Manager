@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -13,20 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  api,
-  InactiveLicenseReport,
-  OffboardingReport,
-  CostReport,
-  ExternalUsersReport,
-  ExpiringContractsReport,
-  UtilizationReport,
-  CostTrendReport,
-  DuplicateAccountsReport,
-  CostsByDepartmentReport,
-  CostsByEmployeeReport,
-} from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import {
   Clock,
   UserMinus,
@@ -47,13 +32,13 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { exportInactiveLicenses, exportOffboarding, exportExternalUsers, exportCosts, ExportTranslations } from '@/lib/export';
 import { LicenseStatusBadge } from '@/components/licenses';
 import { ExportButton } from '@/components/exports';
 import { LicenseRecommendations } from '@/components/reports';
 import { EmployeeTable, EmployeeTableData } from '@/components/users/EmployeeTable';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
+import { useReports } from '@/hooks/use-reports';
 
 // Lazy load the chart component to reduce initial bundle size (recharts is ~600KB)
 const CostTrendChart = dynamic(
@@ -75,168 +60,30 @@ export default function ReportsPage() {
   const tExport = useTranslations('export');
   const { formatDate, formatCurrency } = useLocale();
 
-  // Build export translations object
-  const exportTranslations: ExportTranslations = {
-    provider: tExport('provider'),
-    userId: tExport('userId'),
-    employee: tExport('employee'),
-    email: tExport('email'),
-    daysInactive: tExport('daysInactive'),
-    monthlyCost: tExport('monthlyCost'),
-    terminationDate: tExport('terminationDate'),
-    daysSinceOffboarding: tExport('daysSinceOffboarding'),
-    pendingLicenses: tExport('pendingLicenses'),
-    licenseCount: tExport('licenseCount'),
-    externalEmail: tExport('externalEmail'),
-    assignedEmployee: tExport('assignedEmployee'),
-    employeeEmail: tExport('employeeEmail'),
-    status: tExport('status'),
-    licenseType: tExport('licenseType'),
-    licenses: tExport('licenses'),
-    total: tExport('total'),
-    unassigned: tExport('unassigned'),
-  };
-  const [inactiveReport, setInactiveReport] = useState<InactiveLicenseReport | null>(null);
-  const [offboardingReport, setOffboardingReport] = useState<OffboardingReport | null>(null);
-  const [costReport, setCostReport] = useState<CostReport | null>(null);
-  const [externalUsersReport, setExternalUsersReport] = useState<ExternalUsersReport | null>(null);
-  // Quick Win Reports
-  const [expiringContractsReport, setExpiringContractsReport] = useState<ExpiringContractsReport | null>(null);
-  const [utilizationReport, setUtilizationReport] = useState<UtilizationReport | null>(null);
-  const [costTrendReport, setCostTrendReport] = useState<CostTrendReport | null>(null);
-  const [duplicateAccountsReport, setDuplicateAccountsReport] = useState<DuplicateAccountsReport | null>(null);
-  // Cost Breakdown Reports
-  const [costsByDepartmentReport, setCostsByDepartmentReport] = useState<CostsByDepartmentReport | null>(null);
-  const [costsByEmployeeReport, setCostsByEmployeeReport] = useState<CostsByEmployeeReport | null>(null);
-
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  // Min cost filter for costs-by-employee report
-  const [minCostFilter, setMinCostFilter] = useState<string>('');
-  const [debouncedMinCost, setDebouncedMinCost] = useState<string>('');
-  // Tab state for lazy loading
-  const [activeTab, setActiveTab] = useState('utilization');
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
-  const [tabLoading, setTabLoading] = useState<Set<string>>(new Set());
-
-  // Load departments once
-  useEffect(() => {
-    api.getDepartments().then(setDepartments).catch((e) => handleSilentError('getDepartments', e));
-  }, []);
-
-  // Debounce min cost filter
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedMinCost(minCostFilter);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [minCostFilter]);
-
-  // Helper to mark tab as loading
-  const setTabLoadingState = (tab: string, isLoading: boolean) => {
-    setTabLoading(prev => {
-      const next = new Set(prev);
-      if (isLoading) next.add(tab);
-      else next.delete(tab);
-      return next;
-    });
-  };
-
-  // Load data for a specific tab
-  const loadTabData = async (tab: string, forceReload = false) => {
-    // Skip if already loaded and not forcing reload
-    if (loadedTabs.has(tab) && !forceReload) return;
-
-    const dept = selectedDepartment !== 'all' ? selectedDepartment : undefined;
-    setTabLoadingState(tab, true);
-
-    try {
-      switch (tab) {
-        case 'utilization': {
-          const [utilization, costTrend] = await Promise.all([
-            api.getUtilizationReport(),
-            api.getCostTrendReport(6),
-          ]);
-          setUtilizationReport(utilization);
-          setCostTrendReport(costTrend);
-          break;
-        }
-        case 'expiring': {
-          const expiring = await api.getExpiringContractsReport(90);
-          setExpiringContractsReport(expiring);
-          break;
-        }
-        case 'duplicates': {
-          const duplicates = await api.getDuplicateAccountsReport();
-          setDuplicateAccountsReport(duplicates);
-          break;
-        }
-        case 'inactive': {
-          const inactive = await api.getInactiveLicenseReport(30, dept);
-          setInactiveReport(inactive);
-          break;
-        }
-        case 'offboarding': {
-          const offboarding = await api.getOffboardingReport(dept);
-          setOffboardingReport(offboarding);
-          break;
-        }
-        case 'external': {
-          const external = await api.getExternalUsersReport(dept);
-          setExternalUsersReport(external);
-          break;
-        }
-        case 'costs': {
-          const costs = await api.getCostReport(undefined, undefined, dept);
-          setCostReport(costs);
-          break;
-        }
-        case 'costs-department': {
-          const costsByDept = await api.getCostsByDepartmentReport();
-          setCostsByDepartmentReport(costsByDept);
-          break;
-        }
-        case 'costs-employee': {
-          const costsByEmployee = await api.getCostsByEmployeeReport(dept, debouncedMinCost ? parseFloat(debouncedMinCost) : undefined, 100);
-          setCostsByEmployeeReport(costsByEmployee);
-          break;
-        }
-        case 'recommendations':
-          // LicenseRecommendations component loads its own data
-          break;
-      }
-      setLoadedTabs(prev => new Set(prev).add(tab));
-    } catch (e) {
-      handleSilentError(`load${tab}Report`, e);
-    } finally {
-      setTabLoadingState(tab, false);
-    }
-  };
-
-  // Load initial tab on mount
-  useEffect(() => {
-    loadTabData('utilization');
-  }, []);
-
-  // Load data when active tab changes
-  useEffect(() => {
-    loadTabData(activeTab);
-  }, [activeTab]);
-
-  // Reload current tab when department changes (for department-filtered tabs)
-  useEffect(() => {
-    const deptFilteredTabs = ['inactive', 'offboarding', 'external', 'costs', 'costs-employee'];
-    if (deptFilteredTabs.includes(activeTab) && loadedTabs.has(activeTab)) {
-      loadTabData(activeTab, true);
-    }
-  }, [selectedDepartment]);
-
-  // Reload costs-employee when min cost filter changes
-  useEffect(() => {
-    if (activeTab === 'costs-employee' && loadedTabs.has('costs-employee')) {
-      loadTabData('costs-employee', true);
-    }
-  }, [debouncedMinCost]);
+  const {
+    inactiveReport,
+    offboardingReport,
+    costReport,
+    externalUsersReport,
+    expiringContractsReport,
+    utilizationReport,
+    costTrendReport,
+    duplicateAccountsReport,
+    costsByDepartmentReport,
+    costsByEmployeeReport,
+    departments,
+    selectedDepartment,
+    setSelectedDepartment,
+    minCostFilter,
+    setMinCostFilter,
+    activeTab,
+    setActiveTab,
+    tabLoading,
+    handleExportInactive,
+    handleExportOffboarding,
+    handleExportExternalUsers,
+    handleExportCosts,
+  } = useReports(t, tCommon, tLicenses, tExport);
 
   return (
     <AppLayout>
@@ -435,8 +282,8 @@ export default function ReportsPage() {
                         <th className="text-right px-3 py-3 font-medium text-muted-foreground">{tLicenses('unassigned')}</th>
                         <th className="text-right px-3 py-3 font-medium text-muted-foreground">{t('external')}</th>
                         <th className="text-right px-3 py-3 font-medium text-muted-foreground">{t('cost')}</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-amber-600">{tLicenses('unassigned')} €</th>
-                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-blue-600">{t('external')} €</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-amber-600">{tLicenses('unassigned')} &euro;</th>
+                        <th className="text-right px-3 py-3 font-medium text-muted-foreground text-blue-600">{t('external')} &euro;</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -672,11 +519,7 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => inactiveReport && exportInactiveLicenses(
-                    inactiveReport.licenses,
-                    exportTranslations,
-                    selectedDepartment !== 'all' ? selectedDepartment : undefined
-                  )}
+                  onClick={handleExportInactive}
                   disabled={!inactiveReport || inactiveReport.licenses.length === 0}
                   className="gap-2"
                 >
@@ -800,11 +643,7 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => offboardingReport && exportOffboarding(
-                    offboardingReport.employees,
-                    exportTranslations,
-                    selectedDepartment !== 'all' ? selectedDepartment : undefined
-                  )}
+                  onClick={handleExportOffboarding}
                   disabled={!offboardingReport || offboardingReport.employees.length === 0}
                   className="gap-2"
                 >
@@ -863,11 +702,7 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => externalUsersReport && exportExternalUsers(
-                    externalUsersReport.licenses,
-                    exportTranslations,
-                    selectedDepartment !== 'all' ? selectedDepartment : undefined
-                  )}
+                  onClick={handleExportExternalUsers}
                   disabled={!externalUsersReport || externalUsersReport.licenses.length === 0}
                   className="gap-2"
                 >
@@ -993,12 +828,7 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => costReport && exportCosts(
-                    costReport.monthly_costs,
-                    costReport.total_cost,
-                    exportTranslations,
-                    selectedDepartment !== 'all' ? selectedDepartment : undefined
-                  )}
+                  onClick={handleExportCosts}
                   disabled={!costReport || costReport.monthly_costs.length === 0}
                   className="gap-2"
                 >

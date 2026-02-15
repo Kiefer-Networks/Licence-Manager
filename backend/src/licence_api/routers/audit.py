@@ -1,8 +1,5 @@
 """Audit log router."""
 
-import csv
-import io
-import json
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -10,15 +7,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from licence_api.database import get_db
+from licence_api.dependencies import get_audit_service
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.repositories.audit_repository import AuditRepository
-from licence_api.repositories.user_repository import UserRepository
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.services.audit_service import AuditAction, ResourceType
-from licence_api.utils.validation import validate_against_whitelist
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
 router = APIRouter()
 
@@ -128,22 +121,10 @@ class AuditUsersListResponse(BaseModel):
     items: list[AuditUserResponse]
 
 
-# Dependency injection functions
-def get_audit_repository(db: AsyncSession = Depends(get_db)) -> AuditRepository:
-    """Get AuditRepository instance."""
-    return AuditRepository(db)
-
-
-def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
-    """Get UserRepository instance."""
-    return UserRepository(db)
-
-
 @router.get("", response_model=AuditLogListResponse)
 async def list_audit_logs(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=10, le=100),
     action: str | None = Query(None, max_length=50),
@@ -154,59 +135,32 @@ async def list_audit_logs(
     search: str | None = Query(None, min_length=2, max_length=200),
 ) -> AuditLogListResponse:
     """List audit logs with optional filters. Requires audit.view permission."""
-    # Validate filter inputs against whitelists
-    action = validate_against_whitelist(action, ALLOWED_ACTIONS)
-    resource_type = validate_against_whitelist(resource_type, ALLOWED_RESOURCE_TYPES)
-
-    offset = (page - 1) * page_size
-
-    # Get logs with all filters
-    logs, total = await audit_repo.get_recent(
-        limit=page_size,
-        offset=offset,
+    result = await audit_service.list_audit_logs(
+        page=page,
+        page_size=page_size,
         action=action,
         resource_type=resource_type,
         admin_user_id=admin_user_id,
         date_from=date_from,
         date_to=date_to,
         search=search,
+        allowed_actions=ALLOWED_ACTIONS,
+        allowed_resource_types=ALLOWED_RESOURCE_TYPES,
     )
 
-    # Fetch admin user emails via repository
-    user_ids = {log.admin_user_id for log in logs if log.admin_user_id}
-    user_emails = await user_repo.get_emails_by_ids(user_ids)
-
-    items = [
-        AuditLogResponse(
-            id=log.id,
-            admin_user_id=log.admin_user_id,
-            admin_user_email=user_emails.get(log.admin_user_id) if log.admin_user_id else None,
-            action=log.action,
-            resource_type=log.resource_type,
-            resource_id=log.resource_id,
-            changes=log.changes,
-            ip_address=str(log.ip_address) if log.ip_address else None,
-            created_at=log.created_at,
-        )
-        for log in logs
-    ]
-
-    total_pages = (total + page_size - 1) // page_size
-
     return AuditLogListResponse(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
+        items=[AuditLogResponse(**item) for item in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"],
     )
 
 
 @router.get("/export")
 async def export_audit_logs(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_EXPORT))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     format: str = Query("csv", pattern="^(csv|json)$"),
     limit: int = Query(MAX_EXPORT_RECORDS, ge=1, le=MAX_EXPORT_RECORDS),
     action: str | None = Query(None),
@@ -221,89 +175,33 @@ async def export_audit_logs(
     Args:
         limit: Number of records to export (1-10000, default 10000)
     """
-    # Validate filter inputs against whitelists
-    action = validate_against_whitelist(action, ALLOWED_ACTIONS)
-    resource_type = validate_against_whitelist(resource_type, ALLOWED_RESOURCE_TYPES)
-
-    # Get matching logs with user-specified limit (capped at MAX_EXPORT_RECORDS)
-    logs, total = await audit_repo.get_recent(
+    content, media_type, filename = await audit_service.export_audit_logs(
+        export_format=format,
         limit=limit,
-        offset=0,
         action=action,
         resource_type=resource_type,
         admin_user_id=admin_user_id,
         date_from=date_from,
         date_to=date_to,
         search=search,
+        allowed_actions=ALLOWED_ACTIONS,
+        allowed_resource_types=ALLOWED_RESOURCE_TYPES,
     )
 
-    # Fetch admin user emails
-    user_ids = {log.admin_user_id for log in logs if log.admin_user_id}
-    user_emails = await user_repo.get_emails_by_ids(user_ids)
-
-    if format == "json":
-        # JSON export
-        data = [
-            {
-                "id": str(log.id),
-                "timestamp": log.created_at.isoformat(),
-                "user_email": user_emails.get(log.admin_user_id) if log.admin_user_id else None,
-                "action": log.action,
-                "resource_type": log.resource_type,
-                "resource_id": str(log.resource_id) if log.resource_id else None,
-                "changes": log.changes,
-                "ip_address": str(log.ip_address) if log.ip_address else None,
-            }
-            for log in logs
-        ]
-        content = json.dumps(data, indent=2, ensure_ascii=False)
-        return StreamingResponse(
-            iter([content]),
-            media_type="application/json",
-            headers={"Content-Disposition": "attachment; filename=audit_log.json"},
-        )
-    else:
-        # CSV export
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "Timestamp",
-                "User",
-                "Action",
-                "Resource Type",
-                "Resource ID",
-                "Changes",
-                "IP Address",
-            ]
-        )
-        for log in logs:
-            writer.writerow(
-                [
-                    log.created_at.isoformat(),
-                    user_emails.get(log.admin_user_id) if log.admin_user_id else "System",
-                    log.action,
-                    log.resource_type,
-                    str(log.resource_id) if log.resource_id else "",
-                    json.dumps(log.changes, ensure_ascii=False) if log.changes else "",
-                    str(log.ip_address) if log.ip_address else "",
-                ]
-            )
-        content = output.getvalue()
-        return StreamingResponse(
-            iter([content]),
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=audit_log.csv"},
-        )
+    return StreamingResponse(
+        iter([content]),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/users", response_model=AuditUsersListResponse)
 async def list_audit_users(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> AuditUsersListResponse:
     """Get list of users who have audit log entries. Requires audit.view permission."""
-    users = await audit_repo.get_distinct_users()
+    users = await audit_service.list_audit_users()
     return AuditUsersListResponse(
         items=[AuditUserResponse(id=user_id, email=email) for user_id, email in users]
     )
@@ -312,20 +210,20 @@ async def list_audit_users(
 @router.get("/resource-types", response_model=ResourceTypesResponse)
 async def list_resource_types(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> ResourceTypesResponse:
     """Get list of unique resource types. Requires audit.view permission."""
-    resource_types = await audit_repo.get_distinct_resource_types()
+    resource_types = await audit_service.list_resource_types()
     return ResourceTypesResponse(resource_types=resource_types)
 
 
 @router.get("/actions", response_model=ActionsResponse)
 async def list_actions(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> ActionsResponse:
     """Get list of unique actions. Requires audit.view permission."""
-    actions = await audit_repo.get_distinct_actions()
+    actions = await audit_service.list_actions()
     return ActionsResponse(actions=actions)
 
 
@@ -333,31 +231,15 @@ async def list_actions(
 async def get_audit_log(
     log_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
-    audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> AuditLogResponse:
     """Get a single audit log entry. Requires audit.view permission."""
-    log = await audit_repo.get_by_id(log_id)
+    result = await audit_service.get_audit_log(log_id)
 
-    if not log:
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Audit log not found",
         )
 
-    # Get admin user email via repository
-    admin_email = None
-    if log.admin_user_id:
-        admin_email = await user_repo.get_email_by_id(log.admin_user_id)
-
-    return AuditLogResponse(
-        id=log.id,
-        admin_user_id=log.admin_user_id,
-        admin_user_email=admin_email,
-        action=log.action,
-        resource_type=log.resource_type,
-        resource_id=log.resource_id,
-        changes=log.changes,
-        ip_address=str(log.ip_address) if log.ip_address else None,
-        created_at=log.created_at,
-    )
+    return AuditLogResponse(**result)

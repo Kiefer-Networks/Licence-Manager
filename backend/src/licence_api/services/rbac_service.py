@@ -193,7 +193,7 @@ class RbacService:
             # Revoke all sessions when deactivating a user
             if was_active and not request.is_active:
                 await self.token_repo.revoke_all_for_user(user_id)
-                logger.info(f"Deactivated user {user.email} and revoked all sessions")
+                logger.info(f"Deactivated user_id={user.id} and revoked all sessions")
 
         # Update roles if provided
         if request.role_codes is not None:

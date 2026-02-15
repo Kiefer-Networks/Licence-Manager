@@ -2,30 +2,25 @@
 
 Architecture Note (MVC-06):
     This service manages the lifecycle state transitions for licenses, packages, and
-    organization licenses. It uses direct SQLAlchemy access because:
-    1. Cancellation/renewal operations modify multiple related fields atomically
-    2. State transitions require immediate consistency (status + dates + metadata)
-    3. Operations span multiple entity types (License, Package, OrgLicense) with
-       similar but distinct field sets that don't fit a generic repository pattern
-    4. Each operation is a single-entity update with business-specific field logic
-    5. Transaction commit is done here to ensure atomic state changes
-
-    The service is intentionally thin and focused on state management rather than
-    complex queries, keeping the cancellation business logic in one place.
+    organization licenses. It delegates all database queries to the appropriate
+    repositories (LicenseRepository, LicensePackageRepository,
+    OrganizationLicenseRepository) and keeps only transaction management
+    (commit/flush) and business logic in the service layer.
 """
 
 import logging
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from licence_api.models.domain.license import LicenseStatus
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
 from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
+from licence_api.repositories.license_package_repository import LicensePackageRepository
+from licence_api.repositories.license_repository import LicenseRepository
+from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.services.notification_service import NotificationService
@@ -42,6 +37,9 @@ class CancellationService:
         self.notification_service = NotificationService(session)
         self.settings_repo = SettingsRepository(session)
         self.user_repo = UserRepository(session)
+        self.license_repo = LicenseRepository(session)
+        self.package_repo = LicensePackageRepository(session)
+        self.org_license_repo = OrganizationLicenseRepository(session)
 
     async def _get_slack_token(self) -> str | None:
         """Get Slack bot token from settings."""
@@ -74,12 +72,7 @@ class CancellationService:
         Raises:
             ValueError: If license not found
         """
-        result = await self.session.execute(
-            select(LicenseORM)
-            .options(selectinload(LicenseORM.provider))
-            .where(LicenseORM.id == license_id)
-        )
-        license_orm = result.scalar_one_or_none()
+        license_orm = await self.license_repo.get_by_id_with_provider(license_id)
 
         if license_orm is None:
             raise ValueError(f"License {license_id} not found")
@@ -139,12 +132,7 @@ class CancellationService:
         Raises:
             ValueError: If package not found
         """
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(LicensePackageORM.id == package_id)
-        )
-        package = result.scalar_one_or_none()
+        package = await self.package_repo.get_by_id_with_provider(package_id)
 
         if package is None:
             raise ValueError(f"Package {package_id} not found")
@@ -204,12 +192,7 @@ class CancellationService:
         Raises:
             ValueError: If org license not found
         """
-        result = await self.session.execute(
-            select(OrganizationLicenseORM)
-            .options(selectinload(OrganizationLicenseORM.provider))
-            .where(OrganizationLicenseORM.id == org_license_id)
-        )
-        org_license = result.scalar_one_or_none()
+        org_license = await self.org_license_repo.get_by_id_with_provider(org_license_id)
 
         if org_license is None:
             raise ValueError(f"Organization license {org_license_id} not found")
@@ -267,12 +250,7 @@ class CancellationService:
         Raises:
             ValueError: If license not found
         """
-        result = await self.session.execute(
-            select(LicenseORM)
-            .options(selectinload(LicenseORM.provider))
-            .where(LicenseORM.id == license_id)
-        )
-        license_orm = result.scalar_one_or_none()
+        license_orm = await self.license_repo.get_by_id_with_provider(license_id)
 
         if license_orm is None:
             raise ValueError(f"License {license_id} not found")
@@ -338,12 +316,7 @@ class CancellationService:
         Raises:
             ValueError: If package not found
         """
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(LicensePackageORM.id == package_id)
-        )
-        package = result.scalar_one_or_none()
+        package = await self.package_repo.get_by_id_with_provider(package_id)
 
         if package is None:
             raise ValueError(f"Package {package_id} not found")
@@ -405,12 +378,7 @@ class CancellationService:
         Raises:
             ValueError: If license not found
         """
-        result = await self.session.execute(
-            select(LicenseORM)
-            .options(selectinload(LicenseORM.provider))
-            .where(LicenseORM.id == license_id)
-        )
-        license_orm = result.scalar_one_or_none()
+        license_orm = await self.license_repo.get_by_id_with_provider(license_id)
 
         if license_orm is None:
             raise ValueError(f"License {license_id} not found")
@@ -461,12 +429,7 @@ class CancellationService:
         Raises:
             ValueError: If package not found
         """
-        result = await self.session.execute(
-            select(LicensePackageORM)
-            .options(selectinload(LicensePackageORM.provider))
-            .where(LicensePackageORM.id == package_id)
-        )
-        package = result.scalar_one_or_none()
+        package = await self.package_repo.get_by_id_with_provider(package_id)
 
         if package is None:
             raise ValueError(f"Package {package_id} not found")
@@ -521,12 +484,7 @@ class CancellationService:
         Raises:
             ValueError: If org license not found
         """
-        result = await self.session.execute(
-            select(OrganizationLicenseORM)
-            .options(selectinload(OrganizationLicenseORM.provider))
-            .where(OrganizationLicenseORM.id == org_license_id)
-        )
-        org_license = result.scalar_one_or_none()
+        org_license = await self.org_license_repo.get_by_id_with_provider(org_license_id)
 
         if org_license is None:
             raise ValueError(f"Organization license {org_license_id} not found")
@@ -590,12 +548,7 @@ class CancellationService:
         Raises:
             ValueError: If org license not found
         """
-        result = await self.session.execute(
-            select(OrganizationLicenseORM)
-            .options(selectinload(OrganizationLicenseORM.provider))
-            .where(OrganizationLicenseORM.id == org_license_id)
-        )
-        org_license = result.scalar_one_or_none()
+        org_license = await self.org_license_repo.get_by_id_with_provider(org_license_id)
 
         if org_license is None:
             raise ValueError(f"Organization license {org_license_id} not found")

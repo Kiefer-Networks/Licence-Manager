@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
@@ -13,24 +12,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { api, Employee, EmployeeSource, Provider } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import { Search, Users, Bot, ShieldCheck, CheckCircle, AlertCircle, Info, Upload, UserPlus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { ServiceAccountsTab } from '@/components/users/ServiceAccountsTab';
 import { AdminAccountsTab } from '@/components/users/AdminAccountsTab';
 import { EmployeeTable, mapEmployeeToTableData } from '@/components/users/EmployeeTable';
 import { ManualEmployeeDialog } from '@/components/users/ManualEmployeeDialog';
 import { EmployeeBulkImportDialog } from '@/components/users/EmployeeBulkImportDialog';
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
+import { useEmployees } from '@/hooks/use-employees';
 
 export default function UsersPage() {
   const t = useTranslations('employees');
@@ -39,81 +27,36 @@ export default function UsersPage() {
   const tServiceAccounts = useTranslations('serviceAccounts');
   const tAdminAccounts = useTranslations('adminAccounts');
 
-  const router = useRouter();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [selectedSource, setSelectedSource] = useState<string>('all');
-  const [sortColumn, setSortColumn] = useState<string>('full_name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [activeTab, setActiveTab] = useState<string>('employees');
-  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-
-  // Manual employee dialogs
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-
-  const showToast = (type: 'success' | 'error' | 'info', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const debouncedSearch = useDebounce(search, 300);
-
-  const handleSort = (column: string) => {
-    setPage(1); // Reset to first page when sorting changes
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  useEffect(() => {
-    Promise.all([
-      api.getDepartments(),
-      api.getProviders(),
-    ]).then(([departmentsData, providersData]) => {
-      setDepartments(departmentsData);
-      setProviders(providersData.items);
-    }).catch((e) => handleSilentError('getDepartments', e));
-  }, []);
-
-  // Reset page to 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, selectedStatus, selectedDepartment, selectedSource]);
-
-  const loadEmployees = () => {
-    setLoading(true);
-    api.getEmployees({
-      page,
-      search: debouncedSearch || undefined,
-      status: selectedStatus !== 'all' ? selectedStatus : undefined,
-      department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
-      source: selectedSource !== 'all' ? (selectedSource as EmployeeSource) : undefined,
-      sort_by: sortColumn,
-      sort_dir: sortDirection,
-    }).then((data) => {
-      setEmployees(data.items);
-      setTotal(data.total);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    loadEmployees();
-  }, [page, debouncedSearch, selectedStatus, selectedDepartment, selectedSource, sortColumn, sortDirection]);
-
-  const pageSize = 50;
-  const totalPages = Math.ceil(total / pageSize);
+  const {
+    employees,
+    providers,
+    departments,
+    loading,
+    total,
+    toast,
+    search,
+    setSearch,
+    selectedStatus,
+    setSelectedStatus,
+    selectedDepartment,
+    setSelectedDepartment,
+    selectedSource,
+    setSelectedSource,
+    sortColumn,
+    sortDirection,
+    handleSort,
+    page,
+    setPage,
+    totalPages,
+    activeTab,
+    setActiveTab,
+    showAddEmployee,
+    setShowAddEmployee,
+    showImportDialog,
+    setShowImportDialog,
+    showToast,
+    loadEmployees,
+  } = useEmployees();
 
   return (
     <AppLayout>

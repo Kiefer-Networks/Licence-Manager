@@ -1,6 +1,10 @@
 """Audit service for centralized audit logging."""
 
+import csv
+import io
+import json
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -8,6 +12,8 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.repositories.audit_repository import AuditRepository
+from licence_api.repositories.user_repository import UserRepository
+from licence_api.utils.validation import validate_against_whitelist
 
 if TYPE_CHECKING:
     from licence_api.models.domain.admin_user import AdminUser
@@ -166,6 +172,7 @@ class AuditService:
         """
         self.session = session
         self.audit_repo = AuditRepository(session)
+        self.user_repo = UserRepository(session)
 
     @classmethod
     def _mask_sensitive_data(cls, data: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -384,3 +391,242 @@ class AuditService:
             return request.client.host
 
         return "unknown"
+
+    # =========================================================================
+    # Read / Query methods
+    # =========================================================================
+
+    async def list_audit_logs(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        action: str | None = None,
+        resource_type: str | None = None,
+        admin_user_id: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        search: str | None = None,
+        allowed_actions: set[str] | None = None,
+        allowed_resource_types: set[str] | None = None,
+    ) -> dict[str, Any]:
+        """List audit logs with optional filters and email enrichment.
+
+        Args:
+            page: Page number (1-based)
+            page_size: Number of items per page
+            action: Filter by action
+            resource_type: Filter by resource type
+            admin_user_id: Filter by admin user ID
+            date_from: Filter by minimum date
+            date_to: Filter by maximum date
+            search: Full-text search string
+            allowed_actions: Whitelist of allowed action values for validation
+            allowed_resource_types: Whitelist of allowed resource type values for validation
+
+        Returns:
+            Dict with items, total, page, page_size, total_pages
+        """
+        # Validate filter inputs against whitelists
+        if allowed_actions is not None:
+            action = validate_against_whitelist(action, allowed_actions)
+        if allowed_resource_types is not None:
+            resource_type = validate_against_whitelist(resource_type, allowed_resource_types)
+
+        offset = (page - 1) * page_size
+
+        logs, total = await self.audit_repo.get_recent(
+            limit=page_size,
+            offset=offset,
+            action=action,
+            resource_type=resource_type,
+            admin_user_id=admin_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+        )
+
+        # Enrich with admin user emails
+        user_ids = {log.admin_user_id for log in logs if log.admin_user_id}
+        user_emails = await self.user_repo.get_emails_by_ids(user_ids)
+
+        items = [
+            {
+                "id": log.id,
+                "admin_user_id": log.admin_user_id,
+                "admin_user_email": user_emails.get(log.admin_user_id)
+                if log.admin_user_id
+                else None,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "changes": log.changes,
+                "ip_address": str(log.ip_address) if log.ip_address else None,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ]
+
+        total_pages = (total + page_size - 1) // page_size
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
+
+    async def get_audit_log(self, log_id: UUID) -> dict[str, Any] | None:
+        """Get a single audit log entry with email enrichment.
+
+        Args:
+            log_id: Audit log UUID
+
+        Returns:
+            Dict with audit log data, or None if not found
+        """
+        log = await self.audit_repo.get_by_id(log_id)
+        if not log:
+            return None
+
+        admin_email = None
+        if log.admin_user_id:
+            admin_email = await self.user_repo.get_email_by_id(log.admin_user_id)
+
+        return {
+            "id": log.id,
+            "admin_user_id": log.admin_user_id,
+            "admin_user_email": admin_email,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "changes": log.changes,
+            "ip_address": str(log.ip_address) if log.ip_address else None,
+            "created_at": log.created_at,
+        }
+
+    async def export_audit_logs(
+        self,
+        export_format: str = "csv",
+        limit: int = 10000,
+        action: str | None = None,
+        resource_type: str | None = None,
+        admin_user_id: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        search: str | None = None,
+        allowed_actions: set[str] | None = None,
+        allowed_resource_types: set[str] | None = None,
+    ) -> tuple[str, str, str]:
+        """Export audit logs as CSV or JSON.
+
+        Args:
+            export_format: Export format ("csv" or "json")
+            limit: Maximum number of records to export
+            action: Filter by action
+            resource_type: Filter by resource type
+            admin_user_id: Filter by admin user ID
+            date_from: Filter by minimum date
+            date_to: Filter by maximum date
+            search: Full-text search string
+            allowed_actions: Whitelist of allowed action values for validation
+            allowed_resource_types: Whitelist of allowed resource type values for validation
+
+        Returns:
+            Tuple of (content, media_type, filename)
+        """
+        # Validate filter inputs against whitelists
+        if allowed_actions is not None:
+            action = validate_against_whitelist(action, allowed_actions)
+        if allowed_resource_types is not None:
+            resource_type = validate_against_whitelist(resource_type, allowed_resource_types)
+
+        logs, total = await self.audit_repo.get_recent(
+            limit=limit,
+            offset=0,
+            action=action,
+            resource_type=resource_type,
+            admin_user_id=admin_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+        )
+
+        # Enrich with admin user emails
+        user_ids = {log.admin_user_id for log in logs if log.admin_user_id}
+        user_emails = await self.user_repo.get_emails_by_ids(user_ids)
+
+        if export_format == "json":
+            data = [
+                {
+                    "id": str(log.id),
+                    "timestamp": log.created_at.isoformat(),
+                    "user_email": user_emails.get(log.admin_user_id)
+                    if log.admin_user_id
+                    else None,
+                    "action": log.action,
+                    "resource_type": log.resource_type,
+                    "resource_id": str(log.resource_id) if log.resource_id else None,
+                    "changes": log.changes,
+                    "ip_address": str(log.ip_address) if log.ip_address else None,
+                }
+                for log in logs
+            ]
+            content = json.dumps(data, indent=2, ensure_ascii=False)
+            return content, "application/json", "audit_log.json"
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "Timestamp",
+                    "User",
+                    "Action",
+                    "Resource Type",
+                    "Resource ID",
+                    "Changes",
+                    "IP Address",
+                ]
+            )
+            for log in logs:
+                writer.writerow(
+                    [
+                        log.created_at.isoformat(),
+                        user_emails.get(log.admin_user_id)
+                        if log.admin_user_id
+                        else "System",
+                        log.action,
+                        log.resource_type,
+                        str(log.resource_id) if log.resource_id else "",
+                        json.dumps(log.changes, ensure_ascii=False)
+                        if log.changes
+                        else "",
+                        str(log.ip_address) if log.ip_address else "",
+                    ]
+                )
+            content = output.getvalue()
+            return content, "text/csv; charset=utf-8", "audit_log.csv"
+
+    async def list_audit_users(self) -> list[tuple[UUID, str]]:
+        """Get list of users who have audit log entries.
+
+        Returns:
+            List of (user_id, email) tuples
+        """
+        return await self.audit_repo.get_distinct_users()
+
+    async def list_resource_types(self) -> list[str]:
+        """Get list of unique resource types.
+
+        Returns:
+            List of unique resource type strings
+        """
+        return await self.audit_repo.get_distinct_resource_types()
+
+    async def list_actions(self) -> list[str]:
+        """Get list of unique actions.
+
+        Returns:
+            List of unique action strings
+        """
+        return await self.audit_repo.get_distinct_actions()
