@@ -54,6 +54,22 @@ from licence_api.security.rate_limit import limiter
 from licence_api.services.permission_sync_service import sync_system_role_permissions
 from licence_api.tasks.scheduler import start_scheduler, stop_scheduler
 
+logger = __import__("logging").getLogger(__name__)
+
+
+async def _ensure_cost_snapshot() -> None:
+    """Ensure a cost snapshot exists for the current month."""
+    from licence_api.database import async_session_maker
+    from licence_api.services.cost_snapshot_service import CostSnapshotService
+
+    try:
+        async with async_session_maker() as session:
+            service = CostSnapshotService(session)
+            await service.ensure_current_snapshot_exists()
+            logger.info("Cost snapshot verified for current month")
+    except Exception as e:
+        logger.warning(f"Failed to ensure cost snapshot: {e}")
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware to add security headers to all responses."""
@@ -91,6 +107,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     # Sync system role permissions (adds new permissions to admin/auditor roles)
     await sync_system_role_permissions()
+
+    # Ensure current month cost snapshot exists for forecasting
+    await _ensure_cost_snapshot()
+
     await start_scheduler()
     yield
     # Shutdown

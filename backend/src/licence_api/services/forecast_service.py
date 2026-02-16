@@ -100,6 +100,13 @@ class ForecastService:
         self.session = session
         self.repo = ForecastRepository(session)
 
+    async def _ensure_snapshots(self) -> None:
+        """Create cost snapshots from live data if none exist."""
+        from licence_api.services.cost_snapshot_service import CostSnapshotService
+
+        service = CostSnapshotService(self.session)
+        await service.ensure_current_snapshot_exists()
+
     async def get_forecast(
         self,
         months: int = 12,
@@ -120,6 +127,13 @@ class ForecastService:
         history = await self.repo.get_cost_history(
             months=24, provider_id=provider_id
         )
+
+        # Fallback: if no snapshots exist, create them on-the-fly from live data
+        if not history and not provider_id:
+            await self._ensure_snapshots()
+            history = await self.repo.get_cost_history(
+                months=24, provider_id=provider_id
+            )
 
         # Build total forecast data points
         data_points = self._build_forecast(history, months)

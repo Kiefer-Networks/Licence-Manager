@@ -254,6 +254,23 @@ async def check_expiring_licenses_job() -> None:
             await session.rollback()
 
 
+async def create_cost_snapshots_job() -> None:
+    """Background job to create monthly cost snapshots for forecasting."""
+    from licence_api.database import async_session_maker
+    from licence_api.services.cost_snapshot_service import CostSnapshotService
+
+    logger.info("Creating monthly cost snapshots")
+
+    async with async_session_maker() as session:
+        try:
+            service = CostSnapshotService(session)
+            snapshots = await service.create_monthly_snapshot()
+            logger.info(f"Cost snapshots created: {len(snapshots)} entries")
+        except Exception as e:
+            logger.error(f"Cost snapshot creation failed: {e}")
+            await session.rollback()
+
+
 async def start_scheduler() -> None:
     """Start the background task scheduler."""
     global _scheduler
@@ -295,6 +312,15 @@ async def start_scheduler() -> None:
         trigger=IntervalTrigger(hours=24),
         id="check_expiring_licenses",
         name="Check expiring licenses",
+        replace_existing=True,
+    )
+
+    # Schedule cost snapshot creation (daily at 01:00)
+    _scheduler.add_job(
+        create_cost_snapshots_job,
+        trigger=CronTrigger(hour=1, minute=0),
+        id="create_cost_snapshots",
+        name="Create cost snapshots",
         replace_existing=True,
     )
 
