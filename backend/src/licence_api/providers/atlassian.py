@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -69,7 +70,7 @@ class AtlassianProvider(BaseProvider):
             async with httpx.AsyncClient() as client:
                 # Test Admin API access
                 response = await client.get(
-                    f"{self.ADMIN_API_BASE}/admin/v1/orgs/{self.org_id}",
+                    f"{self.ADMIN_API_BASE}/admin/v1/orgs/{quote(self.org_id, safe='')}",
                     headers=self._get_bearer_headers(),
                     timeout=10.0,
                 )
@@ -90,7 +91,7 @@ class AtlassianProvider(BaseProvider):
             # First, get organization info
             try:
                 org_response = await client.get(
-                    f"{self.ADMIN_API_BASE}/admin/v1/orgs/{self.org_id}",
+                    f"{self.ADMIN_API_BASE}/admin/v1/orgs/{quote(self.org_id, safe='')}",
                     headers=self._get_bearer_headers(),
                     timeout=30.0,
                 )
@@ -107,7 +108,7 @@ class AtlassianProvider(BaseProvider):
             # Fetch users with pagination
             cursor = None
             while True:
-                url = f"{self.ADMIN_API_BASE}/admin/v1/orgs/{self.org_id}/users"
+                url = f"{self.ADMIN_API_BASE}/admin/v1/orgs/{quote(self.org_id, safe='')}/users"
                 params: dict[str, Any] = {"maxResults": 100}
                 if cursor:
                     params["cursor"] = cursor
@@ -222,7 +223,7 @@ class AtlassianProvider(BaseProvider):
         async with httpx.AsyncClient() as client:
             # Get managed products
             response = await client.get(
-                f"{self.ADMIN_API_BASE}/admin/v1/orgs/{self.org_id}/products",
+                f"{self.ADMIN_API_BASE}/admin/v1/orgs/{quote(self.org_id, safe='')}/products",
                 headers=self._get_bearer_headers(),
                 timeout=30.0,
             )

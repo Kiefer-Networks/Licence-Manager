@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -36,7 +37,9 @@ class GitLabProvider(BaseProvider):
         # Normalize URL
         if base_url:
             base_url = base_url.removeprefix("https://").removeprefix("http://")
-            self.base_url = f"https://{base_url}/api/v4"
+            self.base_url = urljoin(
+                f"https://{quote(base_url, safe='.:@/')}", "/api/v4"
+            )
             self.is_self_hosted = True
         else:
             self.base_url = self.DEFAULT_BASE_URL
@@ -66,7 +69,7 @@ class GitLabProvider(BaseProvider):
                     if not self.group_id:
                         return False
                     response = await client.get(
-                        f"{self.base_url}/groups/{self.group_id}",
+                        f"{self.base_url}/groups/{quote(str(self.group_id), safe='')}",
                         headers=self._get_headers(),
                         timeout=10.0,
                     )
@@ -202,7 +205,7 @@ class GitLabProvider(BaseProvider):
         async with httpx.AsyncClient() as client:
             while True:
                 response = await client.get(
-                    f"{self.base_url}/groups/{self.group_id}/members/all",
+                    f"{self.base_url}/groups/{quote(str(self.group_id), safe='')}/members/all",
                     headers=self._get_headers(),
                     params={"per_page": per_page, "page": page},
                     timeout=30.0,
@@ -224,7 +227,7 @@ class GitLabProvider(BaseProvider):
                     user_data = {}
                     try:
                         user_response = await client.get(
-                            f"{self.base_url}/users/{user_id}",
+                            f"{self.base_url}/users/{quote(str(user_id), safe='')}",
                             headers=self._get_headers(),
                             timeout=10.0,
                         )

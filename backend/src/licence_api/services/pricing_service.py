@@ -415,6 +415,49 @@ class PricingService:
             return Decimal("0")
 
     @staticmethod
+    def build_package_pricing_dict(package_pricing: Any) -> dict | None:
+        """Build package pricing dictionary from a package pricing object.
+
+        Args:
+            package_pricing: Package pricing object with cost, currency, etc.
+
+        Returns:
+            Dict with package pricing info, or None if no valid cost provided
+        """
+        if package_pricing and package_pricing.cost:
+            return {
+                "cost": package_pricing.cost,
+                "currency": package_pricing.currency,
+                "billing_cycle": package_pricing.billing_cycle,
+                "next_billing_date": package_pricing.next_billing_date,
+                "notes": package_pricing.notes,
+            }
+        return None
+
+    @staticmethod
+    def build_individual_pricing_config_dict(pricing_list: list) -> dict:
+        """Build individual pricing config dictionary from a list of pricing objects.
+
+        Args:
+            pricing_list: List of pricing objects with license_type, cost, currency, etc.
+
+        Returns:
+            Dict mapping license_type to pricing info
+        """
+        individual_pricing_config = {}
+        for p in pricing_list:
+            individual_pricing_config[p.license_type] = {
+                "cost": p.cost,
+                "currency": p.currency,
+                "billing_cycle": p.billing_cycle,
+                "payment_frequency": p.payment_frequency,
+                "display_name": p.display_name,
+                "next_billing_date": p.next_billing_date,
+                "notes": p.notes,
+            }
+        return individual_pricing_config
+
+    @staticmethod
     def build_pricing_config_dict(pricing_list: list) -> dict:
         """Build pricing config dictionary from a list of pricing objects.
 

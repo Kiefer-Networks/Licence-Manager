@@ -174,29 +174,16 @@ async def bulk_link_accounts(
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
 ) -> BulkLinkResponse:
     """Bulk link multiple external accounts."""
-    linked = 0
-    skipped = 0
-    errors = []
-
-    for link in data.links:
-        try:
-            await service.link_account(
-                employee_id=link.employee_id,
-                provider_type=link.provider_type,
-                external_username=link.external_username,
-                external_user_id=link.external_user_id,
-                display_name=link.display_name,
-                user=current_user,
-                request=request,
-            )
-            linked += 1
-        except ValueError as e:
-            if "already linked" in str(e).lower():
-                skipped += 1
-            else:
-                errors.append(f"{link.external_username}: {str(e)}")
-
-    return BulkLinkResponse(linked=linked, skipped=skipped, errors=errors)
+    result = await service.bulk_link_accounts(
+        links=data.links,
+        user=current_user,
+        request=request,
+    )
+    return BulkLinkResponse(
+        linked=result["linked"],
+        skipped=result["skipped"],
+        errors=result["errors"],
+    )
 
 
 # Lookup by external username

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -24,8 +25,8 @@ class OnePasswordProvider(BaseProvider):
         sign_in_address = credentials.get("sign_in_address", "").rstrip("/")
         # SCIM bridge URL format
         if sign_in_address and not sign_in_address.startswith("http"):
-            sign_in_address = f"https://{sign_in_address}"
-        self.base_url = f"{sign_in_address}/scim/v2" if sign_in_address else ""
+            sign_in_address = f"https://{quote(sign_in_address, safe='.:@')}"
+        self.base_url = urljoin(sign_in_address + "/", "scim/v2") if sign_in_address else ""
 
     def _get_headers(self) -> dict[str, str]:
         """Get request headers with authentication."""

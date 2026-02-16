@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -30,6 +31,7 @@ class Auth0Provider(BaseProvider):
         self.domain = credentials.get("domain", "").rstrip("/")
         self.client_id = credentials.get("client_id", "")
         self.client_secret = credentials.get("client_secret", "")
+        self.base_url = f"https://{quote(self.domain, safe='.:@')}"
         self._access_token: str | None = None
 
     async def _get_access_token(self) -> str:
@@ -43,12 +45,12 @@ class Auth0Provider(BaseProvider):
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://{self.domain}/oauth/token",
+                urljoin(self.base_url, "/oauth/token"),
                 json={
                     "grant_type": "client_credentials",
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
-                    "audience": f"https://{self.domain}/api/v2/",
+                    "audience": urljoin(self.base_url, "/api/v2/"),
                 },
                 timeout=10.0,
             )
@@ -75,7 +77,7 @@ class Auth0Provider(BaseProvider):
             async with httpx.AsyncClient() as client:
                 # Test by fetching tenant settings
                 response = await client.get(
-                    f"https://{self.domain}/api/v2/tenants/settings",
+                    urljoin(self.base_url, "/api/v2/tenants/settings"),
                     headers=self._get_headers(token),
                     timeout=10.0,
                 )
@@ -102,7 +104,7 @@ class Auth0Provider(BaseProvider):
 
             while True:
                 response = await client.get(
-                    f"https://{self.domain}/api/v2/users",
+                    urljoin(self.base_url, "/api/v2/users"),
                     headers=self._get_headers(token),
                     params={
                         "page": page,

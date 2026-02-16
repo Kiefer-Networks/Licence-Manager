@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -88,7 +89,7 @@ class AdobeProvider(BaseProvider):
             async with httpx.AsyncClient() as client:
                 # Test by getting organization info
                 response = await client.get(
-                    f"{self.BASE_URL}/organizations/{self.org_id}/users",
+                    f"{self.BASE_URL}/organizations/{quote(self.org_id, safe='')}/users",
                     headers=self._get_headers(access_token),
                     params={"page": 0, "size": 1},
                     timeout=10.0,
@@ -111,7 +112,7 @@ class AdobeProvider(BaseProvider):
             page = 0
             while True:
                 response = await client.get(
-                    f"{self.BASE_URL}/organizations/{self.org_id}/users",
+                    f"{self.BASE_URL}/organizations/{quote(self.org_id, safe='')}/users",
                     headers=self._get_headers(access_token),
                     params={"page": page, "size": 100},
                     timeout=30.0,

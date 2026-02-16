@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -42,7 +43,7 @@ class GitHubProvider(BaseProvider):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.BASE_URL}/orgs/{self.org_name}",
+                    f"{self.BASE_URL}/orgs/{quote(self.org_name, safe='')}",
                     headers=self._get_headers(),
                     timeout=10.0,
                 )
@@ -64,7 +65,7 @@ class GitHubProvider(BaseProvider):
             # Fetch organization members
             while True:
                 response = await client.get(
-                    f"{self.BASE_URL}/orgs/{self.org_name}/members",
+                    f"{self.BASE_URL}/orgs/{quote(self.org_name, safe='')}/members",
                     headers=self._get_headers(),
                     params={"per_page": per_page, "page": page},
                     timeout=30.0,
@@ -81,7 +82,7 @@ class GitHubProvider(BaseProvider):
 
                     # Get user details including email
                     user_response = await client.get(
-                        f"{self.BASE_URL}/users/{username}",
+                        f"{self.BASE_URL}/users/{quote(username, safe='')}",
                         headers=self._get_headers(),
                         timeout=10.0,
                     )
@@ -92,7 +93,7 @@ class GitHubProvider(BaseProvider):
 
                     # Get membership details
                     membership_response = await client.get(
-                        f"{self.BASE_URL}/orgs/{self.org_name}/memberships/{username}",
+                        f"{self.BASE_URL}/orgs/{quote(self.org_name, safe='')}/memberships/{quote(username, safe='')}",
                         headers=self._get_headers(),
                         timeout=10.0,
                     )

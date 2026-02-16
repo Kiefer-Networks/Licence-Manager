@@ -55,7 +55,7 @@ async def download_template(
     )
 
 
-@router.post("/{provider_id}/import/upload", response_model=ImportUploadResponse)
+@router.post("/{provider_id}/import/upload", response_model=ImportUploadResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def upload_import_file(
     request: Request,
@@ -135,7 +135,7 @@ async def validate_import(
         )
 
 
-@router.post("/{provider_id}/import/execute", response_model=ImportExecuteResponse)
+@router.post("/{provider_id}/import/execute", response_model=ImportExecuteResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/hour")
 async def execute_import(
     request: Request,

@@ -553,15 +553,7 @@ async def update_provider_pricing(
     pricing_config = PricingService.build_pricing_config_dict(body.pricing)
 
     # Build package pricing config
-    package_pricing = None
-    if body.package_pricing and body.package_pricing.cost:
-        package_pricing = {
-            "cost": body.package_pricing.cost,
-            "currency": body.package_pricing.currency,
-            "billing_cycle": body.package_pricing.billing_cycle,
-            "next_billing_date": body.package_pricing.next_billing_date,
-            "notes": body.package_pricing.notes,
-        }
+    package_pricing = PricingService.build_package_pricing_dict(body.package_pricing)
 
     # Use pricing service to update (handles audit logging and commit)
     # Raises ValueError if provider not found
@@ -668,17 +660,7 @@ async def update_provider_individual_pricing(
     Requires providers.edit permission.
     """
     # Build individual pricing config
-    individual_pricing_config = {}
-    for p in body.pricing:
-        individual_pricing_config[p.license_type] = {
-            "cost": p.cost,
-            "currency": p.currency,
-            "billing_cycle": p.billing_cycle,
-            "payment_frequency": p.payment_frequency,
-            "display_name": p.display_name,
-            "next_billing_date": p.next_billing_date,
-            "notes": p.notes,
-        }
+    individual_pricing_config = PricingService.build_individual_pricing_config_dict(body.pricing)
 
     # Use pricing service to update (handles audit logging and commit)
     # Raises ValueError if provider not found

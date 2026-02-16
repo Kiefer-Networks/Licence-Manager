@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -22,7 +23,7 @@ class MattermostProvider(BaseProvider):
         super().__init__(credentials)
         self.access_token = credentials.get("access_token")
         server_url = credentials.get("server_url", "").rstrip("/")
-        self.base_url = f"{server_url}/api/v4" if server_url else ""
+        self.base_url = urljoin(server_url + "/", "api/v4") if server_url else ""
         self._license_info: dict[str, Any] | None = None
 
     def _get_headers(self) -> dict[str, str]:
@@ -249,7 +250,7 @@ class MattermostProvider(BaseProvider):
         """
         try:
             response = await client.get(
-                f"{self.base_url}/users/{user_id}/teams",
+                f"{self.base_url}/users/{quote(str(user_id), safe='')}/teams",
                 headers=self._get_headers(),
                 timeout=10.0,
             )

@@ -63,6 +63,24 @@ export interface UseLicensesReturn {
   loadLicenses: () => Promise<void>;
   clearFilters: () => void;
 
+  // Bulk actions
+  bulkActionDialog: 'remove' | 'delete' | 'unassign' | null;
+  setBulkActionDialog: (dialog: 'remove' | 'delete' | 'unassign' | null) => void;
+  bulkActionLoading: boolean;
+  handleBulkRemove: () => Promise<void>;
+  handleBulkDelete: () => Promise<void>;
+  handleBulkUnassign: () => Promise<void>;
+
+  // Toast
+  toast: { message: string; type: 'success' | 'error' } | null;
+  showToast: (message: string, type: 'success' | 'error') => void;
+
+  // Mark as / Link dialogs
+  markAsDialog: { license: License; type: 'service' | 'admin' } | null;
+  setMarkAsDialog: (dialog: { license: License; type: 'service' | 'admin' } | null) => void;
+  linkDialog: License | null;
+  setLinkDialog: (license: License | null) => void;
+
   // Tab counts
   assignedActiveCount: number;
   notInHrisActiveCount: number;
@@ -269,6 +287,71 @@ export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn
   const unassignedActiveCount = categorizedData?.unassigned.filter(l => l.status === 'active').length || 0;
   const externalActiveCount = categorizedData?.external.filter(l => l.status === 'active').length || 0;
 
+  // Bulk action dialog state
+  const [bulkActionDialog, setBulkActionDialog] = useState<'remove' | 'delete' | 'unassign' | null>(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Mark as dialog state
+  const [markAsDialog, setMarkAsDialog] = useState<{ license: License; type: 'service' | 'admin' } | null>(null);
+
+  // Link dialog state
+  const [linkDialog, setLinkDialog] = useState<License | null>(null);
+
+  // Toast handler
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  // Bulk action handlers
+  const handleBulkRemove = useCallback(async () => {
+    if (removableLicenses.length === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const result = await api.bulkRemoveFromProvider(removableLicenses.map(l => l.id));
+      showToast(`Bulk removed: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      setBulkActionDialog(null);
+      loadLicenses();
+    } catch {
+      showToast('Failed to remove licenses', 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [removableLicenses, showToast, loadLicenses]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const result = await api.bulkDeleteLicenses(Array.from(selectedIds));
+      showToast(`Bulk deleted: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      setBulkActionDialog(null);
+      loadLicenses();
+    } catch {
+      showToast('Failed to delete licenses', 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [selectedIds, showToast, loadLicenses]);
+
+  const handleBulkUnassign = useCallback(async () => {
+    if (assignedLicenses.length === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const result = await api.bulkUnassignLicenses(assignedLicenses.map(l => l.id));
+      showToast(`Bulk unassigned: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      setBulkActionDialog(null);
+      loadLicenses();
+    } catch {
+      showToast('Failed to unassign licenses', 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [assignedLicenses, showToast, loadLicenses]);
+
   return {
     // Data
     categorizedData,
@@ -319,6 +402,24 @@ export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn
     // Actions
     loadLicenses,
     clearFilters,
+
+    // Bulk actions
+    bulkActionDialog,
+    setBulkActionDialog,
+    bulkActionLoading,
+    handleBulkRemove,
+    handleBulkDelete,
+    handleBulkUnassign,
+
+    // Toast
+    toast,
+    showToast,
+
+    // Mark as / Link dialogs
+    markAsDialog,
+    setMarkAsDialog,
+    linkDialog,
+    setLinkDialog,
 
     // Tab counts
     assignedActiveCount,

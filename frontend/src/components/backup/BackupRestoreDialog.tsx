@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Upload, Loader2, AlertTriangle, Eye, EyeOff, CheckCircle2, XCircle, FileArchive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { api, BackupRestoreResponse } from '@/lib/api';
+import { BackupRestoreResponse } from '@/lib/api';
+import { useBackupRestore } from '@/hooks/use-backup-restore';
 
 interface BackupRestoreDialogProps {
   open: boolean;
@@ -31,81 +31,33 @@ export function BackupRestoreDialog({
 }: BackupRestoreDialogProps) {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
-  const [file, setFile] = useState<File | null>(null);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<BackupRestoreResponse | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
 
-  const canSubmit = file && password.length >= 8 && confirmed && !result;
-
-  const handleFileSelect = (selectedFile: File) => {
-    if (selectedFile.name.endsWith('.lcbak')) {
-      setFile(selectedFile);
-      setError(null);
-    } else {
-      setError(t('selectBackupFile'));
-      setFile(null);
-    }
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      handleFileSelect(droppedFile);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleRestore = async () => {
-    if (!file || !canSubmit) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await api.restoreBackup(file, password);
-      setResult(response);
-
-      if (response.success) {
-        onSuccess?.(response);
-      } else {
-        setError(response.error || t('restoreFailed'));
-        onError?.(response.error || t('restoreFailed'));
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('restoreFailed');
-      setError(message);
-      onError?.(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleClose = () => {
-    if (!isLoading) {
-      setFile(null);
-      setPassword('');
-      setConfirmed(false);
-      setError(null);
-      setResult(null);
-      onOpenChange(false);
-    }
-  };
+  const {
+    file,
+    password,
+    setPassword,
+    showPassword,
+    setShowPassword,
+    confirmed,
+    setConfirmed,
+    isLoading,
+    error,
+    result,
+    isDragging,
+    canSubmit,
+    handleFileSelect,
+    handleDrop,
+    handleDragOver,
+    handleDragLeave,
+    handleRestore,
+    handleClose,
+  } = useBackupRestore({
+    onOpenChange,
+    onSuccess,
+    onError,
+    fallbackErrorMessage: t('restoreFailed'),
+    invalidFileMessage: t('selectBackupFile'),
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

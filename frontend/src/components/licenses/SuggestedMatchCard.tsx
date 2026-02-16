@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, X, UserPlus, Loader2, AlertCircle } from 'lucide-react';
-import { api, License } from '@/lib/api';
+import { License } from '@/lib/api';
+import { useSuggestedMatch } from '@/hooks/use-suggested-match';
 
 interface SuggestedMatchCardProps {
   license: License;
@@ -23,51 +23,26 @@ interface SuggestedMatchCardProps {
 export function SuggestedMatchCard({ license, onUpdate }: SuggestedMatchCardProps) {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    isLoading,
+    error,
+    handleConfirm,
+    handleReject,
+    handleMarkAsGuest,
+  } = useSuggestedMatch({
+    licenseId: license.id,
+    onUpdate,
+    messages: {
+      failedToConfirmMatch: t('failedToConfirmMatch'),
+      failedToRejectMatch: t('failedToRejectMatch'),
+      failedToMarkAsGuest: t('failedToMarkAsGuest'),
+    },
+  });
 
   const confidence = license.match_confidence
     ? Math.round(license.match_confidence * 100)
     : 0;
-
-  const handleConfirm = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await api.confirmLicenseMatch(license.id);
-      onUpdate?.();
-    } catch (err) {
-      setError(t('failedToConfirmMatch'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleReject = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await api.rejectLicenseMatch(license.id);
-      onUpdate?.();
-    } catch (err) {
-      setError(t('failedToRejectMatch'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleMarkAsGuest = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await api.markAsExternalGuest(license.id);
-      onUpdate?.();
-    } catch (err) {
-      setError(t('failedToMarkAsGuest'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <Card className="hover:shadow-md transition-shadow">

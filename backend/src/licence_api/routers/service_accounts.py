@@ -86,8 +86,7 @@ async def create_pattern(
     Requires licenses.edit permission.
     """
     # Check if pattern already exists
-    existing_patterns = await service.get_all_patterns()
-    if any(p.email_pattern == data.email_pattern for p in existing_patterns.items):
+    if await service.check_duplicate_pattern(data.email_pattern):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An email pattern with this value already exists",
@@ -242,8 +241,7 @@ async def create_license_type(
     Requires licenses.edit permission.
     """
     # Check if license type already exists
-    existing_entries = await service.get_all_license_types()
-    if any(e.license_type.lower() == data.license_type.lower() for e in existing_entries.items):
+    if await service.check_duplicate_license_type(data.license_type):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A license type rule with this value already exists",

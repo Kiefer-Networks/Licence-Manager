@@ -12,6 +12,7 @@ See: https://developers.figma.com/docs/rest-api/scim/
 """
 
 from typing import Any
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -44,7 +45,10 @@ class FigmaProvider(BaseProvider):
         super().__init__(credentials)
         self.scim_token = credentials.get("scim_token")
         self.tenant_id = credentials.get("tenant_id")
-        self.base_url = f"https://www.figma.com/scim/v2/{self.tenant_id}"
+        self.base_url = urljoin(
+            "https://www.figma.com/",
+            f"scim/v2/{quote(str(self.tenant_id), safe='')}",
+        )
 
     def _get_headers(self) -> dict[str, str]:
         """Get API request headers for SCIM API."""

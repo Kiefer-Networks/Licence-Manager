@@ -99,6 +99,30 @@ class ServiceAccountService:
         match_count = await self.pattern_repo.get_match_count(pattern_id)
         return self._pattern_to_response(pattern, match_count)
 
+    async def check_duplicate_pattern(self, email_pattern: str) -> bool:
+        """Check if a pattern with the given email_pattern already exists.
+
+        Args:
+            email_pattern: The email pattern to check for duplicates
+
+        Returns:
+            True if a duplicate exists, False otherwise
+        """
+        existing_patterns = await self.get_all_patterns()
+        return any(p.email_pattern == email_pattern for p in existing_patterns.items)
+
+    async def check_duplicate_license_type(self, license_type: str) -> bool:
+        """Check if a license type rule with the given value already exists (case-insensitive).
+
+        Args:
+            license_type: The license type to check for duplicates
+
+        Returns:
+            True if a duplicate exists, False otherwise
+        """
+        existing_entries = await self.get_all_license_types()
+        return any(e.license_type.lower() == license_type.lower() for e in existing_entries.items)
+
     async def create_pattern(
         self,
         data: ServiceAccountPatternCreate,

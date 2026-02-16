@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,8 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { api, BackupConfig, StoredBackup, BackupListResponse } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import {
   Loader2,
   Database,
@@ -44,15 +41,14 @@ import {
   Trash2,
   Play,
   AlertTriangle,
-  CheckCircle2,
   Lock,
-  Calendar,
   HardDrive,
   RotateCcw,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
 } from 'lucide-react';
+import { useBackupsTab } from '@/hooks/use-backups-tab';
 
 interface BackupsTabProps {
   showToast: (type: 'success' | 'error', message: string) => void;
@@ -87,265 +83,62 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
   const t = useTranslations('settings.scheduledBackup');
   const tCommon = useTranslations('common');
 
-  // Config state
-  const [config, setConfig] = useState<BackupConfig>({
-    enabled: false,
-    schedule: '0 2 * * *',
-    retention_count: 7,
-    password_configured: false,
-  });
-  const [loading, setLoading] = useState(true);
-  const [savingConfig, setSavingConfig] = useState(false);
-
-  // Backups list state
-  const [backups, setBackups] = useState<StoredBackup[]>([]);
-  const [nextScheduled, setNextScheduled] = useState<string | null>(null);
-  const [lastBackup, setLastBackup] = useState<string | null>(null);
-
-  // Password dialog state
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
-
-  // Trigger backup state
-  const [triggeringBackup, setTriggeringBackup] = useState(false);
-
-  // Download state
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [backupToDelete, setBackupToDelete] = useState<StoredBackup | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // Restore dialog state
-  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [backupToRestore, setBackupToRestore] = useState<StoredBackup | null>(null);
-  const [restorePassword, setRestorePassword] = useState('');
-  const [restoring, setRestoring] = useState(false);
-
-  // Table state: search, sort, filter, pagination
-  const [search, setSearch] = useState('');
-  const [sortColumn, setSortColumn] = useState<'created_at' | 'size_bytes' | 'filename'>('created_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [filterEncrypted, setFilterEncrypted] = useState<'all' | 'encrypted' | 'unencrypted'>('all');
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-
-  const fetchData = useCallback(async () => {
-    try {
-      const response = await api.listBackups();
-      setConfig(response.config);
-      setBackups(response.backups);
-      setNextScheduled(response.next_scheduled);
-      setLastBackup(response.last_backup);
-    } catch (error) {
-      handleSilentError('fetchBackups', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  async function handleSaveConfig() {
-    setSavingConfig(true);
-    try {
-      const updated = await api.updateBackupConfig({
-        enabled: config.enabled,
-        schedule: config.schedule,
-        retention_count: config.retention_count,
-      });
-      setConfig(updated);
-      showToast('success', t('configSaved'));
-    } catch (error) {
-      handleSilentError('updateBackupConfig', error);
-      showToast('error', tCommon('operationFailed'));
-    } finally {
-      setSavingConfig(false);
-    }
-  }
-
-  async function handleSavePassword() {
-    if (newPassword !== confirmPassword) {
-      showToast('error', tCommon('operationFailed'));
-      return;
-    }
-    if (newPassword.length < 12) {
-      showToast('error', tCommon('operationFailed'));
-      return;
-    }
-
-    setSavingPassword(true);
-    try {
-      const updated = await api.updateBackupConfig({
-        password: newPassword,
-      });
-      setConfig(updated);
-      setPasswordDialogOpen(false);
-      setNewPassword('');
-      setConfirmPassword('');
-      showToast('success', t('configSaved'));
-    } catch (error) {
-      handleSilentError('updateBackupPassword', error);
-      const message = error instanceof Error ? error.message : tCommon('operationFailed');
-      showToast('error', message);
-    } finally {
-      setSavingPassword(false);
-    }
-  }
-
-  async function handleTriggerBackup() {
-    setTriggeringBackup(true);
-    try {
-      const backup = await api.triggerBackup();
-      setBackups((prev) => [backup, ...prev]);
-      setLastBackup(backup.created_at);
-      showToast('success', t('backupCreated'));
-    } catch (error) {
-      handleSilentError('triggerBackup', error);
-      const message = error instanceof Error ? error.message : tCommon('operationFailed');
-      showToast('error', message);
-    } finally {
-      setTriggeringBackup(false);
-    }
-  }
-
-  async function handleDownloadBackup(backup: StoredBackup) {
-    setDownloadingId(backup.id);
-    try {
-      const blob = await api.downloadStoredBackup(backup.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = backup.filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      handleSilentError('downloadBackup', error);
-      showToast('error', tCommon('operationFailed'));
-    } finally {
-      setDownloadingId(null);
-    }
-  }
-
-  async function handleDeleteBackup() {
-    if (!backupToDelete) return;
-
-    setDeleting(true);
-    try {
-      await api.deleteStoredBackup(backupToDelete.id);
-      setBackups((prev) => prev.filter((b) => b.id !== backupToDelete.id));
-      setDeleteDialogOpen(false);
-      setBackupToDelete(null);
-      showToast('success', t('backupDeleted'));
-    } catch (error) {
-      handleSilentError('deleteBackup', error);
-      showToast('error', tCommon('operationFailed'));
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function handleRestoreBackup() {
-    if (!backupToRestore || !restorePassword) return;
-
-    setRestoring(true);
-    try {
-      await api.restoreFromStoredBackup(backupToRestore.id, restorePassword);
-      setRestoreDialogOpen(false);
-      setBackupToRestore(null);
-      setRestorePassword('');
-      showToast('success', t('restored'));
-      // Reload the page after successful restore
-      window.location.reload();
-    } catch (error) {
-      handleSilentError('restoreBackup', error);
-      const message = error instanceof Error ? error.message : tCommon('operationFailed');
-      showToast('error', message);
-    } finally {
-      setRestoring(false);
-    }
-  }
-
-  // Sort handler
-  const handleSort = useCallback((column: 'created_at' | 'size_bytes' | 'filename') => {
-    if (sortColumn === column) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
-    }
-  }, [sortColumn]);
+  const {
+    loading,
+    savingConfig,
+    savingPassword,
+    triggeringBackup,
+    downloadingId,
+    deleting,
+    restoring,
+    config,
+    setConfig,
+    backups,
+    nextScheduled,
+    lastBackup,
+    passwordDialogOpen,
+    setPasswordDialogOpen,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    backupToDelete,
+    setBackupToDelete,
+    restoreDialogOpen,
+    setRestoreDialogOpen,
+    backupToRestore,
+    setBackupToRestore,
+    restorePassword,
+    setRestorePassword,
+    search,
+    setSearch,
+    sortColumn,
+    sortDirection,
+    filterEncrypted,
+    setFilterEncrypted,
+    page,
+    setPage,
+    pageSize,
+    filteredBackups,
+    totalPages,
+    paginatedBackups,
+    handleSaveConfig,
+    handleSavePassword,
+    handleTriggerBackup,
+    handleDownloadBackup,
+    handleDeleteBackup,
+    handleRestoreBackup,
+    handleSort,
+    handleClearFilters,
+  } = useBackupsTab(showToast, t, tCommon);
 
   // Sort icon component
   const SortIcon = ({ column }: { column: 'created_at' | 'size_bytes' | 'filename' }) => {
     if (sortColumn !== column) return <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />;
     return sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
-
-  // Filter, sort, and paginate backups
-  const filteredBackups = useMemo(() => {
-    let result = backups;
-
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(
-        (b) =>
-          b.filename.toLowerCase().includes(searchLower) ||
-          b.age_description?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Encrypted filter
-    if (filterEncrypted === 'encrypted') {
-      result = result.filter((b) => b.is_encrypted);
-    } else if (filterEncrypted === 'unencrypted') {
-      result = result.filter((b) => !b.is_encrypted);
-    }
-
-    // Sort
-    result = [...result].sort((a, b) => {
-      let aVal: string | number;
-      let bVal: string | number;
-
-      switch (sortColumn) {
-        case 'created_at':
-          aVal = new Date(a.created_at).getTime();
-          bVal = new Date(b.created_at).getTime();
-          break;
-        case 'size_bytes':
-          aVal = a.size_bytes;
-          bVal = b.size_bytes;
-          break;
-        case 'filename':
-          aVal = a.filename.toLowerCase();
-          bVal = b.filename.toLowerCase();
-          break;
-      }
-
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return result;
-  }, [backups, search, filterEncrypted, sortColumn, sortDirection]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredBackups.length / pageSize);
-  const paginatedBackups = filteredBackups.slice((page - 1) * pageSize, page * pageSize);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, filterEncrypted]);
 
   if (loading) {
     return (
@@ -529,7 +322,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
             placeholder={t('searchBackups')}
             className="flex-1 min-w-[200px]"
           />
-          <Select value={filterEncrypted} onValueChange={(v) => setFilterEncrypted(v as typeof filterEncrypted)}>
+          <Select value={filterEncrypted} onValueChange={(v) => setFilterEncrypted(v as 'all' | 'encrypted' | 'unencrypted')}>
             <SelectTrigger className="w-40 h-9 text-sm">
               <SelectValue placeholder={t('filterEncryption')} />
             </SelectTrigger>
@@ -544,10 +337,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
               variant="ghost"
               size="sm"
               className="h-9 text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setSearch('');
-                setFilterEncrypted('all');
-              }}
+              onClick={handleClearFilters}
             >
               {tCommon('clear')}
             </Button>

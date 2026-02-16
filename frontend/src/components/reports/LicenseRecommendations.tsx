@@ -1,9 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { api, LicenseRecommendationsReport, LicenseRecommendation, Provider } from '@/lib/api';
-import { handleSilentError } from '@/lib/error-handler';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +28,7 @@ import {
 } from 'lucide-react';
 import { formatMonthlyCost } from '@/lib/format';
 import Link from 'next/link';
+import { useLicenseRecommendations } from '@/hooks/use-license-recommendations';
 
 interface LicenseRecommendationsProps {
   department?: string;
@@ -41,36 +39,15 @@ export function LicenseRecommendations({ department }: LicenseRecommendationsPro
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
 
-  const [report, setReport] = useState<LicenseRecommendationsReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>('all');
-  const [minDaysInactive, setMinDaysInactive] = useState<number>(60);
-
-  // Load providers once
-  useEffect(() => {
-    api.getProviders().then((res) => setProviders(res.items)).catch((e) => handleSilentError('getProviders', e));
-  }, []);
-
-  // Load recommendations when filters change
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    api.getLicenseRecommendations({
-      min_days_inactive: minDaysInactive,
-      department: department,
-      provider_id: selectedProvider !== 'all' ? selectedProvider : undefined,
-      limit: 100,
-    }).then((data) => {
-      if (!cancelled) {
-        setReport(data);
-      }
-    }).catch((e) => handleSilentError('getLicenseRecommendations', e))
-      .finally(() => !cancelled && setLoading(false));
-
-    return () => { cancelled = true; };
-  }, [department, selectedProvider, minDaysInactive]);
+  const {
+    report,
+    loading,
+    providers,
+    selectedProvider,
+    setSelectedProvider,
+    minDaysInactive,
+    setMinDaysInactive,
+  } = useLicenseRecommendations({ department });
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {

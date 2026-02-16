@@ -233,6 +233,50 @@ class ExternalAccountService:
             request=request,
         )
 
+    async def bulk_link_accounts(
+        self,
+        links: list,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> dict[str, Any]:
+        """Bulk link multiple external accounts.
+
+        Iterates over the provided links, calling link_account() for each.
+        Categorizes results into linked, skipped (already linked), and errors.
+
+        Args:
+            links: List of link objects with employee_id, provider_type,
+                   external_username, external_user_id, display_name
+            user: Admin user creating the links
+            request: HTTP request for audit logging
+
+        Returns:
+            Dict with linked count, skipped count, and error messages
+        """
+        linked = 0
+        skipped = 0
+        errors: list[str] = []
+
+        for link in links:
+            try:
+                await self.link_account(
+                    employee_id=link.employee_id,
+                    provider_type=link.provider_type,
+                    external_username=link.external_username,
+                    external_user_id=link.external_user_id,
+                    display_name=link.display_name,
+                    user=user,
+                    request=request,
+                )
+                linked += 1
+            except ValueError as e:
+                if "already linked" in str(e).lower():
+                    skipped += 1
+                else:
+                    errors.append(f"{link.external_username}: {str(e)}")
+
+        return {"linked": linked, "skipped": skipped, "errors": errors}
+
     async def get_employee_by_external_username(
         self,
         provider_type: str,

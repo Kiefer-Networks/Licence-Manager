@@ -1188,7 +1188,9 @@ class LicenseRepository(BaseRepository[LicenseORM]):
         ]
         for domain in company_domains:
             conditions.append(
-                ~func.lower(LicenseORM.external_user_id).like(f"%@{domain.lower()}")
+                ~func.lower(LicenseORM.external_user_id).like(
+                f"%@{escape_like_wildcards(domain.lower())}", escape="\\"
+            )
             )
 
         result = await self.session.execute(

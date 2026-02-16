@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, useState, useCallback, useMemo } from 'react';
+import { Suspense, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
-import { License, Provider, api } from '@/lib/api';
+import { License, Provider } from '@/lib/api';
 import { formatMonthlyCost } from '@/lib/format';
 import {
   LicenseStatsCards,
@@ -36,69 +36,6 @@ function LicensesContent() {
 
   // Use custom hook for license data management
   const licenses = useLicenses();
-
-  // Dialog state
-  const [bulkActionDialog, setBulkActionDialog] = useState<'remove' | 'delete' | 'unassign' | null>(null);
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  // Mark as dialog state
-  const [markAsDialog, setMarkAsDialog] = useState<{ license: License; type: 'service' | 'admin' } | null>(null);
-
-  // Link dialog state
-  const [linkDialog, setLinkDialog] = useState<License | null>(null);
-
-  // Toast handler
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  }, []);
-
-  // Bulk action handlers
-  const handleBulkRemove = async () => {
-    if (licenses.removableLicenses.length === 0) return;
-    setBulkActionLoading(true);
-    try {
-      const result = await api.bulkRemoveFromProvider(licenses.removableLicenses.map(l => l.id));
-      showToast(t('bulkRemoved', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
-      setBulkActionDialog(null);
-      licenses.loadLicenses();
-    } catch {
-      showToast(t('failedToRemoveLicenses'), 'error');
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (licenses.selectedIds.size === 0) return;
-    setBulkActionLoading(true);
-    try {
-      const result = await api.bulkDeleteLicenses(Array.from(licenses.selectedIds));
-      showToast(t('bulkDeleted', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
-      setBulkActionDialog(null);
-      licenses.loadLicenses();
-    } catch {
-      showToast(t('failedToDeleteLicenses'), 'error');
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  const handleBulkUnassign = async () => {
-    if (licenses.assignedLicenses.length === 0) return;
-    setBulkActionLoading(true);
-    try {
-      const result = await api.bulkUnassignLicenses(licenses.assignedLicenses.map(l => l.id));
-      showToast(t('bulkUnassigned', { successful: result.successful, total: result.total }), result.failed > 0 ? 'error' : 'success');
-      setBulkActionDialog(null);
-      licenses.loadLicenses();
-    } catch {
-      showToast(t('failedToUnassignLicenses'), 'error');
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
 
   // Tab change handler
   const handleTabChange = useCallback((tab: LicenseTab) => {
@@ -186,9 +123,9 @@ function LicensesContent() {
                   provider={getProvider(license.provider_id)}
                   isSelected={licenses.selectedIds.has(license.id)}
                   onToggleSelect={() => licenses.toggleSelect(license.id)}
-                  onMarkAsService={() => setMarkAsDialog({ license, type: 'service' })}
-                  onMarkAsAdmin={() => setMarkAsDialog({ license, type: 'admin' })}
-                  onLinkToEmployee={!license.employee_id ? () => setLinkDialog(license) : undefined}
+                  onMarkAsService={() => licenses.setMarkAsDialog({ license, type: 'service' })}
+                  onMarkAsAdmin={() => licenses.setMarkAsDialog({ license, type: 'admin' })}
+                  onLinkToEmployee={!license.employee_id ? () => licenses.setLinkDialog(license) : undefined}
                 />
               ))}
             </tbody>
@@ -221,9 +158,9 @@ function LicensesContent() {
           selectedCount={licenses.selectedIds.size}
           assignedCount={licenses.assignedLicenses.length}
           removableCount={licenses.removableLicenses.length}
-          onUnassign={() => setBulkActionDialog('unassign')}
-          onRemove={() => setBulkActionDialog('remove')}
-          onDelete={() => setBulkActionDialog('delete')}
+          onUnassign={() => licenses.setBulkActionDialog('unassign')}
+          onRemove={() => licenses.setBulkActionDialog('remove')}
+          onDelete={() => licenses.setBulkActionDialog('delete')}
           onClear={licenses.clearSelection}
         />
 
@@ -354,53 +291,53 @@ function LicensesContent() {
 
       {/* Dialogs */}
       <BulkRemoveDialog
-        open={bulkActionDialog === 'remove'}
-        onOpenChange={() => setBulkActionDialog(null)}
+        open={licenses.bulkActionDialog === 'remove'}
+        onOpenChange={() => licenses.setBulkActionDialog(null)}
         removableCount={licenses.removableLicenses.length}
         totalSelected={licenses.selectedIds.size}
-        loading={bulkActionLoading}
-        onConfirm={handleBulkRemove}
+        loading={licenses.bulkActionLoading}
+        onConfirm={licenses.handleBulkRemove}
       />
 
       <BulkDeleteDialog
-        open={bulkActionDialog === 'delete'}
-        onOpenChange={() => setBulkActionDialog(null)}
+        open={licenses.bulkActionDialog === 'delete'}
+        onOpenChange={() => licenses.setBulkActionDialog(null)}
         selectedCount={licenses.selectedIds.size}
-        loading={bulkActionLoading}
-        onConfirm={handleBulkDelete}
+        loading={licenses.bulkActionLoading}
+        onConfirm={licenses.handleBulkDelete}
       />
 
       <BulkUnassignDialog
-        open={bulkActionDialog === 'unassign'}
-        onOpenChange={() => setBulkActionDialog(null)}
+        open={licenses.bulkActionDialog === 'unassign'}
+        onOpenChange={() => licenses.setBulkActionDialog(null)}
         assignedCount={licenses.assignedLicenses.length}
-        loading={bulkActionLoading}
-        onConfirm={handleBulkUnassign}
+        loading={licenses.bulkActionLoading}
+        onConfirm={licenses.handleBulkUnassign}
       />
 
       <MarkAsAccountDialog
-        open={!!markAsDialog}
-        onOpenChange={() => setMarkAsDialog(null)}
-        license={markAsDialog?.license || null}
-        type={markAsDialog?.type || 'service'}
+        open={!!licenses.markAsDialog}
+        onOpenChange={() => licenses.setMarkAsDialog(null)}
+        license={licenses.markAsDialog?.license || null}
+        type={licenses.markAsDialog?.type || 'service'}
         onSuccess={licenses.loadLicenses}
-        onToast={showToast}
+        onToast={licenses.showToast}
       />
 
       <LinkToEmployeeDialog
-        open={!!linkDialog}
-        onOpenChange={() => setLinkDialog(null)}
-        license={linkDialog}
+        open={!!licenses.linkDialog}
+        onOpenChange={() => licenses.setLinkDialog(null)}
+        license={licenses.linkDialog}
         onSuccess={licenses.loadLicenses}
-        onToast={showToast}
+        onToast={licenses.showToast}
       />
 
       {/* Toast */}
-      {toast && (
+      {licenses.toast && (
         <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-          toast.type === 'success' ? 'bg-zinc-900 text-white' : 'bg-red-600 text-white'
+          licenses.toast.type === 'success' ? 'bg-zinc-900 text-white' : 'bg-red-600 text-white'
         }`}>
-          {toast.message}
+          {licenses.toast.message}
         </div>
       )}
     </AppLayout>
