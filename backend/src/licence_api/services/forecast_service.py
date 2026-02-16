@@ -554,10 +554,12 @@ class ForecastService:
         total_current = sum(dept_headcount.values()) if dept_headcount else 1
 
         results: list[DepartmentForecast] = []
-        for dept, current_cost in dept_costs.items():
+        all_depts = set(dept_headcount.keys()) | set(dept_costs.keys())
+        for dept in all_depts:
             if department and dept != department:
                 continue
 
+            current_cost = dept_costs.get(dept, Decimal("0"))
             emp_count = dept_headcount.get(dept, 0)
             cost_per_emp = (
                 current_cost / emp_count if emp_count > 0 else Decimal("0")

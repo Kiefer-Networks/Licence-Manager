@@ -91,31 +91,59 @@ class ForecastRepository:
         )
 
     async def get_department_costs(self) -> dict[str, Decimal]:
-        """Get current monthly cost per department based on license assignments.
+        """Get current monthly cost per department.
 
-        Sums cost_per_seat for all active licenses grouped by employee department.
+        Distributes provider-level package costs across departments
+        proportionally by active license count. This avoids the broken
+        license_type JOIN (License.license_type is nullable, causing
+        NULL == NULL → FALSE in SQL).
         """
-        result = await self.session.execute(
+        # Step 1: Get total monthly cost per provider from packages
+        provider_costs = await self.get_provider_costs_from_packages()
+        if not provider_costs:
+            return {}
+
+        # Step 2: Count active licenses per provider (for cost-per-license calc)
+        license_count_result = await self.session.execute(
+            select(
+                LicenseORM.provider_id,
+                func.count(LicenseORM.id),
+            )
+            .where(LicenseORM.status == "active")
+            .group_by(LicenseORM.provider_id)
+        )
+        licenses_per_provider = {pid: count for pid, count in license_count_result.all()}
+
+        cost_per_license: dict[UUID, Decimal] = {}
+        for pid, total_cost in provider_costs.items():
+            license_count = licenses_per_provider.get(pid, 0)
+            if license_count > 0:
+                cost_per_license[pid] = round(total_cost / license_count, 4)
+
+        # Step 3: Count licenses per department+provider, then multiply by cost_per_license
+        dept_license_result = await self.session.execute(
             select(
                 EmployeeORM.department,
-                func.coalesce(func.sum(LicensePackageORM.cost_per_seat), 0),
+                LicenseORM.provider_id,
+                func.count(LicenseORM.id),
             )
             .join(LicenseORM, LicenseORM.employee_id == EmployeeORM.id)
-            .join(ProviderORM, ProviderORM.id == LicenseORM.provider_id)
-            .outerjoin(
-                LicensePackageORM,
-                (LicensePackageORM.provider_id == LicenseORM.provider_id)
-                & (LicensePackageORM.license_type == LicenseORM.license_type)
-                & (LicensePackageORM.status == "active"),
-            )
             .where(
                 EmployeeORM.status == "active",
-                EmployeeORM.department.isnot(None),
                 LicenseORM.status == "active",
             )
-            .group_by(EmployeeORM.department)
+            .group_by(EmployeeORM.department, LicenseORM.provider_id)
         )
-        return {dept: Decimal(str(cost)) for dept, cost in result.all()}
+
+        dept_costs: dict[str, Decimal] = {}
+        for dept, provider_id, lcount in dept_license_result.all():
+            dept_key = dept or "-"
+            cpl = cost_per_license.get(provider_id, Decimal("0"))
+            dept_costs[dept_key] = dept_costs.get(dept_key, Decimal("0")) + round(
+                cpl * lcount, 2
+            )
+
+        return dept_costs
 
     async def get_active_employee_count(
         self,
