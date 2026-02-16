@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.cost_snapshot import CostSnapshotORM
 from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
+from licence_api.repositories.forecast_repository import ForecastRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 
@@ -46,6 +47,10 @@ class CostSnapshotService:
         providers = await self.provider_repo.get_all(limit=1000)
         all_stats = await self.license_repo.get_statistics_all_providers()
 
+        # Get actual costs from license packages (cost_per_seat × total_seats)
+        forecast_repo = ForecastRepository(self.session)
+        package_costs = await forecast_repo.get_provider_costs_from_packages()
+
         # Build provider lookup for display names
         provider_lookup = {p.id: p for p in providers}
 
@@ -70,7 +75,9 @@ class CostSnapshotService:
                 "total_monthly_cost": Decimal("0"),
             })
 
-            provider_cost = stats.get("total_monthly_cost", Decimal("0"))
+            # Use package-based costs (cost_per_seat × total_seats) instead of
+            # License.monthly_cost which is typically NULL
+            provider_cost = package_costs.get(provider.id, Decimal("0"))
             provider_license_count = stats.get("total", 0)
             provider_active = stats.get("by_status", {}).get("active", 0)
             provider_unassigned = stats.get("unassigned", 0)

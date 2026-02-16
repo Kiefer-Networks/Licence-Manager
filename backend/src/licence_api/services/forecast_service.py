@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.dto.forecast import (
+    AdjustmentRequest,
     DepartmentForecast,
     ForecastDataPoint,
     ForecastSummary,
@@ -112,6 +113,7 @@ class ForecastService:
         months: int = 12,
         provider_id: UUID | None = None,
         department: str | None = None,
+        history_months: int = 6,
     ) -> ForecastSummary:
         """Generate a cost forecast.
 
@@ -119,20 +121,22 @@ class ForecastService:
             months: Number of months to project forward
             provider_id: Optional filter to forecast a single provider
             department: Optional filter for department-level analysis
+            history_months: Number of months of history to include (min 3 for regression)
 
         Returns:
             ForecastSummary with data points and breakdowns
         """
-        # Get historical data (up to 24 months for good regression)
+        # Fetch enough history for regression (at least 3), but display only requested
+        fetch_months = max(history_months, 3)
         history = await self.repo.get_cost_history(
-            months=24, provider_id=provider_id
+            months=fetch_months, provider_id=provider_id
         )
 
         # Fallback: if no snapshots exist, create them on-the-fly from live data
         if not history and not provider_id:
             await self._ensure_snapshots()
             history = await self.repo.get_cost_history(
-                months=24, provider_id=provider_id
+                months=fetch_months, provider_id=provider_id
             )
 
         # Build total forecast data points
@@ -249,6 +253,130 @@ class ForecastService:
             scenario_total=scenario_total,
             difference=difference,
             difference_percent=round(diff_pct, 1),
+        )
+
+    async def get_adjusted_forecast(
+        self,
+        request: AdjustmentRequest,
+    ) -> ForecastSummary:
+        """Generate a forecast with slider-based adjustments applied.
+
+        Applies price and headcount factors only to projected data points,
+        leaving historical data untouched.
+
+        Args:
+            request: Adjustment parameters (price %, headcount change)
+
+        Returns:
+            ForecastSummary with adjusted projections
+        """
+        baseline = await self.get_forecast(
+            months=request.forecast_months,
+            provider_id=request.provider_id,
+            history_months=request.history_months,
+        )
+
+        price_factor = 1.0 + (request.price_adjustment_percent / 100.0)
+        # Headcount factor: use cost-per-employee to convert headcount to cost multiplier
+        total_emps = await self.repo.get_active_employee_count()
+        if total_emps > 0 and request.headcount_change != 0:
+            headcount_factor = 1.0 + (request.headcount_change / total_emps)
+        else:
+            headcount_factor = 1.0
+
+        combined_factor = Decimal(str(round(price_factor * headcount_factor, 6)))
+
+        # Apply factor to projected data points only
+        adjusted_points: list[ForecastDataPoint] = []
+        for dp in baseline.data_points:
+            if dp.is_historical:
+                adjusted_points.append(dp)
+            else:
+                adjusted_cost = max(Decimal("0"), round(dp.cost * combined_factor, 2))
+                adjusted_lower = (
+                    max(Decimal("0"), round(dp.confidence_lower * combined_factor, 2))
+                    if dp.confidence_lower is not None
+                    else None
+                )
+                adjusted_upper = (
+                    round(dp.confidence_upper * combined_factor, 2)
+                    if dp.confidence_upper is not None
+                    else None
+                )
+                adjusted_points.append(
+                    ForecastDataPoint(
+                        month=dp.month,
+                        cost=adjusted_cost,
+                        is_historical=False,
+                        confidence_lower=adjusted_lower,
+                        confidence_upper=adjusted_upper,
+                    )
+                )
+
+        # Recalculate summary values
+        projected_cost = adjusted_points[-1].cost if adjusted_points else Decimal("0")
+        projected_annual = projected_cost * 12
+        current_cost = baseline.current_monthly_cost
+        change_pct = (
+            float((projected_cost - current_cost) / current_cost * 100)
+            if current_cost > 0
+            else 0.0
+        )
+
+        # Adjust provider forecasts
+        adjusted_providers: list[ProviderForecast] = []
+        for pf in baseline.by_provider:
+            adj_points: list[ForecastDataPoint] = []
+            for dp in pf.data_points:
+                if dp.is_historical:
+                    adj_points.append(dp)
+                else:
+                    adj_points.append(
+                        ForecastDataPoint(
+                            month=dp.month,
+                            cost=max(Decimal("0"), round(dp.cost * combined_factor, 2)),
+                            is_historical=False,
+                            confidence_lower=(
+                                max(Decimal("0"), round(dp.confidence_lower * combined_factor, 2))
+                                if dp.confidence_lower is not None
+                                else None
+                            ),
+                            confidence_upper=(
+                                round(dp.confidence_upper * combined_factor, 2)
+                                if dp.confidence_upper is not None
+                                else None
+                            ),
+                        )
+                    )
+            adj_projected = adj_points[-1].cost if adj_points else pf.projected_cost
+            adj_change = (
+                float((adj_projected - pf.current_cost) / pf.current_cost * 100)
+                if pf.current_cost > 0
+                else 0.0
+            )
+            adjusted_providers.append(
+                ProviderForecast(
+                    provider_id=pf.provider_id,
+                    provider_name=pf.provider_name,
+                    display_name=pf.display_name,
+                    current_cost=pf.current_cost,
+                    projected_cost=adj_projected,
+                    change_percent=round(adj_change, 1),
+                    contract_end=pf.contract_end,
+                    auto_renew=pf.auto_renew,
+                    data_points=adj_points,
+                )
+            )
+
+        return ForecastSummary(
+            current_monthly_cost=current_cost,
+            projected_monthly_cost=projected_cost,
+            projected_annual_cost=projected_annual,
+            change_percent=round(change_pct, 1),
+            forecast_months=request.forecast_months,
+            data_points=adjusted_points,
+            by_provider=adjusted_providers,
+            by_department=baseline.by_department,
         )
 
     def _build_forecast(

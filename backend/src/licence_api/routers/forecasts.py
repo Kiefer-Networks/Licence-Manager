@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from licence_api.dependencies import get_forecast_service
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.dto.forecast import ForecastSummary, ScenarioRequest, ScenarioResult
+from licence_api.models.dto.forecast import AdjustmentRequest, ForecastSummary, ScenarioRequest, ScenarioResult
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.forecast_service import ForecastService
@@ -23,6 +23,7 @@ async def get_forecast(
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     forecast_service: Annotated[ForecastService, Depends(get_forecast_service)],
     months: int = Query(default=12, ge=1, le=24, description="Number of months to forecast"),
+    history_months: int = Query(default=6, ge=1, le=24, description="Number of months of history to include"),
     provider_id: UUID | None = Query(default=None, description="Filter by provider UUID"),
     department: str | None = Query(
         default=None, max_length=100, description="Filter by department"
@@ -40,7 +41,24 @@ async def get_forecast(
         months=months,
         provider_id=provider_id,
         department=sanitized_department,
+        history_months=history_months,
     )
+
+
+@router.post("/adjust", response_model=ForecastSummary)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
+async def adjust_forecast(
+    request: Request,
+    body: AdjustmentRequest,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
+    forecast_service: Annotated[ForecastService, Depends(get_forecast_service)],
+) -> ForecastSummary:
+    """Get forecast with slider-based adjustments applied.
+
+    Accepts price adjustment percentage and headcount change,
+    returns forecast with adjusted projections.
+    """
+    return await forecast_service.get_adjusted_forecast(request=body)
 
 
 @router.post("/scenarios", response_model=ScenarioResult)

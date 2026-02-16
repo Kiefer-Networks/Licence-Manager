@@ -16,8 +16,9 @@ import { Loader2 } from 'lucide-react';
 import { ForecastSummaryCards } from '@/components/forecasts/ForecastSummaryCards';
 import { ProviderForecastTable } from '@/components/forecasts/ProviderForecastTable';
 import { DepartmentForecastTable } from '@/components/forecasts/DepartmentForecastTable';
-import { ScenarioBuilder } from '@/components/forecasts/ScenarioBuilder';
-import { useForecasts, ForecastHorizon, ForecastGranularity } from '@/hooks/use-forecasts';
+import { ForecastAdjustments } from '@/components/forecasts/ForecastAdjustments';
+import { DataPointDetail } from '@/components/forecasts/DataPointDetail';
+import { useForecasts, ForecastHorizon, HistoryDepth, ForecastGranularity } from '@/hooks/use-forecasts';
 
 const ForecastChart = dynamic(
   () => import('@/components/charts/ForecastChart').then((mod) => mod.ForecastChart),
@@ -38,26 +39,38 @@ const HORIZONS: { value: ForecastHorizon; key: string }[] = [
   { value: 24, key: 'months24' },
 ];
 
+const HISTORY_DEPTHS: { value: HistoryDepth; key: string }[] = [
+  { value: 3, key: 'history3' },
+  { value: 6, key: 'history6' },
+  { value: 12, key: 'history12' },
+  { value: 24, key: 'history24' },
+];
+
 export default function ForecastsPage() {
   const t = useTranslations('forecasts');
   const {
     forecast,
+    adjustedForecast,
     loading,
-    scenarioResult,
-    scenarioLoading,
+    adjusting,
+    activeDataPoints,
     horizon,
     setHorizon,
+    historyDepth,
+    setHistoryDepth,
     granularity,
     setGranularity,
     selectedProvider,
     setSelectedProvider,
-    adjustments,
-    addAdjustment,
-    removeAdjustment,
-    updateAdjustment,
-    runSimulation,
-    resetScenario,
-    departments,
+    selectedDataPoint,
+    selectedIndex,
+    setSelectedDataPoint,
+    priceAdjustment,
+    setPriceAdjustment,
+    headcountChange,
+    setHeadcountChange,
+    hasAdjustments,
+    resetAdjustments,
   } = useForecasts();
 
   if (loading) {
@@ -73,6 +86,11 @@ export default function ForecastsPage() {
     );
   }
 
+  // Get the adjusted data point at the selected index
+  const adjustedDataPoint = selectedIndex != null && adjustedForecast
+    ? adjustedForecast.data_points[selectedIndex] ?? null
+    : null;
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -85,6 +103,26 @@ export default function ForecastsPage() {
             <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* History depth selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t('historyDepth')}:</span>
+              <Select
+                value={String(historyDepth)}
+                onValueChange={(v) => setHistoryDepth(Number(v) as HistoryDepth)}
+              >
+                <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HISTORY_DEPTHS.map((h) => (
+                    <SelectItem key={h.value} value={String(h.value)} className="text-xs">
+                      {t(h.key)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Horizon selector */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{t('horizon')}:</span>
               <Select
@@ -113,6 +151,9 @@ export default function ForecastsPage() {
             projectedMonthly={forecast.projected_monthly_cost}
             projectedAnnual={forecast.projected_annual_cost}
             changePercent={forecast.change_percent}
+            adjustedProjectedMonthly={adjustedForecast?.projected_monthly_cost}
+            adjustedProjectedAnnual={adjustedForecast?.projected_annual_cost}
+            adjustedChangePercent={adjustedForecast?.change_percent}
           />
         )}
 
@@ -131,36 +172,43 @@ export default function ForecastsPage() {
           </TabsList>
 
           {/* Total view */}
-          <TabsContent value="total" className="space-y-6 mt-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{t('forecast')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {forecast && (
-                  <ForecastChart
-                    dataPoints={forecast.data_points}
-                    scenarioPoints={scenarioResult?.scenario}
-                  />
-                )}
-              </CardContent>
-            </Card>
+          <TabsContent value="total" className="space-y-4 mt-4">
+            <div className="flex gap-4">
+              {/* Chart */}
+              <Card className="flex-1">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{t('forecast')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {forecast && (
+                    <ForecastChart
+                      dataPoints={forecast.data_points}
+                      adjustedPoints={hasAdjustments ? adjustedForecast?.data_points : undefined}
+                      selectedIndex={selectedIndex}
+                      onDataPointClick={(dp, idx) => setSelectedDataPoint(dp, idx)}
+                    />
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Scenario builder */}
-            {forecast && (
-              <ScenarioBuilder
-                adjustments={adjustments}
-                onAddAdjustment={addAdjustment}
-                onRemoveAdjustment={removeAdjustment}
-                onUpdateAdjustment={updateAdjustment}
-                onRunSimulation={runSimulation}
-                onReset={resetScenario}
-                scenarioResult={scenarioResult}
-                loading={scenarioLoading}
-                providers={forecast.by_provider}
-                departments={departments}
+              {/* Adjustments sidebar */}
+              <ForecastAdjustments
+                priceAdjustment={priceAdjustment}
+                onPriceAdjustmentChange={setPriceAdjustment}
+                headcountChange={headcountChange}
+                onHeadcountChangeChange={setHeadcountChange}
+                onReset={resetAdjustments}
+                hasAdjustments={hasAdjustments}
+                adjusting={adjusting}
               />
-            )}
+            </div>
+
+            {/* Data point detail */}
+            <DataPointDetail
+              dataPoint={selectedDataPoint}
+              adjustedDataPoint={adjustedDataPoint}
+              hasAdjustments={hasAdjustments}
+            />
           </TabsContent>
 
           {/* Provider view */}
@@ -181,7 +229,11 @@ export default function ForecastsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ForecastChart dataPoints={selectedProvider.data_points} />
+                  <ForecastChart
+                    dataPoints={selectedProvider.data_points}
+                    onDataPointClick={(dp, idx) => setSelectedDataPoint(dp, idx)}
+                    selectedIndex={selectedIndex}
+                  />
                 </CardContent>
               </Card>
             ) : (
@@ -189,7 +241,7 @@ export default function ForecastsPage() {
                 <CardContent className="pt-4">
                   {forecast && (
                     <ProviderForecastTable
-                      providers={forecast.by_provider}
+                      providers={adjustedForecast?.by_provider ?? forecast.by_provider}
                       onProviderClick={setSelectedProvider}
                     />
                   )}

@@ -143,7 +143,45 @@ class ForecastRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_provider_costs_from_packages(self) -> dict[UUID, Decimal]:
+        """Calculate monthly costs per provider from active license packages.
+
+        Normalizes billing_cycle: yearly costs are divided by 12,
+        quarterly by 3, monthly stays as-is.
+
+        Returns:
+            Dict mapping provider_id to monthly cost.
+        """
+        result = await self.session.execute(
+            select(LicensePackageORM).where(
+                LicensePackageORM.status == "active",
+                LicensePackageORM.cost_per_seat.isnot(None),
+            )
+        )
+        packages = result.scalars().all()
+
+        costs: dict[UUID, Decimal] = {}
+        for pkg in packages:
+            raw_cost = pkg.cost_per_seat * pkg.total_seats
+            cycle = (pkg.billing_cycle or "monthly").lower()
+            if cycle == "yearly":
+                monthly = raw_cost / 12
+            elif cycle == "quarterly":
+                monthly = raw_cost / 3
+            else:
+                monthly = raw_cost
+            costs[pkg.provider_id] = costs.get(pkg.provider_id, Decimal("0")) + round(monthly, 2)
+
+        return costs
+
     async def get_provider_current_cost(self, provider_id: UUID) -> Decimal:
-        """Get current monthly cost for a provider from latest snapshot."""
+        """Get current monthly cost for a provider from latest snapshot.
+
+        Falls back to package-based calculation if snapshot shows zero cost.
+        """
         snapshot = await self.cost_snapshot_repo.get_latest(provider_id=provider_id)
-        return snapshot.total_cost if snapshot else Decimal("0")
+        cost = snapshot.total_cost if snapshot else Decimal("0")
+        if cost == Decimal("0"):
+            package_costs = await self.get_provider_costs_from_packages()
+            cost = package_costs.get(provider_id, Decimal("0"))
+        return cost

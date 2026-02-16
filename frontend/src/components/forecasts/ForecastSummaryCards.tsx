@@ -10,6 +10,9 @@ interface ForecastSummaryCardsProps {
   projectedMonthly: string;
   projectedAnnual: string;
   changePercent: number;
+  adjustedProjectedMonthly?: string | null;
+  adjustedProjectedAnnual?: string | null;
+  adjustedChangePercent?: number | null;
 }
 
 export function ForecastSummaryCards({
@@ -17,14 +20,20 @@ export function ForecastSummaryCards({
   projectedMonthly,
   projectedAnnual,
   changePercent,
+  adjustedProjectedMonthly,
+  adjustedProjectedAnnual,
+  adjustedChangePercent,
 }: ForecastSummaryCardsProps) {
   const t = useTranslations('forecasts');
   const { formatCurrency } = useLocale();
 
-  const TrendIcon = changePercent > 0 ? TrendingUp : changePercent < 0 ? TrendingDown : Minus;
-  const trendColor = changePercent > 0
+  const hasAdjustments = adjustedProjectedMonthly != null;
+
+  const effectiveChange = adjustedChangePercent ?? changePercent;
+  const TrendIcon = effectiveChange > 0 ? TrendingUp : effectiveChange < 0 ? TrendingDown : Minus;
+  const trendColor = effectiveChange > 0
     ? 'text-red-500'
-    : changePercent < 0
+    : effectiveChange < 0
       ? 'text-emerald-500'
       : 'text-zinc-400';
 
@@ -36,14 +45,19 @@ export function ForecastSummaryCards({
     {
       label: t('projectedMonthly'),
       value: formatCurrency(projectedMonthly),
+      adjustedValue: hasAdjustments ? formatCurrency(adjustedProjectedMonthly!) : null,
     },
     {
       label: t('projectedAnnual'),
       value: formatCurrency(projectedAnnual),
+      adjustedValue: hasAdjustments && adjustedProjectedAnnual ? formatCurrency(adjustedProjectedAnnual) : null,
     },
     {
       label: t('changePercent'),
       value: `${changePercent > 0 ? '+' : ''}${changePercent}%`,
+      adjustedValue: hasAdjustments && adjustedChangePercent != null
+        ? `${adjustedChangePercent > 0 ? '+' : ''}${adjustedChangePercent}%`
+        : null,
       icon: <TrendIcon className={`h-4 w-4 ${trendColor}`} />,
       valueColor: trendColor,
     },
@@ -57,9 +71,20 @@ export function ForecastSummaryCards({
             <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
             <div className="flex items-center gap-2 mt-1">
               {card.icon}
-              <p className={`text-xl font-semibold tabular-nums ${card.valueColor || ''}`}>
-                {card.value}
-              </p>
+              {card.adjustedValue ? (
+                <div className="flex items-baseline gap-2">
+                  <p className="text-sm tabular-nums text-muted-foreground line-through">
+                    {card.value}
+                  </p>
+                  <p className={`text-xl font-semibold tabular-nums text-amber-600`}>
+                    {card.adjustedValue}
+                  </p>
+                </div>
+              ) : (
+                <p className={`text-xl font-semibold tabular-nums ${card.valueColor || ''}`}>
+                  {card.value}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

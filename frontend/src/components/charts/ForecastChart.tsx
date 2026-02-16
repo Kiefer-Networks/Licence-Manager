@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   AreaChart,
@@ -17,13 +17,17 @@ import { useLocale } from '@/components/locale-provider';
 
 interface ForecastChartProps {
   dataPoints: ForecastDataPoint[];
-  scenarioPoints?: ForecastDataPoint[];
+  adjustedPoints?: ForecastDataPoint[];
+  selectedIndex?: number | null;
+  onDataPointClick?: (dp: ForecastDataPoint, index: number) => void;
   className?: string;
 }
 
 export function ForecastChart({
   dataPoints,
-  scenarioPoints,
+  adjustedPoints,
+  selectedIndex,
+  onDataPointClick,
   className = '',
 }: ForecastChartProps) {
   const t = useTranslations('forecasts');
@@ -31,7 +35,7 @@ export function ForecastChart({
 
   const chartData = useMemo(() => {
     return dataPoints.map((dp, idx) => {
-      const scenarioDp = scenarioPoints?.[idx];
+      const adjustedDp = adjustedPoints?.[idx];
       return {
         month: new Date(dp.month).toLocaleDateString(numberFormat, {
           month: 'short',
@@ -46,12 +50,13 @@ export function ForecastChart({
         confidenceRange: dp.confidence_lower && dp.confidence_upper
           ? [Number(dp.confidence_lower), Number(dp.confidence_upper)]
           : undefined,
-        scenario: scenarioDp && !scenarioDp.is_historical
-          ? Number(scenarioDp.cost)
+        adjusted: adjustedDp && !adjustedDp.is_historical
+          ? Number(adjustedDp.cost)
           : undefined,
+        index: idx,
       };
     });
-  }, [dataPoints, scenarioPoints, numberFormat]);
+  }, [dataPoints, adjustedPoints, numberFormat]);
 
   // Find the transition point between historical and projected
   const transitionIndex = useMemo(() => {
@@ -76,6 +81,23 @@ export function ForecastChart({
     return data;
   }, [chartData, transitionIndex]);
 
+  // Selected month label for ReferenceLine
+  const selectedMonth = useMemo(() => {
+    if (selectedIndex == null || selectedIndex < 0 || selectedIndex >= chartData.length) return null;
+    return chartData[selectedIndex].month;
+  }, [selectedIndex, chartData]);
+
+  const handleChartClick = useCallback(
+    (data: { activeTooltipIndex?: number }) => {
+      if (!onDataPointClick || data?.activeTooltipIndex == null) return;
+      const idx = data.activeTooltipIndex;
+      if (idx >= 0 && idx < dataPoints.length) {
+        onDataPointClick(dataPoints[idx], idx);
+      }
+    },
+    [onDataPointClick, dataPoints]
+  );
+
   if (dataPoints.length === 0) {
     return (
       <div className={`flex items-center justify-center h-64 text-muted-foreground ${className}`}>
@@ -99,10 +121,10 @@ export function ForecastChart({
           <div className="w-3 h-2 bg-blue-500/10 rounded-sm" />
           <span>{t('confidenceBand')}</span>
         </div>
-        {scenarioPoints && (
+        {adjustedPoints && (
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 bg-emerald-500" />
-            <span>{t('scenario')}</span>
+            <div className="w-3 h-0.5 bg-amber-500" />
+            <span>{t('adjusted')}</span>
           </div>
         )}
       </div>
@@ -112,6 +134,8 @@ export function ForecastChart({
           <AreaChart
             data={bridgedData}
             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            onClick={handleChartClick}
+            style={{ cursor: onDataPointClick ? 'crosshair' : undefined }}
           >
             <defs>
               <linearGradient id="historicalGradient" x1="0" y1="0" x2="0" y2="1">
@@ -149,11 +173,12 @@ export function ForecastChart({
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 fontSize: '12px',
               }}
+              cursor={{ stroke: '#a1a1aa', strokeDasharray: '4 4' }}
               formatter={(value: number, name: string) => {
                 const labels: Record<string, string> = {
                   historical: t('historical'),
                   projected: t('projected'),
-                  scenario: t('scenario'),
+                  adjusted: t('adjusted'),
                   confidenceUpper: t('confidenceBand'),
                   confidenceLower: t('confidenceBand'),
                 };
@@ -161,6 +186,16 @@ export function ForecastChart({
               }}
               labelStyle={{ fontWeight: 500, marginBottom: 4 }}
             />
+
+            {/* Selected data point reference line */}
+            {selectedMonth && (
+              <ReferenceLine
+                x={selectedMonth}
+                stroke="#f59e0b"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+              />
+            )}
 
             {/* Confidence band - upper */}
             <Area
@@ -208,17 +243,17 @@ export function ForecastChart({
               connectNulls={false}
             />
 
-            {/* Scenario line */}
-            {scenarioPoints && (
+            {/* Adjusted line - amber */}
+            {adjustedPoints && (
               <Area
                 type="monotone"
-                dataKey="scenario"
-                stroke="#10b981"
+                dataKey="adjusted"
+                stroke="#f59e0b"
                 strokeWidth={2}
                 strokeDasharray="6 3"
                 fill="none"
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#10b981' }}
+                activeDot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#f59e0b' }}
                 connectNulls={false}
               />
             )}

@@ -1788,6 +1788,14 @@ export type ScenarioType =
   | 'change_seats'
   | 'change_billing';
 
+export interface AdjustmentRequest {
+  forecast_months?: number;
+  history_months?: number;
+  price_adjustment_percent?: number;
+  headcount_change?: number;
+  provider_id?: string;
+}
+
 export interface ScenarioAdjustment {
   type: ScenarioType;
   provider_id?: string;
@@ -3456,11 +3464,19 @@ export const api = {
 
   async getForecast(params: {
     months?: number;
+    history_months?: number;
     provider_id?: string;
     department?: string;
   } = {}): Promise<ForecastSummary> {
     const query = buildSearchParams(params);
     return fetchApi<ForecastSummary>(`/forecasts/${query}`);
+  },
+
+  async getAdjustedForecast(request: AdjustmentRequest): Promise<ForecastSummary> {
+    return fetchApi<ForecastSummary>('/forecasts/adjust', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 
   async simulateScenario(request: ScenarioRequest): Promise<ScenarioResult> {
