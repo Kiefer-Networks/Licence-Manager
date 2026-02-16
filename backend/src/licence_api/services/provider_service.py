@@ -170,9 +170,20 @@ class ProviderService:
         Raises:
             ValueError: If provider already exists
         """
+        # Manual providers (name starts with 'manual_') are allowed to have
+        # similar names — uniqueness is ensured by appending a counter if needed
+        is_manual = name.startswith("manual_") or (config or {}).get("provider_type") == "manual"
         existing = await self.provider_repo.get_by_name(name)
-        if existing:
+        if existing and not is_manual:
             raise ValueError(f"Provider {name} already configured")
+        if existing and is_manual:
+            # Append counter to make name unique
+            counter = 2
+            base_name = name
+            while existing:
+                name = f"{base_name}_{counter}"
+                existing = await self.provider_repo.get_by_name(name)
+                counter += 1
 
         # Check if trying to add an HRIS provider when one already exists
         if name in HRIS_PROVIDER_NAMES:

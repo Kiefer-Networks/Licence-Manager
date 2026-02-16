@@ -228,8 +228,14 @@ export function useProviders(
         config.license_model = manualConfig.license_model;
       }
 
+      // Manual providers need a unique name derived from display_name
+      // API providers use the fixed type name (e.g. 'adobe', 'slack')
+      const providerName = isManual
+        ? `manual_${newProviderName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+        : providerType;
+
       const newProvider = await api.createProvider({
-        name: providerType,
+        name: providerName,
         display_name: newProviderName,
         credentials: isManual ? {} : credentials,
         config: Object.keys(config).length > 0 ? config : undefined,
