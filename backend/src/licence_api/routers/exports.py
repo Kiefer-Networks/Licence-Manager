@@ -5,12 +5,13 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from licence_api.dependencies import get_export_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
+from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.export_service import ExportService
 
 router = APIRouter()
@@ -30,7 +31,9 @@ def sanitize_filename_part(value: str, max_length: int = 30) -> str:
 
 
 @router.get("/licenses/csv")
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def export_licenses_csv(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     export_service: Annotated[ExportService, Depends(get_export_service)],
     provider_id: UUID | None = Query(default=None, description="Filter by provider"),
@@ -69,7 +72,9 @@ async def export_licenses_csv(
 
 
 @router.get("/costs/csv")
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def export_costs_csv(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     export_service: Annotated[ExportService, Depends(get_export_service)],
     start_date: date | None = Query(default=None, description="Start date"),
@@ -97,7 +102,9 @@ async def export_costs_csv(
 
 
 @router.get("/full-report/excel")
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def export_full_report_excel(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_EXPORT))],
     export_service: Annotated[ExportService, Depends(get_export_service)],
 ) -> Response:

@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +34,9 @@ import { useSettings } from '@/hooks/use-settings';
 export default function SettingsPage() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canUpdate = hasPermission(Permissions.SETTINGS_UPDATE);
 
   const {
     loading,
@@ -90,7 +96,14 @@ export default function SettingsPage() {
     handleSaveThresholds,
   } = useSettings(t, tCommon);
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.SETTINGS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-96">
@@ -181,7 +194,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Button size="sm" onClick={handleSaveSystemSettings} disabled={savingSystemSettings}>
+            <Button size="sm" onClick={handleSaveSystemSettings} disabled={!canUpdate || savingSystemSettings}>
               {savingSystemSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : tCommon('save')}
             </Button>
           </div>
@@ -243,7 +256,7 @@ export default function SettingsPage() {
             )}
 
             <div className="pt-2 border-t">
-              <Button size="sm" onClick={handleSaveDomains} disabled={savingDomains}>
+              <Button size="sm" onClick={handleSaveDomains} disabled={!canUpdate || savingDomains}>
                 {savingDomains ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {tCommon('save')}
               </Button>
@@ -362,7 +375,7 @@ export default function SettingsPage() {
                   placeholder={slackConfigured ? t('newTokenPlaceholder') : t('slackTokenPlaceholder')}
                   className="flex-1"
                 />
-                <Button variant="outline" size="sm" onClick={handleSaveSlackConfig} disabled={savingSlack || !slackBotToken.trim()}>
+                <Button variant="outline" size="sm" onClick={handleSaveSlackConfig} disabled={!canUpdate || savingSlack || !slackBotToken.trim()}>
                   {savingSlack ? <Loader2 className="h-4 w-4 animate-spin" /> : t('saveToken')}
                 </Button>
               </div>
@@ -557,7 +570,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="pt-4 border-t">
-              <Button size="sm" onClick={handleSaveThresholds} disabled={savingThresholds}>
+              <Button size="sm" onClick={handleSaveThresholds} disabled={!canUpdate || savingThresholds}>
                 {savingThresholds ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {t('saveThresholds')}
               </Button>

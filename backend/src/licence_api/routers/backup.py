@@ -266,9 +266,10 @@ async def update_backup_config(
             http_request=request,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Backup operation failed",
         )
 
 
@@ -334,9 +335,10 @@ async def download_backup(
             },
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Backup operation failed",
         )
 
 
@@ -360,9 +362,10 @@ async def delete_backup(
         )
         return None
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Backup operation failed",
         )
 
 
@@ -389,7 +392,8 @@ async def restore_from_backup(
             http_request=request,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Backup operation failed",
         )

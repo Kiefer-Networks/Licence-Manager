@@ -1,7 +1,9 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +62,11 @@ export default function ProviderDetailPage() {
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
   const { formatDate, formatDateTimeWithSeconds, formatCurrency, formatNumber } = useLocale();
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canUpdate = hasPermission(Permissions.PROVIDERS_UPDATE);
+  const canDelete = hasPermission(Permissions.PROVIDERS_DELETE);
+  const canSync = hasPermission(Permissions.PROVIDERS_SYNC);
 
   const detail = useProviderDetail(providerId, t, tCommon, tLicenses);
 
@@ -176,7 +183,14 @@ export default function ProviderDetailPage() {
     fetchLicenses,
   } = detail;
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.PROVIDERS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">
@@ -251,13 +265,13 @@ export default function ProviderDetailPage() {
               </div>
             </div>
           <div className="flex items-center gap-2">
-            {!isManual && (
+            {!isManual && canSync && (
               <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
                 Sync
               </Button>
             )}
-            {isManual && (
+            {isManual && canUpdate && (
               <>
                 <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" />

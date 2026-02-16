@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -59,6 +62,9 @@ export default function ReportsPage() {
   const tLicenses = useTranslations('licenses');
   const tExport = useTranslations('export');
   const { formatDate, formatCurrency } = useLocale();
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canExport = hasPermission(Permissions.REPORTS_EXPORT);
 
   const {
     inactiveReport,
@@ -85,6 +91,21 @@ export default function ReportsPage() {
     handleExportCosts,
   } = useReports(t, tCommon, tLicenses, tExport);
 
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.REPORTS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -97,9 +118,11 @@ export default function ReportsPage() {
 
           <div className="flex items-center gap-3">
             {/* Export Button */}
-            <ExportButton
-              department={selectedDepartment !== 'all' ? selectedDepartment : undefined}
-            />
+            {canExport && (
+              <ExportButton
+                department={selectedDepartment !== 'all' ? selectedDepartment : undefined}
+              />
+            )}
 
             {/* Department Filter */}
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
@@ -516,16 +539,18 @@ export default function ReportsPage() {
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportInactive}
-                  disabled={!inactiveReport || inactiveReport.licenses.length === 0}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  {t('exportCSV')}
-                </Button>
+                {canExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportInactive}
+                    disabled={!inactiveReport || inactiveReport.licenses.length === 0}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t('exportCSV')}
+                  </Button>
+                )}
               </div>
 
               {/* Stats */}
@@ -640,16 +665,18 @@ export default function ReportsPage() {
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportOffboarding}
-                  disabled={!offboardingReport || offboardingReport.employees.length === 0}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  {t('exportCSV')}
-                </Button>
+                {canExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportOffboarding}
+                    disabled={!offboardingReport || offboardingReport.employees.length === 0}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t('exportCSV')}
+                  </Button>
+                )}
               </div>
 
               {/* Stats */}
@@ -699,16 +726,18 @@ export default function ReportsPage() {
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportExternalUsers}
-                  disabled={!externalUsersReport || externalUsersReport.licenses.length === 0}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  {t('exportCSV')}
-                </Button>
+                {canExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportExternalUsers}
+                    disabled={!externalUsersReport || externalUsersReport.licenses.length === 0}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t('exportCSV')}
+                  </Button>
+                )}
               </div>
 
               {/* Stats */}
@@ -825,16 +854,18 @@ export default function ReportsPage() {
               {/* Header with Export */}
               <div className="flex items-center justify-between">
                 <div />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportCosts}
-                  disabled={!costReport || costReport.monthly_costs.length === 0}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  {t('exportCSV')}
-                </Button>
+                {canExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCosts}
+                    disabled={!costReport || costReport.monthly_costs.length === 0}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t('exportCSV')}
+                  </Button>
+                )}
               </div>
 
               {/* Stats */}

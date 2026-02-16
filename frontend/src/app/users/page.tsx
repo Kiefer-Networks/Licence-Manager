@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,6 +29,11 @@ export default function UsersPage() {
   const tUsers = useTranslations('users');
   const tServiceAccounts = useTranslations('serviceAccounts');
   const tAdminAccounts = useTranslations('adminAccounts');
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canEdit = hasPermission(Permissions.USERS_EDIT);
+  const canViewAdminUsers = hasPermission(Permissions.ADMIN_USERS_VIEW);
+  const canCreateAdminUsers = hasPermission(Permissions.ADMIN_USERS_CREATE);
 
   const {
     employees,
@@ -57,6 +65,21 @@ export default function UsersPage() {
     showToast,
     loadEmployees,
   } = useEmployees();
+
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.USERS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <AppLayout>
@@ -138,25 +161,27 @@ export default function UsersPage() {
                 {total} {t('employee')}{total !== 1 ? 's' : ''}
               </span>
 
-              <div className="flex items-center gap-2 ml-auto">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowImportDialog(true)}
-                  className="h-9 gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  {t('importEmployees')}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setShowAddEmployee(true)}
-                  className="h-9 gap-2"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  {t('addEmployee')}
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowImportDialog(true)}
+                    className="h-9 gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {t('importEmployees')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAddEmployee(true)}
+                    className="h-9 gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    {t('addEmployee')}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Table */}

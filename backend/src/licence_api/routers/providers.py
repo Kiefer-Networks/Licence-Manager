@@ -23,6 +23,8 @@ from licence_api.models.dto.provider import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
     PROVIDER_TEST_CONNECTION_LIMIT,
     SENSITIVE_OPERATION_LIMIT,
     limiter,
@@ -73,7 +75,9 @@ class SyncResponse(BaseModel):
 
 
 @router.get("", response_model=ProviderListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_providers(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
 ) -> ProviderListResponse:
@@ -97,7 +101,9 @@ async def list_providers(
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_provider(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -113,7 +119,9 @@ async def get_provider(
 
 
 @router.get("/{provider_id}/public-credentials", response_model=PublicCredentialsResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_provider_public_credentials(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     provider_service: Annotated[ProviderService, Depends(get_provider_service)],
@@ -250,7 +258,9 @@ async def upload_provider_logo(
 
 
 @router.get("/{provider_id}/logo/{filename}")
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_provider_logo_file(
+    request: Request,
     provider_id: UUID,
     filename: Annotated[str, Path(max_length=100, pattern=r"^[a-zA-Z0-9_.-]+$")],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
@@ -489,7 +499,9 @@ class LicenseTypesResponse(BaseModel):
 
 
 @router.get("/{provider_id}/license-types", response_model=LicenseTypesResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_provider_license_types(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
@@ -519,7 +531,9 @@ async def get_provider_license_types(
 
 
 @router.get("/{provider_id}/pricing", response_model=LicenseTypePricingResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_provider_pricing(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
@@ -602,7 +616,9 @@ class IndividualLicenseTypePricingRequest(BaseModel):
 @router.get(
     "/{provider_id}/individual-license-types", response_model=IndividualLicenseTypesResponse
 )
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_provider_individual_license_types(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],

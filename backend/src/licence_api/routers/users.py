@@ -17,7 +17,12 @@ from licence_api.models.dto.employee import (
     EmployeeUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.employee_service import EmployeeService
 from licence_api.services.manual_employee_service import ManualEmployeeService
 from licence_api.utils.validation import (
@@ -88,7 +93,9 @@ async def list_employees(
 
 
 @router.get("/employees/departments", response_model=list[str])
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_departments(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     employee_service: Annotated[EmployeeService, Depends(get_employee_service)],
 ) -> list[str]:
@@ -97,7 +104,9 @@ async def list_departments(
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_employee(
+    request: Request,
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     employee_service: Annotated[EmployeeService, Depends(get_employee_service)],

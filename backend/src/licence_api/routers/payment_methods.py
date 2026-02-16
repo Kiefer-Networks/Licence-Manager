@@ -1,5 +1,6 @@
 """Payment methods router."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -25,14 +26,22 @@ class PaymentMethodUsageResponse(BaseModel):
 
 
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.payment_method_service import PaymentMethodService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("", response_model=PaymentMethodListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_payment_methods(
+    request: Request,
     current_user: Annotated[
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
     ],
@@ -67,7 +76,9 @@ async def create_payment_method(
 
 
 @router.get("/{payment_method_id}", response_model=PaymentMethodResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_payment_method(
+    request: Request,
     payment_method_id: UUID,
     current_user: Annotated[
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
@@ -85,7 +96,9 @@ async def get_payment_method(
 
 
 @router.get("/{payment_method_id}/usage", response_model=PaymentMethodUsageResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_payment_method_usage(
+    request: Request,
     payment_method_id: UUID,
     current_user: Annotated[
         AdminUser, Depends(require_permission(Permissions.PAYMENT_METHODS_VIEW))
@@ -153,11 +166,12 @@ async def delete_payment_method(
             force=force,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         error_msg = str(e)
         if "used by" in error_msg:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=error_msg,
+                detail="Payment method is in use and cannot be deleted",
             )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

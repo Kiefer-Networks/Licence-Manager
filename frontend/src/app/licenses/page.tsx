@@ -1,7 +1,9 @@
 'use client';
 
-import { Suspense, useCallback, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { License, Provider } from '@/lib/api';
@@ -33,9 +35,24 @@ import Link from 'next/link';
 function LicensesContent() {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canCreate = hasPermission(Permissions.LICENSES_CREATE);
+  const canUpdate = hasPermission(Permissions.LICENSES_UPDATE);
+  const canDelete = hasPermission(Permissions.LICENSES_DELETE);
+  const canAssign = hasPermission(Permissions.LICENSES_ASSIGN);
+  const canBulk = hasPermission(Permissions.LICENSES_BULK);
+  const canImport = hasPermission(Permissions.LICENSES_IMPORT);
 
   // Use custom hook for license data management
   const licenses = useLicenses();
+
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.LICENSES_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
 
   // Tab change handler
   const handleTabChange = useCallback((tab: LicenseTab) => {
@@ -189,7 +206,7 @@ function LicensesContent() {
         />
 
         {/* Table */}
-        {licenses.loading ? (
+        {authLoading || licenses.loading ? (
           <div className="border rounded-lg bg-white flex items-center justify-center h-64">
             <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
           </div>

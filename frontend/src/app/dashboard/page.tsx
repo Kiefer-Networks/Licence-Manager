@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +43,8 @@ export default function DashboardPage() {
   const tProviders = useTranslations('providers');
   const tEmployees = useTranslations('employees');
   const { formatDate, formatCurrency, formatNumber } = useLocale();
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
 
   const {
     dashboard,
@@ -61,7 +66,14 @@ export default function DashboardPage() {
     handleSync,
   } = useDashboard({ tProviders });
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.DASHBOARD_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="max-w-6xl mx-auto">

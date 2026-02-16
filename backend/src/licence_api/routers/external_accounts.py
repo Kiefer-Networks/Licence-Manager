@@ -21,6 +21,12 @@ from licence_api.models.dto.external_account import (
     UsernameMatchingSettingUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.external_account_service import ExternalAccountService
 
 logger = logging.getLogger(__name__)
@@ -29,7 +35,9 @@ router = APIRouter()
 
 # Settings endpoint
 @router.get("/settings/username-matching", response_model=UsernameMatchingSettingResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_username_matching_setting(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
 ) -> UsernameMatchingSettingResponse:
@@ -39,6 +47,7 @@ async def get_username_matching_setting(
 
 
 @router.put("/settings/username-matching", response_model=UsernameMatchingSettingResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def update_username_matching_setting(
     request: Request,
     data: UsernameMatchingSettingUpdate,
@@ -59,7 +68,9 @@ async def update_username_matching_setting(
     "/employees/{employee_id}/external-accounts",
     response_model=ExternalAccountListResponse,
 )
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_employee_external_accounts(
+    request: Request,
     employee_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
@@ -92,6 +103,7 @@ async def get_employee_external_accounts(
     response_model=ExternalAccountResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def link_external_account(
     request: Request,
     data: ExternalAccountCreate,
@@ -122,14 +134,16 @@ async def link_external_account(
             updated_at=account.updated_at,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Failed to link external account",
         )
 
 
 # Unlink an external account
 @router.delete("/external-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def unlink_external_account(
     request: Request,
     account_id: UUID,
@@ -151,7 +165,9 @@ async def unlink_external_account(
 
 # Get suggestions for linking
 @router.post("/external-accounts/suggestions", response_model=SuggestionsResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def get_employee_suggestions(
+    request: Request,
     data: SuggestionsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
@@ -167,6 +183,7 @@ async def get_employee_suggestions(
 
 # Bulk link accounts
 @router.post("/external-accounts/bulk", response_model=BulkLinkResponse)
+@limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_link_accounts(
     request: Request,
     data: BulkLinkRequest,
@@ -188,7 +205,9 @@ async def bulk_link_accounts(
 
 # Lookup by external username
 @router.get("/external-accounts/lookup/{provider_type}/{username}")
+@limiter.limit(API_DEFAULT_LIMIT)
 async def lookup_by_external_username(
+    request: Request,
     provider_type: Annotated[str, Path(max_length=50, pattern=r"^[a-z0-9_-]+$")],
     username: Annotated[str, Path(max_length=255)],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],

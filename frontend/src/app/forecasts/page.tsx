@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,6 +51,9 @@ const HISTORY_DEPTHS: { value: HistoryDepth; key: string }[] = [
 
 export default function ForecastsPage() {
   const t = useTranslations('forecasts');
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+
   const {
     forecast,
     adjustedForecast,
@@ -73,7 +79,14 @@ export default function ForecastsPage() {
     resetAdjustments,
   } = useForecasts();
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.REPORTS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">

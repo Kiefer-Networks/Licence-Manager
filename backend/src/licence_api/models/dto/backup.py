@@ -133,9 +133,9 @@ class BackupConfigUpdate(BaseModel):
     """Request to update backup configuration."""
 
     enabled: bool | None = None
-    schedule: str | None = None  # Cron format
+    schedule: str | None = Field(None, max_length=100)  # Cron format
     retention_count: int | None = Field(None, ge=1, le=100)
-    password: str | None = Field(None, min_length=12)  # New encryption password
+    password: str | None = Field(None, min_length=12, max_length=256)  # New encryption password
 
 
 class StoredBackupMetadata(BaseModel):

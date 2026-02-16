@@ -20,7 +20,12 @@ from licence_api.models.dto.service_account import (
     ServiceAccountPatternResponse,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
 from licence_api.utils.validation import validate_sort_by
@@ -41,7 +46,9 @@ class ServiceAccountLicenseListResponse(BaseModel):
 
 
 @router.get("/patterns", response_model=ServiceAccountPatternListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_patterns(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ServiceAccountPatternListResponse:
@@ -53,7 +60,9 @@ async def list_patterns(
 
 
 @router.get("/patterns/{pattern_id}", response_model=ServiceAccountPatternResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_pattern(
+    request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
@@ -158,7 +167,9 @@ async def apply_patterns(
 
 
 @router.get("/licenses", response_model=ServiceAccountLicenseListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_service_account_licenses(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
     search: str | None = Query(default=None, max_length=200),
@@ -194,7 +205,9 @@ async def list_service_account_licenses(
 
 # License Type endpoints
 @router.get("/license-types", response_model=ServiceAccountLicenseTypeListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_license_types(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],
 ) -> ServiceAccountLicenseTypeListResponse:
@@ -206,7 +219,9 @@ async def list_license_types(
 
 
 @router.get("/license-types/{entry_id}", response_model=ServiceAccountLicenseTypeResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_license_type(
+    request: Request,
     entry_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[ServiceAccountService, Depends(get_service_account_service)],

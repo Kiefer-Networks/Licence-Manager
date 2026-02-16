@@ -36,7 +36,7 @@ from licence_api.security.auth import (
     require_permission,
     require_superadmin,
 )
-from licence_api.security.rate_limit import limiter
+from licence_api.security.rate_limit import API_DEFAULT_LIMIT, EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.rbac_service import RbacService
 from licence_api.utils.errors import (
     raise_bad_request,
@@ -64,7 +64,9 @@ class UserListResponse(BaseModel):
 
 
 @router.get("/users", response_model=UserListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_users(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> UserListResponse:
@@ -100,7 +102,9 @@ async def create_user(
 
 
 @router.get("/users/{user_id}", response_model=UserInfo)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_user(
+    request: Request,
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.USERS_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
@@ -164,7 +168,9 @@ async def delete_user(
 
 
 @router.get("/users/{user_id}/sessions", response_model=list[SessionInfo])
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_user_sessions(
+    request: Request,
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     service: Annotated[RbacService, Depends(get_rbac_service)],
@@ -204,7 +210,9 @@ class RoleListResponse(BaseModel):
 
 
 @router.get("/roles", response_model=RoleListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_roles(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> RoleListResponse:
@@ -231,7 +239,9 @@ async def create_role(
 
 
 @router.get("/roles/{role_id}", response_model=RoleResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_role(
+    request: Request,
     role_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
@@ -298,7 +308,9 @@ class PermissionListResponse(BaseModel):
 
 
 @router.get("/permissions", response_model=PermissionListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_permissions(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> PermissionListResponse:
@@ -320,7 +332,9 @@ async def list_permissions(
 
 
 @router.get("/permissions/by-category", response_model=list[PermissionsByCategory])
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_permissions_by_category(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.ROLES_VIEW))],
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> list[PermissionsByCategory]:

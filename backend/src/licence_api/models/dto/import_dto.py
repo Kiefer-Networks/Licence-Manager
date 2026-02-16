@@ -10,18 +10,18 @@ from pydantic import BaseModel, Field
 class CSVOptions(BaseModel):
     """CSV parsing options."""
 
-    delimiter: str = ","
-    encoding: str = "utf-8"
+    delimiter: str = Field(",", max_length=1)
+    encoding: str = Field("utf-8", max_length=20)
     has_header: bool = True
     skip_rows: int = 0
-    quote_char: str = '"'
+    quote_char: str = Field('"', max_length=1)
 
 
 class ImportColumnMapping(BaseModel):
     """Mapping from file column to system field."""
 
-    file_column: str
-    system_field: str | None = None  # None = ignore column
+    file_column: str = Field(max_length=255)
+    system_field: str | None = Field(None, max_length=255)  # None = ignore column
 
 
 class ImportOptions(BaseModel):
@@ -29,8 +29,8 @@ class ImportOptions(BaseModel):
 
     error_handling: Literal["strict", "skip"] = "skip"
     csv_options: CSVOptions | None = None
-    default_status: str = "active"
-    default_currency: str = "EUR"
+    default_status: str = Field("active", max_length=50)
+    default_currency: str = Field("EUR", max_length=3)
 
 
 class ImportUploadResponse(BaseModel):

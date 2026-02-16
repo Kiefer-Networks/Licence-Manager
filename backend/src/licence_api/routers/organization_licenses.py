@@ -14,7 +14,7 @@ from licence_api.models.dto.organization_license import (
     OrganizationLicenseUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.organization_license_service import OrganizationLicenseService
 from licence_api.utils.errors import raise_not_found
 
@@ -22,7 +22,9 @@ router = APIRouter()
 
 
 @router.get("/{provider_id}/org-licenses", response_model=OrganizationLicenseListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_organization_licenses(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[OrganizationLicenseService, Depends(get_organization_license_service)],

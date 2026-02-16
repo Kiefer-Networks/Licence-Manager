@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +42,11 @@ import { usePaymentMethods } from '@/hooks/use-payment-methods';
 export default function FinancePage() {
   const t = useTranslations('finance');
   const tCommon = useTranslations('common');
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canCreate = hasPermission(Permissions.PAYMENT_METHODS_CREATE);
+  const canUpdate = hasPermission(Permissions.PAYMENT_METHODS_UPDATE);
+  const canDelete = hasPermission(Permissions.PAYMENT_METHODS_DELETE);
 
   const {
     loading,
@@ -55,6 +63,13 @@ export default function FinancePage() {
     handleDeletePaymentMethod,
   } = usePaymentMethods(t, tCommon);
 
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.PAYMENT_METHODS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
   const getPaymentMethodIcon = (type: string) => {
     switch (type) {
       case 'credit_card':
@@ -66,7 +81,7 @@ export default function FinancePage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-96">
@@ -102,10 +117,12 @@ export default function FinancePage() {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-medium">{t('paymentMethods')}</h2>
             </div>
-            <Button size="sm" variant="outline" onClick={() => handleOpenPaymentMethodDialog()}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              {t('addPaymentMethod')}
-            </Button>
+            {canCreate && (
+              <Button size="sm" variant="outline" onClick={() => handleOpenPaymentMethodDialog()}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                {t('addPaymentMethod')}
+              </Button>
+            )}
           </div>
 
           <div className="border rounded-lg bg-white p-4 space-y-4">
@@ -155,12 +172,16 @@ export default function FinancePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenPaymentMethodDialog(method)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeletePaymentMethod(method.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canUpdate && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenPaymentMethodDialog(method)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeletePaymentMethod(method.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

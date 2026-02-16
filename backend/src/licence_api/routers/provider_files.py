@@ -11,7 +11,12 @@ from pydantic import BaseModel
 from licence_api.dependencies import get_provider_file_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.provider_file_service import (
     VIEWABLE_EXTENSIONS,
     ProviderFileService,
@@ -50,7 +55,9 @@ class ProviderFilesListResponse(BaseModel):
 
 
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_provider_files(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
     service: Annotated[ProviderFileService, Depends(get_provider_file_service)],
@@ -136,7 +143,9 @@ async def upload_provider_file(
 
 
 @router.get("/{provider_id}/files/{file_id}/download")
+@limiter.limit(API_DEFAULT_LIMIT)
 async def download_provider_file(
+    request: Request,
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],
@@ -160,7 +169,9 @@ async def download_provider_file(
 
 
 @router.get("/{provider_id}/files/{file_id}/view")
+@limiter.limit(API_DEFAULT_LIMIT)
 async def view_provider_file(
+    request: Request,
     provider_id: UUID,
     file_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_VIEW))],

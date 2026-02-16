@@ -18,6 +18,7 @@ from licence_api.models.dto.license import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
     EXPENSIVE_READ_LIMIT,
     SENSITIVE_OPERATION_LIMIT,
     limiter,
@@ -200,7 +201,9 @@ async def get_pending_suggestions(
 
 
 @router.get("/{license_id}", response_model=LicenseResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_license(
+    request: Request,
     license_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     license_service: Annotated[LicenseService, Depends(get_license_service)],

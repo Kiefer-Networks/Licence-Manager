@@ -9,7 +9,12 @@ from pydantic import BaseModel, Field, field_validator
 from licence_api.dependencies import get_notification_service, get_settings_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, get_current_user, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.notification_service import NotificationService
 from licence_api.services.settings_service import SettingsService
 
@@ -190,7 +195,9 @@ async def get_setup_status(
 
 
 @router.get("/status/detailed", response_model=SetupStatusDetailedResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_setup_status_detailed(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SetupStatusDetailedResponse:
@@ -205,7 +212,9 @@ async def get_setup_status_detailed(
 
 
 @router.get("", response_model=dict[str, Any])
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_all_settings(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> dict[str, Any]:
@@ -214,7 +223,9 @@ async def get_all_settings(
 
 
 @router.get("/company-domains", response_model=CompanyDomainsResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_company_domains(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> CompanyDomainsResponse:
@@ -243,7 +254,9 @@ async def set_company_domains(
 
 
 @router.get("/thresholds", response_model=ThresholdSettings)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_threshold_settings(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> ThresholdSettings:
@@ -275,7 +288,9 @@ async def update_threshold_settings(
 
 
 @router.get("/system", response_model=SystemSettings)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_system_settings(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> SystemSettings:
@@ -308,7 +323,9 @@ async def update_system_settings(
 
 
 @router.get("/{key}", response_model=dict[str, Any] | None)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_setting(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
     key: str = Path(max_length=100, pattern=r"^[a-z][a-z0-9_]*$"),
@@ -357,7 +374,9 @@ async def delete_setting(
 
 
 @router.get("/notifications/rules", response_model=list[NotificationRuleResponse])
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_notification_rules(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> list[NotificationRuleResponse]:

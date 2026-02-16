@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +31,8 @@ export default function LifecyclePage() {
   const tProviders = useTranslations('providers');
   const tCommon = useTranslations('common');
   const { formatDate, formatCurrency } = useLocale();
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
 
   const {
     overview,
@@ -47,7 +52,14 @@ export default function LifecyclePage() {
     handleToggleNeedsReorder,
   } = useLifecycle(t);
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.LICENSES_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="max-w-6xl mx-auto space-y-6">

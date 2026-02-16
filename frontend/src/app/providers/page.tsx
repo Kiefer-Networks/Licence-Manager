@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +44,12 @@ export default function ProvidersPage() {
   const tLicenses = useTranslations('licenses');
   const tSetup = useTranslations('providerSetup');
   const { formatDate } = useLocale();
+  const router = useRouter();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canCreate = hasPermission(Permissions.PROVIDERS_CREATE);
+  const canUpdate = hasPermission(Permissions.PROVIDERS_UPDATE);
+  const canDelete = hasPermission(Permissions.PROVIDERS_DELETE);
+  const canSync = hasPermission(Permissions.PROVIDERS_SYNC);
 
   const {
     hrisProviders,
@@ -81,7 +90,14 @@ export default function ProvidersPage() {
     isManualProvider,
   } = useProviders({ t, tCommon });
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.PROVIDERS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <PageLoader />
@@ -115,7 +131,7 @@ export default function ProvidersPage() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-medium">{t('hrisConnection')}</h2>
             </div>
-            {hrisProviders.length === 0 && (
+            {hrisProviders.length === 0 && canCreate && (
               <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('hris')}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 {t('connectHris')}
@@ -140,15 +156,21 @@ export default function ProvidersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-0">{t('connected')}</Badge>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSyncProvider(provider.id)} disabled={syncingProviderId === provider.id}>
-                      <RefreshCw className={`h-4 w-4 ${syncingProviderId === provider.id ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(provider)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700" onClick={() => { setDeletingProvider(provider); setDeleteDialogOpen(true); }}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canSync && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSyncProvider(provider.id)} disabled={syncingProviderId === provider.id}>
+                        <RefreshCw className={`h-4 w-4 ${syncingProviderId === provider.id ? 'animate-spin' : ''}`} />
+                      </Button>
+                    )}
+                    {canUpdate && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(provider)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700" onClick={() => { setDeletingProvider(provider); setDeleteDialogOpen(true); }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -168,10 +190,12 @@ export default function ProvidersPage() {
               <Key className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-medium">{t('licenseProvidersSection')}</h2>
             </div>
-            <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('license')}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              {t('addProvider')}
-            </Button>
+            {canCreate && (
+              <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog('license')}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                {t('addProvider')}
+              </Button>
+            )}
           </div>
 
           {licenseProviders.length > 0 ? (
@@ -222,7 +246,7 @@ export default function ProvidersPage() {
                         <Badge variant="secondary" className={isManual ? 'bg-purple-50 text-purple-700 border-0' : provider.enabled ? 'bg-emerald-50 text-emerald-700 border-0' : ''}>
                           {isManual ? t('manual') : provider.enabled ? t('active') : t('disabled')}
                         </Badge>
-                        {!isManual && (
+                        {!isManual && canSync && (
                           <Button
                             variant="ghost"
                             size="icon"

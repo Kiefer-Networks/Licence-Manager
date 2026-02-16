@@ -1,7 +1,9 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,10 +53,13 @@ import { useEmployeeDetail } from '@/hooks/use-employee-detail';
 export default function UserDetailPage() {
   const params = useParams();
   const employeeId = params.id as string;
+  const router = useRouter();
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
   const tEmployees = useTranslations('employees');
   const { formatDate, formatCurrency } = useLocale();
+  const { hasPermission, isLoading: authLoading } = useAuth();
+  const canEdit = hasPermission(Permissions.USERS_EDIT);
 
   const {
     employee,
@@ -93,7 +98,14 @@ export default function UserDetailPage() {
     linkableProviderTypes,
   } = useEmployeeDetail(employeeId, t, tCommon, tEmployees);
 
-  if (loading) {
+  useEffect(() => {
+    if (!authLoading && !hasPermission(Permissions.USERS_VIEW)) {
+      router.push('/unauthorized');
+      return;
+    }
+  }, [authLoading, hasPermission, router]);
+
+  if (authLoading || loading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">
@@ -190,10 +202,12 @@ export default function UserDetailPage() {
                 </div>
               </div>
             </div>
-          <Button size="sm" onClick={openAssignDialog}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            {tEmployees('assignLicense')}
-          </Button>
+          {canEdit && (
+            <Button size="sm" onClick={openAssignDialog}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {tEmployees('assignLicense')}
+            </Button>
+          )}
         </div>
 
         {/* Info Cards */}
@@ -258,9 +272,11 @@ export default function UserDetailPage() {
               <div className="p-8 text-center text-muted-foreground">
                 <Key className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">{tEmployees('noLicensesAssigned')}</p>
-                <Button variant="link" size="sm" onClick={openAssignDialog} className="mt-2">
-                  {tEmployees('assignALicense')}
-                </Button>
+                {canEdit && (
+                  <Button variant="link" size="sm" onClick={openAssignDialog} className="mt-2">
+                    {tEmployees('assignALicense')}
+                  </Button>
+                )}
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -319,28 +335,30 @@ export default function UserDetailPage() {
                           {license.monthly_cost ? formatMonthlyCost(license.monthly_cost, license.currency) : '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setUnassignDialog(license)}
-                              title={t('unassignLicense')}
-                            >
-                              <UserMinus className="h-3.5 w-3.5" />
-                            </Button>
-                            {isRemovable && (
+                          {canEdit && (
+                            <div className="flex items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-red-600"
-                                onClick={() => setRemoveDialog(license)}
-                                title={t('removeFromProvider')}
+                                className="h-7 w-7"
+                                onClick={() => setUnassignDialog(license)}
+                                title={t('unassignLicense')}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <UserMinus className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                          </div>
+                              {isRemovable && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-red-600"
+                                  onClick={() => setRemoveDialog(license)}
+                                  title={t('removeFromProvider')}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -406,10 +424,12 @@ export default function UserDetailPage() {
               <Link2 className="h-4 w-4 text-muted-foreground" />
               {tEmployees('externalAccounts')}
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => setLinkDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              {tEmployees('linkExternalAccount')}
-            </Button>
+            {canEdit && (
+              <Button variant="ghost" size="sm" onClick={() => setLinkDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                {tEmployees('linkExternalAccount')}
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mb-3">
             {tEmployees('externalAccountsDescription')}
@@ -419,9 +439,11 @@ export default function UserDetailPage() {
               <div className="p-8 text-center text-muted-foreground">
                 <Link2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">{tEmployees('noExternalAccounts')}</p>
-                <Button variant="link" size="sm" onClick={() => setLinkDialogOpen(true)} className="mt-2">
-                  {tEmployees('linkExternalAccount')}
-                </Button>
+                {canEdit && (
+                  <Button variant="link" size="sm" onClick={() => setLinkDialogOpen(true)} className="mt-2">
+                    {tEmployees('linkExternalAccount')}
+                  </Button>
+                )}
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -451,15 +473,17 @@ export default function UserDetailPage() {
                         {account.linked_at ? formatDate(account.linked_at) : '-'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-600"
-                          onClick={() => setUnlinkDialog(account)}
-                          title={tEmployees('unlinkAccount')}
-                        >
-                          <Unlink className="h-3.5 w-3.5" />
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-600"
+                            onClick={() => setUnlinkDialog(account)}
+                            title={tEmployees('unlinkAccount')}
+                          >
+                            <Unlink className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -47,9 +47,11 @@ from licence_api.models.dto.auth import (
 from licence_api.security.auth import get_current_user
 from licence_api.security.csrf import generate_csrf_token
 from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
     AUTH_LOGIN_LIMIT,
     AUTH_LOGOUT_LIMIT,
     AUTH_REFRESH_LIMIT,
+    EXPENSIVE_READ_LIMIT,
     limiter,
 )
 from licence_api.services.auth_service import AuthService
@@ -256,7 +258,8 @@ async def get_csrf_token(request: Request, response: Response) -> CsrfTokenRespo
 
 
 @router.get("/config", response_model=AuthConfigResponse)
-async def get_auth_config() -> AuthConfigResponse:
+@limiter.limit(API_DEFAULT_LIMIT)
+async def get_auth_config(request: Request) -> AuthConfigResponse:
     """Get authentication configuration."""
     settings = get_settings()
     return AuthConfigResponse(google_oauth_enabled=settings.google_oauth_enabled)
@@ -453,7 +456,9 @@ async def logout_all_sessions(
 
 
 @router.get("/me", response_model=UserInfo)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_current_user_info(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserInfo:
@@ -526,7 +531,9 @@ async def upload_avatar(
 
 
 @router.get("/avatar/{user_id}")
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_avatar(
+    request: Request,
     user_id: UUID,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
@@ -563,7 +570,9 @@ async def delete_avatar(
 
 
 @router.get("/me/notification-preferences", response_model=UserNotificationPreferencesResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_notification_preferences(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(get_current_user)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferencesResponse:

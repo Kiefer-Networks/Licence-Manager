@@ -1,5 +1,6 @@
 """Admin Accounts router for managing admin account patterns and detecting orphans."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -17,11 +18,17 @@ from licence_api.models.dto.admin_account import (
 )
 from licence_api.models.dto.license import LicenseResponse
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.admin_account_service import AdminAccountService
 from licence_api.services.cache_service import get_cache_service
 from licence_api.utils.validation import validate_sort_by
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Allowed sort columns for admin account licenses (whitelist to prevent injection)
@@ -38,7 +45,9 @@ class AdminAccountLicenseListResponse(BaseModel):
 
 
 @router.get("/patterns", response_model=AdminAccountPatternListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_patterns(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> AdminAccountPatternListResponse:
@@ -50,7 +59,9 @@ async def list_patterns(
 
 
 @router.get("/patterns/{pattern_id}", response_model=AdminAccountPatternResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_pattern(
+    request: Request,
     pattern_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
@@ -89,9 +100,10 @@ async def create_pattern(
             request=request,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Invalid pattern configuration",
         )
 
 
@@ -154,7 +166,9 @@ async def apply_patterns(
 
 
 @router.get("/licenses", response_model=AdminAccountLicenseListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_admin_account_licenses(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
     search: str | None = Query(default=None, max_length=200),
@@ -194,7 +208,9 @@ async def list_admin_account_licenses(
 
 
 @router.get("/orphaned", response_model=OrphanedAdminAccountsResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_orphaned_admin_accounts(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
     service: Annotated[AdminAccountService, Depends(get_admin_account_service)],
 ) -> OrphanedAdminAccountsResponse:

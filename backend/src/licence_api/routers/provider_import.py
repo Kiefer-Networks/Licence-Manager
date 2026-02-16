@@ -1,5 +1,6 @@
 """Provider import router for CSV license imports."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -17,14 +18,22 @@ from licence_api.models.dto.import_dto import (
     ImportValidateResponse,
 )
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import (
+    API_DEFAULT_LIMIT,
+    EXPENSIVE_READ_LIMIT,
+    SENSITIVE_OPERATION_LIMIT,
+    limiter,
+)
 from licence_api.services.import_service import ImportService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/{provider_id}/import/template")
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def download_template(
+    request: Request,
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_IMPORT))],
     service: Annotated[ImportService, Depends(get_import_service)],
@@ -89,9 +98,10 @@ async def upload_import_file(
             user=current_user,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Import operation failed",
         )
 
 
@@ -129,9 +139,10 @@ async def validate_import(
             user=current_user,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Import operation failed",
         )
 
 
@@ -170,14 +181,17 @@ async def execute_import(
             http_request=request,
         )
     except ValueError as e:
+        logger.warning("Operation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Import operation failed",
         )
 
 
 @router.get("/{provider_id}/import/jobs/{job_id}", response_model=ImportJobStatus)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_import_job_status(
+    request: Request,
     provider_id: UUID,
     job_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.LICENSES_VIEW))],
