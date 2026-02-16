@@ -16,6 +16,11 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG BACKEND_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV BACKEND_URL=$BACKEND_URL
+
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
@@ -32,6 +37,7 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/messages ./messages
 
 USER nextjs
 

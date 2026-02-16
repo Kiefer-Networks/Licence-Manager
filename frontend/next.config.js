@@ -2,12 +2,17 @@ const createNextIntlPlugin = require('next-intl/plugin');
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
-// API URL from environment, with localhost fallback for development
+// Public API URL for client-side (CSP headers, browser requests)
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Internal backend URL for server-side rewrites (Docker network)
+const backendUrl = process.env.BACKEND_URL || apiUrl;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  outputFileTracingIncludes: {
+    '/*': ['./messages/**'],
+  },
   reactStrictMode: true,
   images: {
     remotePatterns: [
@@ -84,7 +89,7 @@ const nextConfig = {
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${apiUrl}/api/v1/:path*`,
+        destination: `${backendUrl}/api/v1/:path*`,
       },
     ];
   },

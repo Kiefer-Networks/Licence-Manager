@@ -97,3 +97,4 @@ jobs:
           platforms: linux/amd64
           build-args: |
             NEXT_PUBLIC_API_URL=/api
+            BACKEND_URL=http://backend:8000
