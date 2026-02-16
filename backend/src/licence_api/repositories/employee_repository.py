@@ -4,7 +4,7 @@ import calendar
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, func, or_, select
 
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -431,15 +431,11 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
             # Employee was active if:
             # - start_date is NULL or start_date <= month_end
             # - termination_date is NULL or termination_date >= month_start
-            # - status check is implicit via date ranges
             conditions = [
-                case(
-                    (EmployeeORM.start_date.is_(None), True),
-                    else_=(EmployeeORM.start_date <= month_end),
-                ),
-                case(
-                    (EmployeeORM.termination_date.is_(None), True),
-                    else_=(EmployeeORM.termination_date >= month_start),
+                or_(EmployeeORM.start_date.is_(None), EmployeeORM.start_date <= month_end),
+                or_(
+                    EmployeeORM.termination_date.is_(None),
+                    EmployeeORM.termination_date >= month_start,
                 ),
             ]
 

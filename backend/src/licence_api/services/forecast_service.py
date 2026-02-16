@@ -1,8 +1,7 @@
 """Forecast service for cost projections and scenario simulations."""
 
-import calendar
 import math
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -18,8 +17,9 @@ from licence_api.models.dto.forecast import (
     ScenarioResult,
     ScenarioType,
 )
+from licence_api.models.orm.cost_snapshot import CostSnapshotORM
+from licence_api.models.orm.license_package import LicensePackageORM
 from licence_api.repositories.forecast_repository import ForecastRepository
-
 
 # Z-score for 80% confidence interval
 _Z_SCORE_80 = 1.28
@@ -182,9 +182,40 @@ class ForecastService:
             for dp in baseline_points
         ]
 
-        # Apply each adjustment
+        # Pre-fetch all data needed by adjustments to avoid N+1 queries
+        dept_costs = await self.repo.get_department_costs()
+        dept_headcount = await self.repo.get_active_count_by_department()
+        total_emps = await self.repo.get_active_employee_count()
+        latest_history = await self.repo.get_cost_history(months=1)
+        latest_total_cost = (
+            latest_history[-1].total_cost if latest_history else Decimal("0")
+        )
+
+        # Batch-fetch provider data for all referenced providers
+        provider_ids = {
+            adj.provider_id for adj in request.adjustments if adj.provider_id
+        }
+        provider_costs: dict[UUID, Decimal] = {}
+        for pid in provider_ids:
+            provider_costs[pid] = await self.repo.get_provider_current_cost(pid)
+
+        all_packages = await self.repo.get_provider_packages()
+        pkgs_by_provider: dict[UUID, list[LicensePackageORM]] = {}
+        for pkg in all_packages:
+            pkgs_by_provider.setdefault(pkg.provider_id, []).append(pkg)
+
+        # Apply each adjustment using pre-fetched data (no more async calls)
         for adj in request.adjustments:
-            await self._apply_adjustment(scenario_points, adj, history)
+            self._apply_adjustment(
+                scenario_points,
+                adj,
+                dept_costs=dept_costs,
+                dept_headcount=dept_headcount,
+                total_emps=total_emps,
+                latest_total_cost=latest_total_cost,
+                provider_costs=provider_costs,
+                provider_packages=pkgs_by_provider,
+            )
 
         baseline_total = sum(
             dp.cost for dp in baseline_points if not dp.is_historical
@@ -208,7 +239,7 @@ class ForecastService:
 
     def _build_forecast(
         self,
-        history: list,
+        history: list[CostSnapshotORM],
         forecast_months: int,
     ) -> list[ForecastDataPoint]:
         """Build forecast data points from historical data.
@@ -298,11 +329,9 @@ class ForecastService:
         packages_list = await self.repo.get_provider_packages()
 
         # Index packages by provider
-        packages_by_provider: dict[UUID, list] = {}
+        packages_by_provider: dict[UUID, list[LicensePackageORM]] = {}
         for pkg in packages_list:
-            if pkg.provider_id not in packages_by_provider:
-                packages_by_provider[pkg.provider_id] = []
-            packages_by_provider[pkg.provider_id].append(pkg)
+            packages_by_provider.setdefault(pkg.provider_id, []).append(pkg)
 
         results: list[ProviderForecast] = []
         for provider in providers:
@@ -407,21 +436,30 @@ class ForecastService:
                     employee_count=emp_count,
                     projected_employees=projected_emps,
                     current_cost=current_cost,
-                    projected_cost=Decimal(str(round(float(projected_cost), 2))),
-                    cost_per_employee=Decimal(str(round(float(cost_per_emp), 2))),
+                    projected_cost=round(projected_cost, 2),
+                    cost_per_employee=round(cost_per_emp, 2),
                 )
             )
 
         results.sort(key=lambda r: r.current_cost, reverse=True)
         return results
 
-    async def _apply_adjustment(
+    def _apply_adjustment(
         self,
         scenario_points: list[ForecastDataPoint],
         adj: ScenarioAdjustment,
-        history: list,
+        *,
+        dept_costs: dict[str, Decimal],
+        dept_headcount: dict[str, int],
+        total_emps: int,
+        latest_total_cost: Decimal,
+        provider_costs: dict[UUID, Decimal],
+        provider_packages: dict[UUID, list[LicensePackageORM]],
     ) -> None:
-        """Apply a single scenario adjustment to projected data points."""
+        """Apply a single scenario adjustment to projected data points.
+
+        Uses pre-fetched data to avoid N+1 queries.
+        """
         # Find the first projected month index
         projected_indices = [
             i for i, dp in enumerate(scenario_points) if not dp.is_historical
@@ -434,16 +472,24 @@ class ForecastService:
         start_idx = first_proj_idx + adj.effective_month - 1
 
         if adj.type == ScenarioType.ADD_EMPLOYEES:
-            delta = await self._get_employee_cost_delta(
-                adj.department, int(adj.value)
+            delta = self._get_employee_cost_delta(
+                adj.department, int(adj.value),
+                dept_costs=dept_costs,
+                dept_headcount=dept_headcount,
+                total_emps=total_emps,
+                latest_total_cost=latest_total_cost,
             )
             for i in range(start_idx, len(scenario_points)):
                 if not scenario_points[i].is_historical:
                     scenario_points[i].cost += delta
 
         elif adj.type == ScenarioType.REMOVE_EMPLOYEES:
-            delta = await self._get_employee_cost_delta(
-                adj.department, int(adj.value)
+            delta = self._get_employee_cost_delta(
+                adj.department, int(adj.value),
+                dept_costs=dept_costs,
+                dept_headcount=dept_headcount,
+                total_emps=total_emps,
+                latest_total_cost=latest_total_cost,
             )
             for i in range(start_idx, len(scenario_points)):
                 if not scenario_points[i].is_historical:
@@ -459,9 +505,7 @@ class ForecastService:
 
         elif adj.type == ScenarioType.REMOVE_PROVIDER:
             if adj.provider_id:
-                provider_cost = await self.repo.get_provider_current_cost(
-                    adj.provider_id
-                )
+                provider_cost = provider_costs.get(adj.provider_id, Decimal("0"))
                 for i in range(start_idx, len(scenario_points)):
                     if not scenario_points[i].is_historical:
                         scenario_points[i].cost = max(
@@ -471,19 +515,21 @@ class ForecastService:
 
         elif adj.type == ScenarioType.CHANGE_SEATS:
             if adj.provider_id:
-                packages = await self.repo.get_provider_packages(adj.provider_id)
+                packages = provider_packages.get(adj.provider_id, [])
                 if packages:
-                    # Use average cost per seat across packages
-                    costs = [
-                        float(p.cost_per_seat)
-                        for p in packages
-                        if p.cost_per_seat
+                    # Use average cost per seat across packages (Decimal precision)
+                    seat_costs = [
+                        p.cost_per_seat for p in packages if p.cost_per_seat
                     ]
-                    avg_cost = sum(costs) / len(costs) if costs else 0
+                    avg_cost = (
+                        sum(seat_costs, Decimal("0")) / len(seat_costs)
+                        if seat_costs
+                        else Decimal("0")
+                    )
                     current_seats = sum(p.total_seats for p in packages)
                     new_seats = int(adj.value)
                     seat_delta = new_seats - current_seats
-                    cost_change = Decimal(str(round(seat_delta * avg_cost, 2)))
+                    cost_change = round(Decimal(seat_delta) * avg_cost, 2)
                     for i in range(start_idx, len(scenario_points)):
                         if not scenario_points[i].is_historical:
                             scenario_points[i].cost = max(
@@ -493,9 +539,7 @@ class ForecastService:
 
         elif adj.type == ScenarioType.CHANGE_BILLING:
             if adj.provider_id:
-                provider_cost = await self.repo.get_provider_current_cost(
-                    adj.provider_id
-                )
+                provider_cost = provider_costs.get(adj.provider_id, Decimal("0"))
                 # Apply discount for yearly billing (~17.5% avg)
                 new_cycle = (adj.new_billing_cycle or "").lower()
                 if new_cycle == "yearly":
@@ -515,25 +559,27 @@ class ForecastService:
                             scenario_points[i].cost + cost_change,
                         )
 
-    async def _get_employee_cost_delta(
+    def _get_employee_cost_delta(
         self,
         department: str | None,
         count: int,
+        *,
+        dept_costs: dict[str, Decimal],
+        dept_headcount: dict[str, int],
+        total_emps: int,
+        latest_total_cost: Decimal,
     ) -> Decimal:
-        """Calculate cost impact of adding/removing employees."""
+        """Calculate cost impact of adding/removing employees.
+
+        Uses pre-fetched data to avoid redundant queries.
+        """
         if department:
-            dept_costs = await self.repo.get_department_costs()
-            dept_headcount = await self.repo.get_active_count_by_department()
             dept_cost = dept_costs.get(department, Decimal("0"))
             dept_count = dept_headcount.get(department, 0)
             cost_per_emp = dept_cost / dept_count if dept_count > 0 else Decimal("0")
         else:
-            # Use overall average
-            total_cost = Decimal("0")
-            history = await self.repo.get_cost_history(months=1)
-            if history:
-                total_cost = history[-1].total_cost
-            total_emps = await self.repo.get_active_employee_count()
-            cost_per_emp = total_cost / total_emps if total_emps > 0 else Decimal("0")
+            cost_per_emp = (
+                latest_total_cost / total_emps if total_emps > 0 else Decimal("0")
+            )
 
-        return Decimal(str(round(float(cost_per_emp) * count, 2)))
+        return round(cost_per_emp * count, 2)

@@ -11,6 +11,7 @@ from licence_api.models.dto.forecast import ForecastSummary, ScenarioRequest, Sc
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.forecast_service import ForecastService
+from licence_api.utils.validation import sanitize_department
 
 router = APIRouter()
 
@@ -33,10 +34,12 @@ async def get_forecast(
     cost snapshots. Includes confidence intervals and breakdowns by
     provider and department.
     """
+    sanitized_department = sanitize_department(department)
+
     return await forecast_service.get_forecast(
         months=months,
         provider_id=provider_id,
-        department=department,
+        department=sanitized_department,
     )
 
 

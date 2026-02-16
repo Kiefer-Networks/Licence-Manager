@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Play, RotateCcw } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, RotateCcw } from 'lucide-react';
 import { ScenarioAdjustment, ScenarioResult, ScenarioType, ProviderForecast } from '@/lib/api';
 import { useLocale } from '@/components/locale-provider';
 
@@ -99,7 +99,11 @@ export function ScenarioBuilder({
               {t('resetScenario')}
             </Button>
             <Button size="sm" onClick={onRunSimulation} disabled={adjustments.length === 0 || loading}>
-              <Play className="h-3.5 w-3.5 mr-1.5" />
+              {loading ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5 mr-1.5" />
+              )}
               {t('runSimulation')}
             </Button>
           </div>
@@ -252,6 +256,7 @@ export function ScenarioBuilder({
               size="sm"
               onClick={() => onRemoveAdjustment(idx)}
               className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500"
+              aria-label={t('removeAdjustment')}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
