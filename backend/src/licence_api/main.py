@@ -125,7 +125,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    """Custom rate limit handler returning RFC 7807 Problem Details."""
+    """Custom rate limit handler returning RFC 7807 Problem Details.
+
+    Includes Retry-After header per RFC 6585 Section 4.
+    """
     return JSONResponse(
         status_code=429,
         content={
@@ -135,7 +138,10 @@ async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded)
             "detail": "Rate limit exceeded",
             "instance": request.url.path,
         },
-        headers={"Content-Type": "application/problem+json"},
+        headers={
+            "Content-Type": "application/problem+json",
+            "Retry-After": "60",
+        },
     )
 
 

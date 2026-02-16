@@ -3131,14 +3131,11 @@ export const api = {
    * Get employee suggestions for a username.
    */
   async getEmployeeSuggestions(providerType: string, username: string, displayName?: string): Promise<SuggestionsResponse> {
-    return fetchApi<SuggestionsResponse>('/external-accounts/suggestions', {
-      method: 'POST',
-      body: JSON.stringify({
-        provider_type: providerType,
-        username,
-        display_name: displayName,
-      }),
+    const query = buildSearchParams({
+      provider_type: providerType,
+      display_name: displayName || username,
     });
+    return fetchApi<SuggestionsResponse>(`/external-accounts/suggestions${query}`);
   },
 
   // ============================================================================
@@ -3473,10 +3470,8 @@ export const api = {
   },
 
   async getAdjustedForecast(request: AdjustmentRequest): Promise<ForecastSummary> {
-    return fetchApi<ForecastSummary>('/forecasts/adjust', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    const query = buildSearchParams(request);
+    return fetchApi<ForecastSummary>(`/forecasts/adjust${query}`);
   },
 
   async simulateScenario(request: ScenarioRequest): Promise<ScenarioResult> {

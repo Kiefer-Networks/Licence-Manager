@@ -4,7 +4,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
 from licence_api.dependencies import get_external_account_service
 from licence_api.models.domain.admin_user import AdminUser
@@ -164,25 +164,27 @@ async def unlink_external_account(
 
 
 # Get suggestions for linking
-@router.post("/external-accounts/suggestions", response_model=SuggestionsResponse)
-@limiter.limit(SENSITIVE_OPERATION_LIMIT)
+@router.get("/external-accounts/suggestions", response_model=SuggestionsResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_employee_suggestions(
     request: Request,
-    data: SuggestionsRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
+    display_name: str = Query(..., min_length=1, max_length=255),
+    provider_type: str = Query(..., min_length=1, max_length=100),
+    limit: int = Query(default=5, ge=1, le=20),
 ) -> SuggestionsResponse:
     """Get employee suggestions for linking based on name similarity."""
     suggestions = await service.find_employee_suggestions(
-        display_name=data.display_name,
-        provider_type=data.provider_type,
-        limit=data.limit,
+        display_name=display_name,
+        provider_type=provider_type,
+        limit=limit,
     )
     return SuggestionsResponse(suggestions=[EmployeeSuggestion(**s) for s in suggestions])
 
 
 # Bulk link accounts
-@router.post("/external-accounts/bulk", response_model=BulkLinkResponse)
+@router.post("/external-accounts/bulk", response_model=BulkLinkResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_link_accounts(
     request: Request,
@@ -209,7 +211,7 @@ async def bulk_link_accounts(
 async def lookup_by_external_username(
     request: Request,
     provider_type: Annotated[str, Path(max_length=50, pattern=r"^[a-z0-9_-]+$")],
-    username: Annotated[str, Path(max_length=255)],
+    username: Annotated[str, Path(max_length=255, pattern=r"^[a-zA-Z0-9@._\-]+$")],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
 ) -> dict:

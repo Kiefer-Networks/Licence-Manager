@@ -45,20 +45,32 @@ async def get_forecast(
     )
 
 
-@router.post("/adjust", response_model=ForecastSummary)
+@router.get("/adjust", response_model=ForecastSummary)
 @limiter.limit(EXPENSIVE_READ_LIMIT)
 async def adjust_forecast(
     request: Request,
-    body: AdjustmentRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.REPORTS_VIEW))],
     forecast_service: Annotated[ForecastService, Depends(get_forecast_service)],
+    forecast_months: int = Query(default=12, ge=1, le=24),
+    history_months: int = Query(default=6, ge=1, le=24),
+    price_adjustment_percent: float = Query(default=0.0, ge=-50.0, le=50.0),
+    headcount_change: int = Query(default=0, ge=-50, le=50),
+    provider_id: UUID | None = Query(default=None),
 ) -> ForecastSummary:
     """Get forecast with slider-based adjustments applied.
 
     Accepts price adjustment percentage and headcount change,
     returns forecast with adjusted projections.
     """
-    return await forecast_service.get_adjusted_forecast(request=body)
+    return await forecast_service.get_adjusted_forecast(
+        request=AdjustmentRequest(
+            forecast_months=forecast_months,
+            history_months=history_months,
+            price_adjustment_percent=price_adjustment_percent,
+            headcount_change=headcount_change,
+            provider_id=provider_id,
+        )
+    )
 
 
 @router.post("/scenarios", response_model=ScenarioResult)

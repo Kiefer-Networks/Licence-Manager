@@ -233,6 +233,7 @@ async def setup_restore_backup(
 
 
 @router.get("/config", response_model=BackupConfig)
+@limiter.limit(BACKUP_INFO_LIMIT)
 async def get_backup_config(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],
@@ -274,6 +275,7 @@ async def update_backup_config(
 
 
 @router.get("/list", response_model=BackupListResponse)
+@limiter.limit(BACKUP_INFO_LIMIT)
 async def list_backups(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.BACKUPS_VIEW))],

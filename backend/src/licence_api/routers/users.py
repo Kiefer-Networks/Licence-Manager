@@ -200,7 +200,7 @@ async def delete_employee(
         )
 
 
-@router.post("/employees/import", response_model=EmployeeBulkImportResponse)
+@router.post("/employees/import", response_model=EmployeeBulkImportResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(SENSITIVE_OPERATION_LIMIT)
 async def bulk_import_employees(
     request: Request,

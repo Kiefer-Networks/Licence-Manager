@@ -24,7 +24,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +218,7 @@ def _clear_auth_cookies(response: Response) -> None:
 class LogoutRequest(BaseModel):
     """Logout request."""
 
-    refresh_token: str | None = None
+    refresh_token: str | None = Field(default=None, max_length=2048)
 
 
 class CsrfTokenResponse(BaseModel):
@@ -657,7 +657,7 @@ async def update_single_notification_preference(
     if event_type not in EVENT_TYPE_MAP:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown event type: {event_type}",
+            detail="Unknown event type",
         )
 
     pref = await auth_service.update_notification_preference(

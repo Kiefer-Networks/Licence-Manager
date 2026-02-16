@@ -4,13 +4,14 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from licence_api.dependencies import get_audit_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
+from licence_api.security.rate_limit import API_DEFAULT_LIMIT, EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 
 router = APIRouter()
@@ -122,7 +123,9 @@ class AuditUsersListResponse(BaseModel):
 
 
 @router.get("", response_model=AuditLogListResponse)
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_audit_logs(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     page: int = Query(1, ge=1),
@@ -158,7 +161,9 @@ async def list_audit_logs(
 
 
 @router.get("/export")
+@limiter.limit(EXPENSIVE_READ_LIMIT)
 async def export_audit_logs(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_EXPORT))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     format: str = Query("csv", pattern="^(csv|json)$"),
@@ -191,12 +196,14 @@ async def export_audit_logs(
     return StreamingResponse(
         iter([content]),
         media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 @router.get("/users", response_model=AuditUsersListResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def list_audit_users(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> AuditUsersListResponse:
@@ -208,7 +215,9 @@ async def list_audit_users(
 
 
 @router.get("/resource-types", response_model=ResourceTypesResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def list_resource_types(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> ResourceTypesResponse:
@@ -218,7 +227,9 @@ async def list_resource_types(
 
 
 @router.get("/actions", response_model=ActionsResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def list_actions(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> ActionsResponse:
@@ -228,7 +239,9 @@ async def list_actions(
 
 
 @router.get("/{log_id}", response_model=AuditLogResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_audit_log(
+    request: Request,
     log_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.AUDIT_VIEW))],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],

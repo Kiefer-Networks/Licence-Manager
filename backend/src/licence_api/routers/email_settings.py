@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 from licence_api.dependencies import get_email_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
-from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
+from licence_api.security.rate_limit import API_DEFAULT_LIMIT, SENSITIVE_OPERATION_LIMIT, limiter
 from licence_api.services.email_service import (
     EmailService,
     SmtpConfigRequest,
@@ -38,7 +38,9 @@ class TestEmailResponse(BaseModel):
 
 
 @router.get("", response_model=SmtpConfigResponse | EmailConfigStatusResponse)
+@limiter.limit(API_DEFAULT_LIMIT)
 async def get_email_config(
+    request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_VIEW))],
     service: Annotated[EmailService, Depends(get_email_service)],
 ) -> SmtpConfigResponse | EmailConfigStatusResponse:
