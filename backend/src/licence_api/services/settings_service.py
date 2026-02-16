@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.domain.admin_user import AdminUser
@@ -12,6 +13,53 @@ from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.notification_service import NotificationService
+
+
+def validate_setting_recursive(
+    data: Any, max_depth: int = 5, current_depth: int = 0, max_items: int = 50
+) -> None:
+    """Recursively validate dict/list structures to prevent DoS attacks.
+
+    Args:
+        data: Data to validate
+        max_depth: Maximum nesting depth
+        current_depth: Current recursion depth
+        max_items: Maximum items per dict/list
+    """
+    if current_depth > max_depth:
+        raise ValueError(f"Setting nesting too deep (max {max_depth} levels)")
+
+    if isinstance(data, dict):
+        if len(data) > max_items:
+            raise ValueError(f"Too many setting fields (max {max_items})")
+        for key, value in data.items():
+            if not isinstance(key, str):
+                raise ValueError("Setting keys must be strings")
+            if len(key) > 100:
+                raise ValueError("Setting key too long (max 100 chars)")
+            validate_setting_recursive(value, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, list):
+        if len(data) > max_items:
+            raise ValueError(f"Too many items in setting list (max {max_items})")
+        for item in data:
+            validate_setting_recursive(item, max_depth, current_depth + 1, max_items)
+    elif isinstance(data, str):
+        if len(data) > 10000:
+            raise ValueError("Setting value too long (max 10000 chars)")
+    elif isinstance(data, (int, float, bool, type(None))):
+        pass
+    else:
+        raise ValueError(f"Invalid setting value type: {type(data).__name__}")
+
+
+class NotificationRuleResponse(BaseModel):
+    """Notification rule response DTO."""
+
+    id: UUID
+    event_type: str
+    slack_channel: str
+    enabled: bool
+    template: str | None = None
 
 
 class SetupStatus:
@@ -209,9 +257,23 @@ class SettingsService:
 
     # Notification rules methods
 
-    async def get_notification_rules(self) -> list:
-        """Get all notification rules."""
-        return await self.notification_service.get_rules()
+    async def get_notification_rules(self) -> list[NotificationRuleResponse]:
+        """Get all notification rules.
+
+        Returns:
+            List of NotificationRuleResponse DTOs
+        """
+        rules = await self.notification_service.get_rules()
+        return [
+            NotificationRuleResponse(
+                id=r.id,
+                event_type=r.event_type,
+                slack_channel=r.slack_channel,
+                enabled=r.enabled,
+                template=r.template,
+            )
+            for r in rules
+        ]
 
     async def create_notification_rule(
         self,
@@ -220,7 +282,7 @@ class SettingsService:
         template: str | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ):
+    ) -> NotificationRuleResponse:
         """Create a notification rule.
 
         Args:
@@ -231,7 +293,7 @@ class SettingsService:
             request: HTTP request for audit logging
 
         Returns:
-            Created notification rule
+            Created NotificationRuleResponse DTO
         """
         rule = await self.notification_service.create_rule(
             event_type=event_type,
@@ -254,7 +316,13 @@ class SettingsService:
             )
 
         await self.session.commit()
-        return rule
+        return NotificationRuleResponse(
+            id=rule.id,
+            event_type=rule.event_type,
+            slack_channel=rule.slack_channel,
+            enabled=rule.enabled,
+            template=rule.template,
+        )
 
     async def update_notification_rule(
         self,
@@ -264,7 +332,7 @@ class SettingsService:
         enabled: bool | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ):
+    ) -> NotificationRuleResponse | None:
         """Update a notification rule.
 
         Args:
@@ -276,7 +344,7 @@ class SettingsService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated notification rule or None if not found
+            Updated NotificationRuleResponse DTO or None if not found
         """
         rule = await self.notification_service.update_rule(
             rule_id,
@@ -304,7 +372,16 @@ class SettingsService:
             )
             await self.session.commit()
 
-        return rule
+        if rule is None:
+            return None
+
+        return NotificationRuleResponse(
+            id=rule.id,
+            event_type=rule.event_type,
+            slack_channel=rule.slack_channel,
+            enabled=rule.enabled,
+            template=rule.template,
+        )
 
     async def delete_notification_rule(
         self,

@@ -21,7 +21,7 @@ async def get_dashboard(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.DASHBOARD_VIEW))],
     report_service: Annotated[ReportService, Depends(get_report_service)],
-    department: str | None = Query(default=None, description="Filter by department"),
+    department: str | None = Query(default=None, max_length=100, description="Filter by department"),
 ) -> DashboardResponse:
     """Get dashboard overview data.
 

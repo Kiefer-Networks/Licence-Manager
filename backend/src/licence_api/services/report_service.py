@@ -266,20 +266,26 @@ class ReportService:
 
     async def get_cost_report(
         self,
-        start_date: date,
-        end_date: date,
+        start_date: date | None = None,
+        end_date: date | None = None,
         department: str | None = None,
     ) -> CostReportResponse:
         """Get cost report for date range.
 
+        If dates are not specified, defaults to the last 3 months.
+
         Args:
-            start_date: Report start date
-            end_date: Report end date
+            start_date: Report start date (defaults to 90 days before end_date)
+            end_date: Report end date (defaults to today)
             department: Optional department filter
 
         Returns:
             CostReportResponse with cost breakdown
         """
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=90)
         # Get all licenses with costs (exclude HRIS providers like hibob)
         # Don't filter by status - unassigned licenses still cost money
         results, _ = await self.license_repo.get_all_with_details(

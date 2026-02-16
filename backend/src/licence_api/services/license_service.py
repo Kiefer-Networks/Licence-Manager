@@ -12,10 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName
 from licence_api.models.dto.license import (
+    BulkActionResponse,
+    BulkActionResult,
     CategorizedLicensesResponse,
     LicenseListResponse,
     LicenseResponse,
     LicenseStats,
+    PendingSuggestionsResponse,
 )
 from licence_api.repositories.employee_repository import EmployeeRepository
 from licence_api.repositories.license_repository import LicenseRepository
@@ -593,6 +596,31 @@ class LicenseService:
             stats=stats,
         )
 
+    async def get_pending_suggestions(
+        self,
+        provider_id: UUID | None = None,
+    ) -> PendingSuggestionsResponse:
+        """Get all licenses with pending match suggestions.
+
+        Returns licenses that have a suggested_employee_id but are not yet
+        confirmed or rejected. Useful for review workflows.
+
+        Args:
+            provider_id: Optional provider filter
+
+        Returns:
+            PendingSuggestionsResponse with suggested licenses
+        """
+        categorized = await self.get_categorized_licenses(
+            provider_id=provider_id,
+            sort_by="external_user_id",
+            sort_dir="asc",
+        )
+        return PendingSuggestionsResponse(
+            total=len(categorized.suggested),
+            items=categorized.suggested,
+        )
+
     async def _update_account_status(
         self,
         license_id: UUID,
@@ -920,7 +948,7 @@ class LicenseService:
         license_ids: list[UUID],
         user: AdminUser,
         request: Request | None = None,
-    ) -> int:
+    ) -> BulkActionResponse:
         """Delete multiple licenses from the database.
 
         Args:
@@ -929,9 +957,39 @@ class LicenseService:
             request: HTTP request for audit logging
 
         Returns:
-            Number of deleted licenses
+            BulkActionResponse with accurate per-item results
         """
+        # Check which IDs exist before deleting so we can report accurately
+        existing_ids: set[UUID] = set()
+        for lid in license_ids:
+            license_orm = await self.license_repo.get_by_id(lid)
+            if license_orm is not None:
+                existing_ids.add(lid)
+
         deleted_count = await self.license_repo.delete_by_ids(license_ids)
+
+        # Build accurate per-item results
+        results: list[BulkActionResult] = []
+        for lid in license_ids:
+            if lid in existing_ids:
+                results.append(
+                    BulkActionResult(
+                        license_id=str(lid),
+                        success=True,
+                        message="License deleted from database",
+                    )
+                )
+            else:
+                results.append(
+                    BulkActionResult(
+                        license_id=str(lid),
+                        success=False,
+                        message="License not found",
+                    )
+                )
+
+        successful = len(existing_ids)
+        failed = len(license_ids) - successful
 
         # Audit log the bulk deletion
         await self.audit_service.log(
@@ -948,14 +1006,19 @@ class LicenseService:
         )
 
         await self.session.commit()
-        return deleted_count
+        return BulkActionResponse(
+            total=len(license_ids),
+            successful=successful,
+            failed=failed,
+            results=results,
+        )
 
     async def bulk_unassign(
         self,
         license_ids: list[UUID],
         user: AdminUser,
         request: Request | None = None,
-    ) -> int:
+    ) -> BulkActionResponse:
         """Unassign multiple licenses from employees.
 
         Args:
@@ -964,9 +1027,39 @@ class LicenseService:
             request: HTTP request for audit logging
 
         Returns:
-            Number of unassigned licenses
+            BulkActionResponse with accurate per-item results
         """
+        # Check which IDs exist before unassigning so we can report accurately
+        existing_ids: set[UUID] = set()
+        for lid in license_ids:
+            license_orm = await self.license_repo.get_by_id(lid)
+            if license_orm is not None:
+                existing_ids.add(lid)
+
         unassigned_count = await self.license_repo.unassign_by_ids(license_ids)
+
+        # Build accurate per-item results
+        results: list[BulkActionResult] = []
+        for lid in license_ids:
+            if lid in existing_ids:
+                results.append(
+                    BulkActionResult(
+                        license_id=str(lid),
+                        success=True,
+                        message="License unassigned from employee",
+                    )
+                )
+            else:
+                results.append(
+                    BulkActionResult(
+                        license_id=str(lid),
+                        success=False,
+                        message="License not found",
+                    )
+                )
+
+        successful = len(existing_ids)
+        failed = len(license_ids) - successful
 
         # Audit log the bulk unassignment
         await self.audit_service.log(
@@ -983,7 +1076,12 @@ class LicenseService:
         )
 
         await self.session.commit()
-        return unassigned_count
+        return BulkActionResponse(
+            total=len(license_ids),
+            successful=successful,
+            failed=failed,
+            results=results,
+        )
 
     async def remove_from_provider(
         self,
@@ -1068,7 +1166,7 @@ class LicenseService:
         license_ids: list[UUID],
         user: AdminUser,
         request: Request | None = None,
-    ) -> dict[str, Any]:
+    ) -> BulkActionResponse:
         """Remove multiple license users from their external provider systems.
 
         This will attempt to remove each user from their external provider.
@@ -1081,7 +1179,7 @@ class LicenseService:
             request: HTTP request for audit logging
 
         Returns:
-            Dict with total, successful, failed counts and individual results
+            BulkActionResponse with per-item results
         """
         from licence_api.providers import CursorProvider
 
@@ -1092,7 +1190,7 @@ class LicenseService:
 
         # Group by provider for efficient credential decryption
         provider_credentials: dict[UUID, dict] = {}
-        results: list[dict[str, Any]] = []
+        results: list[BulkActionResult] = []
         successful = 0
         failed = 0
         deleted_license_ids: list[UUID] = []
@@ -1101,14 +1199,14 @@ class LicenseService:
             # Check if provider supports remote removal
             if provider.name != ProviderName.CURSOR:
                 results.append(
-                    {
-                        "license_id": str(license_orm.id),
-                        "success": False,
-                        "message": (
+                    BulkActionResult(
+                        license_id=str(license_orm.id),
+                        success=False,
+                        message=(
                             f"Provider {provider.display_name} does not "
                             "support remote user removal"
                         ),
-                    }
+                    )
                 )
                 failed += 1
                 continue
@@ -1128,29 +1226,29 @@ class LicenseService:
                     deleted_license_ids.append(license_orm.id)
                     successful += 1
                     results.append(
-                        {
-                            "license_id": str(license_orm.id),
-                            "success": True,
-                            "message": result["message"],
-                        }
+                        BulkActionResult(
+                            license_id=str(license_orm.id),
+                            success=True,
+                            message=result["message"],
+                        )
                     )
                 else:
                     failed += 1
                     results.append(
-                        {
-                            "license_id": str(license_orm.id),
-                            "success": False,
-                            "message": result.get("message", "Unknown error"),
-                        }
+                        BulkActionResult(
+                            license_id=str(license_orm.id),
+                            success=False,
+                            message=result.get("message", "Unknown error"),
+                        )
                     )
             except ValueError as e:
                 failed += 1
                 results.append(
-                    {
-                        "license_id": str(license_orm.id),
-                        "success": False,
-                        "message": str(e),
-                    }
+                    BulkActionResult(
+                        license_id=str(license_orm.id),
+                        success=False,
+                        message=str(e),
+                    )
                 )
 
         # Audit log the bulk operation
@@ -1170,9 +1268,9 @@ class LicenseService:
 
         await self.session.commit()
 
-        return {
-            "total": len(license_ids),
-            "successful": successful,
-            "failed": failed,
-            "results": results,
-        }
+        return BulkActionResponse(
+            total=len(license_ids),
+            successful=successful,
+            failed=failed,
+            results=results,
+        )

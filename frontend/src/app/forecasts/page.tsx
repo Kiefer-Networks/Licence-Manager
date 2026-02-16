@@ -77,6 +77,14 @@ export default function ForecastsPage() {
     setHeadcountChange,
     hasAdjustments,
     resetAdjustments,
+    providerPriceAdjustment,
+    setProviderPriceAdjustment,
+    providerLicenseChange,
+    setProviderLicenseChange,
+    providerAdjusting,
+    providerAdjustedForecast,
+    hasProviderAdjustments,
+    resetProviderAdjustments,
   } = useForecasts();
 
   useEffect(() => {
@@ -227,28 +235,45 @@ export default function ForecastsPage() {
           {/* Provider view */}
           <TabsContent value="provider" className="space-y-6 mt-4">
             {selectedProvider ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
-                      {selectedProvider.display_name}
-                    </CardTitle>
-                    <button
-                      onClick={() => setSelectedProvider(null)}
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      &larr; {t('tabByProvider')}
-                    </button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ForecastChart
-                    dataPoints={selectedProvider.data_points}
-                    onDataPointClick={(dp, idx) => setSelectedDataPoint(dp, idx)}
-                    selectedIndex={selectedIndex}
-                  />
-                </CardContent>
-              </Card>
+              <div className="flex gap-4">
+                <Card className="flex-1">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">
+                        {selectedProvider.display_name}
+                      </CardTitle>
+                      <button
+                        onClick={() => setSelectedProvider(null)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        &larr; {t('tabByProvider')}
+                      </button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ForecastChart
+                      dataPoints={selectedProvider.data_points}
+                      adjustedPoints={hasProviderAdjustments ? providerAdjustedForecast?.data_points : undefined}
+                      onDataPointClick={(dp, idx) => setSelectedDataPoint(dp, idx)}
+                      selectedIndex={selectedIndex}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Provider adjustments sidebar */}
+                <ForecastAdjustments
+                  priceAdjustment={providerPriceAdjustment}
+                  onPriceAdjustmentChange={setProviderPriceAdjustment}
+                  headcountChange={providerLicenseChange}
+                  onHeadcountChangeChange={setProviderLicenseChange}
+                  onReset={resetProviderAdjustments}
+                  hasAdjustments={hasProviderAdjustments}
+                  adjusting={providerAdjusting}
+                  headcountLabel={t('licenseChange')}
+                  headcountMin={-500}
+                  headcountMax={500}
+                />
+              </div>
             ) : (
               <Card>
                 <CardContent className="pt-4">

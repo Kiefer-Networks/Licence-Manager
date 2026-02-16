@@ -39,3 +39,21 @@ class NeedsReorderUpdate(BaseModel):
     """Update needs_reorder flag."""
 
     needs_reorder: bool
+
+
+class RenewalResponse(BaseModel):
+    """Response after renewal of a license, package, or organization license."""
+
+    success: bool = True
+    message: str
+    expires_at: str | None = None
+    contract_end: str | None = None
+    renewal_date: str | None = None
+    status: str | None = None
+
+
+class NeedsReorderResponse(BaseModel):
+    """Response after updating the needs_reorder flag."""
+
+    success: bool = True
+    needs_reorder: bool

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import FILES_DIR
 from licence_api.models.domain.admin_user import AdminUser
+from licence_api.models.dto.provider_file import ProviderFileResponse
 from licence_api.repositories.provider_file_repository import ProviderFileRepository
 from licence_api.repositories.provider_repository import ProviderRepository
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
@@ -198,14 +199,49 @@ class ProviderFileService:
         except (ValueError, RuntimeError):
             return False
 
-    async def list_files(self, provider_id: UUID) -> list["ProviderFileORM"]:
+    @staticmethod
+    def is_viewable(filename: str) -> bool:
+        """Check if a file can be viewed inline in the browser.
+
+        Args:
+            filename: The filename to check
+
+        Returns:
+            True if the file extension is in VIEWABLE_EXTENSIONS
+        """
+        return Path(filename).suffix.lower() in VIEWABLE_EXTENSIONS
+
+    @staticmethod
+    def _to_response(file_orm: "ProviderFileORM") -> ProviderFileResponse:
+        """Convert a ProviderFileORM to a ProviderFileResponse DTO.
+
+        Args:
+            file_orm: The ORM object to convert
+
+        Returns:
+            ProviderFileResponse DTO
+        """
+        return ProviderFileResponse(
+            id=file_orm.id,
+            provider_id=file_orm.provider_id,
+            filename=file_orm.filename,
+            original_name=file_orm.original_name,
+            file_type=file_orm.file_type,
+            file_size=file_orm.file_size,
+            description=file_orm.description,
+            category=file_orm.category,
+            created_at=file_orm.created_at.isoformat(),
+            viewable=Path(file_orm.filename).suffix.lower() in VIEWABLE_EXTENSIONS,
+        )
+
+    async def list_files(self, provider_id: UUID) -> list[ProviderFileResponse]:
         """List all files for a provider.
 
         Args:
             provider_id: Provider UUID
 
         Returns:
-            List of ProviderFileORM
+            List of ProviderFileResponse DTOs
 
         Raises:
             ValueError: If provider not found
@@ -213,7 +249,8 @@ class ProviderFileService:
         provider = await self.provider_repo.get_by_id(provider_id)
         if provider is None:
             raise ValueError("Provider not found")
-        return await self.file_repo.get_by_provider(provider_id)
+        files = await self.file_repo.get_by_provider(provider_id)
+        return [self._to_response(f) for f in files]
 
     async def get_file(self, provider_id: UUID, file_id: UUID) -> "ProviderFileORM | None":
         """Get a specific file for a provider.
@@ -236,7 +273,7 @@ class ProviderFileService:
         category: str | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> "ProviderFileORM":
+    ) -> ProviderFileResponse:
         """Upload a file for a provider.
 
         Args:
@@ -249,7 +286,7 @@ class ProviderFileService:
             request: HTTP request for audit logging
 
         Returns:
-            Created ProviderFileORM
+            ProviderFileResponse DTO for the created file
 
         Raises:
             ValueError: If validation fails
@@ -311,7 +348,7 @@ class ProviderFileService:
             )
 
         await self.session.commit()
-        return file_orm
+        return self._to_response(file_orm)
 
     async def delete_file(
         self,

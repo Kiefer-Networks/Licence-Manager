@@ -321,7 +321,7 @@ export default function ReportsPage() {
                                 <p className="text-xs text-muted-foreground">{provider.license_type}</p>
                               )}
                               {provider.purchased_seats > 0 && (
-                                <p className="text-xs text-muted-foreground">{provider.purchased_seats} purchased</p>
+                                <p className="text-xs text-muted-foreground">{provider.purchased_seats} {t('purchased')}</p>
                               )}
                             </div>
                           </td>

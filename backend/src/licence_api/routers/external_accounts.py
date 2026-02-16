@@ -11,6 +11,7 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.external_account import (
     BulkLinkRequest,
     BulkLinkResponse,
+    EmployeeLookupResponse,
     EmployeeSuggestion,
     ExternalAccountCreate,
     ExternalAccountListResponse,
@@ -76,25 +77,7 @@ async def get_employee_external_accounts(
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
 ) -> ExternalAccountListResponse:
     """Get all external accounts linked to an employee."""
-    accounts = await service.get_employee_external_accounts(employee_id)
-    return ExternalAccountListResponse(
-        accounts=[
-            ExternalAccountResponse(
-                id=acc.id,
-                employee_id=acc.employee_id,
-                provider_type=acc.provider_type,
-                external_username=acc.external_username,
-                external_user_id=acc.external_user_id,
-                display_name=acc.display_name,
-                linked_at=acc.linked_at,
-                linked_by_id=acc.linked_by_id,
-                created_at=acc.created_at,
-                updated_at=acc.updated_at,
-            )
-            for acc in accounts
-        ],
-        total=len(accounts),
-    )
+    return await service.get_employee_external_accounts(employee_id)
 
 
 # Link an external account
@@ -112,7 +95,7 @@ async def link_external_account(
 ) -> ExternalAccountResponse:
     """Link an external account to an employee."""
     try:
-        account = await service.link_account(
+        return await service.link_account(
             employee_id=data.employee_id,
             provider_type=data.provider_type,
             external_username=data.external_username,
@@ -120,18 +103,6 @@ async def link_external_account(
             display_name=data.display_name,
             user=current_user,
             request=request,
-        )
-        return ExternalAccountResponse(
-            id=account.id,
-            employee_id=account.employee_id,
-            provider_type=account.provider_type,
-            external_username=account.external_username,
-            external_user_id=account.external_user_id,
-            display_name=account.display_name,
-            linked_at=account.linked_at,
-            linked_by_id=account.linked_by_id,
-            created_at=account.created_at,
-            updated_at=account.updated_at,
         )
     except ValueError as e:
         logger.warning("Operation failed: %s", e)
@@ -206,7 +177,7 @@ async def bulk_link_accounts(
 
 
 # Lookup by external username
-@router.get("/external-accounts/lookup/{provider_type}/{username}")
+@router.get("/external-accounts/lookup/{provider_type}/{username}", response_model=EmployeeLookupResponse)
 @limiter.limit(API_DEFAULT_LIMIT)
 async def lookup_by_external_username(
     request: Request,
@@ -214,17 +185,12 @@ async def lookup_by_external_username(
     username: Annotated[str, Path(max_length=255, pattern=r"^[a-zA-Z0-9@._\-]+$")],
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.EMPLOYEES_VIEW))],
     service: Annotated[ExternalAccountService, Depends(get_external_account_service)],
-) -> dict:
+) -> EmployeeLookupResponse:
     """Lookup an employee by their external username."""
-    employee = await service.get_employee_by_external_username(provider_type, username)
-    if employee is None:
+    result = await service.get_employee_by_external_username(provider_type, username)
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No employee linked to this username",
         )
-    return {
-        "employee_id": str(employee.id),
-        "email": employee.email,
-        "full_name": employee.full_name,
-        "department": employee.department,
-    }
+    return result

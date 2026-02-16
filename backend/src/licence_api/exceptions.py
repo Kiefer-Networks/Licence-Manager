@@ -96,6 +96,13 @@ class ValidationError(LicenceAPIError):
 # =============================================================================
 
 
+class PermissionDeniedError(LicenceAPIError):
+    """Raised when a user lacks a required permission."""
+
+    def __init__(self, message: str = "Insufficient permissions") -> None:
+        super().__init__(message)
+
+
 class CannotDeleteSelfError(LicenceAPIError):
     """Raised when user tries to delete themselves."""
 

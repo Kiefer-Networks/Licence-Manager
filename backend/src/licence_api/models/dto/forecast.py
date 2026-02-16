@@ -74,7 +74,7 @@ class AdjustmentRequest(BaseModel):
     forecast_months: int = Field(default=12, ge=1, le=24)
     history_months: int = Field(default=6, ge=1, le=24)
     price_adjustment_percent: float = Field(default=0.0, ge=-50.0, le=50.0)
-    headcount_change: int = Field(default=0, ge=-50, le=50)
+    headcount_change: int = Field(default=0, ge=-5000, le=5000)
     provider_id: UUID | None = None
 
 

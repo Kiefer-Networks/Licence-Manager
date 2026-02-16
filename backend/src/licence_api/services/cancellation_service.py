@@ -20,9 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.license import LicenseStatus
-from licence_api.models.orm.license import LicenseORM
-from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
-from licence_api.models.orm.organization_license import OrganizationLicenseORM, OrgLicenseStatus
+from licence_api.models.dto.cancellation import (
+    CancellationResponse,
+    NeedsReorderResponse,
+    RenewalResponse,
+)
+from licence_api.models.orm.license_package import PackageStatus
+from licence_api.models.orm.organization_license import OrgLicenseStatus
 from licence_api.repositories.license_package_repository import LicensePackageRepository
 from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
@@ -66,7 +70,7 @@ class CancellationService:
         cancelled_by: UUID,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicenseORM:
+    ) -> CancellationResponse:
         """Cancel a license.
 
         Args:
@@ -78,7 +82,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicenseORM
+            CancellationResponse DTO
 
         Raises:
             ValueError: If license not found
@@ -134,7 +138,13 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send cancellation notification: {e}")
 
-        return license_orm
+        return CancellationResponse(
+            id=license_orm.id,
+            cancelled_at=license_orm.cancelled_at,
+            cancellation_effective_date=license_orm.cancellation_effective_date,
+            cancellation_reason=license_orm.cancellation_reason,
+            cancelled_by=license_orm.cancelled_by,
+        )
 
     async def cancel_package(
         self,
@@ -144,7 +154,7 @@ class CancellationService:
         cancelled_by: UUID,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicensePackageORM:
+    ) -> CancellationResponse:
         """Cancel a license package.
 
         Args:
@@ -156,7 +166,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicensePackageORM
+            CancellationResponse DTO
 
         Raises:
             ValueError: If package not found
@@ -212,7 +222,13 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send package cancellation notification: {e}")
 
-        return package
+        return CancellationResponse(
+            id=package.id,
+            cancelled_at=package.cancelled_at,
+            cancellation_effective_date=package.cancellation_effective_date,
+            cancellation_reason=package.cancellation_reason,
+            cancelled_by=package.cancelled_by,
+        )
 
     async def cancel_org_license(
         self,
@@ -222,7 +238,7 @@ class CancellationService:
         cancelled_by: UUID,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> OrganizationLicenseORM:
+    ) -> CancellationResponse:
         """Cancel an organization license.
 
         Args:
@@ -234,7 +250,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated OrganizationLicenseORM
+            CancellationResponse DTO
 
         Raises:
             ValueError: If org license not found
@@ -288,7 +304,13 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send org license cancellation notification: {e}")
 
-        return org_license
+        return CancellationResponse(
+            id=org_license.id,
+            cancelled_at=org_license.cancelled_at,
+            cancellation_effective_date=org_license.cancellation_effective_date,
+            cancellation_reason=org_license.cancellation_reason,
+            cancelled_by=org_license.cancelled_by,
+        )
 
     async def renew_license(
         self,
@@ -298,7 +320,7 @@ class CancellationService:
         clear_cancellation: bool = True,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicenseORM:
+    ) -> RenewalResponse:
         """Renew a license by setting a new expiration date.
 
         Args:
@@ -310,7 +332,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicenseORM
+            RenewalResponse DTO
 
         Raises:
             ValueError: If license not found
@@ -372,7 +394,12 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send license renewal notification: {e}")
 
-        return license_orm
+        return RenewalResponse(
+            success=True,
+            message="License renewed successfully",
+            expires_at=license_orm.expires_at.isoformat() if license_orm.expires_at else None,
+            status=license_orm.status,
+        )
 
     async def renew_package(
         self,
@@ -382,7 +409,7 @@ class CancellationService:
         clear_cancellation: bool = True,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicensePackageORM:
+    ) -> RenewalResponse:
         """Renew a license package by setting a new contract end date.
 
         Args:
@@ -394,7 +421,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicensePackageORM
+            RenewalResponse DTO
 
         Raises:
             ValueError: If package not found
@@ -454,31 +481,37 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send package renewal notification: {e}")
 
-        return package
+        return RenewalResponse(
+            success=True,
+            message="Package renewed successfully",
+            contract_end=package.contract_end.isoformat() if package.contract_end else None,
+            status=package.status,
+        )
 
     async def set_license_needs_reorder(
         self,
         license_id: UUID,
         needs_reorder: bool,
-        flagged_by: UUID | None = None,
+        current_user_id: UUID | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicenseORM:
+    ) -> NeedsReorderResponse:
         """Set the needs_reorder flag for a license.
 
         Args:
             license_id: License UUID
             needs_reorder: Whether license needs reorder
-            flagged_by: Admin user who flagged (optional, for notification)
+            current_user_id: Current user ID (used as flagged_by when needs_reorder is True)
             user: AdminUser for audit logging
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicenseORM
+            NeedsReorderResponse DTO
 
         Raises:
             ValueError: If license not found
         """
+        flagged_by = current_user_id if needs_reorder else None
         license_orm = await self.license_repo.get_by_id_with_provider(license_id)
 
         if license_orm is None:
@@ -520,31 +553,35 @@ class CancellationService:
             except Exception as e:
                 logger.warning(f"Failed to send license needs reorder notification: {e}")
 
-        return license_orm
+        return NeedsReorderResponse(
+            success=True,
+            needs_reorder=license_orm.needs_reorder,
+        )
 
     async def set_package_needs_reorder(
         self,
         package_id: UUID,
         needs_reorder: bool,
-        flagged_by: UUID | None = None,
+        current_user_id: UUID | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> LicensePackageORM:
+    ) -> NeedsReorderResponse:
         """Set the needs_reorder flag for a package.
 
         Args:
             package_id: Package UUID
             needs_reorder: Whether package needs reorder
-            flagged_by: Admin user who flagged (optional, for notification)
+            current_user_id: Current user ID (used as flagged_by when needs_reorder is True)
             user: AdminUser for audit logging
             request: HTTP request for audit logging
 
         Returns:
-            Updated LicensePackageORM
+            NeedsReorderResponse DTO
 
         Raises:
             ValueError: If package not found
         """
+        flagged_by = current_user_id if needs_reorder else None
         package = await self.package_repo.get_by_id_with_provider(package_id)
 
         if package is None:
@@ -586,7 +623,10 @@ class CancellationService:
             except Exception as e:
                 logger.warning(f"Failed to send package needs reorder notification: {e}")
 
-        return package
+        return NeedsReorderResponse(
+            success=True,
+            needs_reorder=package.needs_reorder,
+        )
 
     async def renew_org_license(
         self,
@@ -597,7 +637,7 @@ class CancellationService:
         clear_cancellation: bool = True,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> OrganizationLicenseORM:
+    ) -> RenewalResponse:
         """Renew an organization license by setting new renewal/expiration dates.
 
         Args:
@@ -610,7 +650,7 @@ class CancellationService:
             request: HTTP request for audit logging
 
         Returns:
-            Updated OrganizationLicenseORM
+            RenewalResponse DTO
 
         Raises:
             ValueError: If org license not found
@@ -672,31 +712,40 @@ class CancellationService:
         except Exception as e:
             logger.warning(f"Failed to send org license renewal notification: {e}")
 
-        return org_license
+        return RenewalResponse(
+            success=True,
+            message="Organization license renewed successfully",
+            renewal_date=org_license.renewal_date.isoformat()
+            if org_license.renewal_date
+            else None,
+            expires_at=org_license.expires_at.isoformat() if org_license.expires_at else None,
+            status=org_license.status,
+        )
 
     async def set_org_license_needs_reorder(
         self,
         org_license_id: UUID,
         needs_reorder: bool,
-        flagged_by: UUID | None = None,
+        current_user_id: UUID | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> OrganizationLicenseORM:
+    ) -> NeedsReorderResponse:
         """Set the needs_reorder flag for an organization license.
 
         Args:
             org_license_id: Organization license UUID
             needs_reorder: Whether org license needs reorder
-            flagged_by: Admin user who flagged (optional, for notification)
+            current_user_id: Current user ID (used as flagged_by when needs_reorder is True)
             user: AdminUser for audit logging
             request: HTTP request for audit logging
 
         Returns:
-            Updated OrganizationLicenseORM
+            NeedsReorderResponse DTO
 
         Raises:
             ValueError: If org license not found
         """
+        flagged_by = current_user_id if needs_reorder else None
         org_license = await self.org_license_repo.get_by_id_with_provider(org_license_id)
 
         if org_license is None:
@@ -736,4 +785,7 @@ class CancellationService:
             except Exception as e:
                 logger.warning(f"Failed to send org license needs reorder notification: {e}")
 
-        return org_license
+        return NeedsReorderResponse(
+            success=True,
+            needs_reorder=org_license.needs_reorder,
+        )

@@ -1,6 +1,5 @@
 """Exports router for CSV and Excel downloads."""
 
-import re
 from datetime import date
 from typing import Annotated
 from uuid import UUID
@@ -15,19 +14,6 @@ from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.export_service import ExportService
 
 router = APIRouter()
-
-# Pattern for safe filename characters (alphanumeric, underscore, hyphen)
-SAFE_FILENAME_PATTERN = re.compile(r"[^a-zA-Z0-9_-]")
-
-
-def sanitize_filename_part(value: str, max_length: int = 30) -> str:
-    """Sanitize a string for safe use in filenames.
-
-    Removes any characters that are not alphanumeric, underscore, or hyphen.
-    Truncates to max_length characters.
-    """
-    sanitized = SAFE_FILENAME_PATTERN.sub("_", value)
-    return sanitized[:max_length]
 
 
 @router.get("/licenses/csv")
@@ -52,14 +38,11 @@ async def export_licenses_csv(
         status=status,
     )
 
-    filename = "licenses"
-    if provider_id:
-        filename += f"_provider_{str(provider_id)[:8]}"
-    if department:
-        filename += f"_{sanitize_filename_part(department)}"
-    if status:
-        filename += f"_{sanitize_filename_part(status)}"
-    filename += f"_{date.today().isoformat()}.csv"
+    filename = ExportService.build_export_filename(
+        provider_id=provider_id,
+        department=department,
+        status=status,
+    )
 
     return Response(
         content=csv_content,

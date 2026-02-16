@@ -40,13 +40,23 @@ export interface UseForecastsReturn {
   selectedIndex: number | null;
   setSelectedDataPoint: (dp: ForecastDataPoint | null, index: number | null) => void;
 
-  // Adjustments (sliders)
+  // Adjustments (sliders) — global (total tab)
   priceAdjustment: number;
   setPriceAdjustment: (v: number) => void;
   headcountChange: number;
   setHeadcountChange: (v: number) => void;
   hasAdjustments: boolean;
   resetAdjustments: () => void;
+
+  // Adjustments — provider-specific
+  providerPriceAdjustment: number;
+  setProviderPriceAdjustment: (v: number) => void;
+  providerLicenseChange: number;
+  setProviderLicenseChange: (v: number) => void;
+  providerAdjusting: boolean;
+  providerAdjustedForecast: ProviderForecast | null;
+  hasProviderAdjustments: boolean;
+  resetProviderAdjustments: () => void;
 
   // Derived
   departments: string[];
@@ -66,9 +76,17 @@ export function useForecasts(): UseForecastsReturn {
   const [priceAdjustment, setPriceAdjustment] = useState(0);
   const [headcountChange, setHeadcountChange] = useState(0);
 
+  // Provider-specific adjustment state
+  const [providerPriceAdjustment, setProviderPriceAdjustment] = useState(0);
+  const [providerLicenseChange, setProviderLicenseChange] = useState(0);
+  const [providerAdjusting, setProviderAdjusting] = useState(false);
+  const [providerAdjustedForecast, setProviderAdjustedForecast] = useState<ProviderForecast | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const providerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasAdjustments = priceAdjustment !== 0 || headcountChange !== 0;
+  const hasProviderAdjustments = providerPriceAdjustment !== 0 || providerLicenseChange !== 0;
 
   // Load baseline forecast data
   useEffect(() => {
@@ -131,6 +149,55 @@ export function useForecasts(): UseForecastsReturn {
     };
   }, [priceAdjustment, headcountChange, horizon, historyDepth, hasAdjustments]);
 
+  // Reset provider adjustments when selectedProvider changes
+  useEffect(() => {
+    setProviderPriceAdjustment(0);
+    setProviderLicenseChange(0);
+    setProviderAdjustedForecast(null);
+  }, [selectedProvider?.provider_id]);
+
+  // Debounced provider-specific adjusted forecast API call
+  useEffect(() => {
+    if (!hasProviderAdjustments || !selectedProvider) {
+      setProviderAdjustedForecast(null);
+      return;
+    }
+
+    if (providerDebounceRef.current) {
+      clearTimeout(providerDebounceRef.current);
+    }
+
+    providerDebounceRef.current = setTimeout(async () => {
+      setProviderAdjusting(true);
+      try {
+        const result = await api.getAdjustedForecast({
+          forecast_months: horizon,
+          history_months: historyDepth,
+          price_adjustment_percent: providerPriceAdjustment,
+          headcount_change: providerLicenseChange,
+          provider_id: selectedProvider.provider_id,
+        });
+        // Extract the provider-level data points from the adjusted result
+        setProviderAdjustedForecast({
+          ...selectedProvider,
+          data_points: result.data_points,
+          projected_cost: result.projected_monthly_cost,
+          change_percent: result.change_percent,
+        });
+      } catch (e) {
+        handleSilentError('getProviderAdjustedForecast', e);
+      } finally {
+        setProviderAdjusting(false);
+      }
+    }, 300);
+
+    return () => {
+      if (providerDebounceRef.current) {
+        clearTimeout(providerDebounceRef.current);
+      }
+    };
+  }, [providerPriceAdjustment, providerLicenseChange, horizon, historyDepth, hasProviderAdjustments, selectedProvider]);
+
   // Active data points: adjusted if available, otherwise baseline
   const activeDataPoints = useMemo(() => {
     const source = adjustedForecast ?? forecast;
@@ -157,6 +224,12 @@ export function useForecasts(): UseForecastsReturn {
     setAdjustedForecast(null);
   }, []);
 
+  const resetProviderAdjustments = useCallback(() => {
+    setProviderPriceAdjustment(0);
+    setProviderLicenseChange(0);
+    setProviderAdjustedForecast(null);
+  }, []);
+
   return {
     forecast,
     adjustedForecast,
@@ -180,6 +253,14 @@ export function useForecasts(): UseForecastsReturn {
     setHeadcountChange,
     hasAdjustments,
     resetAdjustments,
+    providerPriceAdjustment,
+    setProviderPriceAdjustment,
+    providerLicenseChange,
+    setProviderLicenseChange,
+    providerAdjusting,
+    providerAdjustedForecast,
+    hasProviderAdjustments,
+    resetProviderAdjustments,
     departments,
   };
 }

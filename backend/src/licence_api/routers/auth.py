@@ -33,8 +33,6 @@ from licence_api.dependencies import get_auth_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
     AvatarUploadResponse,
-    LoginResponse,
-    NotificationEventType,
     ProfileUpdateRequest,
     RefreshTokenRequest,
     TokenResponse,
@@ -98,67 +96,6 @@ router = APIRouter()
 
 # CSRF token TTL in seconds (8 hours)
 CSRF_TOKEN_TTL_SECONDS = 8 * 3600
-
-
-# Available notification event types
-NOTIFICATION_EVENT_TYPES = [
-    NotificationEventType(
-        code="license_expiring",
-        name="License Expiring",
-        description="Contract or license about to expire",
-        category="licenses",
-    ),
-    NotificationEventType(
-        code="license_inactive",
-        name="Inactive License",
-        description="License not used for extended period",
-        category="licenses",
-    ),
-    NotificationEventType(
-        code="license_unassigned",
-        name="Unassigned License",
-        description="License not assigned to any employee",
-        category="licenses",
-    ),
-    NotificationEventType(
-        code="employee_offboarded",
-        name="Employee Offboarded",
-        description="Employee has been offboarded with active licenses",
-        category="employees",
-    ),
-    NotificationEventType(
-        code="utilization_low",
-        name="Low Utilization",
-        description="Provider utilization below threshold",
-        category="utilization",
-    ),
-    NotificationEventType(
-        code="cost_increase",
-        name="Cost Increase",
-        description="Monthly costs increased significantly",
-        category="costs",
-    ),
-    NotificationEventType(
-        code="duplicate_detected",
-        name="Duplicate Detected",
-        description="Potential duplicate account detected",
-        category="duplicates",
-    ),
-    NotificationEventType(
-        code="sync_failed",
-        name="Sync Failed",
-        description="Provider sync failed",
-        category="system",
-    ),
-    NotificationEventType(
-        code="sync_completed",
-        name="Sync Completed",
-        description="Provider sync completed successfully",
-        category="system",
-    ),
-]
-
-EVENT_TYPE_MAP = {e.code: e for e in NOTIFICATION_EVENT_TYPES}
 
 
 def _set_auth_cookies(
@@ -577,27 +514,7 @@ async def get_notification_preferences(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferencesResponse:
     """Get current user's notification preferences."""
-    prefs = await auth_service.get_notification_preferences(current_user.id)
-
-    pref_responses = []
-    for pref in prefs:
-        event_info = EVENT_TYPE_MAP.get(pref.event_type)
-        pref_responses.append(
-            UserNotificationPreferenceResponse(
-                id=pref.id,
-                event_type=pref.event_type,
-                event_name=event_info.name if event_info else pref.event_type,
-                event_description=event_info.description if event_info else "",
-                enabled=pref.enabled,
-                slack_dm=pref.slack_dm,
-                slack_channel=pref.slack_channel,
-            )
-        )
-
-    return UserNotificationPreferencesResponse(
-        preferences=pref_responses,
-        available_event_types=NOTIFICATION_EVENT_TYPES,
-    )
+    return await auth_service.get_notification_preferences(current_user.id)
 
 
 @router.put("/me/notification-preferences", response_model=UserNotificationPreferencesResponse)
@@ -619,27 +536,7 @@ async def update_notification_preferences(
         for p in body.preferences
     ]
 
-    prefs = await auth_service.update_notification_preferences_bulk(current_user.id, prefs_data)
-
-    pref_responses = []
-    for pref in prefs:
-        event_info = EVENT_TYPE_MAP.get(pref.event_type)
-        pref_responses.append(
-            UserNotificationPreferenceResponse(
-                id=pref.id,
-                event_type=pref.event_type,
-                event_name=event_info.name if event_info else pref.event_type,
-                event_description=event_info.description if event_info else "",
-                enabled=pref.enabled,
-                slack_dm=pref.slack_dm,
-                slack_channel=pref.slack_channel,
-            )
-        )
-
-    return UserNotificationPreferencesResponse(
-        preferences=pref_responses,
-        available_event_types=NOTIFICATION_EVENT_TYPES,
-    )
+    return await auth_service.update_notification_preferences_bulk(current_user.id, prefs_data)
 
 
 @router.patch(
@@ -654,27 +551,16 @@ async def update_single_notification_preference(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserNotificationPreferenceResponse:
     """Update a single notification preference."""
-    if event_type not in EVENT_TYPE_MAP:
+    if not auth_service.is_valid_event_type(event_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unknown event type",
         )
 
-    pref = await auth_service.update_notification_preference(
+    return await auth_service.update_notification_preference(
         user_id=current_user.id,
         event_type=event_type,
         enabled=body.enabled,
         slack_dm=body.slack_dm,
         slack_channel=body.slack_channel,
-    )
-
-    event_info = EVENT_TYPE_MAP[event_type]
-    return UserNotificationPreferenceResponse(
-        id=pref.id,
-        event_type=pref.event_type,
-        event_name=event_info.name,
-        event_description=event_info.description,
-        enabled=pref.enabled,
-        slack_dm=pref.slack_dm,
-        slack_channel=pref.slack_channel,
     )

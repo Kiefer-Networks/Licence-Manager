@@ -144,7 +144,10 @@ export function useEmployees(
       setEmployees(data.items);
       setTotal(data.total);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((e) => {
+      handleSilentError('loadEmployees', e);
+      setLoading(false);
+    });
   };
 
   // Load employees when filters/pagination/sorting change

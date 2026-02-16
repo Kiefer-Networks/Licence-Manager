@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.models.dto.audit import AuditLogListResponse, AuditLogResponse, AuditUserResponse
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.user_repository import UserRepository
 from licence_api.utils.validation import validate_against_whitelist
@@ -408,7 +409,7 @@ class AuditService:
         search: str | None = None,
         allowed_actions: set[str] | None = None,
         allowed_resource_types: set[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> AuditLogListResponse:
         """List audit logs with optional filters and email enrichment.
 
         Args:
@@ -424,7 +425,7 @@ class AuditService:
             allowed_resource_types: Whitelist of allowed resource type values for validation
 
         Returns:
-            Dict with items, total, page, page_size, total_pages
+            AuditLogListResponse with items, total, page, page_size, total_pages
         """
         # Validate filter inputs against whitelists
         if allowed_actions is not None:
@@ -450,40 +451,40 @@ class AuditService:
         user_emails = await self.user_repo.get_emails_by_ids(user_ids)
 
         items = [
-            {
-                "id": log.id,
-                "admin_user_id": log.admin_user_id,
-                "admin_user_email": user_emails.get(log.admin_user_id)
+            AuditLogResponse(
+                id=log.id,
+                admin_user_id=log.admin_user_id,
+                admin_user_email=user_emails.get(log.admin_user_id)
                 if log.admin_user_id
                 else None,
-                "action": log.action,
-                "resource_type": log.resource_type,
-                "resource_id": log.resource_id,
-                "changes": log.changes,
-                "ip_address": str(log.ip_address) if log.ip_address else None,
-                "created_at": log.created_at,
-            }
+                action=log.action,
+                resource_type=log.resource_type,
+                resource_id=log.resource_id,
+                changes=log.changes,
+                ip_address=str(log.ip_address) if log.ip_address else None,
+                created_at=log.created_at,
+            )
             for log in logs
         ]
 
         total_pages = (total + page_size - 1) // page_size
 
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-        }
+        return AuditLogListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
 
-    async def get_audit_log(self, log_id: UUID) -> dict[str, Any] | None:
+    async def get_audit_log(self, log_id: UUID) -> AuditLogResponse | None:
         """Get a single audit log entry with email enrichment.
 
         Args:
             log_id: Audit log UUID
 
         Returns:
-            Dict with audit log data, or None if not found
+            AuditLogResponse with audit log data, or None if not found
         """
         log = await self.audit_repo.get_by_id(log_id)
         if not log:
@@ -493,17 +494,17 @@ class AuditService:
         if log.admin_user_id:
             admin_email = await self.user_repo.get_email_by_id(log.admin_user_id)
 
-        return {
-            "id": log.id,
-            "admin_user_id": log.admin_user_id,
-            "admin_user_email": admin_email,
-            "action": log.action,
-            "resource_type": log.resource_type,
-            "resource_id": log.resource_id,
-            "changes": log.changes,
-            "ip_address": str(log.ip_address) if log.ip_address else None,
-            "created_at": log.created_at,
-        }
+        return AuditLogResponse(
+            id=log.id,
+            admin_user_id=log.admin_user_id,
+            admin_user_email=admin_email,
+            action=log.action,
+            resource_type=log.resource_type,
+            resource_id=log.resource_id,
+            changes=log.changes,
+            ip_address=str(log.ip_address) if log.ip_address else None,
+            created_at=log.created_at,
+        )
 
     async def export_audit_logs(
         self,
@@ -607,13 +608,14 @@ class AuditService:
             content = output.getvalue()
             return content, "text/csv; charset=utf-8", "audit_log.csv"
 
-    async def list_audit_users(self) -> list[tuple[UUID, str]]:
+    async def list_audit_users(self) -> list[AuditUserResponse]:
         """Get list of users who have audit log entries.
 
         Returns:
-            List of (user_id, email) tuples
+            List of AuditUserResponse
         """
-        return await self.audit_repo.get_distinct_users()
+        users = await self.audit_repo.get_distinct_users()
+        return [AuditUserResponse(id=user_id, email=email) for user_id, email in users]
 
     async def list_resource_types(self) -> list[str]:
         """Get list of unique resource types.

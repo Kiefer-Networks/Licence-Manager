@@ -1,6 +1,6 @@
 """Reports router."""
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -46,11 +46,6 @@ async def get_cost_report(
 
     If dates are not specified, defaults to the last 3 months.
     """
-    if end_date is None:
-        end_date = date.today()
-    if start_date is None:
-        start_date = end_date - timedelta(days=90)
-
     return await report_service.get_cost_report(start_date, end_date, department=department)
 
 

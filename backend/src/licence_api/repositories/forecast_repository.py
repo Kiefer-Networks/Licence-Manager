@@ -164,6 +164,18 @@ class ForecastRepository:
         """Get active employee counts by department."""
         return await self.employee_repo.get_active_count_by_department()
 
+    async def get_provider_license_count(self, provider_id: UUID) -> int:
+        """Count active licenses for a specific provider."""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(LicenseORM)
+            .where(
+                LicenseORM.provider_id == provider_id,
+                LicenseORM.status == "active",
+            )
+        )
+        return result.scalar_one()
+
     async def get_provider_by_id(self, provider_id: UUID) -> ProviderORM | None:
         """Get a single provider by ID."""
         result = await self.session.execute(

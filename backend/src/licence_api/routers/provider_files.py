@@ -6,10 +6,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
 from licence_api.dependencies import get_provider_file_service
 from licence_api.models.domain.admin_user import AdminUser
+from licence_api.models.dto.provider_file import ProviderFileResponse, ProviderFilesListResponse
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import (
     API_DEFAULT_LIMIT,
@@ -17,41 +17,13 @@ from licence_api.security.rate_limit import (
     SENSITIVE_OPERATION_LIMIT,
     limiter,
 )
-from licence_api.services.provider_file_service import (
-    VIEWABLE_EXTENSIONS,
-    ProviderFileService,
-)
+from licence_api.services.provider_file_service import ProviderFileService
 from licence_api.utils.errors import raise_bad_request, raise_not_found
 
 # Maximum provider file upload size: 50MB
 MAX_PROVIDER_FILE_SIZE = 50 * 1024 * 1024
 
 router = APIRouter()
-
-
-class ProviderFileResponse(BaseModel):
-    """Provider file response."""
-
-    id: UUID
-    provider_id: UUID
-    filename: str
-    original_name: str
-    file_type: str
-    file_size: int
-    description: str | None
-    category: str | None
-    created_at: str
-    viewable: bool
-
-    class Config:
-        from_attributes = True
-
-
-class ProviderFilesListResponse(BaseModel):
-    """Provider files list response."""
-
-    items: list[ProviderFileResponse]
-    total: int
 
 
 @router.get("/{provider_id}/files", response_model=ProviderFilesListResponse)
@@ -64,25 +36,9 @@ async def list_provider_files(
 ) -> ProviderFilesListResponse:
     """List all files for a provider."""
     try:
-        files = await service.list_files(provider_id)
+        items = await service.list_files(provider_id)
     except ValueError:
         raise_not_found("Provider")
-
-    items = [
-        ProviderFileResponse(
-            id=f.id,
-            provider_id=f.provider_id,
-            filename=f.filename,
-            original_name=f.original_name,
-            file_type=f.file_type,
-            file_size=f.file_size,
-            description=f.description,
-            category=f.category,
-            created_at=f.created_at.isoformat(),
-            viewable=Path(f.filename).suffix.lower() in VIEWABLE_EXTENSIONS,
-        )
-        for f in files
-    ]
 
     return ProviderFilesListResponse(items=items, total=len(items))
 
@@ -115,7 +71,7 @@ async def upload_provider_file(
         )
 
     try:
-        file_orm = await service.upload_file(
+        return await service.upload_file(
             provider_id=provider_id,
             filename=file.filename,
             content=content,
@@ -126,20 +82,6 @@ async def upload_provider_file(
         )
     except ValueError:
         raise_bad_request("Invalid file or provider not found")
-
-    ext = Path(file_orm.filename).suffix.lower()
-    return ProviderFileResponse(
-        id=file_orm.id,
-        provider_id=file_orm.provider_id,
-        filename=file_orm.filename,
-        original_name=file_orm.original_name,
-        file_type=file_orm.file_type,
-        file_size=file_orm.file_size,
-        description=file_orm.description,
-        category=file_orm.category,
-        created_at=file_orm.created_at.isoformat(),
-        viewable=ext in VIEWABLE_EXTENSIONS,
-    )
 
 
 @router.get("/{provider_id}/files/{file_id}/download")
@@ -183,14 +125,14 @@ async def view_provider_file(
     if file_orm is None:
         raise_not_found("File")
 
-    ext = Path(file_orm.filename).suffix.lower()
-    if ext not in VIEWABLE_EXTENSIONS:
+    if not ProviderFileService.is_viewable(file_orm.filename):
         raise_bad_request("This file type cannot be viewed inline. Use download instead.")
 
     file_path = service.get_file_path(provider_id, file_orm.filename)
     if file_path is None:
         raise_not_found("File on disk")
 
+    ext = Path(file_orm.filename).suffix.lower()
     return FileResponse(
         path=file_path,
         media_type=ProviderFileService.get_safe_mime_type(ext),

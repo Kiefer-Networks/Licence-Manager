@@ -1,15 +1,21 @@
 """Audit log router."""
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from licence_api.dependencies import get_audit_service
 from licence_api.models.domain.admin_user import AdminUser
+from licence_api.models.dto.audit import (
+    ActionsResponse,
+    AuditLogListResponse,
+    AuditLogResponse,
+    AuditUsersListResponse,
+    ResourceTypesResponse,
+)
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import API_DEFAULT_LIMIT, EXPENSIVE_READ_LIMIT, limiter
 from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
@@ -73,55 +79,6 @@ ALLOWED_RESOURCE_TYPES = {
 }
 
 
-class AuditLogResponse(BaseModel):
-    """Audit log entry response."""
-
-    id: UUID
-    admin_user_id: UUID | None
-    admin_user_email: str | None
-    action: str
-    resource_type: str
-    resource_id: UUID | None
-    changes: dict[str, Any] | None
-    ip_address: str | None
-    created_at: datetime
-
-
-class AuditLogListResponse(BaseModel):
-    """Paginated audit log list response."""
-
-    items: list[AuditLogResponse]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-
-
-class ResourceTypesResponse(BaseModel):
-    """Available resource types response."""
-
-    resource_types: list[str]
-
-
-class ActionsResponse(BaseModel):
-    """Available actions response."""
-
-    actions: list[str]
-
-
-class AuditUserResponse(BaseModel):
-    """User who has audit entries."""
-
-    id: UUID
-    email: str
-
-
-class AuditUsersListResponse(BaseModel):
-    """List of users with audit entries."""
-
-    items: list[AuditUserResponse]
-
-
 @router.get("", response_model=AuditLogListResponse)
 @limiter.limit(EXPENSIVE_READ_LIMIT)
 async def list_audit_logs(
@@ -138,7 +95,7 @@ async def list_audit_logs(
     search: str | None = Query(None, min_length=2, max_length=200),
 ) -> AuditLogListResponse:
     """List audit logs with optional filters. Requires audit.view permission."""
-    result = await audit_service.list_audit_logs(
+    return await audit_service.list_audit_logs(
         page=page,
         page_size=page_size,
         action=action,
@@ -151,14 +108,6 @@ async def list_audit_logs(
         allowed_resource_types=ALLOWED_RESOURCE_TYPES,
     )
 
-    return AuditLogListResponse(
-        items=[AuditLogResponse(**item) for item in result["items"]],
-        total=result["total"],
-        page=result["page"],
-        page_size=result["page_size"],
-        total_pages=result["total_pages"],
-    )
-
 
 @router.get("/export")
 @limiter.limit(EXPENSIVE_READ_LIMIT)
@@ -168,8 +117,8 @@ async def export_audit_logs(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     format: str = Query("csv", pattern="^(csv|json)$"),
     limit: int = Query(MAX_EXPORT_RECORDS, ge=1, le=MAX_EXPORT_RECORDS),
-    action: str | None = Query(None),
-    resource_type: str | None = Query(None),
+    action: str | None = Query(None, max_length=50),
+    resource_type: str | None = Query(None, max_length=50),
     admin_user_id: UUID | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
@@ -209,9 +158,7 @@ async def list_audit_users(
 ) -> AuditUsersListResponse:
     """Get list of users who have audit log entries. Requires audit.view permission."""
     users = await audit_service.list_audit_users()
-    return AuditUsersListResponse(
-        items=[AuditUserResponse(id=user_id, email=email) for user_id, email in users]
-    )
+    return AuditUsersListResponse(items=users)
 
 
 @router.get("/resource-types", response_model=ResourceTypesResponse)
@@ -255,4 +202,4 @@ async def get_audit_log(
             detail="Audit log not found",
         )
 
-    return AuditLogResponse(**result)
+    return result

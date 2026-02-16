@@ -277,10 +277,13 @@ class ForecastService:
         )
 
         price_factor = 1.0 + (request.price_adjustment_percent / 100.0)
-        # Headcount factor: use cost-per-employee to convert headcount to cost multiplier
-        total_emps = await self.repo.get_active_employee_count()
-        if total_emps > 0 and request.headcount_change != 0:
-            headcount_factor = 1.0 + (request.headcount_change / total_emps)
+        # Headcount factor: use provider license count or total employees as basis
+        if request.provider_id:
+            base_count = await self.repo.get_provider_license_count(request.provider_id)
+        else:
+            base_count = await self.repo.get_active_employee_count()
+        if base_count > 0 and request.headcount_change != 0:
+            headcount_factor = 1.0 + (request.headcount_change / base_count)
         else:
             headcount_factor = 1.0
 

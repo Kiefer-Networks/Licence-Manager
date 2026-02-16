@@ -7,8 +7,11 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.domain.admin_user import AdminUser
-from licence_api.models.orm.employee import EmployeeORM
-from licence_api.models.orm.employee_external_account import EmployeeExternalAccountORM
+from licence_api.models.dto.external_account import (
+    EmployeeLookupResponse,
+    ExternalAccountListResponse,
+    ExternalAccountResponse,
+)
 from licence_api.repositories.employee_external_account_repository import (
     EmployeeExternalAccountRepository,
 )
@@ -79,16 +82,20 @@ class ExternalAccountService:
     async def get_employee_external_accounts(
         self,
         employee_id: UUID,
-    ) -> list[EmployeeExternalAccountORM]:
+    ) -> ExternalAccountListResponse:
         """Get all external accounts for an employee.
 
         Args:
             employee_id: Employee UUID
 
         Returns:
-            List of external accounts
+            ExternalAccountListResponse with account DTOs and total count
         """
-        return await self.external_account_repo.get_by_employee(employee_id)
+        accounts = await self.external_account_repo.get_by_employee(employee_id)
+        account_dtos = [
+            ExternalAccountResponse.model_validate(acc) for acc in accounts
+        ]
+        return ExternalAccountListResponse(accounts=account_dtos, total=len(account_dtos))
 
     async def link_account(
         self,
@@ -99,7 +106,7 @@ class ExternalAccountService:
         display_name: str | None = None,
         user: AdminUser | None = None,
         request: Request | None = None,
-    ) -> EmployeeExternalAccountORM:
+    ) -> ExternalAccountResponse:
         """Link an external account to an employee.
 
         Args:
@@ -112,7 +119,7 @@ class ExternalAccountService:
             request: HTTP request for audit logging
 
         Returns:
-            Created external account link
+            ExternalAccountResponse DTO for the created/existing link
 
         Raises:
             ValueError: If employee not found or username already linked
@@ -129,7 +136,7 @@ class ExternalAccountService:
         if existing:
             if existing.employee_id == employee_id:
                 # Already linked to this employee, return existing
-                return existing
+                return ExternalAccountResponse.model_validate(existing)
             raise ValueError(
                 f"Username '{external_username}' is already linked to another employee"
             )
@@ -159,7 +166,7 @@ class ExternalAccountService:
             )
 
         await self.session.commit()
-        return account
+        return ExternalAccountResponse.model_validate(account)
 
     async def unlink_account(
         self,
@@ -281,7 +288,7 @@ class ExternalAccountService:
         self,
         provider_type: str,
         external_username: str,
-    ) -> EmployeeORM | None:
+    ) -> EmployeeLookupResponse | None:
         """Get employee by their external username.
 
         Args:
@@ -289,10 +296,18 @@ class ExternalAccountService:
             external_username: Username in the external system
 
         Returns:
-            EmployeeORM or None
+            EmployeeLookupResponse DTO or None if not found
         """
-        return await self.external_account_repo.get_employee_by_external_username(
+        employee = await self.external_account_repo.get_employee_by_external_username(
             provider_type, external_username
+        )
+        if employee is None:
+            return None
+        return EmployeeLookupResponse(
+            employee_id=str(employee.id),
+            email=employee.email,
+            full_name=employee.full_name,
+            department=employee.department,
         )
 
     async def find_employee_suggestions(

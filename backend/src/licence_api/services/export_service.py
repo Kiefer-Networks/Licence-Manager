@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -11,6 +12,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.repositories.cost_snapshot_repository import CostSnapshotRepository
 from licence_api.repositories.license_repository import LicenseRepository
+
+# Pattern for safe filename characters (alphanumeric, underscore, hyphen)
+_SAFE_FILENAME_PATTERN = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def _sanitize_filename_part(value: str, max_length: int = 30) -> str:
+    """Sanitize a string for safe use in filenames.
+
+    Removes any characters that are not alphanumeric, underscore, or hyphen.
+    Truncates to max_length characters.
+
+    Args:
+        value: The string to sanitize
+        max_length: Maximum length of the sanitized string
+
+    Returns:
+        Sanitized string safe for use in filenames
+    """
+    sanitized = _SAFE_FILENAME_PATTERN.sub("_", value)
+    return sanitized[:max_length]
 
 
 def _escape_csv_formula(value: str) -> str:
@@ -38,6 +59,35 @@ class ExportService:
         self.session = session
         self.license_repo = LicenseRepository(session)
         self.snapshot_repo = CostSnapshotRepository(session)
+
+    @staticmethod
+    def build_export_filename(
+        provider_id: UUID | None = None,
+        department: str | None = None,
+        status: str | None = None,
+    ) -> str:
+        """Build a sanitized filename for license CSV exports.
+
+        Constructs a filename with optional filter parts appended. All user-provided
+        values are sanitized to ensure safe filenames.
+
+        Args:
+            provider_id: Optional provider UUID to include in filename
+            department: Optional department name to include in filename
+            status: Optional status string to include in filename
+
+        Returns:
+            Safe filename string ending with .csv
+        """
+        filename = "licenses"
+        if provider_id:
+            filename += f"_provider_{str(provider_id)[:8]}"
+        if department:
+            filename += f"_{_sanitize_filename_part(department)}"
+        if status:
+            filename += f"_{_sanitize_filename_part(status)}"
+        filename += f"_{date.today().isoformat()}.csv"
+        return filename
 
     async def export_licenses_csv(
         self,

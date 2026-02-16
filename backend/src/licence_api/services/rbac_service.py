@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from licence_api.exceptions import (
     CannotDeleteSelfError,
     CannotModifySystemRoleError,
+    PermissionDeniedError,
     RoleAlreadyExistsError,
     RoleHasUsersError,
     RoleNotFoundError,
@@ -18,14 +19,18 @@ from licence_api.exceptions import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.auth import (
+    PermissionResponse,
+    PermissionsByCategory,
     RoleCreateRequest,
     RoleResponse,
     RoleUpdateRequest,
+    SessionInfo,
     UserCreateRequest,
     UserCreateResponse,
     UserInfo,
     UserUpdateRequest,
 )
+from licence_api.security.auth import Permissions
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.permission_repository import PermissionRepository
 from licence_api.repositories.role_repository import RoleRepository
@@ -161,6 +166,11 @@ class RbacService:
         current_user: AdminUser,
     ) -> UserInfo:
         """Update user details."""
+        # Check role management permission if roles are being changed
+        if request.role_codes is not None:
+            if not current_user.has_permission(Permissions.USERS_MANAGE_ROLES):
+                raise PermissionDeniedError("Insufficient permissions to manage roles")
+
         user = await self.user_repo.get_with_roles(user_id)
         if user is None:
             raise UserNotFoundError(str(user_id))
@@ -367,9 +377,19 @@ class RbacService:
     # Permission Management
     # =========================================================================
 
-    async def list_permissions(self) -> list:
+    async def list_permissions(self) -> list[PermissionResponse]:
         """List all permissions."""
-        return await self.permission_repo.get_all()
+        permissions = await self.permission_repo.get_all()
+        return [
+            PermissionResponse(
+                id=p.id,
+                code=p.code,
+                name=p.name,
+                description=p.description,
+                category=p.category,
+            )
+            for p in permissions
+        ]
 
     async def get_permission_categories(self) -> list[str]:
         """Get all permission categories."""
@@ -379,10 +399,68 @@ class RbacService:
         """Get permissions for a specific category."""
         return await self.permission_repo.get_by_category(category)
 
+    async def get_permissions_grouped_by_category(self) -> list[PermissionsByCategory]:
+        """Get all permissions grouped by category."""
+        categories = await self.permission_repo.get_categories()
+
+        result = []
+        for category in categories:
+            permissions = await self.permission_repo.get_by_category(category)
+            result.append(
+                PermissionsByCategory(
+                    category=category,
+                    permissions=[
+                        PermissionResponse(
+                            id=p.id,
+                            code=p.code,
+                            name=p.name,
+                            description=p.description,
+                            category=p.category,
+                        )
+                        for p in permissions
+                    ],
+                )
+            )
+
+        return result
+
     # =========================================================================
     # Session Management
     # =========================================================================
 
-    async def get_user_sessions(self, user_id: UUID) -> list:
-        """Get active sessions for a user."""
-        return await self.token_repo.get_active_sessions(user_id)
+    async def get_user_sessions(
+        self, user_id: UUID, current_user: AdminUser
+    ) -> list[SessionInfo]:
+        """Get active sessions for a user.
+
+        Args:
+            user_id: The user whose sessions to fetch.
+            current_user: The authenticated user making the request.
+
+        Returns:
+            List of SessionInfo DTOs.
+
+        Raises:
+            PermissionDeniedError: If user lacks permission to view other users' sessions.
+        """
+        is_own_sessions = user_id == current_user.id
+        has_view_permission = current_user.has_permission(Permissions.USERS_VIEW)
+
+        if not is_own_sessions and not has_view_permission:
+            raise PermissionDeniedError(
+                "Viewing other users' sessions requires users.view permission"
+            )
+
+        sessions = await self.token_repo.get_active_sessions(user_id)
+
+        return [
+            SessionInfo(
+                id=s.id,
+                user_agent=s.user_agent,
+                ip_address=s.ip_address,
+                created_at=s.created_at,
+                expires_at=s.expires_at,
+                is_current=False,
+            )
+            for s in sessions
+        ]

@@ -15,6 +15,9 @@ interface ForecastAdjustmentsProps {
   onReset: () => void;
   hasAdjustments: boolean;
   adjusting: boolean;
+  headcountLabel?: string;
+  headcountMin?: number;
+  headcountMax?: number;
 }
 
 export function ForecastAdjustments({
@@ -25,6 +28,9 @@ export function ForecastAdjustments({
   onReset,
   hasAdjustments,
   adjusting,
+  headcountLabel,
+  headcountMin = -50,
+  headcountMax = 50,
 }: ForecastAdjustmentsProps) {
   const t = useTranslations('forecasts');
 
@@ -68,10 +74,10 @@ export function ForecastAdjustments({
           </div>
         </div>
 
-        {/* Headcount change slider */}
+        {/* Headcount / License change slider */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-xs">{t('headcountChange')}</Label>
+            <Label className="text-xs">{headcountLabel ?? t('headcountChange')}</Label>
             <span className={`text-xs font-medium tabular-nums ${
               headcountChange > 0
                 ? 'text-red-500'
@@ -85,14 +91,14 @@ export function ForecastAdjustments({
           <Slider
             value={[headcountChange]}
             onValueChange={([v]) => onHeadcountChangeChange(v)}
-            min={-50}
-            max={50}
+            min={headcountMin}
+            max={headcountMax}
             step={1}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>-50</span>
+            <span>{headcountMin}</span>
             <span>0</span>
-            <span>+50</span>
+            <span>+{headcountMax}</span>
           </div>
         </div>
 

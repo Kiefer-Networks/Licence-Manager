@@ -1330,7 +1330,8 @@
     "noProviderData": "No provider data available",
     "noDepartmentData": "No department data available",
     "clickProviderForDetails": "Click a provider row to see its forecast chart",
-    "loading": "Loading forecast data..."
+    "loading": "Loading forecast data...",
+    "licenseChange": "License Change"
   },
   "settings": {
     "title": "Settings",

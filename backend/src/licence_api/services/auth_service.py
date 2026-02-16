@@ -13,8 +13,11 @@ from licence_api.config import get_settings
 from licence_api.constants.paths import ADMIN_AVATAR_DIR, AVATAR_DIR
 from licence_api.models.dto.auth import (
     LoginResponse,
+    NotificationEventType,
     TokenResponse,
     UserInfo,
+    UserNotificationPreferenceResponse,
+    UserNotificationPreferencesResponse,
 )
 from licence_api.repositories.audit_repository import AuditRepository
 from licence_api.repositories.role_repository import RoleRepository
@@ -73,6 +76,66 @@ def get_avatar_base64(hibob_id: str) -> str | None:
 
 MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+# Available notification event types (domain configuration)
+NOTIFICATION_EVENT_TYPES = [
+    NotificationEventType(
+        code="license_expiring",
+        name="License Expiring",
+        description="Contract or license about to expire",
+        category="licenses",
+    ),
+    NotificationEventType(
+        code="license_inactive",
+        name="Inactive License",
+        description="License not used for extended period",
+        category="licenses",
+    ),
+    NotificationEventType(
+        code="license_unassigned",
+        name="Unassigned License",
+        description="License not assigned to any employee",
+        category="licenses",
+    ),
+    NotificationEventType(
+        code="employee_offboarded",
+        name="Employee Offboarded",
+        description="Employee has been offboarded with active licenses",
+        category="employees",
+    ),
+    NotificationEventType(
+        code="utilization_low",
+        name="Low Utilization",
+        description="Provider utilization below threshold",
+        category="utilization",
+    ),
+    NotificationEventType(
+        code="cost_increase",
+        name="Cost Increase",
+        description="Monthly costs increased significantly",
+        category="costs",
+    ),
+    NotificationEventType(
+        code="duplicate_detected",
+        name="Duplicate Detected",
+        description="Potential duplicate account detected",
+        category="duplicates",
+    ),
+    NotificationEventType(
+        code="sync_failed",
+        name="Sync Failed",
+        description="Provider sync failed",
+        category="system",
+    ),
+    NotificationEventType(
+        code="sync_completed",
+        name="Sync Completed",
+        description="Provider sync completed successfully",
+        category="system",
+    ),
+]
+
+EVENT_TYPE_MAP = {e.code: e for e in NOTIFICATION_EVENT_TYPES}
 
 
 class AuthService:
@@ -529,17 +592,44 @@ class AuthService:
 
     # Notification preference methods
 
-    async def get_notification_preferences(self, user_id: UUID) -> list:
-        """Get user notification preferences."""
-        return await self.notification_pref_repo.get_by_user_id(user_id)
+    @staticmethod
+    def _map_pref_to_dto(pref) -> UserNotificationPreferenceResponse:
+        """Map an ORM notification preference to a response DTO.
+
+        Enriches with event name/description from EVENT_TYPE_MAP.
+        """
+        event_info = EVENT_TYPE_MAP.get(pref.event_type)
+        return UserNotificationPreferenceResponse(
+            id=pref.id,
+            event_type=pref.event_type,
+            event_name=event_info.name if event_info else pref.event_type,
+            event_description=event_info.description if event_info else "",
+            enabled=pref.enabled,
+            slack_dm=pref.slack_dm,
+            slack_channel=pref.slack_channel,
+        )
+
+    async def get_notification_preferences(
+        self, user_id: UUID
+    ) -> UserNotificationPreferencesResponse:
+        """Get user notification preferences as DTOs."""
+        prefs = await self.notification_pref_repo.get_by_user_id(user_id)
+        return UserNotificationPreferencesResponse(
+            preferences=[self._map_pref_to_dto(p) for p in prefs],
+            available_event_types=NOTIFICATION_EVENT_TYPES,
+        )
 
     async def update_notification_preferences_bulk(
         self,
         user_id: UUID,
         preferences: list[dict[str, Any]],
-    ) -> list:
-        """Update notification preferences in bulk."""
-        return await self.notification_pref_repo.bulk_upsert(user_id, preferences)
+    ) -> UserNotificationPreferencesResponse:
+        """Update notification preferences in bulk and return DTOs."""
+        prefs = await self.notification_pref_repo.bulk_upsert(user_id, preferences)
+        return UserNotificationPreferencesResponse(
+            preferences=[self._map_pref_to_dto(p) for p in prefs],
+            available_event_types=NOTIFICATION_EVENT_TYPES,
+        )
 
     async def update_notification_preference(
         self,
@@ -548,12 +638,17 @@ class AuthService:
         enabled: bool | None = None,
         slack_dm: bool | None = None,
         slack_channel: str | None = None,
-    ):
-        """Update a single notification preference."""
-        return await self.notification_pref_repo.upsert(
+    ) -> UserNotificationPreferenceResponse:
+        """Update a single notification preference and return DTO."""
+        pref = await self.notification_pref_repo.upsert(
             user_id=user_id,
             event_type=event_type,
             enabled=enabled,
             slack_dm=slack_dm,
             slack_channel=slack_channel,
         )
+        return self._map_pref_to_dto(pref)
+
+    def is_valid_event_type(self, event_type: str) -> bool:
+        """Check if an event type code is valid."""
+        return event_type in EVENT_TYPE_MAP

@@ -79,6 +79,15 @@ class BulkLinkResponse(BaseModel):
     errors: list[str]
 
 
+class EmployeeLookupResponse(BaseModel):
+    """Response for looking up an employee by external username."""
+
+    employee_id: str
+    email: str
+    full_name: str
+    department: str | None
+
+
 class UsernameMatchingSettingResponse(BaseModel):
     """Response for username matching setting."""
 

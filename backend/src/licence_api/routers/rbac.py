@@ -10,6 +10,7 @@ from licence_api.dependencies import get_rbac_service
 from licence_api.exceptions import (
     CannotDeleteSelfError,
     CannotModifySystemRoleError,
+    PermissionDeniedError,
     RoleAlreadyExistsError,
     RoleHasUsersError,
     RoleNotFoundError,
@@ -126,16 +127,14 @@ async def update_user(
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> UserInfo:
     """Update user details."""
-    if body.role_codes is not None:
-        if not current_user.has_permission(Permissions.USERS_MANAGE_ROLES):
-            raise_forbidden("Insufficient permissions to manage roles")
-
     try:
         return await service.update_user(
             user_id=user_id,
             request=body,
             current_user=current_user,
         )
+    except PermissionDeniedError as e:
+        raise_forbidden(str(e))
     except UserNotFoundError:
         raise_not_found("User not found")
     except UserAlreadyExistsError:
@@ -176,25 +175,10 @@ async def get_user_sessions(
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> list[SessionInfo]:
     """Get active sessions for a user."""
-    is_own_sessions = user_id == current_user.id
-    has_view_permission = current_user.has_permission(Permissions.USERS_VIEW)
-
-    if not is_own_sessions and not has_view_permission:
-        raise_forbidden("Viewing other users' sessions requires users.view permission")
-
-    sessions = await service.get_user_sessions(user_id)
-
-    return [
-        SessionInfo(
-            id=s.id,
-            user_agent=s.user_agent,
-            ip_address=s.ip_address,
-            created_at=s.created_at,
-            expires_at=s.expires_at,
-            is_current=False,
-        )
-        for s in sessions
-    ]
+    try:
+        return await service.get_user_sessions(user_id, current_user=current_user)
+    except PermissionDeniedError as e:
+        raise_forbidden(str(e))
 
 
 # ============================================================================
@@ -315,19 +299,7 @@ async def list_permissions(
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> PermissionListResponse:
     """List all permissions."""
-    permissions = await service.list_permissions()
-
-    items = [
-        PermissionResponse(
-            id=p.id,
-            code=p.code,
-            name=p.name,
-            description=p.description,
-            category=p.category,
-        )
-        for p in permissions
-    ]
-
+    items = await service.list_permissions()
     return PermissionListResponse(items=items, total=len(items))
 
 
@@ -339,25 +311,4 @@ async def list_permissions_by_category(
     service: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> list[PermissionsByCategory]:
     """List all permissions grouped by category."""
-    categories = await service.get_permission_categories()
-
-    result = []
-    for category in categories:
-        permissions = await service.get_permissions_by_category(category)
-        result.append(
-            PermissionsByCategory(
-                category=category,
-                permissions=[
-                    PermissionResponse(
-                        id=p.id,
-                        code=p.code,
-                        name=p.name,
-                        description=p.description,
-                        category=p.category,
-                    )
-                    for p in permissions
-                ],
-            )
-        )
-
-    return result
+    return await service.get_permissions_grouped_by_category()

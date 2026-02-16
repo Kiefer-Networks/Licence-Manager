@@ -10,10 +10,12 @@ from licence_api.dependencies import get_license_service, get_matching_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.license import (
     AdminAccountUpdate,
+    BulkActionResponse,
     CategorizedLicensesResponse,
     LicenseListResponse,
     LicenseResponse,
     LicenseTypeUpdate,
+    PendingSuggestionsResponse,
     ServiceAccountUpdate,
 )
 from licence_api.security.auth import Permissions, require_permission
@@ -54,23 +56,6 @@ class BulkActionRequest(BaseModel):
     license_ids: list[UUID] = Field(max_length=500)
 
 
-class BulkActionResult(BaseModel):
-    """Result of a single bulk action."""
-
-    license_id: str
-    success: bool
-    message: str
-
-
-class BulkActionResponse(BaseModel):
-    """Response from bulk action operation."""
-
-    total: int
-    successful: int
-    failed: int
-    results: list[BulkActionResult]
-
-
 class ManualAssignRequest(BaseModel):
     """Request to manually assign a license to an employee."""
 
@@ -108,7 +93,7 @@ async def list_licenses(
     license_service: Annotated[LicenseService, Depends(get_license_service)],
     provider_id: UUID | None = None,
     employee_id: UUID | None = None,
-    status: str | None = None,
+    status: str | None = Query(default=None, max_length=50),
     unassigned: bool = False,
     external: bool = False,
     search: str | None = Query(default=None, max_length=200),
@@ -167,13 +152,6 @@ async def get_categorized_licenses(
     )
 
 
-class PendingSuggestionsResponse(BaseModel):
-    """Response for pending suggestions endpoint."""
-
-    total: int
-    items: list[LicenseResponse]
-
-
 @router.get("/suggestions/pending", response_model=PendingSuggestionsResponse)
 @limiter.limit(EXPENSIVE_READ_LIMIT)
 async def get_pending_suggestions(
@@ -189,15 +167,7 @@ async def get_pending_suggestions(
 
     Requires licenses.view permission.
     """
-    categorized = await license_service.get_categorized_licenses(
-        provider_id=provider_id,
-        sort_by="external_user_id",
-        sort_dir="asc",
-    )
-    return PendingSuggestionsResponse(
-        total=len(categorized.suggested),
-        items=categorized.suggested,
-    )
+    return await license_service.get_pending_suggestions(provider_id=provider_id)
 
 
 @router.get("/{license_id}", response_model=LicenseResponse)
@@ -316,24 +286,10 @@ async def bulk_remove_from_provider(
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    result = await license_service.bulk_remove_from_provider(
+    return await license_service.bulk_remove_from_provider(
         license_ids=body.license_ids,
         user=current_user,
         request=request,
-    )
-
-    return BulkActionResponse(
-        total=result["total"],
-        successful=result["successful"],
-        failed=result["failed"],
-        results=[
-            BulkActionResult(
-                license_id=r["license_id"],
-                success=r["success"],
-                message=r["message"],
-            )
-            for r in result["results"]
-        ],
     )
 
 
@@ -359,26 +315,10 @@ async def bulk_delete_licenses(
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    deleted_count = await license_service.bulk_delete(
+    return await license_service.bulk_delete(
         license_ids=body.license_ids,
         user=current_user,
         request=request,
-    )
-
-    results = [
-        BulkActionResult(
-            license_id=str(lid),
-            success=True,
-            message="License deleted from database",
-        )
-        for lid in body.license_ids
-    ]
-
-    return BulkActionResponse(
-        total=len(body.license_ids),
-        successful=deleted_count,
-        failed=len(body.license_ids) - deleted_count,
-        results=results,
     )
 
 
@@ -404,26 +344,10 @@ async def bulk_unassign_licenses(
             detail="Maximum 100 licenses per bulk operation",
         )
 
-    unassigned_count = await license_service.bulk_unassign(
+    return await license_service.bulk_unassign(
         license_ids=body.license_ids,
         user=current_user,
         request=request,
-    )
-
-    results = [
-        BulkActionResult(
-            license_id=str(lid),
-            success=True,
-            message="License unassigned from employee",
-        )
-        for lid in body.license_ids
-    ]
-
-    return BulkActionResponse(
-        total=len(body.license_ids),
-        successful=unassigned_count,
-        failed=len(body.license_ids) - unassigned_count,
-        results=results,
     )
 
 

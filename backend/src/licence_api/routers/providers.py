@@ -14,6 +14,10 @@ from licence_api.dependencies import (
 )
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.provider import (
+    IndividualLicenseTypeInfo,
+    LicenseTypeInfo,
+    LicenseTypePricing,
+    PackagePricing,
     ProviderCreate,
     ProviderListResponse,
     ProviderResponse,
@@ -383,31 +387,6 @@ async def sync_provider(
         return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
 
-class LicenseTypePricing(BaseModel):
-    """License type pricing configuration."""
-
-    license_type: str = Field(max_length=500)
-    display_name: str | None = Field(default=None, max_length=255)
-    cost: str = Field(max_length=50)  # Cost per billing cycle
-    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
-    billing_cycle: str = Field(
-        default="yearly", max_length=20
-    )  # yearly, monthly, perpetual, one_time
-    payment_frequency: str = Field(default="yearly", max_length=20)  # yearly, monthly, one_time
-    next_billing_date: str | None = Field(default=None, max_length=10)  # ISO date string
-    notes: str | None = Field(default=None, max_length=2000)
-
-
-class PackagePricing(BaseModel):
-    """Package pricing for providers with bulk/package licenses (e.g., Mattermost)."""
-
-    cost: str = Field(max_length=50)  # Total package cost
-    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
-    billing_cycle: str = Field(default="yearly", max_length=20)  # yearly, monthly
-    next_billing_date: str | None = Field(default=None, max_length=10)
-    notes: str | None = Field(default=None, max_length=2000)
-
-
 class LicenseTypePricingResponse(BaseModel):
     """Response with all license type pricing."""
 
@@ -420,14 +399,6 @@ class LicenseTypePricingRequest(BaseModel):
 
     pricing: list[LicenseTypePricing] = Field(max_length=500)
     package_pricing: PackagePricing | None = None
-
-
-class LicenseTypeInfo(BaseModel):
-    """Info about a license type."""
-
-    license_type: str
-    count: int
-    pricing: LicenseTypePricing | None = None
 
 
 class LicenseTypesResponse(BaseModel):
@@ -449,21 +420,12 @@ async def get_provider_license_types(
     Requires providers.view permission.
     """
     try:
-        result = await pricing_service.get_license_type_overview(provider_id)
+        license_types = await pricing_service.get_license_type_overview(provider_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-
-    license_types = [
-        LicenseTypeInfo(
-            license_type=lt["license_type"],
-            count=lt["count"],
-            pricing=LicenseTypePricing(**lt["pricing"]) if lt["pricing"] else None,
-        )
-        for lt in result["license_types"]
-    ]
 
     return LicenseTypesResponse(license_types=license_types)
 
@@ -478,15 +440,12 @@ async def get_provider_pricing(
 ) -> LicenseTypePricingResponse:
     """Get license type pricing for a provider. Requires providers.view permission."""
     try:
-        result = await pricing_service.get_pricing_overview(provider_id)
+        pricing, package_pricing = await pricing_service.get_pricing_overview(provider_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-
-    pricing = [LicenseTypePricing(**p) for p in result["pricing"]]
-    package_pricing = PackagePricing(**result["package_pricing"]) if result["package_pricing"] else None
 
     return LicenseTypePricingResponse(pricing=pricing, package_pricing=package_pricing)
 
@@ -501,19 +460,11 @@ async def update_provider_pricing(
     pricing_service: Annotated[PricingService, Depends(get_pricing_service)],
 ) -> LicenseTypePricingResponse:
     """Update license type pricing for a provider. Requires providers.edit permission."""
-    # Build pricing config
-    pricing_config = PricingService.build_pricing_config_dict(body.pricing)
-
-    # Build package pricing config
-    package_pricing = PricingService.build_package_pricing_dict(body.package_pricing)
-
-    # Use pricing service to update (handles audit logging and commit)
-    # Raises ValueError if provider not found
     try:
         await pricing_service.update_license_pricing(
             provider_id=provider_id,
-            pricing_config=pricing_config,
-            package_pricing=package_pricing,
+            pricing=body.pricing,
+            package_pricing=body.package_pricing,
             user=current_user,
             request=request,
         )
@@ -527,15 +478,6 @@ async def update_provider_pricing(
         pricing=body.pricing,
         package_pricing=body.package_pricing,
     )
-
-
-class IndividualLicenseTypeInfo(BaseModel):
-    """Info about an individual license type extracted from combined license strings."""
-
-    license_type: str
-    display_name: str | None = None
-    user_count: int  # Number of users with this license
-    pricing: LicenseTypePricing | None = None
 
 
 class IndividualLicenseTypesResponse(BaseModel):
@@ -570,26 +512,18 @@ async def get_provider_individual_license_types(
     Requires providers.view permission.
     """
     try:
-        result = await pricing_service.get_individual_license_type_overview(provider_id)
+        license_types, has_combined_types = (
+            await pricing_service.get_individual_license_type_overview(provider_id)
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
 
-    license_types = [
-        IndividualLicenseTypeInfo(
-            license_type=lt["license_type"],
-            display_name=lt["display_name"],
-            user_count=lt["user_count"],
-            pricing=LicenseTypePricing(**lt["pricing"]) if lt["pricing"] else None,
-        )
-        for lt in result["license_types"]
-    ]
-
     return IndividualLicenseTypesResponse(
         license_types=license_types,
-        has_combined_types=result["has_combined_types"],
+        has_combined_types=has_combined_types,
     )
 
 
@@ -613,17 +547,14 @@ async def update_provider_individual_pricing(
 
     Requires providers.edit permission.
     """
-    # Build individual pricing config
-    individual_pricing_config = PricingService.build_individual_pricing_config_dict(body.pricing)
-
-    # Use pricing service to update (handles audit logging and commit)
-    # Raises ValueError if provider not found
     try:
-        await pricing_service.update_individual_license_pricing(
-            provider_id=provider_id,
-            individual_pricing_config=individual_pricing_config,
-            user=current_user,
-            request=request,
+        license_types, has_combined_types = (
+            await pricing_service.update_individual_license_pricing(
+                provider_id=provider_id,
+                pricing=body.pricing,
+                user=current_user,
+                request=request,
+            )
         )
     except ValueError:
         raise HTTPException(
@@ -631,9 +562,9 @@ async def update_provider_individual_pricing(
             detail="Provider not found",
         )
 
-    # Return updated license types
-    return await get_provider_individual_license_types(
-        provider_id, current_user, pricing_service
+    return IndividualLicenseTypesResponse(
+        license_types=license_types,
+        has_combined_types=has_combined_types,
     )
 
 

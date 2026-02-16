@@ -1330,7 +1330,8 @@
     "noProviderData": "Keine Anbieterdaten verfügbar",
     "noDepartmentData": "Keine Abteilungsdaten verfügbar",
     "clickProviderForDetails": "Klicken Sie auf eine Anbieterzeile, um die Prognose anzuzeigen",
-    "loading": "Prognosedaten werden geladen..."
+    "loading": "Prognosedaten werden geladen...",
+    "licenseChange": "Lizenzänderung"
   },
   "settings": {
     "title": "Einstellungen",

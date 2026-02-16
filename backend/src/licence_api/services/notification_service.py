@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.models.orm.notification_rule import NotificationRuleORM
 from licence_api.repositories.notification_rule_repository import NotificationRuleRepository
+from licence_api.repositories.settings_repository import SettingsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class NotificationService:
         """Initialize service with database session."""
         self.session = session
         self.rule_repo = NotificationRuleRepository(session)
+        self.settings_repo = SettingsRepository(session)
 
     @classmethod
     def _get_http_client(cls) -> httpx.AsyncClient:
@@ -828,6 +830,33 @@ This organization license has been flagged for reordering.
             )
 
         return True
+
+    async def send_test_notification_with_config(
+        self,
+        channel: str,
+    ) -> tuple[bool, str]:
+        """Send a test notification using the stored Slack configuration.
+
+        Fetches the Slack bot token from settings and sends a test message.
+        This encapsulates the multi-service orchestration that would otherwise
+        need to happen in the router layer.
+
+        Args:
+            channel: Slack channel to send to
+
+        Returns:
+            Tuple of (success, message)
+        """
+        slack_config = await self.settings_repo.get("slack")
+
+        if not slack_config or not slack_config.get("bot_token"):
+            return False, (
+                "Slack bot token not configured. "
+                "Please configure Slack settings first."
+            )
+
+        bot_token = slack_config["bot_token"]
+        return await self.send_test_notification(channel=channel, token=bot_token)
 
     async def _send_slack_message(
         self,

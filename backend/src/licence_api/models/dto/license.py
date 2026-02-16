@@ -135,3 +135,27 @@ class LicenseTypeUpdate(BaseModel):
     """Update license type for a license."""
 
     license_type: str = Field(max_length=100)
+
+
+class BulkActionResult(BaseModel):
+    """Result of a single bulk action."""
+
+    license_id: str
+    success: bool
+    message: str
+
+
+class BulkActionResponse(BaseModel):
+    """Response from bulk action operation."""
+
+    total: int
+    successful: int
+    failed: int
+    results: list[BulkActionResult]
+
+
+class PendingSuggestionsResponse(BaseModel):
+    """Response for pending suggestions endpoint."""
+
+    total: int
+    items: list[LicenseResponse]

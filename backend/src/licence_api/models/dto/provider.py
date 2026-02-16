@@ -108,3 +108,45 @@ class ProviderListResponse(BaseModel):
 
     items: list[ProviderResponse]
     total: int
+
+
+class LicenseTypePricing(BaseModel):
+    """License type pricing configuration."""
+
+    license_type: str = Field(max_length=500)
+    display_name: str | None = Field(default=None, max_length=255)
+    cost: str = Field(max_length=50)  # Cost per billing cycle
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
+    billing_cycle: str = Field(
+        default="yearly", max_length=20
+    )  # yearly, monthly, perpetual, one_time
+    payment_frequency: str = Field(default="yearly", max_length=20)  # yearly, monthly, one_time
+    next_billing_date: str | None = Field(default=None, max_length=10)  # ISO date string
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class PackagePricing(BaseModel):
+    """Package pricing for providers with bulk/package licenses (e.g., Mattermost)."""
+
+    cost: str = Field(max_length=50)  # Total package cost
+    currency: str = Field(default="EUR", max_length=3, pattern=r"^[A-Z]{3}$")
+    billing_cycle: str = Field(default="yearly", max_length=20)  # yearly, monthly
+    next_billing_date: str | None = Field(default=None, max_length=10)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class LicenseTypeInfo(BaseModel):
+    """Info about a license type."""
+
+    license_type: str
+    count: int
+    pricing: LicenseTypePricing | None = None
+
+
+class IndividualLicenseTypeInfo(BaseModel):
+    """Info about an individual license type extracted from combined license strings."""
+
+    license_type: str
+    display_name: str | None = None
+    user_count: int  # Number of users with this license
+    pricing: LicenseTypePricing | None = None
