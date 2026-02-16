@@ -10,6 +10,8 @@ export type LicenseTab = 'assigned' | 'not_in_hris' | 'unassigned' | 'external';
 export interface UseLicensesOptions {
   initialProvider?: string;
   initialTab?: LicenseTab;
+  /** Translation function for license namespace */
+  t?: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export interface UseLicensesReturn {
@@ -98,7 +100,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn {
-  const { initialProvider = 'all', initialTab = 'assigned' } = options;
+  const { initialProvider = 'all', initialTab = 'assigned', t } = options;
 
   // Data state
   const [categorizedData, setCategorizedData] = useState<CategorizedLicensesResponse | null>(null);
@@ -312,45 +314,45 @@ export function useLicenses(options: UseLicensesOptions = {}): UseLicensesReturn
     setBulkActionLoading(true);
     try {
       const result = await api.bulkRemoveFromProvider(removableLicenses.map(l => l.id));
-      showToast(`Bulk removed: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      showToast(t ? t('bulkRemoved', { successful: result.successful, total: result.total }) : `Bulk removed: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
       loadLicenses();
     } catch {
-      showToast('Failed to remove licenses', 'error');
+      showToast(t ? t('failedToRemoveLicenses') : 'Failed to remove licenses', 'error');
     } finally {
       setBulkActionLoading(false);
     }
-  }, [removableLicenses, showToast, loadLicenses]);
+  }, [removableLicenses, showToast, loadLicenses, t]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setBulkActionLoading(true);
     try {
       const result = await api.bulkDeleteLicenses(Array.from(selectedIds));
-      showToast(`Bulk deleted: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      showToast(t ? t('bulkDeleted', { successful: result.successful, total: result.total }) : `Bulk deleted: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
       loadLicenses();
     } catch {
-      showToast('Failed to delete licenses', 'error');
+      showToast(t ? t('failedToDeleteLicenses') : 'Failed to delete licenses', 'error');
     } finally {
       setBulkActionLoading(false);
     }
-  }, [selectedIds, showToast, loadLicenses]);
+  }, [selectedIds, showToast, loadLicenses, t]);
 
   const handleBulkUnassign = useCallback(async () => {
     if (assignedLicenses.length === 0) return;
     setBulkActionLoading(true);
     try {
       const result = await api.bulkUnassignLicenses(assignedLicenses.map(l => l.id));
-      showToast(`Bulk unassigned: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
+      showToast(t ? t('bulkUnassigned', { successful: result.successful, total: result.total }) : `Bulk unassigned: ${result.successful}/${result.total}`, result.failed > 0 ? 'error' : 'success');
       setBulkActionDialog(null);
       loadLicenses();
     } catch {
-      showToast('Failed to unassign licenses', 'error');
+      showToast(t ? t('failedToUnassignLicenses') : 'Failed to unassign licenses', 'error');
     } finally {
       setBulkActionLoading(false);
     }
-  }, [assignedLicenses, showToast, loadLicenses]);
+  }, [assignedLicenses, showToast, loadLicenses, t]);
 
   return {
     // Data

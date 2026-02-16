@@ -73,6 +73,17 @@ class EmailService:
         self.session = session
         self.settings_repo = SettingsRepository(session)
         self.encryption = get_encryption_service()
+        # Lazy import to avoid circular imports
+        self._audit_service = None
+
+    @property
+    def audit_service(self):
+        """Get audit service (lazy init)."""
+        if self._audit_service is None:
+            from licence_api.services.audit_service import AuditService
+
+            self._audit_service = AuditService(self.session)
+        return self._audit_service
 
     async def get_system_settings(self) -> tuple[str, str | None]:
         """Get the configured system name and URL.
@@ -145,11 +156,18 @@ class EmailService:
         config = await self.settings_repo.get(SMTP_CONFIG_KEY)
         return config is not None
 
-    async def save_smtp_config(self, request: SmtpConfigRequest) -> None:
+    async def save_smtp_config(
+        self,
+        config_request: SmtpConfigRequest,
+        user: "Any | None" = None,
+        http_request: "Any | None" = None,
+    ) -> None:
         """Save SMTP configuration with encrypted password.
 
         Args:
-            request: SMTP configuration request
+            config_request: SMTP configuration request
+            user: AdminUser for audit logging
+            http_request: HTTP request for audit logging
 
         Raises:
             HTTPException: If this is initial configuration and no password is provided
@@ -157,8 +175,10 @@ class EmailService:
         # Get existing config to preserve password if not provided
         existing_config = await self.settings_repo.get(SMTP_CONFIG_KEY)
 
+        is_new = existing_config is None
+
         # Validate: password is required for initial configuration
-        if existing_config is None and not request.password:
+        if is_new and not config_request.password:
             from fastapi import HTTPException, status
 
             raise HTTPException(
@@ -167,9 +187,9 @@ class EmailService:
             )
         password_encrypted: bytes | None = None
 
-        if request.password:
+        if config_request.password:
             # Encrypt new password
-            password_encrypted = self.encryption.encrypt_string(request.password)
+            password_encrypted = self.encryption.encrypt_string(config_request.password)
         elif existing_config and existing_config.get("password_encrypted"):
             # Keep existing encrypted password
             existing_pwd = existing_config["password_encrypted"]
@@ -179,12 +199,12 @@ class EmailService:
                 password_encrypted = existing_pwd
 
         config_data: dict[str, Any] = {
-            "host": request.host,
-            "port": request.port,
-            "username": request.username,
-            "from_email": request.from_email,
-            "from_name": request.from_name,
-            "use_tls": request.use_tls,
+            "host": config_request.host,
+            "port": config_request.port,
+            "username": config_request.username,
+            "from_email": config_request.from_email,
+            "from_name": config_request.from_name,
+            "use_tls": config_request.use_tls,
         }
 
         if password_encrypted:
@@ -192,15 +212,54 @@ class EmailService:
             config_data["password_encrypted"] = password_encrypted.hex()
 
         await self.settings_repo.set(SMTP_CONFIG_KEY, config_data)
+
+        # Audit log the configuration change
+        if user:
+            from licence_api.services.audit_service import AuditAction, ResourceType
+
+            await self.audit_service.log(
+                action=AuditAction.SETTINGS_UPDATE,
+                resource_type=ResourceType.SETTINGS,
+                user=user,
+                request=http_request,
+                details={
+                    "setting": "smtp_config",
+                    "action": "create" if is_new else "update",
+                    "host": config_request.host,
+                    "port": config_request.port,
+                    "use_tls": config_request.use_tls,
+                },
+            )
+
         await self.session.commit()
 
-    async def delete_smtp_config(self) -> bool:
+    async def delete_smtp_config(
+        self,
+        user: "Any | None" = None,
+        http_request: "Any | None" = None,
+    ) -> bool:
         """Delete SMTP configuration.
+
+        Args:
+            user: AdminUser for audit logging
+            http_request: HTTP request for audit logging
 
         Returns:
             True if deleted, False if not found
         """
         result = await self.settings_repo.delete(SMTP_CONFIG_KEY)
+
+        if result and user:
+            from licence_api.services.audit_service import AuditAction, ResourceType
+
+            await self.audit_service.log(
+                action=AuditAction.SETTING_DELETE,
+                resource_type=ResourceType.SETTINGS,
+                user=user,
+                request=http_request,
+                details={"setting": "smtp_config", "action": "delete"},
+            )
+
         await self.session.commit()
         return result
 

@@ -350,6 +350,7 @@
     "enableProvider": "Enable Provider",
     "disableProvider": "Disable Provider",
     "providerCreated": "Provider created successfully",
+    "providerAdded": "{name} added",
     "providerUpdated": "Provider updated successfully",
     "providerDeleted": "Provider deleted successfully",
     "failedToCreate": "Failed to create provider",
@@ -746,7 +747,16 @@
       "isServiceAccountField": "Is Service Account",
       "serviceAccountNameField": "Service Account Name",
       "isAdminAccountField": "Is Admin Account",
-      "adminAccountNameField": "Admin Account Name"
+      "adminAccountNameField": "Admin Account Name",
+      "uploading": "Uploading...",
+      "downloadFailed": "Download failed",
+      "validationFailed": "Validation failed",
+      "importFailed": "Import failed",
+      "moreErrors": "...and {count} more errors",
+      "cannotProceed": "Cannot proceed due to errors",
+      "rowsProgress": "{processed} / {total} rows",
+      "licensesWillBeCreated": "{count} licenses will be created",
+      "importFailedTitle": "Import Failed"
     }
   },
   "employees": {
@@ -859,6 +869,8 @@
     "unlinkAccountDescription": "The account will no longer be matched to this employee. You can link it again later.",
     "accountLinked": "External account linked successfully",
     "accountUnlinked": "External account unlinked successfully",
+    "failedToLinkAccount": "Failed to link account",
+    "failedToUnlinkAccount": "Failed to unlink account",
     "providerType": "Provider Type",
     "externalUsername": "Username",
     "linkedAt": "Linked At",
@@ -1609,7 +1621,9 @@
       "unencrypted": "Unencrypted",
       "backupCount": "{count, plural, =0 {No backups} =1 {1 backup} other {# backups}}",
       "filename": "Filename",
-      "restore": "Restore"
+      "restore": "Restore",
+      "minCharacters": "Min. 12 characters",
+      "confirmPasswordPlaceholder": "Confirm password"
     }
   },
   "finance": {

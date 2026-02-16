@@ -7,7 +7,7 @@
  * Sanitize an error for safe display/logging.
  * Removes potentially sensitive information like stack traces, URLs, tokens.
  */
-export function sanitizeError(error: unknown): string {
+export function sanitizeError(error: unknown, fallbackMessage?: string): string {
   if (error instanceof Error) {
     // Return only the message, not the stack trace
     const message = error.message;
@@ -27,7 +27,7 @@ export function sanitizeError(error: unknown): string {
     return error;
   }
 
-  return 'An unexpected error occurred';
+  return fallbackMessage ?? 'An unexpected error occurred';
 }
 
 /**
@@ -48,7 +48,7 @@ export function logError(context: string, error: unknown): void {
  * Handle API errors safely.
  * Returns a user-friendly message without sensitive details.
  */
-export function getErrorMessage(error: unknown): string {
+export function getErrorMessage(error: unknown, fallbackMessage?: string): string {
   if (error instanceof Error) {
     // Known safe error messages from our API
     const safePatterns = [
@@ -71,10 +71,10 @@ export function getErrorMessage(error: unknown): string {
     }
 
     // For unknown errors, return generic message
-    return 'An error occurred. Please try again.';
+    return fallbackMessage ?? 'An error occurred. Please try again.';
   }
 
-  return 'An unexpected error occurred';
+  return fallbackMessage ?? 'An unexpected error occurred';
 }
 
 /**

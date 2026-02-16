@@ -9,7 +9,6 @@ from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.dashboard import DashboardResponse
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, limiter
-from licence_api.services.cache_service import get_cache_service
 from licence_api.services.report_service import ReportService
 from licence_api.utils.validation import sanitize_department
 
@@ -34,16 +33,4 @@ async def get_dashboard(
     # Sanitize input
     department = sanitize_department(department)
 
-    # Try to get from cache
-    cache = await get_cache_service()
-    cached = await cache.get_dashboard(department=department)
-    if cached:
-        return DashboardResponse(**cached)
-
-    # Fetch from database
-    result = await report_service.get_dashboard(department=department)
-
-    # Cache the result
-    await cache.set_dashboard(result, department=department)
-
-    return result
+    return await report_service.get_dashboard_cached(department=department)

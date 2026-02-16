@@ -25,7 +25,6 @@ from licence_api.models.dto.report import (
 )
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import EXPENSIVE_READ_LIMIT, limiter
-from licence_api.services.cache_service import get_cache_service
 from licence_api.services.report_service import ReportService
 
 router = APIRouter()
@@ -128,15 +127,7 @@ async def get_utilization_report(
     Identifies over-provisioned licenses where you're paying for more seats
     than are actually being used. Response is cached for 5 minutes.
     """
-    # Try cache first
-    cache = await get_cache_service()
-    cached = await cache.get_report("utilization")
-    if cached:
-        return UtilizationReport(**cached)
-
-    result = await report_service.get_utilization_report()
-    await cache.set_report("utilization", result)
-    return result
+    return await report_service.get_utilization_report_cached()
 
 
 @router.get("/cost-trend", response_model=CostTrendReport)
@@ -168,14 +159,7 @@ async def get_duplicate_accounts_report(
     within the same provider, which may indicate duplicate licenses.
     Response is cached for 5 minutes.
     """
-    cache = await get_cache_service()
-    cached = await cache.get_report("duplicate_accounts")
-    if cached:
-        return DuplicateAccountsReport(**cached)
-
-    result = await report_service.get_duplicate_accounts()
-    await cache.set_report("duplicate_accounts", result)
-    return result
+    return await report_service.get_duplicate_accounts_cached()
 
 
 # ==================== COST BREAKDOWN REPORTS ====================
@@ -194,14 +178,7 @@ async def get_costs_by_department_report(
     Helps identify which departments have the highest software costs.
     Response is cached for 5 minutes.
     """
-    cache = await get_cache_service()
-    cached = await cache.get_report("costs_by_department")
-    if cached:
-        return CostsByDepartmentReport(**cached)
-
-    result = await report_service.get_costs_by_department()
-    await cache.set_report("costs_by_department", result)
-    return result
+    return await report_service.get_costs_by_department_cached()
 
 
 @router.get("/costs-by-employee", response_model=CostsByEmployeeReport)

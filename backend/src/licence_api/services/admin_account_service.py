@@ -228,6 +228,12 @@ class AdminAccountService:
 
         await self.session.commit()
 
+        # Invalidate dashboard cache since license data changed
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
         return ApplyAdminPatternsResponse(
             updated_count=updated_count,
             patterns_applied=patterns_applied,

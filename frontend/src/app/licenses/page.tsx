@@ -45,7 +45,7 @@ function LicensesContent() {
   const canImport = hasPermission(Permissions.LICENSES_IMPORT);
 
   // Use custom hook for license data management
-  const licenses = useLicenses();
+  const licenses = useLicenses({ t });
 
   useEffect(() => {
     if (!authLoading && !hasPermission(Permissions.LICENSES_VIEW)) {

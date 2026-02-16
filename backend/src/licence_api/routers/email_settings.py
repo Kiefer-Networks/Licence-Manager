@@ -5,11 +5,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 
-from licence_api.dependencies import get_audit_service, get_email_service
+from licence_api.dependencies import get_email_service
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import SENSITIVE_OPERATION_LIMIT, limiter
-from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.email_service import (
     EmailService,
     SmtpConfigRequest,
@@ -61,16 +60,13 @@ async def set_email_config(
     body: SmtpConfigRequest,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_EDIT))],
     service: Annotated[EmailService, Depends(get_email_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> SmtpConfigResponse:
     """Save SMTP configuration.
 
     Password is encrypted before storage. If password is not provided,
     the existing password is preserved (for updating other settings).
     """
-    is_new = not await service.is_configured()
-
-    await service.save_smtp_config(body)
+    await service.save_smtp_config(body, user=current_user, http_request=request)
 
     config = await service.get_smtp_config_response()
     if not config:
@@ -78,21 +74,6 @@ async def set_email_config(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save SMTP configuration",
         )
-
-    # Audit log the configuration change
-    await audit_service.log(
-        action=AuditAction.SETTINGS_UPDATE,
-        resource_type=ResourceType.SETTINGS,
-        user=current_user,
-        request=request,
-        details={
-            "setting": "smtp_config",
-            "action": "create" if is_new else "update",
-            "host": body.host,
-            "port": body.port,
-            "use_tls": body.use_tls,
-        },
-    )
 
     return config
 
@@ -103,24 +84,14 @@ async def delete_email_config(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.SETTINGS_DELETE))],
     service: Annotated[EmailService, Depends(get_email_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> None:
     """Delete SMTP configuration."""
-    deleted = await service.delete_smtp_config()
+    deleted = await service.delete_smtp_config(user=current_user, http_request=request)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="SMTP configuration not found",
         )
-
-    # Audit log the deletion
-    await audit_service.log(
-        action=AuditAction.SETTING_DELETE,
-        resource_type=ResourceType.SETTINGS,
-        user=current_user,
-        request=request,
-        details={"setting": "smtp_config", "action": "delete"},
-    )
 
 
 @router.post("/test", response_model=TestEmailResponse)

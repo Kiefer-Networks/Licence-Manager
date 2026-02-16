@@ -76,6 +76,80 @@ class ReportService:
         self.user_repo = UserRepository(session)
         self.expiration_service = ExpirationService(session)
 
+    async def get_dashboard_cached(self, department: str | None = None) -> DashboardResponse:
+        """Get dashboard data with cache layer.
+
+        Checks cache first, falls back to database and caches the result.
+
+        Args:
+            department: Optional department filter
+
+        Returns:
+            DashboardResponse with all dashboard metrics
+        """
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        cached = await cache.get_dashboard(department=department)
+        if cached:
+            return DashboardResponse(**cached)
+
+        result = await self.get_dashboard(department=department)
+
+        await cache.set_dashboard(result, department=department)
+        return result
+
+    async def get_utilization_report_cached(self) -> "UtilizationReport":
+        """Get utilization report with cache layer.
+
+        Returns:
+            UtilizationReport
+        """
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        cached = await cache.get_report("utilization")
+        if cached:
+            return UtilizationReport(**cached)
+
+        result = await self.get_utilization_report()
+        await cache.set_report("utilization", result)
+        return result
+
+    async def get_duplicate_accounts_cached(self) -> "DuplicateAccountsReport":
+        """Get duplicate accounts report with cache layer.
+
+        Returns:
+            DuplicateAccountsReport
+        """
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        cached = await cache.get_report("duplicate_accounts")
+        if cached:
+            return DuplicateAccountsReport(**cached)
+
+        result = await self.get_duplicate_accounts()
+        await cache.set_report("duplicate_accounts", result)
+        return result
+
+    async def get_costs_by_department_cached(self) -> "CostsByDepartmentReport":
+        """Get costs by department report with cache layer.
+
+        Returns:
+            CostsByDepartmentReport
+        """
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        cached = await cache.get_report("costs_by_department")
+        if cached:
+            return CostsByDepartmentReport(**cached)
+
+        result = await self.get_costs_by_department()
+        await cache.set_report("costs_by_department", result)
+        return result
+
     async def get_dashboard(self, department: str | None = None) -> DashboardResponse:
         """Get dashboard data.
 

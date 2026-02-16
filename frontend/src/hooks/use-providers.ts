@@ -253,7 +253,7 @@ export function useProviders(
 
       await fetchProviders();
       setAddDialogOpen(false);
-      showToast('success', `${newProviderName} added`);
+      showToast('success', t('providerAdded', { name: newProviderName }));
     } catch (err) {
       setError(err instanceof Error ? err.message : t('failedToCreate'));
     } finally {

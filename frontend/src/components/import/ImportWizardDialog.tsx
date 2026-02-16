@@ -108,6 +108,9 @@ export function ImportWizardDialog({
     onSuccess,
     onError,
     uploadFailedMessage: t('uploadFailed'),
+    downloadFailedMessage: t('downloadFailed'),
+    validationFailedMessage: t('validationFailed'),
+    importFailedMessage: t('importFailed'),
   });
 
   // Render step indicator
@@ -167,7 +170,7 @@ export function ImportWizardDialog({
         {isUploading ? (
           <div className="flex flex-col items-center">
             <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">Uploading...</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t('uploading')}</p>
           </div>
         ) : (
           <div className="flex flex-col items-center">
@@ -387,7 +390,7 @@ export function ImportWizardDialog({
             </div>
             {validationResult.errors.length > 20 && (
               <p className="text-sm text-muted-foreground">
-                ...and {validationResult.errors.length - 20} more errors
+                {t('moreErrors', { count: validationResult.errors.length - 20 })}
               </p>
             )}
           </div>
@@ -421,7 +424,7 @@ export function ImportWizardDialog({
         {!validationResult.can_proceed && (
           <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
             <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm">Cannot proceed due to errors</span>
+            <span className="text-sm">{t('cannotProceed')}</span>
           </div>
         )}
       </div>
@@ -439,7 +442,7 @@ export function ImportWizardDialog({
             <div className="w-full space-y-2">
               <Progress value={jobStatus.progress} />
               <p className="text-sm text-center text-muted-foreground">
-                {jobStatus.processed_rows} / {jobStatus.total_rows} rows
+                {t('rowsProgress', { processed: jobStatus.processed_rows, total: jobStatus.total_rows })}
               </p>
             </div>
           )}
@@ -450,7 +453,7 @@ export function ImportWizardDialog({
           <p className="text-lg font-medium">{t('executeDescription')}</p>
           {validationResult && (
             <p className="text-sm text-muted-foreground">
-              {validationResult.summary.will_create} licenses will be created
+              {t('licensesWillBeCreated', { count: validationResult.summary.will_create })}
             </p>
           )}
         </>
@@ -480,7 +483,7 @@ export function ImportWizardDialog({
         )}
 
         <h3 className="text-xl font-semibold">
-          {isSuccess ? t('resultTitle') : 'Import Failed'}
+          {isSuccess ? t('resultTitle') : t('importFailedTitle')}
         </h3>
 
         <div className="grid grid-cols-3 gap-4 w-full max-w-sm">

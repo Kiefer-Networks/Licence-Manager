@@ -26,7 +26,6 @@ from licence_api.security.rate_limit import (
     SENSITIVE_OPERATION_LIMIT,
     limiter,
 )
-from licence_api.services.cache_service import get_cache_service
 from licence_api.services.service_account_service import ServiceAccountService
 from licence_api.utils.validation import validate_sort_by
 
@@ -154,16 +153,10 @@ async def apply_patterns(
 
     Requires licenses.edit permission.
     """
-    result = await service.apply_patterns_to_all_licenses(
+    return await service.apply_patterns_to_all_licenses(
         admin_user_id=current_user.id,
         request=request,
     )
-
-    # Invalidate dashboard cache
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    return result
 
 
 @router.get("/licenses", response_model=ServiceAccountLicenseListResponse)
@@ -315,13 +308,7 @@ async def apply_license_types(
 
     Requires licenses.edit permission.
     """
-    result = await service.apply_license_types_to_all_licenses(
+    return await service.apply_license_types_to_all_licenses(
         admin_user_id=current_user.id,
         request=request,
     )
-
-    # Invalidate dashboard cache
-    cache = await get_cache_service()
-    await cache.invalidate_dashboard()
-
-    return result

@@ -1,4 +1,9 @@
-"""Sync service for orchestrating provider synchronization."""
+"""Sync service for orchestrating provider synchronization.
+
+Architecture Note (MVC-06):
+    Audit logging and cache invalidation are handled within this service layer
+    (not in routers) to enforce strict MVC separation.
+"""
 
 import asyncio
 import logging
@@ -7,9 +12,12 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from licence_api.constants.paths import AVATAR_DIR
+from licence_api.middleware.error_handler import sanitize_error_for_audit
+from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.provider import ProviderName, SyncStatus
 from licence_api.repositories.admin_account_pattern_repository import AdminAccountPatternRepository
 from licence_api.repositories.employee_repository import EmployeeRepository
@@ -23,6 +31,8 @@ from licence_api.repositories.service_account_pattern_repository import (
 )
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.security.encryption import get_encryption_service
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
+from licence_api.services.cache_service import get_cache_service
 from licence_api.services.matching_service import MatchingService
 from licence_api.utils.pattern_matcher import PatternMatcher
 from licence_api.utils.secure_logging import log_error, log_warning
@@ -43,6 +53,7 @@ class SyncService:
         self.svc_account_license_type_repo = ServiceAccountLicenseTypeRepository(session)
         self.admin_account_pattern_repo = AdminAccountPatternRepository(session)
         self.encryption = get_encryption_service()
+        self.audit_service = AuditService(session)
 
     def _update_match_fields_if_better(
         self,
@@ -680,27 +691,181 @@ class SyncService:
             "total": len(licenses),
         }
 
-    async def trigger_sync(self, provider_id: UUID | None = None) -> dict[str, Any]:
-        """Trigger a sync operation.
+    async def trigger_sync(
+        self,
+        provider_id: UUID | None = None,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> dict[str, Any]:
+        """Trigger a sync operation with audit logging and cache invalidation.
 
         Args:
             provider_id: Specific provider to sync, or None for all
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Dict with sync results
-        """
-        if provider_id:
-            return await self.sync_provider(provider_id)
-        return await self.sync_all_providers()
 
-    async def resync_avatars(self, force: bool = False) -> dict[str, Any]:
+        Raises:
+            ConnectionError: On network errors
+            TimeoutError: On timeout
+            OSError: On OS-level errors
+            ValueError: On invalid provider
+        """
+        try:
+            if provider_id:
+                results = await self.sync_provider(provider_id)
+            else:
+                results = await self.sync_all_providers()
+
+            # Audit log success
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={
+                        "results": results,
+                        "scope": "single" if provider_id else "all",
+                    },
+                )
+
+            # Invalidate caches after sync (data has changed)
+            cache = await get_cache_service()
+            await cache.invalidate_all()
+
+            return results
+
+        except (ConnectionError, TimeoutError, OSError) as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={
+                        "success": False,
+                        "error_code": "CONNECTION_ERROR",
+                        "error_type": type(e).__name__,
+                    },
+                )
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={
+                        "success": False,
+                        **sanitize_error_for_audit(e),
+                    },
+                )
+            raise
+
+    async def trigger_provider_sync(
+        self,
+        provider_id: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> dict[str, Any]:
+        """Sync a specific provider with audit logging and cache invalidation.
+
+        Args:
+            provider_id: Provider UUID to sync
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
+
+        Returns:
+            Dict with sync results
+
+        Raises:
+            ValueError: If provider not found
+            ConnectionError: On network errors
+            TimeoutError: On timeout
+            OSError: On OS-level errors
+        """
+        try:
+            results = await self.sync_provider(provider_id)
+
+            # Audit log success
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={"results": results},
+                )
+
+            # Invalidate caches after sync (data has changed)
+            cache = await get_cache_service()
+            await cache.invalidate_all()
+
+            return results
+
+        except ValueError:
+            raise
+        except (ConnectionError, TimeoutError, OSError) as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={
+                        "success": False,
+                        "error_code": "CONNECTION_ERROR",
+                        "error_type": type(e).__name__,
+                    },
+                )
+            raise
+        except Exception as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=provider_id,
+                    user=user,
+                    request=request,
+                    details={
+                        "success": False,
+                        **sanitize_error_for_audit(e),
+                    },
+                )
+            raise
+
+    async def resync_avatars(
+        self,
+        force: bool = False,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> dict[str, Any]:
         """Resync all employee avatars from HiBob.
 
         Args:
             force: If True, delete existing avatars and re-download all
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Dict with sync results
+
+        Raises:
+            ValueError: If HiBob provider not configured
+            ConnectionError: On network errors
+            TimeoutError: On timeout
+            OSError: On OS-level errors
         """
         from licence_api.providers.hibob import HiBobProvider
 
@@ -715,18 +880,68 @@ class SyncService:
                 avatar_file.unlink()
             logger.info("Deleted all existing avatars for forced resync")
 
-        # Get credentials and create provider
-        credentials = self.encryption.decrypt(hibob_provider.credentials_encrypted)
-        provider = HiBobProvider(credentials)
+        try:
+            # Get credentials and create provider
+            credentials = self.encryption.decrypt(hibob_provider.credentials_encrypted)
+            provider = HiBobProvider(credentials)
 
-        # Get all employees from database
-        employees = await self.employee_repo.get_all()
-        employee_data = [{"hibob_id": emp.hibob_id} for emp in employees if emp.hibob_id]
+            # Get all employees from database
+            employees = await self.employee_repo.get_all()
+            employee_data = [{"hibob_id": emp.hibob_id} for emp in employees if emp.hibob_id]
 
-        # Sync avatars
-        result = await self._sync_avatars(provider, employee_data)
+            # Sync avatars
+            result = await self._sync_avatars(provider, employee_data)
 
-        return {
-            "provider": "hibob",
-            "avatars": result,
-        }
+            results = {
+                "provider": "hibob",
+                "avatars": result,
+            }
+
+            # Audit log success
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=None,
+                    user=user,
+                    request=request,
+                    details={
+                        "action": "avatar_resync",
+                        "force": force,
+                        "results": results,
+                    },
+                )
+
+            return results
+
+        except (ConnectionError, TimeoutError, OSError) as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=None,
+                    user=user,
+                    request=request,
+                    details={
+                        "action": "avatar_resync",
+                        "success": False,
+                        "error_code": "CONNECTION_ERROR",
+                        "error_type": type(e).__name__,
+                    },
+                )
+            raise
+        except Exception as e:
+            if user:
+                await self.audit_service.log(
+                    action=AuditAction.PROVIDER_SYNC,
+                    resource_type=ResourceType.PROVIDER,
+                    resource_id=None,
+                    user=user,
+                    request=request,
+                    details={
+                        "action": "avatar_resync",
+                        "success": False,
+                        **sanitize_error_for_audit(e),
+                    },
+                )
+            raise

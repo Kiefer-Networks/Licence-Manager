@@ -8,12 +8,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from licence_api.dependencies import (
-    get_audit_service,
     get_pricing_service,
     get_provider_service,
     get_sync_service,
 )
-from licence_api.middleware.error_handler import sanitize_error_for_audit
 from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.dto.provider import (
     ProviderCreate,
@@ -29,12 +27,9 @@ from licence_api.security.rate_limit import (
     SENSITIVE_OPERATION_LIMIT,
     limiter,
 )
-from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
-from licence_api.services.cache_service import get_cache_service
 from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
-from licence_api.utils.errors import log_sync_connection_error, log_sync_unexpected_error
 from licence_api.utils.validation import validate_dict_recursive
 
 router = APIRouter()
@@ -85,18 +80,7 @@ async def list_providers(
 
     Response is cached for 5 minutes to improve performance.
     """
-    # Try to get from cache
-    cache = await get_cache_service()
-    cached = await cache.get_providers()
-    if cached:
-        return ProviderListResponse(items=cached, total=len(cached))
-
-    # Fetch from database
-    items = await provider_service.list_providers()
-
-    # Cache the result (serialize to dict for caching)
-    await cache.set_providers([item.model_dump() for item in items])
-
+    items = await provider_service.list_providers_cached()
     return ProviderListResponse(items=items, total=len(items))
 
 
@@ -153,7 +137,7 @@ async def create_provider(
 ) -> ProviderResponse:
     """Create a new provider. Requires providers.create permission."""
     try:
-        result = await provider_service.create_provider(
+        return await provider_service.create_provider(
             name=body.name,
             display_name=body.display_name,
             credentials=body.credentials,
@@ -161,10 +145,6 @@ async def create_provider(
             user=current_user,
             request=request,
         )
-        # Invalidate provider cache
-        cache = await get_cache_service()
-        await cache.invalidate_providers()
-        return result
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -198,9 +178,6 @@ async def update_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-    # Invalidate provider cache
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
     return result
 
 
@@ -336,9 +313,6 @@ async def delete_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-    # Invalidate provider cache
-    cache = await get_cache_service()
-    await cache.invalidate_providers()
 
 
 @router.post("/test-connection", response_model=TestConnectionResponse)
@@ -364,40 +338,22 @@ async def trigger_sync(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     provider_id: UUID | None = None,
 ) -> SyncResponse:
     """Trigger a sync operation. Requires providers.sync permission."""
     try:
-        results = await sync_service.trigger_sync(provider_id)
-
-        # Audit log
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
+        results = await sync_service.trigger_sync(
+            provider_id=provider_id,
             user=current_user,
             request=request,
-            details={"results": results, "scope": "single" if provider_id else "all"},
         )
-
-        # Invalidate caches after sync (data has changed)
-        cache = await get_cache_service()
-        await cache.invalidate_all()
-
         return SyncResponse(success=True, results=results)
-    except (ConnectionError, TimeoutError, OSError) as e:
-        error = await log_sync_connection_error(
-            audit_service, provider_id, current_user, request, e
-        )
-        return SyncResponse(success=False, results=error)
+    except (ConnectionError, TimeoutError, OSError):
+        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
     except ValueError:
         return SyncResponse(success=False, results={"error": "Invalid provider configuration"})
-    except Exception as e:
-        error = await log_sync_unexpected_error(
-            audit_service, provider_id, current_user, request, e
-        )
-        return SyncResponse(success=False, results=error)
+    except Exception:
+        return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
 
 @router.post("/{provider_id}/sync", response_model=SyncResponse)
@@ -407,42 +363,24 @@ async def sync_provider(
     provider_id: UUID,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> SyncResponse:
     """Sync a specific provider. Requires providers.sync permission."""
     try:
-        results = await sync_service.sync_provider(provider_id)
-
-        # Audit log
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=provider_id,
+        results = await sync_service.trigger_provider_sync(
+            provider_id=provider_id,
             user=current_user,
             request=request,
-            details={"results": results},
         )
-
-        # Invalidate caches after sync (data has changed)
-        cache = await get_cache_service()
-        await cache.invalidate_all()
-
         return SyncResponse(success=True, results=results)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
         )
-    except (ConnectionError, TimeoutError, OSError) as e:
-        error = await log_sync_connection_error(
-            audit_service, provider_id, current_user, request, e
-        )
-        return SyncResponse(success=False, results=error)
-    except Exception as e:
-        error = await log_sync_unexpected_error(
-            audit_service, provider_id, current_user, request, e
-        )
-        return SyncResponse(success=False, results=error)
+    except (ConnectionError, TimeoutError, OSError):
+        return SyncResponse(success=False, results={"error": "Connection to provider failed"})
+    except Exception:
+        return SyncResponse(success=False, results={"error": "Sync operation failed"})
 
 
 class LicenseTypePricing(BaseModel):
@@ -705,7 +643,6 @@ async def resync_avatars(
     request: Request,
     current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_SYNC))],
     sync_service: Annotated[SyncService, Depends(get_sync_service)],
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     force: bool = False,
 ) -> SyncResponse:
     """Resync all employee avatars from HiBob.
@@ -717,48 +654,18 @@ async def resync_avatars(
     Requires providers.sync permission.
     """
     try:
-        results = await sync_service.resync_avatars(force=force)
-
-        # Audit log
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=None,
+        results = await sync_service.resync_avatars(
+            force=force,
             user=current_user,
             request=request,
-            details={"action": "avatar_resync", "force": force, "results": results},
         )
-
         return SyncResponse(success=True, results=results)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="HiBob provider not configured",
         )
-    except (ConnectionError, TimeoutError, OSError) as e:
-        # Network/connection errors - audit and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=None,
-            user=current_user,
-            request=request,
-            details={
-                "action": "avatar_resync",
-                "success": False,
-                "error_code": "CONNECTION_ERROR",
-                "error_type": type(e).__name__,
-            },
-        )
+    except (ConnectionError, TimeoutError, OSError):
         return SyncResponse(success=False, results={"error": "Connection to HiBob failed"})
-    except Exception as e:
-        # Unexpected errors - audit with sanitized details and return failure
-        await audit_service.log(
-            action=AuditAction.PROVIDER_SYNC,
-            resource_type=ResourceType.PROVIDER,
-            resource_id=None,
-            user=current_user,
-            request=request,
-            details={"action": "avatar_resync", "success": False, **sanitize_error_for_audit(e)},
-        )
+    except Exception:
         return SyncResponse(success=False, results={"error": "Avatar sync failed"})

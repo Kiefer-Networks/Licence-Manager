@@ -508,7 +508,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 12 characters"
+                placeholder={t('minCharacters')}
                 autoFocus
                 tabIndex={1}
               />
@@ -519,7 +519,7 @@ export function BackupsTab({ showToast }: BackupsTabProps) {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
+                placeholder={t('confirmPasswordPlaceholder')}
                 tabIndex={2}
               />
             </div>

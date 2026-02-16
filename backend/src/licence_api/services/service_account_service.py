@@ -251,6 +251,12 @@ class ServiceAccountService:
 
         await self.session.commit()
 
+        # Invalidate dashboard cache since license data changed
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
+
         return ApplyPatternsResponse(
             updated_count=updated_count,
             patterns_applied=patterns_applied,
@@ -561,6 +567,12 @@ class ServiceAccountService:
             )
 
         await self.session.commit()
+
+        # Invalidate dashboard cache since license data changed
+        from licence_api.services.cache_service import get_cache_service
+
+        cache = await get_cache_service()
+        await cache.invalidate_dashboard()
 
         return ApplyLicenseTypesResponse(
             updated_count=updated_count,

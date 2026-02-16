@@ -12,6 +12,12 @@ interface UseImportWizardProps {
   onError?: (error: string) => void;
   /** Translation function for fallback error messages */
   uploadFailedMessage: string;
+  /** Translated fallback message for download failure */
+  downloadFailedMessage: string;
+  /** Translated fallback message for validation failure */
+  validationFailedMessage: string;
+  /** Translated fallback message for import failure */
+  importFailedMessage: string;
 }
 
 export interface UseImportWizardReturn {
@@ -67,6 +73,9 @@ export function useImportWizard({
   onSuccess,
   onError,
   uploadFailedMessage,
+  downloadFailedMessage,
+  validationFailedMessage,
+  importFailedMessage,
 }: UseImportWizardProps): UseImportWizardReturn {
   // Step state
   const [currentStep, setCurrentStep] = useState<Step>('upload');
@@ -182,10 +191,10 @@ export function useImportWizard({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Download failed';
+      const message = err instanceof Error ? err.message : downloadFailedMessage;
       onError?.(message);
     }
-  }, [providerId, onError]);
+  }, [providerId, onError, downloadFailedMessage]);
 
   // Handle mapping change
   const handleMappingChange = useCallback((fileColumn: string, systemField: string | null) => {
@@ -220,13 +229,13 @@ export function useImportWizard({
       setValidationResult(result);
       setCurrentStep('validate');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Validation failed';
+      const message = err instanceof Error ? err.message : validationFailedMessage;
       setValidationError(message);
       onError?.(message);
     } finally {
       setIsValidating(false);
     }
-  }, [providerId, uploadResult, columnMapping, options, onError]);
+  }, [providerId, uploadResult, columnMapping, options, onError, validationFailedMessage]);
 
   // Handle execute
   const handleExecute = useCallback(async () => {
@@ -256,13 +265,13 @@ export function useImportWizard({
         onSuccess?.();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Import failed';
+      const message = err instanceof Error ? err.message : importFailedMessage;
       setExecuteError(message);
       onError?.(message);
     } finally {
       setIsExecuting(false);
     }
-  }, [providerId, uploadResult, columnMapping, options, onSuccess, onError]);
+  }, [providerId, uploadResult, columnMapping, options, onSuccess, onError, importFailedMessage]);
 
   // Handle next step
   const handleNext = () => {

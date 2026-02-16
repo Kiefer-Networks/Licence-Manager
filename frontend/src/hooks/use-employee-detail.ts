@@ -258,7 +258,7 @@ export function useEmployeeDetail(
       setExternalUsername('');
       await fetchExternalAccounts();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to link account');
+      showToast('error', error instanceof Error ? error.message : tEmployees('failedToLinkAccount'));
     } finally {
       setActionLoading(false);
     }
@@ -273,7 +273,7 @@ export function useEmployeeDetail(
       setUnlinkDialog(null);
       await fetchExternalAccounts();
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to unlink account');
+      showToast('error', error instanceof Error ? error.message : tEmployees('failedToUnlinkAccount'));
     } finally {
       setActionLoading(false);
     }

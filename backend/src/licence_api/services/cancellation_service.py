@@ -6,14 +6,19 @@ Architecture Note (MVC-06):
     repositories (LicenseRepository, LicensePackageRepository,
     OrganizationLicenseRepository) and keeps only transaction management
     (commit/flush) and business logic in the service layer.
+
+    Audit logging is handled within this service layer (not in routers) to
+    enforce strict MVC separation.
 """
 
 import logging
 from datetime import UTC, date, datetime
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.models.domain.admin_user import AdminUser
 from licence_api.models.domain.license import LicenseStatus
 from licence_api.models.orm.license import LicenseORM
 from licence_api.models.orm.license_package import LicensePackageORM, PackageStatus
@@ -23,6 +28,7 @@ from licence_api.repositories.license_repository import LicenseRepository
 from licence_api.repositories.organization_license_repository import OrganizationLicenseRepository
 from licence_api.repositories.settings_repository import SettingsRepository
 from licence_api.repositories.user_repository import UserRepository
+from licence_api.services.audit_service import AuditAction, AuditService, ResourceType
 from licence_api.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -40,6 +46,7 @@ class CancellationService:
         self.license_repo = LicenseRepository(session)
         self.package_repo = LicensePackageRepository(session)
         self.org_license_repo = OrganizationLicenseRepository(session)
+        self.audit_service = AuditService(session)
 
     async def _get_slack_token(self) -> str | None:
         """Get Slack bot token from settings."""
@@ -57,6 +64,8 @@ class CancellationService:
         effective_date: date,
         reason: str | None,
         cancelled_by: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicenseORM:
         """Cancel a license.
 
@@ -65,6 +74,8 @@ class CancellationService:
             effective_date: Date when cancellation becomes effective
             reason: Cancellation reason
             cancelled_by: Admin user who cancelled
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicenseORM
@@ -90,6 +101,20 @@ class CancellationService:
         provider_name = license_orm.provider.display_name if license_orm.provider else "Unknown"
         license_type = license_orm.license_type
         external_user_id = license_orm.external_user_id
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.LICENSE_CANCEL,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                user=user,
+                request=request,
+                details={
+                    "effective_date": effective_date.isoformat() if effective_date else None,
+                    "reason": reason,
+                },
+            )
 
         await self.session.commit()
 
@@ -117,6 +142,8 @@ class CancellationService:
         effective_date: date,
         reason: str | None,
         cancelled_by: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicensePackageORM:
         """Cancel a license package.
 
@@ -125,6 +152,8 @@ class CancellationService:
             effective_date: Date when cancellation becomes effective
             reason: Cancellation reason
             cancelled_by: Admin user who cancelled
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicensePackageORM
@@ -150,6 +179,20 @@ class CancellationService:
         provider_name = package.provider.display_name if package.provider else "Unknown"
         package_name = package.license_type or "Unknown"
         seat_count = package.seats or 0
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PACKAGE_CANCEL,
+                resource_type=ResourceType.LICENSE_PACKAGE,
+                resource_id=package_id,
+                user=user,
+                request=request,
+                details={
+                    "effective_date": effective_date.isoformat() if effective_date else None,
+                    "reason": reason,
+                },
+            )
 
         await self.session.commit()
 
@@ -177,6 +220,8 @@ class CancellationService:
         effective_date: date,
         reason: str | None,
         cancelled_by: UUID,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> OrganizationLicenseORM:
         """Cancel an organization license.
 
@@ -185,6 +230,8 @@ class CancellationService:
             effective_date: Date when cancellation becomes effective
             reason: Cancellation reason
             cancelled_by: Admin user who cancelled
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated OrganizationLicenseORM
@@ -209,6 +256,20 @@ class CancellationService:
         # Store notification data before commit to avoid extra SELECT after expire
         provider_name = org_license.provider.display_name if org_license.provider else "Unknown"
         org_license_name = org_license.name
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.ORG_LICENSE_CANCEL,
+                resource_type=ResourceType.ORG_LICENSE,
+                resource_id=org_license_id,
+                user=user,
+                request=request,
+                details={
+                    "effective_date": effective_date.isoformat() if effective_date else None,
+                    "reason": reason,
+                },
+            )
 
         await self.session.commit()
 
@@ -235,6 +296,8 @@ class CancellationService:
         new_expiration_date: date,
         renewed_by: UUID,
         clear_cancellation: bool = True,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicenseORM:
         """Renew a license by setting a new expiration date.
 
@@ -243,6 +306,8 @@ class CancellationService:
             new_expiration_date: New expiration date
             renewed_by: Admin user who renewed
             clear_cancellation: Whether to clear cancellation data
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicenseORM
@@ -273,6 +338,20 @@ class CancellationService:
         license_type = license_orm.license_type
         external_user_id = license_orm.external_user_id
 
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.LICENSE_RENEW,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                user=user,
+                request=request,
+                details={
+                    "new_expiration_date": new_expiration_date.isoformat(),
+                    "clear_cancellation": clear_cancellation,
+                },
+            )
+
         await self.session.commit()
 
         # Send notification (fire-and-forget)
@@ -301,6 +380,8 @@ class CancellationService:
         new_contract_end: date,
         renewed_by: UUID,
         clear_cancellation: bool = True,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicensePackageORM:
         """Renew a license package by setting a new contract end date.
 
@@ -309,6 +390,8 @@ class CancellationService:
             new_contract_end: New contract end date
             renewed_by: Admin user who renewed
             clear_cancellation: Whether to clear cancellation data
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicensePackageORM
@@ -339,6 +422,20 @@ class CancellationService:
         package_name = package.license_type or "Unknown"
         seat_count = package.total_seats or 0
 
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PACKAGE_RENEW,
+                resource_type=ResourceType.LICENSE_PACKAGE,
+                resource_id=package_id,
+                user=user,
+                request=request,
+                details={
+                    "new_contract_end": new_contract_end.isoformat(),
+                    "clear_cancellation": clear_cancellation,
+                },
+            )
+
         await self.session.commit()
 
         # Send notification (fire-and-forget)
@@ -364,6 +461,8 @@ class CancellationService:
         license_id: UUID,
         needs_reorder: bool,
         flagged_by: UUID | None = None,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicenseORM:
         """Set the needs_reorder flag for a license.
 
@@ -371,6 +470,8 @@ class CancellationService:
             license_id: License UUID
             needs_reorder: Whether license needs reorder
             flagged_by: Admin user who flagged (optional, for notification)
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicenseORM
@@ -389,6 +490,17 @@ class CancellationService:
         provider_name = license_orm.provider.display_name if license_orm.provider else "Unknown"
         license_type = license_orm.license_type
         external_user_id = license_orm.external_user_id
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.LICENSE_NEEDS_REORDER,
+                resource_type=ResourceType.LICENSE,
+                resource_id=license_id,
+                user=user,
+                request=request,
+                details={"needs_reorder": needs_reorder},
+            )
 
         await self.session.commit()
 
@@ -415,6 +527,8 @@ class CancellationService:
         package_id: UUID,
         needs_reorder: bool,
         flagged_by: UUID | None = None,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> LicensePackageORM:
         """Set the needs_reorder flag for a package.
 
@@ -422,6 +536,8 @@ class CancellationService:
             package_id: Package UUID
             needs_reorder: Whether package needs reorder
             flagged_by: Admin user who flagged (optional, for notification)
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated LicensePackageORM
@@ -440,6 +556,17 @@ class CancellationService:
         provider_name = package.provider.display_name if package.provider else "Unknown"
         package_name = package.license_type or "Unknown"
         seat_count = package.total_seats or 0
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.PACKAGE_NEEDS_REORDER,
+                resource_type=ResourceType.LICENSE_PACKAGE,
+                resource_id=package_id,
+                user=user,
+                request=request,
+                details={"needs_reorder": needs_reorder},
+            )
 
         await self.session.commit()
 
@@ -468,6 +595,8 @@ class CancellationService:
         new_renewal_date: date | None = None,
         new_expires_at: date | None = None,
         clear_cancellation: bool = True,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> OrganizationLicenseORM:
         """Renew an organization license by setting new renewal/expiration dates.
 
@@ -477,6 +606,8 @@ class CancellationService:
             new_renewal_date: New renewal date (optional)
             new_expires_at: New expiration date (optional)
             clear_cancellation: Whether to clear cancellation data
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated OrganizationLicenseORM
@@ -510,6 +641,20 @@ class CancellationService:
         org_license_name = org_license.name
         expiry_date = new_expires_at or new_renewal_date
 
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.ORG_LICENSE_RENEW,
+                resource_type=ResourceType.ORG_LICENSE,
+                resource_id=org_license_id,
+                user=user,
+                request=request,
+                details={
+                    "new_expiration_date": new_expires_at.isoformat() if new_expires_at else None,
+                    "clear_cancellation": clear_cancellation,
+                },
+            )
+
         await self.session.commit()
 
         # Send notification (fire-and-forget)
@@ -534,6 +679,8 @@ class CancellationService:
         org_license_id: UUID,
         needs_reorder: bool,
         flagged_by: UUID | None = None,
+        user: AdminUser | None = None,
+        request: Request | None = None,
     ) -> OrganizationLicenseORM:
         """Set the needs_reorder flag for an organization license.
 
@@ -541,6 +688,8 @@ class CancellationService:
             org_license_id: Organization license UUID
             needs_reorder: Whether org license needs reorder
             flagged_by: Admin user who flagged (optional, for notification)
+            user: AdminUser for audit logging
+            request: HTTP request for audit logging
 
         Returns:
             Updated OrganizationLicenseORM
@@ -558,6 +707,17 @@ class CancellationService:
         # Store notification data before commit to avoid extra SELECT after expire
         provider_name = org_license.provider.display_name if org_license.provider else "Unknown"
         org_license_name = org_license.name
+
+        # Audit log
+        if user:
+            await self.audit_service.log(
+                action=AuditAction.ORG_LICENSE_NEEDS_REORDER,
+                resource_type=ResourceType.ORG_LICENSE,
+                resource_id=org_license_id,
+                user=user,
+                request=request,
+                details={"needs_reorder": needs_reorder},
+            )
 
         await self.session.commit()
 

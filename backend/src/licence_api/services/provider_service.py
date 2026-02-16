@@ -51,6 +51,28 @@ class ProviderService:
             return [d.lower() for d in (domains_setting.get("domains") or [])]
         return []
 
+    async def list_providers_cached(self) -> list[ProviderResponse]:
+        """List all providers with license stats, using cache.
+
+        Checks cache first, falls back to database and caches the result.
+
+        Returns:
+            List of ProviderResponse with license counts and stats
+        """
+        cache = await get_cache_service()
+        cached = await cache.get_providers()
+        if cached:
+            from licence_api.models.dto.provider import ProviderListResponse
+
+            return cached
+
+        items = await self.list_providers()
+
+        # Cache the result (serialize to dict for caching)
+        await cache.set_providers([item.model_dump() for item in items])
+
+        return items
+
     async def list_providers(self) -> list[ProviderResponse]:
         """List all providers with license stats.
 
