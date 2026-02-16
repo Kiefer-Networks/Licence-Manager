@@ -16,6 +16,7 @@ from licence_api.services.cancellation_service import CancellationService
 from licence_api.services.email_service import EmailService
 from licence_api.services.employee_service import EmployeeService
 from licence_api.services.export_service import ExportService
+from licence_api.services.forecast_service import ForecastService
 from licence_api.services.external_account_service import ExternalAccountService
 from licence_api.services.import_service import ImportService
 from licence_api.services.license_package_service import LicensePackageService
@@ -195,6 +196,11 @@ def get_manual_employee_service(
 def get_report_service(db: AsyncSession = Depends(get_db)) -> ReportService:
     """Get ReportService instance."""
     return ReportService(db)
+
+
+def get_forecast_service(db: AsyncSession = Depends(get_db)) -> ForecastService:
+    """Get ForecastService instance."""
+    return ForecastService(db)
 
 
 def get_export_service(db: AsyncSession = Depends(get_db)) -> ExportService:

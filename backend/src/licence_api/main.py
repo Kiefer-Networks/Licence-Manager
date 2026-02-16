@@ -35,6 +35,7 @@ from licence_api.routers import (
     email_settings,
     exports,
     external_accounts,
+    forecasts,
     license_packages,
     licenses,
     manual_licenses,
@@ -237,6 +238,7 @@ def create_app() -> FastAPI:
         tags=["Manual Licenses"],
     )
     app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+    app.include_router(forecasts.router, prefix="/api/v1/forecasts", tags=["Forecasts"])
     app.include_router(cancellation.router, prefix="/api/v1", tags=["Cancellation"])
     # Email settings must be registered before generic settings to avoid route conflict
     app.include_router(

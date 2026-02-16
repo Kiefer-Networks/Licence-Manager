@@ -28,6 +28,7 @@ import {
   ScrollText,
   Clock,
   Wallet,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuth, Permissions } from '@/components/auth-provider';
 
@@ -50,6 +51,7 @@ const mainNavigation: NavItem[] = [
   { nameKey: 'providers', href: '/providers', icon: Package, permission: Permissions.PROVIDERS_VIEW },
   { nameKey: 'finance', href: '/finance', icon: Wallet, permission: Permissions.PAYMENT_METHODS_VIEW },
   { nameKey: 'reports', href: '/reports', icon: FileText, permission: Permissions.REPORTS_VIEW },
+  { nameKey: 'forecasts', href: '/forecasts', icon: TrendingUp, permission: Permissions.REPORTS_VIEW },
 ];
 
 const adminNavigation: NavItem[] = [

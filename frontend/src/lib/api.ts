@@ -1738,6 +1738,81 @@ export interface BackupListResponse {
   last_backup: string | null;
 }
 
+// Forecast types
+export interface ForecastDataPoint {
+  month: string;
+  cost: string;
+  is_historical: boolean;
+  confidence_lower: string | null;
+  confidence_upper: string | null;
+}
+
+export interface ProviderForecast {
+  provider_id: string;
+  provider_name: string;
+  display_name: string;
+  current_cost: string;
+  projected_cost: string;
+  change_percent: number;
+  contract_end: string | null;
+  auto_renew: boolean;
+  data_points: ForecastDataPoint[];
+}
+
+export interface DepartmentForecast {
+  department: string;
+  employee_count: number;
+  projected_employees: number;
+  current_cost: string;
+  projected_cost: string;
+  cost_per_employee: string;
+}
+
+export interface ForecastSummary {
+  current_monthly_cost: string;
+  projected_monthly_cost: string;
+  projected_annual_cost: string;
+  change_percent: number;
+  forecast_months: number;
+  currency: string;
+  data_points: ForecastDataPoint[];
+  by_provider: ProviderForecast[];
+  by_department: DepartmentForecast[];
+}
+
+export type ScenarioType =
+  | 'add_employees'
+  | 'remove_employees'
+  | 'add_provider'
+  | 'remove_provider'
+  | 'change_seats'
+  | 'change_billing';
+
+export interface ScenarioAdjustment {
+  type: ScenarioType;
+  provider_id?: string;
+  provider_name?: string;
+  department?: string;
+  value: number;
+  effective_month: number;
+  new_billing_cycle?: string;
+}
+
+export interface ScenarioRequest {
+  forecast_months: number;
+  adjustments: ScenarioAdjustment[];
+}
+
+export interface ScenarioResult {
+  baseline: ForecastDataPoint[];
+  scenario: ForecastDataPoint[];
+  baseline_total: string;
+  scenario_total: string;
+  difference: string;
+  difference_percent: number;
+  currency: string;
+}
+
 // API Functions
 export const api = {
   // Setup
@@ -3375,5 +3450,23 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  // ==================== FORECASTS ====================
+
+  async getForecast(params: {
+    months?: number;
+    provider_id?: string;
+    department?: string;
+  } = {}): Promise<ForecastSummary> {
+    const query = buildSearchParams(params);
+    return fetchApi<ForecastSummary>(`/forecasts/${query}`);
+  },
+
+  async simulateScenario(request: ScenarioRequest): Promise<ScenarioResult> {
+    return fetchApi<ScenarioResult>('/forecasts/scenarios', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 };

@@ -1,9 +1,10 @@
 """Employee repository."""
 
-from datetime import datetime, timedelta
+import calendar
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 
 from licence_api.models.orm.employee import EmployeeORM
 from licence_api.models.orm.license import LicenseORM
@@ -396,6 +397,76 @@ class EmployeeRepository(BaseRepository[EmployeeORM]):
         )
         source = result.scalar_one_or_none()
         return source == "manual"
+
+    async def get_monthly_headcount(
+        self,
+        months: int = 12,
+        department: str | None = None,
+    ) -> list[tuple[date, int]]:
+        """Get active employee count per month for the last N months.
+
+        Counts employees who were active during each month based on
+        start_date and termination_date.
+
+        Args:
+            months: Number of months to look back
+            department: Optional department filter
+
+        Returns:
+            List of (month_date, active_count) tuples ordered ascending
+        """
+        today = date.today()
+        results = []
+
+        for i in range(months - 1, -1, -1):
+            # Calculate month by subtracting i months
+            year = today.year
+            month = today.month - i
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_start = date(year, month, 1)
+            month_end = date(year, month, calendar.monthrange(year, month)[1])
+
+            # Employee was active if:
+            # - start_date is NULL or start_date <= month_end
+            # - termination_date is NULL or termination_date >= month_start
+            # - status check is implicit via date ranges
+            conditions = [
+                case(
+                    (EmployeeORM.start_date.is_(None), True),
+                    else_=(EmployeeORM.start_date <= month_end),
+                ),
+                case(
+                    (EmployeeORM.termination_date.is_(None), True),
+                    else_=(EmployeeORM.termination_date >= month_start),
+                ),
+            ]
+
+            query = select(func.count()).select_from(EmployeeORM).where(and_(*conditions))
+
+            if department:
+                query = query.where(EmployeeORM.department == department)
+
+            result = await self.session.execute(query)
+            count = result.scalar_one()
+            results.append((month_start, count))
+
+        return results
+
+    async def get_active_count_by_department(self) -> dict[str, int]:
+        """Get active employee count grouped by department.
+
+        Returns:
+            Dict mapping department name to active employee count
+        """
+        result = await self.session.execute(
+            select(EmployeeORM.department, func.count())
+            .where(EmployeeORM.status == "active")
+            .where(EmployeeORM.department.isnot(None))
+            .group_by(EmployeeORM.department)
+        )
+        return dict(result.all())
 
     async def count_by_source(self) -> dict[str, int]:
         """Count employees by source.
