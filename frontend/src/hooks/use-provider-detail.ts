@@ -999,7 +999,10 @@ export function useProviderDetail(
     if (!provider) return;
     if (confirm(t('confirmDeleteProvider', { name: provider.display_name }))) {
       api.deleteProvider(provider.id)
-        .then(() => router.push('/settings'))
+        .then(() => {
+          showToast('success', t('providerDeleted'));
+          router.push('/providers');
+        })
         .catch(() => showToast('error', t('deleteProviderFailed')));
     }
   }, [provider, router, showToast, t]);
