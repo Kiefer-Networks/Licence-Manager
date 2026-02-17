@@ -228,15 +228,26 @@ class GoogleWorkspaceProvider(BaseProvider):
                         break
 
                     data = response.json()
-                    for item in data.get("items", []):
+                    items = data.get("items", [])
+                    logger.info(
+                        "Licensing API product=%s: status=%s, items=%d, sample=%s",
+                        product_id, response.status_code, len(items),
+                        items[0] if items else "empty",
+                    )
+                    for item in items:
                         sku_id = item.get("skuId", "")
+                        sku_name = item.get("skuName", "")
+                        product_name = item.get("productName", "")
+                        resolved_name = (
+                            sku_name
+                            or GOOGLE_WORKSPACE_SKUS.get(sku_id)
+                            or f"{product_name} ({sku_id})" if product_name else f"Google Workspace ({sku_id})"
+                        )
                         assignments.append({
                             "userId": item.get("userId", "").lower(),
                             "skuId": sku_id,
                             "productId": product_id,
-                            "license_type": GOOGLE_WORKSPACE_SKUS.get(
-                                sku_id, f"Google Workspace ({sku_id})"
-                            ),
+                            "license_type": resolved_name,
                         })
 
                     page_token = data.get("nextPageToken")
@@ -245,6 +256,7 @@ class GoogleWorkspaceProvider(BaseProvider):
             except Exception:
                 logger.warning("Failed to query Licensing API for product %s", product_id, exc_info=True)
 
+        logger.info("Licensing API total assignments: %d", len(assignments))
         return assignments
 
     async def fetch_licenses(self) -> list[dict[str, Any]]:
@@ -267,10 +279,10 @@ class GoogleWorkspaceProvider(BaseProvider):
             assignments = await self._fetch_license_assignments(client, token)
 
             if assignments:
+                logger.info("Using %d license assignments from Licensing API", len(assignments))
                 return self._build_from_assignments(assignments, users_map)
             else:
-                # Fallback: all users get generic "Google Workspace"
-                logger.info("Licensing API returned no data, falling back to Directory API users")
+                logger.info("Licensing API returned no data, falling back to %d Directory API users", len(users_map))
                 return self._build_from_users(users_map)
 
     def _build_from_assignments(
