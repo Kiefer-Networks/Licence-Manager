@@ -75,9 +75,11 @@ class CostSnapshotService:
                 "total_monthly_cost": Decimal("0"),
             })
 
-            # Use package-based costs (cost_per_seat × total_seats) instead of
-            # License.monthly_cost which is typically NULL
-            provider_cost = package_costs.get(provider.id, Decimal("0"))
+            # Use license-level monthly_cost (set via Pricing Tab), falling back
+            # to package-based costs (cost_per_seat × total_seats)
+            license_cost = stats.get("total_monthly_cost", Decimal("0"))
+            package_cost = package_costs.get(provider.id, Decimal("0"))
+            provider_cost = license_cost if license_cost > 0 else package_cost
             provider_license_count = stats.get("total", 0)
             provider_active = stats.get("by_status", {}).get("active", 0)
             provider_unassigned = stats.get("unassigned", 0)

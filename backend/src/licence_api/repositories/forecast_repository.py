@@ -214,13 +214,28 @@ class ForecastRepository:
 
         return costs
 
-    async def get_provider_current_cost(self, provider_id: UUID) -> Decimal:
-        """Get current monthly cost for a provider from latest snapshot.
+    async def get_provider_cost_from_licenses(self, provider_id: UUID) -> Decimal:
+        """Calculate monthly cost for a provider from individual license costs.
 
-        Falls back to package-based calculation if snapshot shows zero cost.
+        Returns:
+            Sum of monthly_cost for all licenses of the provider.
+        """
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(LicenseORM.monthly_cost), 0)).where(
+                LicenseORM.provider_id == provider_id,
+            )
+        )
+        return Decimal(str(result.scalar_one()))
+
+    async def get_provider_current_cost(self, provider_id: UUID) -> Decimal:
+        """Get current monthly cost for a provider.
+
+        Priority: snapshot > license monthly_cost > package-based calculation.
         """
         snapshot = await self.cost_snapshot_repo.get_latest(provider_id=provider_id)
         cost = snapshot.total_cost if snapshot else Decimal("0")
+        if cost == Decimal("0"):
+            cost = await self.get_provider_cost_from_licenses(provider_id)
         if cost == Decimal("0"):
             package_costs = await self.get_provider_costs_from_packages()
             cost = package_costs.get(provider_id, Decimal("0"))
