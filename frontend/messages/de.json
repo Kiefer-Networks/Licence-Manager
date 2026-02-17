@@ -298,6 +298,7 @@
     "rejectMatch": "Zuordnung ablehnen",
     "externalReview": "Extern (Prüfung)",
     "offboarded": "Ausgeschieden",
+    "cancelledUntil": "Gekündigt zum {date}",
     "totalCount": "{count} gesamt",
     "active": "Aktiv",
     "inactive": "Inaktiv",

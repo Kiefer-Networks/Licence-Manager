@@ -47,6 +47,7 @@ export interface OverviewTabProps {
   provider: Provider;
   stats: LicenseStats;
   licenseTypes?: LicenseTypeInfo[];
+  licenses?: License[];
   isManual: boolean;
   isSeatBased: boolean;
   formatDate: LocaleFormatters['formatDate'];

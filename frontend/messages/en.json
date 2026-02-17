@@ -298,6 +298,7 @@
     "rejectMatch": "Reject match",
     "externalReview": "External (Review)",
     "offboarded": "Offboarded",
+    "cancelledUntil": "Cancelled {date}",
     "totalCount": "{count} total",
     "active": "Active",
     "inactive": "Inactive",

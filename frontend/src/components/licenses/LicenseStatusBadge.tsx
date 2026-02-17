@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Skull, UserMinus, Bot, HelpCircle, UserCheck, AlertCircle } from 'lucide-react';
+import { Globe, Skull, UserMinus, Bot, HelpCircle, UserCheck, AlertCircle, Ban } from 'lucide-react';
 
 // Minimal type for LicenseStatusBadge - only the fields it actually needs
 interface LicenseForBadge {
@@ -12,6 +12,7 @@ interface LicenseForBadge {
   status?: string;
   is_service_account?: boolean;
   service_account_name?: string | null;
+  cancellation_effective_date?: string | null;
   // Match fields
   match_status?: string | null;
   match_confidence?: number | null;
@@ -135,6 +136,21 @@ export function LicenseStatusBadge({ license, showUnassigned = true }: LicenseSt
       >
         <UserMinus className="h-3 w-3 mr-1" />
         {t('inactive')}
+      </Badge>
+    );
+  }
+
+  // Cancelled badge - if cancellation_effective_date is set
+  if (license.cancellation_effective_date) {
+    const date = new Date(license.cancellation_effective_date).toLocaleDateString();
+    badges.push(
+      <Badge
+        key="cancelled"
+        variant="outline"
+        className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950"
+      >
+        <Ban className="h-3 w-3 mr-1" />
+        {t('cancelledUntil', { date })}
       </Badge>
     );
   }

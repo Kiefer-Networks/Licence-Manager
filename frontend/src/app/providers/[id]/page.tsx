@@ -327,6 +327,7 @@ export default function ProviderDetailPage() {
             provider={provider}
             stats={stats}
             licenseTypes={licenseTypes}
+            licenses={licenses}
             isManual={isManual}
             isSeatBased={isSeatBased}
             formatDate={formatDate}

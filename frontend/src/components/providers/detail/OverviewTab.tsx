@@ -10,6 +10,7 @@ import {
   DollarSign,
   AlertTriangle,
   ShoppingCart,
+  Ban,
 } from 'lucide-react';
 import type { OverviewTabProps } from './types';
 
@@ -21,6 +22,7 @@ export function OverviewTab({
   provider,
   stats,
   licenseTypes = [],
+  licenses = [],
   isManual,
   isSeatBased,
   formatDate,
@@ -40,6 +42,8 @@ export function OverviewTab({
     availableSeats,
   } = stats;
 
+  const cancelledLicenses = licenses.filter(l => l.cancellation_effective_date).length;
+
   // Determine billing cycle from package pricing or license pricing
   const packagePricing = provider.config?.package_pricing;
   const licensePricing = provider.config?.license_pricing || {};
@@ -52,7 +56,7 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className={`grid grid-cols-2 ${availableSeats !== null ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+      <div className={`grid grid-cols-2 ${availableSeats !== null || cancelledLicenses > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
         <Card>
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -105,6 +109,18 @@ export function OverviewTab({
             <p className="text-2xl font-semibold text-zinc-400">{inactiveLicenses}</p>
           </CardContent>
         </Card>
+
+        {cancelledLicenses > 0 && (
+          <Card className="border-red-200 bg-red-50/30">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Ban className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase">{tLicenses('cancelled')}</span>
+              </div>
+              <p className="text-2xl font-semibold text-red-600">{cancelledLicenses}</p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="pt-5 pb-4">
