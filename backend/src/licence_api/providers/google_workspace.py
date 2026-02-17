@@ -17,8 +17,14 @@ logger = logging.getLogger(__name__)
 # Google product IDs to query for license assignments
 GOOGLE_PRODUCT_IDS = [
     "Google-Apps",  # Google Workspace (main)
+    "101001",       # Cloud Identity Free
+    "101005",       # Cloud Identity Premium
     "101031",       # Google Workspace Additional Storage
+    "101033",       # Google Voice
+    "101034",       # Google Vault
     "101037",       # Gemini for Google Workspace
+    "101038",       # AppSheet
+    "101047",       # Google Workspace AI / AI Ultra
 ]
 
 # Google Workspace SKU ID → human-readable name mapping
@@ -43,6 +49,11 @@ GOOGLE_WORKSPACE_SKUS: dict[str, str] = {
     "1010470001": "Gemini Business",
     "1010470003": "Gemini Enterprise",
     "1010470004": "Gemini AI Meetings and Messaging",
+    "1010470006": "AI Ultra",
+    # Google Voice
+    "1010330003": "Google Voice Starter",
+    "1010330004": "Google Voice Standard",
+    "1010330002": "Google Voice Premier",
     # Additional Storage
     "Google-Apps-Extra-Storage": "Google Workspace Additional Storage",
 }
