@@ -155,13 +155,14 @@ class GoogleWorkspaceProvider(BaseProvider):
 
     async def _fetch_all_users(
         self, client: httpx.AsyncClient, token: str,
-    ) -> dict[str, dict[str, Any]]:
+    ) -> tuple[dict[str, dict[str, Any]], str]:
         """Fetch all users from Directory API for enrichment.
 
         Returns:
-            Dict mapping email → user details (name, lastLogin, etc.)
+            Tuple of (dict mapping email → user details, customer_id)
         """
         users: dict[str, dict[str, Any]] = {}
+        customer_id = "my_customer"
         page_token = None
 
         while True:
@@ -181,36 +182,18 @@ class GoogleWorkspaceProvider(BaseProvider):
             for user in data.get("users", []):
                 email = user["primaryEmail"].lower()
                 users[email] = user
+                if customer_id == "my_customer" and user.get("customerId"):
+                    customer_id = user["customerId"]
 
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
 
-        return users
-
-    async def _get_customer_id(
-        self, client: httpx.AsyncClient, token: str,
-    ) -> str:
-        """Resolve the real Google customer ID via Directory API.
-
-        Falls back to 'my_customer' if the lookup fails.
-        """
-        try:
-            response = await client.get(
-                "https://admin.googleapis.com/admin/directory/v1/customers/my_customer",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0,
-            )
-            if response.status_code == 200:
-                customer_id = response.json().get("id", "my_customer")
-                logger.warning("Resolved Google customer ID: %s", customer_id)
-                return customer_id
-        except Exception:
-            logger.warning("Failed to resolve customer ID, using my_customer", exc_info=True)
-        return "my_customer"
+        logger.warning("Directory API: %d users, customerId=%s", len(users), customer_id)
+        return users, customer_id
 
     async def _fetch_license_assignments(
-        self, client: httpx.AsyncClient, token: str,
+        self, client: httpx.AsyncClient, token: str, customer_id: str,
     ) -> list[dict[str, str]]:
         """Fetch all license assignments from Google Licensing API.
 
@@ -220,7 +203,6 @@ class GoogleWorkspaceProvider(BaseProvider):
         Returns:
             List of dicts with userId (email), skuId, productId, license_type.
         """
-        customer_id = await self._get_customer_id(client, token)
         assignments: list[dict[str, str]] = []
 
         for product_id in GOOGLE_PRODUCT_IDS:
@@ -298,10 +280,10 @@ class GoogleWorkspaceProvider(BaseProvider):
 
         async with httpx.AsyncClient() as client:
             # Always fetch users for enrichment (name, last login, status)
-            users_map = await self._fetch_all_users(client, token)
+            users_map, customer_id = await self._fetch_all_users(client, token)
 
             # Try Licensing API for real license assignments
-            assignments = await self._fetch_license_assignments(client, token)
+            assignments = await self._fetch_license_assignments(client, token, customer_id)
 
             if assignments:
                 logger.warning("Using %d license assignments from Licensing API", len(assignments))
