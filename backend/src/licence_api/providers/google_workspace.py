@@ -112,7 +112,7 @@ class GoogleWorkspaceProvider(BaseProvider):
             "sub": self.admin_email,
             "scope": (
                 "https://www.googleapis.com/auth/admin.directory.user.readonly "
-                "https://www.googleapis.com/auth/apps.licensing.readonly"
+                "https://www.googleapis.com/auth/apps.licensing"
             ),
             "aud": "https://oauth2.googleapis.com/token",
             "iat": now,
