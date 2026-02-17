@@ -1,6 +1,7 @@
 """Google Workspace provider integration."""
 
 import json
+import logging
 import time
 from datetime import datetime
 from typing import Any
@@ -9,6 +10,8 @@ import httpx
 from jose import jwt
 
 from licence_api.config import get_settings
+
+logger = logging.getLogger(__name__)
 from licence_api.providers.base import BaseProvider
 
 
@@ -71,8 +74,11 @@ class GoogleWorkspaceProvider(BaseProvider):
                     "client_secret": settings.google_client_secret,
                 },
             )
+            if response.status_code != 200:
+                logger.error("Google OAuth token refresh failed: %s %s", response.status_code, response.text)
             response.raise_for_status()
             data = response.json()
+            logger.info("Google OAuth token refresh succeeded, scope: %s", data.get("scope", "N/A"))
             self._access_token = data["access_token"]
             return self._access_token
 
@@ -155,6 +161,8 @@ class GoogleWorkspaceProvider(BaseProvider):
                     params=params,
                     timeout=30.0,
                 )
+                if response.status_code != 200:
+                    logger.error("Google Admin API error: %s %s", response.status_code, response.text)
                 response.raise_for_status()
                 data = response.json()
 
