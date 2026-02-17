@@ -230,8 +230,8 @@ class GoogleWorkspaceProvider(BaseProvider):
                     data = response.json()
                     items = data.get("items", [])
                     logger.info(
-                        "Licensing API product=%s: status=%s, items=%d, sample=%s",
-                        product_id, response.status_code, len(items),
+                        "Licensing API product=%s: items=%d, sample=%s",
+                        product_id, len(items),
                         items[0] if items else "empty",
                     )
                     for item in items:
@@ -241,7 +241,7 @@ class GoogleWorkspaceProvider(BaseProvider):
                         resolved_name = (
                             sku_name
                             or GOOGLE_WORKSPACE_SKUS.get(sku_id)
-                            or f"{product_name} ({sku_id})" if product_name else f"Google Workspace ({sku_id})"
+                            or (f"{product_name} ({sku_id})" if product_name else f"Google Workspace ({sku_id})")
                         )
                         assignments.append({
                             "userId": item.get("userId", "").lower(),
