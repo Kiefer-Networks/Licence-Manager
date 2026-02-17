@@ -63,7 +63,7 @@ const groupLicensesByUser = (licenses: License[]): License[] => {
 
     return {
       ...primary,
-      license_type: types.join(' + '),
+      license_type: types.join(', '),
       license_type_display_name: undefined,
       monthly_cost: totalCost > 0 ? String(totalCost) : primary.monthly_cost,
     };

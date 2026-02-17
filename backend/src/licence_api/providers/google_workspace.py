@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -356,18 +357,23 @@ class GoogleWorkspaceProvider(BaseProvider):
     ) -> list[dict[str, Any]]:
         """Build license list from Licensing API assignments enriched with user data.
 
-        Each assignment becomes a separate license entry so pricing can be set
-        per individual license type.
+        Multiple SKU assignments per user are combined into a single entry with
+        comma-separated license types (e.g. "Enterprise Plus, AI Ultra Access").
+        The pricing infrastructure splits by comma for individual per-type pricing.
         """
-        licenses = []
-
+        # Group assignments by user email
+        user_assignments: dict[str, list[str]] = defaultdict(list)
         for assignment in assignments:
-            email = assignment["userId"]
+            user_assignments[assignment["userId"]].append(assignment["license_type"])
+
+        licenses = []
+        for email, license_types in user_assignments.items():
             user = users_map.get(email, {})
+            combined_type = ", ".join(sorted(set(license_types)))
 
             licenses.append(self._build_license_entry(
                 email=email,
-                license_type=assignment["license_type"],
+                license_type=combined_type,
                 user=user,
             ))
 
