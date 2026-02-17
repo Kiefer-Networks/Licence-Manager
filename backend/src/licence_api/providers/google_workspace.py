@@ -219,7 +219,7 @@ class GoogleWorkspaceProvider(BaseProvider):
                         timeout=30.0,
                     )
                     if response.status_code == 403:
-                        logger.info("Licensing API not authorized for product %s, skipping", product_id)
+                        logger.warning("Licensing API not authorized for product %s, skipping", product_id)
                         break
                     if response.status_code == 404:
                         break
@@ -229,7 +229,7 @@ class GoogleWorkspaceProvider(BaseProvider):
 
                     data = response.json()
                     items = data.get("items", [])
-                    logger.info(
+                    logger.warning(
                         "Licensing API product=%s: items=%d, sample=%s",
                         product_id, len(items),
                         items[0] if items else "empty",
@@ -256,7 +256,7 @@ class GoogleWorkspaceProvider(BaseProvider):
             except Exception:
                 logger.warning("Failed to query Licensing API for product %s", product_id, exc_info=True)
 
-        logger.info("Licensing API total assignments: %d", len(assignments))
+        logger.warning("Licensing API total assignments: %d", len(assignments))
         return assignments
 
     async def fetch_licenses(self) -> list[dict[str, Any]]:
@@ -279,10 +279,10 @@ class GoogleWorkspaceProvider(BaseProvider):
             assignments = await self._fetch_license_assignments(client, token)
 
             if assignments:
-                logger.info("Using %d license assignments from Licensing API", len(assignments))
+                logger.warning("Using %d license assignments from Licensing API", len(assignments))
                 return self._build_from_assignments(assignments, users_map)
             else:
-                logger.info("Licensing API returned no data, falling back to %d Directory API users", len(users_map))
+                logger.warning("Licensing API returned no data, falling back to %d Directory API users", len(users_map))
                 return self._build_from_users(users_map)
 
     def _build_from_assignments(
