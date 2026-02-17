@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -15,48 +16,95 @@ from licence_api.providers.base import BaseProvider
 logger = logging.getLogger(__name__)
 
 # Google product IDs to query for license assignments
+# Source: https://developers.google.com/workspace/admin/licensing/v1/how-tos/products
+# and https://github.com/taers232c/GAMADV-XTD3/wiki/Licenses
 GOOGLE_PRODUCT_IDS = [
-    "Google-Apps",  # Google Workspace (main)
-    "101001",       # Cloud Identity Free
-    "101005",       # Cloud Identity Premium
-    "101031",       # Google Workspace Additional Storage
-    "101033",       # Google Voice
-    "101034",       # Google Vault
-    "101037",       # Gemini for Google Workspace
-    "101038",       # AppSheet
-    "101047",       # Google Workspace AI / AI Ultra
+    "Google-Apps",                      # Google Workspace (main)
+    "101001",                           # Cloud Identity Free
+    "101005",                           # Cloud Identity Premium
+    "101031",                           # Google Workspace for Education (Standard/Plus)
+    "101033",                           # Google Voice
+    "101034",                           # Google Workspace Archived User
+    "101035",                           # Cloud Search
+    "101036",                           # Google Meet Global Dialing
+    "101037",                           # Google Workspace for Education (Teaching & Learning)
+    "101038",                           # AppSheet
+    "101039",                           # Assured Controls
+    "101040",                           # Chrome Enterprise
+    "101043",                           # Google Workspace Additional Storage
+    "101047",                           # Gemini / AI add-ons (AI Ultra, Gemini Business/Enterprise)
+    "101049",                           # Education Endpoint Management
+    "101050",                           # Colab
+    "Google-Vault",                     # Google Vault
+    "Google-Drive-storage",             # Google Drive Storage (legacy)
+    "Google-Chrome-Device-Management",  # Chrome Device Management (legacy)
 ]
 
-# Google Workspace SKU ID → human-readable name mapping
+# Google Workspace SKU ID → human-readable name mapping (fallback if API doesn't return skuName)
 GOOGLE_WORKSPACE_SKUS: dict[str, str] = {
     # Google Workspace core plans
     "Google-Apps-Lite": "Google Workspace Business Starter",
     "Google-Apps-For-Business": "Google Workspace Business Standard",
     "Google-Apps-Unlimited": "Google Workspace Business Plus",
-    "1010020027": "Google Workspace Enterprise Starter",
-    "1010020020": "Google Workspace Enterprise Standard",
-    "1010020025": "Google Workspace Enterprise Plus",
-    "1010020028": "Google Workspace Frontline Starter",
-    "1010020029": "Google Workspace Frontline Standard",
+    "1010020027": "Google Workspace Business Starter",
+    "1010020028": "Google Workspace Business Standard",
+    "1010020025": "Google Workspace Business Plus",
+    "1010020029": "Google Workspace Enterprise Starter",
+    "1010020026": "Google Workspace Enterprise Standard",
+    "1010020020": "Google Workspace Enterprise Plus",
+    "1010020030": "Google Workspace Frontline Starter",
+    "1010020031": "Google Workspace Frontline Standard",
+    "1010020034": "Google Workspace Frontline Plus",
     "1010060001": "Google Workspace Essentials",
-    "1010060003": "Google Workspace Essentials Plus",
+    "1010060003": "Google Workspace Enterprise Essentials",
+    "1010060005": "Google Workspace Enterprise Essentials Plus",
     # Education
-    "1010010001": "Google Workspace for Education Fundamentals",
-    "1010370001": "Google Workspace for Education Standard",
-    "1010310002": "Google Workspace for Education Plus",
-    "1010310003": "Google Workspace for Education Teaching and Learning Upgrade",
+    "1010070001": "Google Workspace for Education Fundamentals",
+    "1010310002": "Google Workspace for Education Plus (Legacy)",
+    "1010310005": "Google Workspace for Education Standard",
+    "1010310008": "Google Workspace for Education Plus",
+    "1010370001": "Google Workspace for Education: Teaching and Learning Upgrade",
+    # Cloud Identity
+    "1010010001": "Cloud Identity Free",
+    "1010050001": "Cloud Identity Premium",
     # Gemini / AI add-ons
-    "1010470001": "Gemini Business",
-    "1010470003": "Gemini Enterprise",
-    "1010470004": "Gemini AI Meetings and Messaging",
-    "1010470006": "AI Ultra",
+    "1010470001": "Gemini Enterprise",
+    "1010470003": "Gemini Business",
+    "1010470004": "AI Pro for Education",
+    "1010470005": "Gemini Education Premium",
+    "1010470006": "AI Security",
+    "1010470007": "AI Meetings and Messaging",
+    "1010470008": "AI Ultra",
     # Google Voice
+    "1010330002": "Google Voice Premier",
     "1010330003": "Google Voice Starter",
     "1010330004": "Google Voice Standard",
-    "1010330002": "Google Voice Premier",
+    # Google Vault
+    "Google-Vault": "Google Vault",
+    "Google-Vault-Former-Employee": "Google Vault (Former Employee)",
+    # AppSheet
+    "1010380001": "AppSheet Core",
+    "1010380002": "AppSheet Enterprise Standard",
+    "1010380003": "AppSheet Enterprise Plus",
+    # Assured Controls
+    "1010390001": "Assured Controls",
+    "1010390002": "Assured Controls Plus",
+    # Chrome Enterprise
+    "1010400001": "Chrome Enterprise Premium",
     # Additional Storage
+    "1010430001": "Google Workspace Additional Storage",
     "Google-Apps-Extra-Storage": "Google Workspace Additional Storage",
+    # Colab
+    "1010500001": "Colab Pro",
+    "1010500002": "Colab Pro+",
+    # Cloud Search
+    "1010350001": "Cloud Search",
+    # Meet Global Dialing
+    "1010360001": "Google Meet Global Dialing",
 }
+
+# "Base" product IDs — the main workspace license. Add-ons are everything else.
+_BASE_PRODUCT_IDS = {"Google-Apps", "101001", "101005"}
 
 
 class GoogleWorkspaceProvider(BaseProvider):
@@ -247,11 +295,12 @@ class GoogleWorkspaceProvider(BaseProvider):
 
                     data = response.json()
                     items = data.get("items", [])
-                    logger.warning(
-                        "Licensing API product=%s: items=%d, sample=%s",
-                        product_id, len(items),
-                        items[0] if items else "empty",
-                    )
+                    if items:
+                        logger.warning(
+                            "Licensing API product=%s: items=%d, sample=%s",
+                            product_id, len(items),
+                            items[0] if items else "empty",
+                        )
                     for item in items:
                         sku_id = item.get("skuId", "")
                         sku_name = item.get("skuName", "")
@@ -284,6 +333,9 @@ class GoogleWorkspaceProvider(BaseProvider):
         Fallback: Directory API users (all get generic "Google Workspace" type).
         Directory API is always used to enrich with user details.
 
+        Multiple licenses per user are combined into one entry with a combined
+        license_type (e.g. "Google Workspace Enterprise Plus + AI Ultra").
+
         Returns:
             List of license data dicts
         """
@@ -308,16 +360,31 @@ class GoogleWorkspaceProvider(BaseProvider):
         assignments: list[dict[str, str]],
         users_map: dict[str, dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Build license list from Licensing API assignments enriched with user data."""
-        licenses = []
+        """Build license list from Licensing API assignments enriched with user data.
 
+        Combines multiple license assignments per user into one entry.
+        The base license (e.g. Enterprise Plus) comes first, followed by add-ons.
+        """
+        # Group assignments by user email
+        user_assignments: dict[str, list[dict[str, str]]] = defaultdict(list)
         for assignment in assignments:
-            email = assignment["userId"]
+            user_assignments[assignment["userId"]].append(assignment)
+
+        licenses = []
+        for email, user_assgns in user_assignments.items():
             user = users_map.get(email, {})
+
+            # Sort: base licenses first, then add-ons alphabetically
+            base = [a for a in user_assgns if a["productId"] in _BASE_PRODUCT_IDS]
+            addons = [a for a in user_assgns if a["productId"] not in _BASE_PRODUCT_IDS]
+            addons.sort(key=lambda a: a["license_type"])
+
+            ordered = base + addons
+            combined_type = " + ".join(a["license_type"] for a in ordered)
 
             licenses.append(self._build_license_entry(
                 email=email,
-                license_type=assignment["license_type"],
+                license_type=combined_type,
                 user=user,
             ))
 
