@@ -8,6 +8,7 @@ export interface ProviderTypeDefinition {
   label: string;
   fields: string[];
   type?: 'api' | 'manual';
+  oauth?: boolean;
 }
 
 export const hrisProviderTypes: ProviderTypeDefinition[] = [
@@ -25,7 +26,7 @@ export const licenseProviderTypes: ProviderTypeDefinition[] = [
   { value: 'figma', label: 'Figma', fields: ['scim_token', 'tenant_id'], type: 'api' },
   { value: 'github', label: 'GitHub', fields: ['access_token', 'org_name'], type: 'api' },
   { value: 'gitlab', label: 'GitLab', fields: ['access_token', 'base_url'], type: 'api' },
-  { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api' },
+  { value: 'google_workspace', label: 'Google Workspace', fields: ['service_account_json', 'admin_email', 'domain'], type: 'api', oauth: true },
   { value: 'huggingface', label: 'Hugging Face', fields: ['access_token', 'organization'], type: 'api' },
   { value: 'jetbrains', label: 'JetBrains', fields: ['api_key', 'customer_code'], type: 'api' },
   { value: 'mailjet', label: 'Mailjet', fields: ['api_key', 'api_secret'], type: 'api' },
@@ -118,4 +119,12 @@ export const SECRET_FIELDS = [
  */
 export function isSecretField(field: string): boolean {
   return SECRET_FIELDS.includes(field);
+}
+
+/**
+ * Check if a provider type supports OAuth connection.
+ */
+export function hasOAuthSupport(providerName: string): boolean {
+  const provider = allProviderTypes.find(p => p.value === providerName);
+  return provider?.oauth === true;
 }

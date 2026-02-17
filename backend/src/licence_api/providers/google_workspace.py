@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from jose import jwt
 
+from licence_api.config import get_settings
 from licence_api.providers.base import BaseProvider
 
 
@@ -19,11 +20,18 @@ class GoogleWorkspaceProvider(BaseProvider):
 
         Args:
             credentials: Dict with keys:
+                Service Account mode:
                 - service_account_json: Service account JSON key (as string)
                 - admin_email: Admin email for domain-wide delegation
                 - domain: Google Workspace domain
+
+                OAuth mode:
+                - refresh_token: OAuth2 refresh token
+                - admin_email: Admin email (extracted from OAuth)
+                - domain: Google Workspace domain (extracted from hd claim)
         """
         super().__init__(credentials)
+        self.refresh_token = credentials.get("refresh_token")
         self.service_account = json.loads(
             credentials.get("service_account_json")
             or credentials.get("google_service_account_json", "{}")
@@ -33,7 +41,7 @@ class GoogleWorkspaceProvider(BaseProvider):
         self._access_token: str | None = None
 
     async def _get_access_token(self) -> str:
-        """Get OAuth access token using service account.
+        """Get OAuth access token using refresh token or service account.
 
         Returns:
             Access token string
@@ -41,6 +49,39 @@ class GoogleWorkspaceProvider(BaseProvider):
         if self._access_token:
             return self._access_token
 
+        if self.refresh_token:
+            return await self._refresh_oauth_token()
+        else:
+            return await self._get_service_account_token()
+
+    async def _refresh_oauth_token(self) -> str:
+        """Get access token by refreshing OAuth2 token.
+
+        Returns:
+            Access token string
+        """
+        settings = get_settings()
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self.refresh_token,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            self._access_token = data["access_token"]
+            return self._access_token
+
+    async def _get_service_account_token(self) -> str:
+        """Get access token using service account JWT.
+
+        Returns:
+            Access token string
+        """
         now = int(time.time())
         payload = {
             "iss": self.service_account["client_email"],

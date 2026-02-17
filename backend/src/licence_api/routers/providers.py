@@ -1,12 +1,20 @@
 """Providers router."""
 
+import base64
+import hashlib
+import logging
+import secrets
+import urllib.parse
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Path, Request, UploadFile, status
-from fastapi.responses import FileResponse
+import httpx
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, Request, UploadFile, status
+from jose import jwt as jose_jwt
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 
+from licence_api.config import get_settings
 from licence_api.dependencies import (
     get_pricing_service,
     get_provider_service,
@@ -26,6 +34,7 @@ from licence_api.models.dto.provider import (
 from licence_api.security.auth import Permissions, require_permission
 from licence_api.security.rate_limit import (
     API_DEFAULT_LIMIT,
+    AUTH_LOGIN_LIMIT,
     EXPENSIVE_READ_LIMIT,
     PROVIDER_TEST_CONNECTION_LIMIT,
     SENSITIVE_OPERATION_LIMIT,
@@ -35,6 +44,8 @@ from licence_api.services.pricing_service import PricingService
 from licence_api.services.provider_service import ProviderService
 from licence_api.services.sync_service import SyncService
 from licence_api.utils.validation import validate_dict_recursive
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,6 +82,189 @@ class SyncResponse(BaseModel):
 
     success: bool
     results: dict[str, Any]
+
+
+def _get_frontend_url() -> str:
+    """Get the frontend URL from settings."""
+    settings = get_settings()
+    return settings.cors_origins_list[0] if settings.cors_origins_list else "/"
+
+
+def _get_provider_redirect_uri() -> str:
+    """Derive the provider OAuth redirect URI from the auth redirect URI.
+
+    Replaces /auth/google/callback with /providers/google-workspace/callback.
+    """
+    settings = get_settings()
+    return settings.google_redirect_uri.replace(
+        "/auth/google/callback", "/providers/google-workspace/callback"
+    )
+
+
+class GoogleWorkspaceAuthorizeResponse(BaseModel):
+    """Response with the Google OAuth authorize URL."""
+
+    authorize_url: str
+
+
+@router.get(
+    "/google-workspace/authorize",
+    response_model=GoogleWorkspaceAuthorizeResponse,
+)
+@limiter.limit(AUTH_LOGIN_LIMIT)
+async def google_workspace_authorize(
+    request: Request,
+    current_user: Annotated[AdminUser, Depends(require_permission(Permissions.PROVIDERS_CREATE))],
+    display_name: str = Query(default="Google Workspace", max_length=100),
+) -> GoogleWorkspaceAuthorizeResponse:
+    """Initiate Google OAuth flow for Google Workspace provider.
+
+    Requires providers.create permission. Uses PKCE + state for security (RFC 7636).
+    """
+    settings = get_settings()
+
+    if not settings.google_oauth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google OAuth is not configured",
+        )
+
+    # RFC 6749 Section 10.12: State parameter for CSRF protection
+    state = secrets.token_urlsafe(32)
+    request.session["gw_oauth_state"] = state
+
+    # RFC 7636: PKCE - Generate code_verifier and code_challenge
+    code_verifier = secrets.token_urlsafe(64)
+    request.session["gw_pkce_code_verifier"] = code_verifier
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest())
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+
+    # Store display_name in session for the callback
+    request.session["gw_display_name"] = display_name
+
+    redirect_uri = _get_provider_redirect_uri()
+
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile https://www.googleapis.com/auth/admin.directory.user.readonly",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+
+    authorize_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+
+    return GoogleWorkspaceAuthorizeResponse(authorize_url=authorize_url)
+
+
+@router.get("/google-workspace/callback")
+@limiter.limit(AUTH_LOGIN_LIMIT)
+async def google_workspace_callback(
+    request: Request,
+    provider_service: Annotated[ProviderService, Depends(get_provider_service)],
+) -> RedirectResponse:
+    """Handle Google OAuth callback for Google Workspace provider.
+
+    Validates state + PKCE (RFC 6749/7636), exchanges code for tokens,
+    and creates the provider with OAuth credentials.
+    """
+    frontend_url = _get_frontend_url()
+    settings = get_settings()
+
+    # Validate state parameter (CSRF protection)
+    stored_state = request.session.pop("gw_oauth_state", None)
+    received_state = request.query_params.get("state")
+
+    if not stored_state or not received_state:
+        logger.warning("Google Workspace OAuth callback missing state parameter")
+        return RedirectResponse(
+            url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+        )
+
+    if not secrets.compare_digest(stored_state, received_state):
+        logger.warning("Google Workspace OAuth callback state mismatch (possible CSRF)")
+        return RedirectResponse(
+            url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+        )
+
+    # Retrieve PKCE code_verifier and display_name from session
+    code_verifier = request.session.pop("gw_pkce_code_verifier", None)
+    display_name = request.session.pop("gw_display_name", "Google Workspace")
+
+    code = request.query_params.get("code")
+    if not code:
+        logger.warning("Google Workspace OAuth callback missing authorization code")
+        return RedirectResponse(
+            url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+        )
+
+    redirect_uri = _get_provider_redirect_uri()
+
+    try:
+        # Exchange authorization code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                    "code_verifier": code_verifier,
+                },
+            )
+            token_response.raise_for_status()
+            token_data = token_response.json()
+
+        refresh_token = token_data.get("refresh_token")
+        id_token = token_data.get("id_token")
+
+        if not refresh_token:
+            logger.warning("Google Workspace OAuth: no refresh_token received")
+            return RedirectResponse(
+                url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+            )
+
+        # Decode ID token to extract domain (hd) and email
+        # We don't verify the signature here since we just received it from Google
+        id_claims = jose_jwt.get_unverified_claims(id_token)
+        domain = id_claims.get("hd")
+        admin_email = id_claims.get("email")
+
+        if not domain or not admin_email:
+            logger.warning("Google Workspace OAuth: missing hd or email in ID token")
+            return RedirectResponse(
+                url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+            )
+
+        # Create provider with OAuth credentials
+        await provider_service.create_provider(
+            name="google_workspace",
+            display_name=display_name,
+            credentials={
+                "refresh_token": refresh_token,
+                "domain": domain,
+                "admin_email": admin_email,
+            },
+        )
+
+    except Exception:
+        logger.exception("Google Workspace OAuth callback failed")
+        return RedirectResponse(
+            url=urllib.parse.urljoin(frontend_url, "/providers?error=google_workspace_failed")
+        )
+
+    return RedirectResponse(
+        url=urllib.parse.urljoin(frontend_url, "/providers?connected=google_workspace")
+    )
 
 
 @router.get("", response_model=ProviderListResponse)

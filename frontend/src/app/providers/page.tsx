@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth, Permissions } from '@/components/auth-provider';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Users, Key, CheckCircle2, XCircle, Loader2, Building2, Package, AlertTriangle, Upload, X, Info, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
 import {
@@ -36,7 +36,9 @@ import {
   PROVIDER_LINKS,
   PROVIDERS_WITH_SETUP,
   getFieldLabel,
+  hasOAuthSupport,
 } from '@/hooks/use-providers';
+import { api } from '@/lib/api';
 
 export default function ProvidersPage() {
   const t = useTranslations('providers');
@@ -50,6 +52,10 @@ export default function ProvidersPage() {
   const canUpdate = hasPermission(Permissions.PROVIDERS_UPDATE);
   const canDelete = hasPermission(Permissions.PROVIDERS_DELETE);
   const canSync = hasPermission(Permissions.PROVIDERS_SYNC);
+
+  const searchParams = useSearchParams();
+  const [manualExpanded, setManualExpanded] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const {
     hrisProviders,
@@ -88,6 +94,8 @@ export default function ProvidersPage() {
     handleLogoChange,
     clearLogo,
     isManualProvider,
+    showToast,
+    fetchProviders,
   } = useProviders({ t, tCommon });
 
   useEffect(() => {
@@ -96,6 +104,20 @@ export default function ProvidersPage() {
       return;
     }
   }, [authLoading, hasPermission, router]);
+
+  // Handle OAuth callback URL params
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
+    if (connected === 'google_workspace') {
+      showToast('success', t('googleWorkspaceConnected'));
+      fetchProviders();
+      router.replace('/providers');
+    } else if (error === 'google_workspace_failed') {
+      showToast('error', t('connectionFailed'));
+      router.replace('/providers');
+    }
+  }, [searchParams]);
 
   if (authLoading || loading) {
     return (
@@ -286,7 +308,7 @@ export default function ProvidersPage() {
             {/* Provider Type Selection */}
             <div className="space-y-2">
               <Label className="text-xs font-medium">{t('providerType')}</Label>
-              <Select value={newProviderType} onValueChange={setNewProviderType}>
+              <Select value={newProviderType} onValueChange={(v) => { setNewProviderType(v); setManualExpanded(false); }}>
                 <SelectTrigger><SelectValue placeholder={t('selectProviderType')} /></SelectTrigger>
                 <SelectContent>
                   {dialogMode === 'hris' ? (
@@ -309,8 +331,97 @@ export default function ProvidersPage() {
               <Label className="text-xs font-medium">{t('displayName')}</Label>
               <Input value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} placeholder={newProviderType ? t(newProviderType) : t('displayNamePlaceholder')} />
             </div>
-            {/* API Provider Fields */}
-            {!isManualProvider(newProviderType) && getProviderFields(newProviderType).map((field) => (
+            {/* OAuth Provider: Dual-mode UI */}
+            {hasOAuthSupport(newProviderType) && (
+              <>
+                {/* OAuth Section */}
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    className="w-full bg-[#4285F4] hover:bg-[#3367D6] text-white"
+                    disabled={!newProviderName || oauthLoading}
+                    onClick={async () => {
+                      setOauthLoading(true);
+                      try {
+                        const { authorize_url } = await api.getGoogleWorkspaceAuthUrl(newProviderName || 'Google Workspace');
+                        window.location.href = authorize_url;
+                      } catch {
+                        setOauthLoading(false);
+                      }
+                    }}
+                  >
+                    {oauthLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('connectWithGoogle')}</>
+                    ) : (
+                      <>{t('connectWithGoogle')}</>
+                    )}
+                  </Button>
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-700">{t('googleAdminRequired')}</p>
+                  </div>
+                </div>
+
+                {/* Divider + Manual Section (collapsible) */}
+                <div>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                    onClick={() => setManualExpanded(!manualExpanded)}
+                  >
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${manualExpanded ? 'rotate-0' : '-rotate-90'}`} />
+                    {t('orConnectManually')}
+                  </button>
+                  {manualExpanded && (
+                    <div className="space-y-4 mt-3 pt-3 border-t">
+                      {getProviderFields(newProviderType).map((field) => (
+                        <div key={field} className="space-y-2">
+                          <Label className="text-xs font-medium">{getFieldLabel(field, t)}</Label>
+                          <Input
+                            type={field.includes('key') || field.includes('token') || field.includes('secret') ? 'password' : 'text'}
+                            value={credentials[field] || ''}
+                            onChange={(e) => setCredentials({ ...credentials, [field]: e.target.value })}
+                          />
+                        </div>
+                      ))}
+                      {/* Setup Instructions for manual mode */}
+                      {PROVIDERS_WITH_SETUP.includes(newProviderType) && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-3">
+                          <div>
+                            <p className="text-xs font-medium text-blue-800 mb-1">{t('requiredPermissions')}</p>
+                            <ul className="text-xs text-blue-700 space-y-0.5">
+                              {(tSetup.raw(`${newProviderType}.permissions`) as string[]).map((perm) => (
+                                <li key={perm}>• {perm}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-blue-800 mb-1">{t('setupSteps')}</p>
+                            <ol className="text-xs text-blue-700 space-y-0.5">
+                              {(tSetup.raw(`${newProviderType}.steps`) as string[]).map((step, idx) => (
+                                <li key={idx}>{step}</li>
+                              ))}
+                            </ol>
+                          </div>
+                          {PROVIDER_LINKS[newProviderType] && (
+                            <a
+                              href={PROVIDER_LINKS[newProviderType]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1"
+                            >
+                              {t('viewDocumentation')}
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+            {/* Non-OAuth API Provider Fields */}
+            {!isManualProvider(newProviderType) && !hasOAuthSupport(newProviderType) && getProviderFields(newProviderType).map((field) => (
               <div key={field} className="space-y-2">
                 <Label className="text-xs font-medium">{getFieldLabel(field, t)}</Label>
                 <Input
@@ -320,8 +431,8 @@ export default function ProvidersPage() {
                 />
               </div>
             ))}
-            {/* Setup Instructions */}
-            {PROVIDERS_WITH_SETUP.includes(newProviderType) && (
+            {/* Setup Instructions (non-OAuth providers) */}
+            {PROVIDERS_WITH_SETUP.includes(newProviderType) && !hasOAuthSupport(newProviderType) && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-3">
                 <div>
                   <p className="text-xs font-medium text-blue-800 mb-1">{t('requiredPermissions')}</p>

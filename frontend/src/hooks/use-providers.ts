@@ -11,7 +11,7 @@ import {
 } from '@/lib/provider-fields';
 
 // Re-export constants and helpers used by the page component
-export { hrisProviderTypes, licenseProviderTypes, getFieldLabel } from '@/lib/provider-fields';
+export { hrisProviderTypes, licenseProviderTypes, getFieldLabel, hasOAuthSupport } from '@/lib/provider-fields';
 
 /**
  * Documentation links for providers (not translated).
@@ -97,6 +97,7 @@ export interface UseProvidersReturn {
 
   // Handlers
   fetchProviders: () => Promise<void>;
+  showToast: (type: 'success' | 'error', text: string) => void;
   getProviderFields: (providerName: string) => string[];
   handleOpenAddDialog: (mode: 'hris' | 'license') => void;
   handleOpenEditDialog: (provider: Provider) => void;
@@ -360,6 +361,7 @@ export function useProviders(
 
     // Handlers
     fetchProviders,
+    showToast,
     getProviderFields,
     handleOpenAddDialog,
     handleOpenEditDialog,

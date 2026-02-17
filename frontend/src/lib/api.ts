@@ -1847,6 +1847,11 @@ export const api = {
     return fetchApi<{ credentials: Record<string, string> }>(`/providers/${providerId}/public-credentials`);
   },
 
+  async getGoogleWorkspaceAuthUrl(displayName: string): Promise<{ authorize_url: string }> {
+    const query = buildSearchParams({ display_name: displayName });
+    return fetchApi<{ authorize_url: string }>(`/providers/google-workspace/authorize${query}`);
+  },
+
   async createProvider(data: {
     name: string;
     display_name: string;
