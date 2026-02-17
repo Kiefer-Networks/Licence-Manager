@@ -160,7 +160,7 @@ async def google_workspace_authorize(
         "client_id": settings.google_client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "openid email profile https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/apps.licensing.readonly",
+        "scope": "openid email profile https://www.googleapis.com/auth/admin.directory.user.readonly",
         "access_type": "offline",
         "prompt": "consent",
         "state": state,
