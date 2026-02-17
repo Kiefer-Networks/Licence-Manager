@@ -37,6 +37,39 @@ const sortByEmail = (a: License, b: License) => {
   return emailA.localeCompare(emailB);
 };
 
+/**
+ * Group licenses by user (same external_user_id/email) into single display rows.
+ * Combines license_type with " + " and sums monthly costs.
+ * Used for providers like Google Workspace where a user can have multiple SKUs.
+ */
+const groupLicensesByUser = (licenses: License[]): License[] => {
+  const grouped = new Map<string, License[]>();
+  for (const lic of licenses) {
+    const key = (lic.metadata?.email || lic.external_user_id || lic.id).toLowerCase();
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.push(lic);
+    } else {
+      grouped.set(key, [lic]);
+    }
+  }
+
+  return Array.from(grouped.values()).map(group => {
+    if (group.length === 1) return group[0];
+
+    const primary = group[0];
+    const types = group.map(l => l.license_type_display_name || l.license_type || '').filter(Boolean);
+    const totalCost = group.reduce((sum, l) => sum + (parseFloat(l.monthly_cost || '0') || 0), 0);
+
+    return {
+      ...primary,
+      license_type: types.join(' + '),
+      license_type_display_name: undefined,
+      monthly_cost: totalCost > 0 ? String(totalCost) : primary.monthly_cost,
+    };
+  });
+};
+
 export function ThreeTableLayout({
   assigned,
   unassigned,
@@ -86,79 +119,87 @@ export function ThreeTableLayout({
     };
   }, [assigned, unassigned, notInHris, external, serviceAccounts, suggested, stats, maxUsers]);
 
+  // Group licenses by user for display (combine multiple SKUs per user)
+  const groupedAssigned = useMemo(() => groupLicensesByUser(assigned), [assigned]);
+  const groupedUnassigned = useMemo(() => groupLicensesByUser(unassigned), [unassigned]);
+  const groupedNotInHris = useMemo(() => groupLicensesByUser(notInHris), [notInHris]);
+  const groupedExternal = useMemo(() => groupLicensesByUser(external), [external]);
+  const groupedServiceAccounts = useMemo(() => groupLicensesByUser(serviceAccounts), [serviceAccounts]);
+  const groupedSuggested = useMemo(() => groupLicensesByUser(suggested), [suggested]);
+
   // Split unassigned into active and inactive, sorted alphabetically
   const unassignedActive = useMemo(() =>
-    unassigned.filter(l => l.status === 'active').sort(sortByEmail),
-    [unassigned]
+    groupedUnassigned.filter(l => l.status === 'active').sort(sortByEmail),
+    [groupedUnassigned]
   );
   const unassignedInactive = useMemo(() =>
-    unassigned.filter(l => l.status !== 'active').sort(sortByEmail),
-    [unassigned]
+    groupedUnassigned.filter(l => l.status !== 'active').sort(sortByEmail),
+    [groupedUnassigned]
   );
 
   // Split notInHris into active and inactive, sorted alphabetically
   const notInHrisActive = useMemo(() =>
-    notInHris.filter(l => l.status === 'active').sort(sortByEmail),
-    [notInHris]
+    groupedNotInHris.filter(l => l.status === 'active').sort(sortByEmail),
+    [groupedNotInHris]
   );
   const notInHrisInactive = useMemo(() =>
-    notInHris.filter(l => l.status !== 'active').sort(sortByEmail),
-    [notInHris]
+    groupedNotInHris.filter(l => l.status !== 'active').sort(sortByEmail),
+    [groupedNotInHris]
   );
 
   // Split external into active and inactive, sorted alphabetically
   const externalActive = useMemo(() =>
-    external.filter(l => l.status === 'active').sort(sortByEmail),
-    [external]
+    groupedExternal.filter(l => l.status === 'active').sort(sortByEmail),
+    [groupedExternal]
   );
   const externalInactive = useMemo(() =>
-    external.filter(l => l.status !== 'active').sort(sortByEmail),
-    [external]
+    groupedExternal.filter(l => l.status !== 'active').sort(sortByEmail),
+    [groupedExternal]
   );
 
   // Split service accounts into active and inactive, sorted alphabetically
   const serviceAccountsActive = useMemo(() =>
-    serviceAccounts.filter(l => l.status === 'active').sort(sortByEmail),
-    [serviceAccounts]
+    groupedServiceAccounts.filter(l => l.status === 'active').sort(sortByEmail),
+    [groupedServiceAccounts]
   );
   const serviceAccountsInactive = useMemo(() =>
-    serviceAccounts.filter(l => l.status !== 'active').sort(sortByEmail),
-    [serviceAccounts]
+    groupedServiceAccounts.filter(l => l.status !== 'active').sort(sortByEmail),
+    [groupedServiceAccounts]
   );
 
   // Split suggested into active and inactive, sorted alphabetically
   const suggestedActive = useMemo(() =>
-    suggested.filter(l => l.status === 'active').sort(sortByEmail),
-    [suggested]
+    groupedSuggested.filter(l => l.status === 'active').sort(sortByEmail),
+    [groupedSuggested]
   );
   const suggestedInactive = useMemo(() =>
-    suggested.filter(l => l.status !== 'active').sort(sortByEmail),
-    [suggested]
+    groupedSuggested.filter(l => l.status !== 'active').sort(sortByEmail),
+    [groupedSuggested]
   );
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode; warning?: boolean; highlight?: boolean }[] = [
-    { id: 'assigned', label: t('assigned'), count: assigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
+    { id: 'assigned', label: t('assigned'), count: groupedAssigned.filter(l => l.status === 'active').length, icon: <Users className="h-4 w-4" /> },
     ...(suggestedActive.length > 0 ? [{ id: 'suggested' as Tab, label: t('suggested'), count: suggestedActive.length, icon: <Lightbulb className="h-4 w-4" />, highlight: true }] : []),
     ...(notInHrisActive.length > 0 ? [{ id: 'not_in_hris' as Tab, label: t('notInHRIS'), count: notInHrisActive.length, icon: <AlertTriangle className="h-4 w-4" />, warning: true }] : []),
     ...(unassignedActive.length > 0 ? [{ id: 'unassigned' as Tab, label: t('unassigned'), count: unassignedActive.length, icon: <Package className="h-4 w-4" />, warning: true }] : []),
-    { id: 'external', label: t('external'), count: external.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
+    { id: 'external', label: t('external'), count: groupedExternal.filter(l => l.status === 'active').length, icon: <Globe className="h-4 w-4" /> },
     ...(serviceAccounts.length > 0 ? [{ id: 'service_accounts' as Tab, label: t('serviceAccount'), count: serviceAccountsActive.length, icon: <Bot className="h-4 w-4" /> }] : []),
   ];
 
   const getLicenses = () => {
     switch (activeTab) {
       case 'assigned':
-        return assigned.sort(sortByEmail);
+        return groupedAssigned.sort(sortByEmail);
       case 'suggested':
-        return suggested; // Handled separately with two tables
+        return groupedSuggested; // Handled separately with two tables
       case 'not_in_hris':
-        return notInHris; // Handled separately with two tables
+        return groupedNotInHris; // Handled separately with two tables
       case 'unassigned':
-        return unassigned; // Handled separately with two tables
+        return groupedUnassigned; // Handled separately with two tables
       case 'external':
-        return external.sort(sortByEmail);
+        return groupedExternal.sort(sortByEmail);
       case 'service_accounts':
-        return serviceAccounts.sort(sortByEmail);
+        return groupedServiceAccounts.sort(sortByEmail);
     }
   };
 
