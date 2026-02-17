@@ -10,9 +10,27 @@ import httpx
 from jose import jwt
 
 from licence_api.config import get_settings
+from licence_api.providers.base import BaseProvider
 
 logger = logging.getLogger(__name__)
-from licence_api.providers.base import BaseProvider
+
+# Google Workspace SKU ID → human-readable name mapping
+GOOGLE_WORKSPACE_SKUS: dict[str, str] = {
+    "Google-Apps-Lite": "Google Workspace Business Starter",
+    "Google-Apps-For-Business": "Google Workspace Business Standard",
+    "Google-Apps-Unlimited": "Google Workspace Business Plus",
+    "1010020027": "Google Workspace Enterprise Starter",
+    "1010020020": "Google Workspace Enterprise Standard",
+    "1010020025": "Google Workspace Enterprise Plus",
+    "1010020028": "Google Workspace Frontline Starter",
+    "1010020029": "Google Workspace Frontline Standard",
+    "1010060001": "Google Workspace Essentials",
+    "1010060003": "Google Workspace Essentials Plus",
+    "1010010001": "Google Workspace for Education Fundamentals",
+    "1010370001": "Google Workspace for Education Standard",
+    "1010310002": "Google Workspace for Education Plus",
+    "1010310003": "Google Workspace for Education Teaching and Learning Upgrade",
+}
 
 
 class GoogleWorkspaceProvider(BaseProvider):
@@ -74,11 +92,8 @@ class GoogleWorkspaceProvider(BaseProvider):
                     "client_secret": settings.google_client_secret,
                 },
             )
-            if response.status_code != 200:
-                logger.error("Google OAuth token refresh failed: %s %s", response.status_code, response.text)
             response.raise_for_status()
             data = response.json()
-            logger.info("Google OAuth token refresh succeeded, scope: %s", data.get("scope", "N/A"))
             self._access_token = data["access_token"]
             return self._access_token
 
@@ -92,7 +107,7 @@ class GoogleWorkspaceProvider(BaseProvider):
         payload = {
             "iss": self.service_account["client_email"],
             "sub": self.admin_email,
-            "scope": "https://www.googleapis.com/auth/admin.directory.user.readonly",
+            "scope": "https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/apps.licensing.readonly",
             "aud": "https://oauth2.googleapis.com/token",
             "iat": now,
             "exp": now + 3600,
@@ -136,6 +151,47 @@ class GoogleWorkspaceProvider(BaseProvider):
         except Exception:
             return False
 
+    async def _fetch_license_assignments(self, client: httpx.AsyncClient, token: str) -> dict[str, str]:
+        """Fetch license SKU assignments from Google Licensing API.
+
+        Returns:
+            Dict mapping user email → human-readable license type name.
+        """
+        license_map: dict[str, str] = {}
+        try:
+            page_token = None
+            while True:
+                params: dict[str, Any] = {
+                    "customerId": "my_customer",
+                    "maxResults": 1000,
+                }
+                if page_token:
+                    params["pageToken"] = page_token
+
+                response = await client.get(
+                    "https://licensing.googleapis.com/apps/licensing/v1/product/Google-Apps/users",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params=params,
+                    timeout=30.0,
+                )
+                if response.status_code != 200:
+                    logger.warning("Licensing API unavailable (%s), falling back to generic type", response.status_code)
+                    return license_map
+                data = response.json()
+
+                for item in data.get("items", []):
+                    user_id = item.get("userId", "").lower()
+                    sku_id = item.get("skuId", "")
+                    license_map[user_id] = GOOGLE_WORKSPACE_SKUS.get(sku_id, f"Google Workspace ({sku_id})")
+
+                page_token = data.get("nextPageToken")
+                if not page_token:
+                    break
+        except Exception:
+            logger.warning("Failed to fetch license assignments, using generic type", exc_info=True)
+
+        return license_map
+
     async def fetch_licenses(self) -> list[dict[str, Any]]:
         """Fetch all users with licenses from Google Workspace.
 
@@ -147,6 +203,9 @@ class GoogleWorkspaceProvider(BaseProvider):
         page_token = None
 
         async with httpx.AsyncClient() as client:
+            # Try to get actual license types from Licensing API
+            license_map = await self._fetch_license_assignments(client, token)
+
             while True:
                 params: dict[str, Any] = {
                     "domain": self.domain,
@@ -161,17 +220,15 @@ class GoogleWorkspaceProvider(BaseProvider):
                     params=params,
                     timeout=30.0,
                 )
-                if response.status_code != 200:
-                    logger.error("Google Admin API error: %s %s", response.status_code, response.text)
                 response.raise_for_status()
                 data = response.json()
 
                 for user in data.get("users", []):
                     # Skip suspended users
                     if user.get("suspended"):
-                        status = "suspended"
+                        user_status = "suspended"
                     else:
-                        status = "active"
+                        user_status = "active"
 
                     # Parse last login time
                     last_activity = None
@@ -190,12 +247,15 @@ class GoogleWorkspaceProvider(BaseProvider):
                             user["creationTime"].replace("Z", "+00:00")
                         )
 
+                    email = user["primaryEmail"].lower()
+                    license_type = license_map.get(email, "Google Workspace")
+
                     licenses.append(
                         {
-                            "external_user_id": user["id"],
-                            "email": user["primaryEmail"].lower(),
-                            "license_type": "Google Workspace",
-                            "status": status,
+                            "external_user_id": email,
+                            "email": email,
+                            "license_type": license_type,
+                            "status": user_status,
                             "assigned_at": created_at,
                             "last_activity_at": last_activity,
                             "metadata": {

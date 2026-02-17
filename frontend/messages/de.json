@@ -473,6 +473,7 @@
     "paymentMethodDescription": "Zahlungsmethode für die Abrechnung der Lizenzen dieses Anbieters zuweisen.",
     "default": "Standard",
     "tabOverview": "Übersicht",
+    "licenses": "Lizenzen",
     "tabLicenses": "Lizenzen",
     "tabPricing": "Preise",
     "tabFiles": "Dateien",

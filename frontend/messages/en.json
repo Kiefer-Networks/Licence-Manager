@@ -473,6 +473,7 @@
     "paymentMethodDescription": "Assign a payment method for billing this provider's licenses.",
     "default": "Default",
     "tabOverview": "Overview",
+    "licenses": "Licenses",
     "tabLicenses": "Licenses",
     "tabPricing": "Pricing",
     "tabFiles": "Files",
