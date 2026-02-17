@@ -117,7 +117,7 @@ export default function ProvidersPage() {
       showToast('error', t('connectionFailed'));
       router.replace('/providers');
     }
-  }, [searchParams]);
+  }, [searchParams, showToast, t, fetchProviders, router]);
 
   if (authLoading || loading) {
     return (
@@ -344,7 +344,9 @@ export default function ProvidersPage() {
                       setOauthLoading(true);
                       try {
                         const { authorize_url } = await api.getGoogleWorkspaceAuthUrl(newProviderName || 'Google Workspace');
-                        window.location.href = authorize_url;
+                        if (authorize_url && authorize_url.startsWith('https://')) {
+                          window.location.href = authorize_url;
+                        }
                       } catch {
                         setOauthLoading(false);
                       }
@@ -390,7 +392,7 @@ export default function ProvidersPage() {
                           <div>
                             <p className="text-xs font-medium text-blue-800 mb-1">{t('requiredPermissions')}</p>
                             <ul className="text-xs text-blue-700 space-y-0.5">
-                              {(tSetup.raw(`${newProviderType}.permissions`) as string[]).map((perm) => (
+                              {(() => { const raw = tSetup.raw(`${newProviderType}.permissions`); return Array.isArray(raw) ? raw : []; })().map((perm: string) => (
                                 <li key={perm}>• {perm}</li>
                               ))}
                             </ul>
@@ -398,7 +400,7 @@ export default function ProvidersPage() {
                           <div>
                             <p className="text-xs font-medium text-blue-800 mb-1">{t('setupSteps')}</p>
                             <ol className="text-xs text-blue-700 space-y-0.5">
-                              {(tSetup.raw(`${newProviderType}.steps`) as string[]).map((step, idx) => (
+                              {(() => { const raw = tSetup.raw(`${newProviderType}.steps`); return Array.isArray(raw) ? raw : []; })().map((step: string, idx: number) => (
                                 <li key={idx}>{step}</li>
                               ))}
                             </ol>
@@ -437,7 +439,7 @@ export default function ProvidersPage() {
                 <div>
                   <p className="text-xs font-medium text-blue-800 mb-1">{t('requiredPermissions')}</p>
                   <ul className="text-xs text-blue-700 space-y-0.5">
-                    {(tSetup.raw(`${newProviderType}.permissions`) as string[]).map((perm) => (
+                    {(() => { const raw = tSetup.raw(`${newProviderType}.permissions`); return Array.isArray(raw) ? raw : []; })().map((perm: string) => (
                       <li key={perm}>• {perm}</li>
                     ))}
                   </ul>
@@ -445,7 +447,7 @@ export default function ProvidersPage() {
                 <div>
                   <p className="text-xs font-medium text-blue-800 mb-1">{t('setupSteps')}</p>
                   <ol className="text-xs text-blue-700 space-y-0.5">
-                    {(tSetup.raw(`${newProviderType}.steps`) as string[]).map((step, idx) => (
+                    {(() => { const raw = tSetup.raw(`${newProviderType}.steps`); return Array.isArray(raw) ? raw : []; })().map((step: string, idx: number) => (
                       <li key={idx}>{step}</li>
                     ))}
                   </ol>

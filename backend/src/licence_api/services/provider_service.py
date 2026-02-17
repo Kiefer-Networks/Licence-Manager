@@ -1,13 +1,18 @@
 """Provider service for provider management operations."""
 
+import logging
+import time
 import uuid as uuid_module
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import httpx
 from fastapi import Request
+from jose import jwt as jose_jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from licence_api.config import get_settings
 from licence_api.constants import (
     ALLOWED_LOGO_EXTENSIONS,
     HRIS_PROVIDER_NAMES,
@@ -165,6 +170,100 @@ class ProviderService:
             payment_method=pm_summary,
             created_at=provider.created_at,
             updated_at=provider.updated_at,
+        )
+
+    async def exchange_google_workspace_oauth(
+        self,
+        code: str,
+        code_verifier: str,
+        redirect_uri: str,
+        display_name: str,
+        user: AdminUser | None = None,
+        request: Request | None = None,
+    ) -> "ProviderResponse":
+        """Exchange Google OAuth authorization code for tokens and create provider.
+
+        Handles the full OAuth token exchange, ID token verification, and provider
+        creation. This keeps the business logic out of the router.
+
+        Args:
+            code: Authorization code from Google
+            code_verifier: PKCE code verifier (RFC 7636)
+            redirect_uri: Redirect URI used in the authorize request
+            display_name: Display name for the provider
+            user: Admin user who initiated the OAuth flow
+            request: HTTP request for audit logging
+
+        Returns:
+            Created ProviderResponse
+
+        Raises:
+            ValueError: If token exchange fails or ID token is invalid
+        """
+        logger = logging.getLogger(__name__)
+        settings = get_settings()
+
+        # Exchange authorization code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                    "code_verifier": code_verifier,
+                },
+            )
+            token_response.raise_for_status()
+            token_data = token_response.json()
+
+        refresh_token = token_data.get("refresh_token")
+        id_token_raw = token_data.get("id_token")
+
+        if not refresh_token:
+            raise ValueError("No refresh_token received from Google")
+
+        if not id_token_raw:
+            raise ValueError("No id_token received from Google")
+
+        # Verify ID token claims per OpenID Connect Core 1.0 Section 3.1.3.7
+        # We use get_unverified_claims since the token was received via
+        # back-channel (code flow), but still validate iss, aud, and exp.
+        id_claims = jose_jwt.get_unverified_claims(id_token_raw)
+
+        issuer = id_claims.get("iss")
+        if issuer not in ("https://accounts.google.com", "accounts.google.com"):
+            logger.warning("Google Workspace OAuth: invalid issuer '%s'", issuer)
+            raise ValueError("Invalid ID token issuer")
+
+        audience = id_claims.get("aud")
+        if audience != settings.google_client_id:
+            logger.warning("Google Workspace OAuth: audience mismatch")
+            raise ValueError("Invalid ID token audience")
+
+        exp = id_claims.get("exp")
+        if exp and int(exp) < int(time.time()):
+            logger.warning("Google Workspace OAuth: expired ID token")
+            raise ValueError("Expired ID token")
+
+        domain = id_claims.get("hd")
+        admin_email = id_claims.get("email")
+
+        if not domain or not admin_email:
+            raise ValueError("Missing hd or email claim in ID token")
+
+        return await self.create_provider(
+            name="google_workspace",
+            display_name=display_name,
+            credentials={
+                "refresh_token": refresh_token,
+                "domain": domain,
+                "admin_email": admin_email,
+            },
+            user=user,
+            request=request,
         )
 
     async def create_provider(
