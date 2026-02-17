@@ -188,6 +188,27 @@ class GoogleWorkspaceProvider(BaseProvider):
 
         return users
 
+    async def _get_customer_id(
+        self, client: httpx.AsyncClient, token: str,
+    ) -> str:
+        """Resolve the real Google customer ID via Directory API.
+
+        Falls back to 'my_customer' if the lookup fails.
+        """
+        try:
+            response = await client.get(
+                "https://admin.googleapis.com/admin/directory/v1/customers/my_customer",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            if response.status_code == 200:
+                customer_id = response.json().get("id", "my_customer")
+                logger.warning("Resolved Google customer ID: %s", customer_id)
+                return customer_id
+        except Exception:
+            logger.warning("Failed to resolve customer ID, using my_customer", exc_info=True)
+        return "my_customer"
+
     async def _fetch_license_assignments(
         self, client: httpx.AsyncClient, token: str,
     ) -> list[dict[str, str]]:
@@ -199,6 +220,7 @@ class GoogleWorkspaceProvider(BaseProvider):
         Returns:
             List of dicts with userId (email), skuId, productId, license_type.
         """
+        customer_id = await self._get_customer_id(client, token)
         assignments: list[dict[str, str]] = []
 
         for product_id in GOOGLE_PRODUCT_IDS:
@@ -206,7 +228,7 @@ class GoogleWorkspaceProvider(BaseProvider):
                 page_token = None
                 while True:
                     params: dict[str, Any] = {
-                        "customerId": "my_customer",
+                        "customerId": customer_id,
                         "maxResults": 1000,
                     }
                     if page_token:
