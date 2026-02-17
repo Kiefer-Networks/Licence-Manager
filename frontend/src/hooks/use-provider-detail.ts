@@ -148,6 +148,8 @@ export interface UseProviderDetailReturn {
   handleSaveCredentials: () => Promise<void>;
 
   // Delete Provider
+  deleteProviderOpen: boolean;
+  setDeleteProviderOpen: (open: boolean) => void;
   handleDeleteProvider: () => void;
 
   // Pricing
@@ -995,16 +997,16 @@ export function useProviderDetail(
     }
   }, [provider, showToast, t, fetchFiles]);
 
+  const [deleteProviderOpen, setDeleteProviderOpen] = useState(false);
+
   const handleDeleteProvider = useCallback(() => {
     if (!provider) return;
-    if (confirm(t('confirmDeleteProvider', { name: provider.display_name }))) {
-      api.deleteProvider(provider.id)
-        .then(() => {
-          showToast('success', t('providerDeleted'));
-          router.push('/providers');
-        })
-        .catch(() => showToast('error', t('deleteProviderFailed')));
-    }
+    api.deleteProvider(provider.id)
+      .then(() => {
+        showToast('success', t('providerDeleted'));
+        router.push('/providers');
+      })
+      .catch(() => showToast('error', t('deleteProviderFailed')));
   }, [provider, router, showToast, t]);
 
   // License Package handlers
@@ -1268,6 +1270,8 @@ export function useProviderDetail(
     handleSaveCredentials,
 
     // Delete Provider
+    deleteProviderOpen,
+    setDeleteProviderOpen,
     handleDeleteProvider,
 
     // Pricing

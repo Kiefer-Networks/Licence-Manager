@@ -140,6 +140,8 @@ export default function ProviderDetailPage() {
     setShowCredentialsEdit,
     publicCredentials,
     handleSaveCredentials,
+    deleteProviderOpen,
+    setDeleteProviderOpen,
     handleDeleteProvider,
     licenseTypes,
     pricingEdits,
@@ -410,7 +412,7 @@ export default function ProviderDetailPage() {
             setShowCredentialsEdit={setShowCredentialsEdit}
             savingCredentials={savingCredentials}
             onSaveCredentials={handleSaveCredentials}
-            onDeleteProvider={handleDeleteProvider}
+            onDeleteProvider={() => setDeleteProviderOpen(true)}
             t={t}
             tCommon={tCommon}
           />
@@ -538,7 +540,7 @@ export default function ProviderDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
+      {/* Delete License Dialog */}
       <ConfirmationDialog
         open={!!deleteDialog}
         onOpenChange={() => setDeleteDialog(null)}
@@ -546,6 +548,16 @@ export default function ProviderDetailPage() {
         description={t('deleteConfirmMessage', { email: deleteDialog?.external_user_id || '' })}
         confirmLabel={tCommon('delete')}
         onConfirm={handleDeleteLicense}
+      />
+
+      {/* Delete Provider Dialog */}
+      <ConfirmationDialog
+        open={deleteProviderOpen}
+        onOpenChange={setDeleteProviderOpen}
+        title={t('deleteProvider')}
+        description={t('confirmDeleteProvider', { name: provider?.display_name || '' })}
+        confirmLabel={tCommon('delete')}
+        onConfirm={handleDeleteProvider}
       />
 
       {/* Service Account Dialog */}
