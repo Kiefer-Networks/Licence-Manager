@@ -148,15 +148,16 @@ class SyncService:
 
         try:
             # Manual providers don't need sync - data is entered manually
-            if provider.name == ProviderName.MANUAL:
-                logger.info(f"Skipping sync for manual provider {provider_id}")
+            # Check for exact "manual" name or names starting with "manual_"
+            if provider.name == ProviderName.MANUAL or provider.name.startswith("manual_"):
+                logger.info(f"Skipping sync for manual provider {provider.name} ({provider_id})")
                 await self.provider_repo.update_sync_status(
                     provider_id,
                     SyncStatus.SUCCESS,
                     datetime.now(UTC),
                 )
                 return {
-                    "provider": "manual",
+                    "provider": provider.name,
                     "skipped": True,
                     "reason": "Manual providers do not sync from external APIs",
                 }
@@ -165,8 +166,22 @@ class SyncService:
             credentials = self.encryption.decrypt(provider.credentials_encrypted)
 
             # Get the appropriate provider implementation
+            try:
+                provider_name = ProviderName(provider.name)
+            except ValueError:
+                logger.warning(f"Unknown provider type '{provider.name}', skipping sync")
+                await self.provider_repo.update_sync_status(
+                    provider_id,
+                    SyncStatus.SUCCESS,
+                    datetime.now(UTC),
+                )
+                return {
+                    "provider": provider.name,
+                    "skipped": True,
+                    "reason": f"Unknown provider type: {provider.name}",
+                }
             provider_impl = self._get_provider_implementation(
-                ProviderName(provider.name),
+                provider_name,
                 credentials,
             )
 

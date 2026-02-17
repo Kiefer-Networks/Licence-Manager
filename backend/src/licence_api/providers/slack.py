@@ -177,9 +177,12 @@ class SlackProvider(BaseProvider):
                 return "Slack"
 
         async def get_billable() -> dict[str, Any]:
-            """Get billable user info."""
+            """Get billable user info (requires user token with admin scope)."""
+            if not self.user_token:
+                logger.debug("No user token configured, skipping billable info")
+                return {}
             try:
-                data = await self._api_call_with_retry("GET", "team.billableInfo")
+                data = await self._api_call_with_retry("GET", "team.billableInfo", use_user_token=True)
                 return data.get("billable_info", {})
             except Exception as e:
                 logger.debug("Failed to fetch Slack billable info: %s", e)
