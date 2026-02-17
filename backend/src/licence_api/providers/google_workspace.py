@@ -3,7 +3,6 @@
 import json
 import logging
 import time
-from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -102,10 +101,6 @@ GOOGLE_WORKSPACE_SKUS: dict[str, str] = {
     # Meet Global Dialing
     "1010360001": "Google Meet Global Dialing",
 }
-
-# "Base" product IDs — the main workspace license. Add-ons are everything else.
-_BASE_PRODUCT_IDS = {"Google-Apps", "101001", "101005"}
-
 
 class GoogleWorkspaceProvider(BaseProvider):
     """Google Workspace integration for user licenses."""
@@ -330,11 +325,10 @@ class GoogleWorkspaceProvider(BaseProvider):
         """Fetch all license assignments from Google Workspace.
 
         Primary source: Licensing API (real license assignments per user/SKU).
+        Each SKU assignment becomes a separate license entry so pricing can be
+        set per individual license type. The frontend groups them per user.
         Fallback: Directory API users (all get generic "Google Workspace" type).
         Directory API is always used to enrich with user details.
-
-        Multiple licenses per user are combined into one entry with a combined
-        license_type (e.g. "Google Workspace Enterprise Plus + AI Ultra").
 
         Returns:
             List of license data dicts
@@ -362,29 +356,18 @@ class GoogleWorkspaceProvider(BaseProvider):
     ) -> list[dict[str, Any]]:
         """Build license list from Licensing API assignments enriched with user data.
 
-        Combines multiple license assignments per user into one entry.
-        The base license (e.g. Enterprise Plus) comes first, followed by add-ons.
+        Each assignment becomes a separate license entry so pricing can be set
+        per individual license type.
         """
-        # Group assignments by user email
-        user_assignments: dict[str, list[dict[str, str]]] = defaultdict(list)
-        for assignment in assignments:
-            user_assignments[assignment["userId"]].append(assignment)
-
         licenses = []
-        for email, user_assgns in user_assignments.items():
+
+        for assignment in assignments:
+            email = assignment["userId"]
             user = users_map.get(email, {})
-
-            # Sort: base licenses first, then add-ons alphabetically
-            base = [a for a in user_assgns if a["productId"] in _BASE_PRODUCT_IDS]
-            addons = [a for a in user_assgns if a["productId"] not in _BASE_PRODUCT_IDS]
-            addons.sort(key=lambda a: a["license_type"])
-
-            ordered = base + addons
-            combined_type = " + ".join(a["license_type"] for a in ordered)
 
             licenses.append(self._build_license_entry(
                 email=email,
-                license_type=combined_type,
+                license_type=assignment["license_type"],
                 user=user,
             ))
 
