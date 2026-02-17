@@ -9,6 +9,7 @@ import {
   UserMinus,
   DollarSign,
   AlertTriangle,
+  ShoppingCart,
 } from 'lucide-react';
 import type { OverviewTabProps } from './types';
 
@@ -19,6 +20,7 @@ import type { OverviewTabProps } from './types';
 export function OverviewTab({
   provider,
   stats,
+  licenseTypes = [],
   isManual,
   isSeatBased,
   formatDate,
@@ -116,6 +118,47 @@ export function OverviewTab({
           </CardContent>
         </Card>
       </div>
+
+      {/* Purchased Utilization */}
+      {(() => {
+        const typesWithPurchased = licenseTypes.filter(lt => lt.pricing?.purchased_quantity != null && lt.pricing.purchased_quantity > 0);
+        if (typesWithPurchased.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4" />
+                {t('purchasedUtilization')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {typesWithPurchased.map(lt => {
+                const purchased = lt.pricing!.purchased_quantity!;
+                const used = lt.count;
+                const percent = purchased > 0 ? (used / purchased) * 100 : 0;
+                const colorClass = percent > 90 ? 'bg-red-500' : percent > 70 ? 'bg-amber-500' : 'bg-emerald-500';
+                const textColorClass = percent > 90 ? 'text-red-600' : percent > 70 ? 'text-amber-600' : 'text-emerald-600';
+                return (
+                  <div key={lt.license_type} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{lt.pricing?.display_name || lt.license_type}</span>
+                      <span className={textColorClass}>
+                        {used} / {purchased} ({Math.round(percent)}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-zinc-100 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${colorClass}`}
+                        style={{ width: `${Math.min(percent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Provider Information Card */}
       <ProviderInfoCard

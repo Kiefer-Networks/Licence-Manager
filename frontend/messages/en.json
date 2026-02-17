@@ -353,6 +353,8 @@
     "providerAdded": "{name} added",
     "providerUpdated": "Provider updated successfully",
     "providerDeleted": "Provider deleted successfully",
+    "licenseCancelled": "License cancellation scheduled",
+    "failedToCancel": "Failed to cancel license",
     "failedToCreate": "Failed to create provider",
     "failedToUpdate": "Failed to update provider",
     "failedToDelete": "Failed to delete provider",
@@ -484,6 +486,7 @@
     "licenseType": "License Type",
     "licensedTo": "Licensed To",
     "seatUsage": "Seat Usage",
+    "purchasedUtilization": "Purchased Utilization",
     "availableSeats": "Available Seats",
     "expires": "Expires",
     "licenseContact": "License Contact",
@@ -1069,7 +1072,9 @@
     "searchEmployee": "Search employee...",
     "noEmployeesFound": "No employees found",
     "markAsAdminAccount": "Mark as Admin Account",
-    "markAsAdminAccountDescription": "Mark this license as an admin account. Admin accounts are elevated access accounts owned by an employee."
+    "markAsAdminAccountDescription": "Mark this license as an admin account. Admin accounts are elevated access accounts owned by an employee.",
+    "markedAsAdminAccount": "Marked as admin account",
+    "removedAdminAccountFlag": "Removed admin account flag"
   },
   "lifecycle": {
     "title": "License Lifecycle",

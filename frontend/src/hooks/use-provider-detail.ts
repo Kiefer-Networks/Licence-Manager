@@ -100,6 +100,11 @@ export interface UseProviderDetailReturn {
   setDeleteDialog: (license: License | null) => void;
   handleDeleteLicense: () => Promise<void>;
 
+  // Cancel
+  cancelDialog: License | null;
+  setCancelDialog: (license: License | null) => void;
+  handleCancelLicense: (effectiveDate: string, reason: string) => Promise<void>;
+
   // Service Account
   serviceAccountDialog: License | null;
   serviceAccountForm: ServiceAccountFormState;
@@ -322,6 +327,9 @@ export function useProviderDetail(
 
   // Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<License | null>(null);
+
+  // Cancel Dialog
+  const [cancelDialog, setCancelDialog] = useState<License | null>(null);
 
   // Service Account Dialog
   const [serviceAccountDialog, setServiceAccountDialog] = useState<License | null>(null);
@@ -733,6 +741,22 @@ export function useProviderDetail(
       showToast('error', error instanceof Error ? error.message : t('failedToDeleteLicense'));
     }
   }, [deleteDialog, showToast, t, fetchLicenses, fetchCategorizedLicenses, fetchProvider]);
+
+  const handleCancelLicense = useCallback(async (effectiveDate: string, reason: string) => {
+    if (!cancelDialog) return;
+    try {
+      await api.cancelLicense(cancelDialog.id, {
+        effective_date: effectiveDate,
+        reason: reason || undefined,
+      });
+      showToast('success', t('licenseCancelled'));
+      setCancelDialog(null);
+      await fetchLicenses();
+      await fetchCategorizedLicenses();
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : t('failedToCancel'));
+    }
+  }, [cancelDialog, showToast, t, fetchLicenses, fetchCategorizedLicenses]);
 
   const handleOpenServiceAccountDialog = useCallback((license: License) => {
     setServiceAccountForm({
@@ -1232,6 +1256,11 @@ export function useProviderDetail(
     deleteDialog,
     setDeleteDialog,
     handleDeleteLicense,
+
+    // Cancel
+    cancelDialog,
+    setCancelDialog,
+    handleCancelLicense,
 
     // Service Account
     serviceAccountDialog,

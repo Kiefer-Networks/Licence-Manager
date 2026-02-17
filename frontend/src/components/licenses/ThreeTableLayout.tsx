@@ -23,6 +23,7 @@ interface ThreeTableLayoutProps {
   onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
+  onCancelClick?: (license: License) => void;
   onConfirmMatch?: (license: License) => void;
   onRejectMatch?: (license: License) => void;
 }
@@ -86,6 +87,7 @@ export function ThreeTableLayout({
   onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
+  onCancelClick,
   onConfirmMatch,
   onRejectMatch,
 }: ThreeTableLayoutProps) {
@@ -279,6 +281,7 @@ export function ThreeTableLayout({
                   onLicenseTypeClick={onLicenseTypeClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
+                  onCancelClick={onCancelClick}
                   onConfirmMatch={onConfirmMatch}
                   onRejectMatch={onRejectMatch}
                 />
@@ -307,6 +310,7 @@ export function ThreeTableLayout({
                 onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
                 onConfirmMatch={onConfirmMatch}
                 onRejectMatch={onRejectMatch}
               />
@@ -336,6 +340,7 @@ export function ThreeTableLayout({
                   onLicenseTypeClick={onLicenseTypeClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
+                  onCancelClick={onCancelClick}
                 />
               </div>
             ) : (
@@ -361,6 +366,7 @@ export function ThreeTableLayout({
                 onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             </div>
           )}
@@ -388,6 +394,7 @@ export function ThreeTableLayout({
                   onLicenseTypeClick={onLicenseTypeClick}
                   onAssignClick={onAssignClick}
                   onDeleteClick={onDeleteClick}
+                  onCancelClick={onCancelClick}
                 />
               </div>
             ) : (
@@ -413,6 +420,7 @@ export function ThreeTableLayout({
                 onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             </div>
           )}
@@ -439,6 +447,7 @@ export function ThreeTableLayout({
                 onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
@@ -463,6 +472,7 @@ export function ThreeTableLayout({
                 onLicenseTypeClick={onLicenseTypeClick}
                 onAssignClick={onAssignClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             </div>
           )}
@@ -488,6 +498,7 @@ export function ThreeTableLayout({
                 onAdminAccountClick={onAdminAccountClick}
                 onLicenseTypeClick={onLicenseTypeClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             ) : (
               <div className="border border-dashed rounded-lg p-6 text-center text-muted-foreground">
@@ -511,6 +522,7 @@ export function ThreeTableLayout({
                 onAdminAccountClick={onAdminAccountClick}
                 onLicenseTypeClick={onLicenseTypeClick}
                 onDeleteClick={onDeleteClick}
+                onCancelClick={onCancelClick}
               />
             </div>
           )}
@@ -527,6 +539,7 @@ export function ThreeTableLayout({
           onLicenseTypeClick={onLicenseTypeClick}
           onAssignClick={onAssignClick}
           onDeleteClick={onDeleteClick}
+          onCancelClick={onCancelClick}
         />
       )}
     </div>

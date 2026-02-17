@@ -8,7 +8,7 @@ import { formatMonthlyCost } from '@/lib/format';
 import { LicenseStatusBadge } from './LicenseStatusBadge';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags, Check, X, Lightbulb } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Key, MoreHorizontal, Bot, UserPlus, Trash2, ShieldCheck, Tags, Check, X, Lightbulb, Ban } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,7 @@ interface LicenseTableProps {
   onLicenseTypeClick?: (license: License) => void;
   onAssignClick?: (license: License) => void;
   onDeleteClick?: (license: License) => void;
+  onCancelClick?: (license: License) => void;
   onConfirmMatch?: (license: License) => void;
   onRejectMatch?: (license: License) => void;
 }
@@ -53,13 +54,15 @@ function LicenseTableComponent({
   onLicenseTypeClick,
   onAssignClick,
   onDeleteClick,
+  onCancelClick,
   onConfirmMatch,
   onRejectMatch,
 }: LicenseTableProps) {
   const t = useTranslations('licenses');
   const tCommon = useTranslations('common');
+  const tLifecycle = useTranslations('lifecycle');
   const displayEmptyMessage = emptyMessage || tCommon('noResults');
-  const hasActions = onServiceAccountClick || onAdminAccountClick || onLicenseTypeClick || onAssignClick || onDeleteClick;
+  const hasActions = onServiceAccountClick || onAdminAccountClick || onLicenseTypeClick || onAssignClick || onDeleteClick || onCancelClick;
   const hasMatchActions = onConfirmMatch || onRejectMatch;
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn>('external_user_id');
@@ -415,8 +418,17 @@ function LicenseTableComponent({
                               {t('assignToEmployee')}
                             </DropdownMenuItem>
                           )}
-                          {(onServiceAccountClick || onAdminAccountClick || onAssignClick) && onDeleteClick && (
+                          {(onServiceAccountClick || onAdminAccountClick || onAssignClick) && (onDeleteClick || onCancelClick) && (
                             <DropdownMenuSeparator />
+                          )}
+                          {onCancelClick && license.status === 'active' && (
+                            <DropdownMenuItem
+                              onClick={() => onCancelClick(license)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Ban className="h-4 w-4 mr-2" />
+                              {tLifecycle('cancelLicense')}
+                            </DropdownMenuItem>
                           )}
                           {onDeleteClick && (
                             <DropdownMenuItem

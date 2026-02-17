@@ -353,6 +353,8 @@
     "providerAdded": "{name} hinzugefügt",
     "providerUpdated": "Anbieter erfolgreich aktualisiert",
     "providerDeleted": "Anbieter erfolgreich gelöscht",
+    "licenseCancelled": "Lizenzkündigung geplant",
+    "failedToCancel": "Lizenzkündigung fehlgeschlagen",
     "failedToCreate": "Anbieter-Erstellung fehlgeschlagen",
     "failedToUpdate": "Anbieter-Aktualisierung fehlgeschlagen",
     "failedToDelete": "Anbieter-Löschung fehlgeschlagen",
@@ -484,6 +486,7 @@
     "licenseType": "Lizenztyp",
     "licensedTo": "Lizenziert an",
     "seatUsage": "Seat-Nutzung",
+    "purchasedUtilization": "Gekaufte Auslastung",
     "availableSeats": "Verfügbare Seats",
     "expires": "Läuft ab",
     "licenseContact": "Lizenz-Kontakt",
@@ -1069,7 +1072,9 @@
     "searchEmployee": "Mitarbeiter suchen...",
     "noEmployeesFound": "Keine Mitarbeiter gefunden",
     "markAsAdminAccount": "Als Admin-Account markieren",
-    "markAsAdminAccountDescription": "Diese Lizenz als Admin-Account markieren. Admin-Accounts sind Accounts mit erhöhten Rechten, die einem Mitarbeiter gehören."
+    "markAsAdminAccountDescription": "Diese Lizenz als Admin-Account markieren. Admin-Accounts sind Accounts mit erhöhten Rechten, die einem Mitarbeiter gehören.",
+    "markedAsAdminAccount": "Als Admin-Account markiert",
+    "removedAdminAccountFlag": "Admin-Account-Flag entfernt"
   },
   "lifecycle": {
     "title": "Lizenz-Lebenszyklus",

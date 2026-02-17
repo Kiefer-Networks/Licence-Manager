@@ -40,6 +40,7 @@ import {
   PricingTab,
   SettingsTab,
 } from '@/components/providers/detail';
+import { CancellationDialog } from '@/components/licenses/CancellationDialog';
 import {
   Key,
   Package,
@@ -61,6 +62,7 @@ export default function ProviderDetailPage() {
   const t = useTranslations('providers');
   const tCommon = useTranslations('common');
   const tLicenses = useTranslations('licenses');
+  const tLifecycle = useTranslations('lifecycle');
   const { formatDate, formatDateTimeWithSeconds, formatCurrency, formatNumber } = useLocale();
   const router = useRouter();
   const { hasPermission, isLoading: authLoading } = useAuth();
@@ -105,6 +107,9 @@ export default function ProviderDetailPage() {
     deleteDialog,
     setDeleteDialog,
     handleDeleteLicense,
+    cancelDialog,
+    setCancelDialog,
+    handleCancelLicense,
     serviceAccountDialog,
     serviceAccountForm,
     setServiceAccountForm,
@@ -321,6 +326,7 @@ export default function ProviderDetailPage() {
           <OverviewTab
             provider={provider}
             stats={stats}
+            licenseTypes={licenseTypes}
             isManual={isManual}
             isSeatBased={isSeatBased}
             formatDate={formatDate}
@@ -339,6 +345,7 @@ export default function ProviderDetailPage() {
             onAddLicense={(mode) => { setAddLicenseOpen(true); setAddLicenseMode(mode); }}
             onAssign={(license) => setAssignDialog(license)}
             onDelete={(license) => setDeleteDialog(license)}
+            onCancel={(license) => setCancelDialog(license)}
             onServiceAccount={handleOpenServiceAccountDialog}
             onAdminAccount={handleOpenAdminAccountDialog}
             onLicenseType={provider?.name === 'figma' ? handleOpenLicenseTypeDialog : undefined}
@@ -558,6 +565,16 @@ export default function ProviderDetailPage() {
         description={t('confirmDeleteProvider', { name: provider?.display_name || '' })}
         confirmLabel={tCommon('delete')}
         onConfirm={handleDeleteProvider}
+      />
+
+      {/* Cancel License Dialog */}
+      <CancellationDialog
+        open={!!cancelDialog}
+        onOpenChange={(open) => { if (!open) setCancelDialog(null); }}
+        onConfirm={handleCancelLicense}
+        title={tLifecycle('cancelLicense')}
+        description={tLifecycle('cancelDescription')}
+        itemName={cancelDialog?.external_user_id || ''}
       />
 
       {/* Service Account Dialog */}

@@ -12,6 +12,7 @@ export interface LicensesTabProps {
   onAddLicense: (mode: 'single' | 'bulk' | 'seats') => void;
   onAssign: (license: License) => void;
   onDelete: (license: License) => void;
+  onCancel?: (license: License) => void;
   onServiceAccount: (license: License) => void;
   onAdminAccount: (license: License) => void;
   onLicenseType?: (license: License) => void;
@@ -31,6 +32,7 @@ export function LicensesTab({
   onAddLicense,
   onAssign,
   onDelete,
+  onCancel,
   onServiceAccount,
   onAdminAccount,
   onLicenseType,
@@ -74,6 +76,7 @@ export function LicensesTab({
           onLicenseTypeClick={onLicenseType}
           onAssignClick={onAssign}
           onDeleteClick={onDelete}
+          onCancelClick={onCancel}
           onConfirmMatch={onConfirmMatch}
           onRejectMatch={onRejectMatch}
         />
