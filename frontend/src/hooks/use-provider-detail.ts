@@ -632,14 +632,20 @@ export function useProviderDetail(
       const result = await api.syncProvider(provider.id);
       showToast(result.success ? 'success' : 'error', result.success ? t('syncCompleted') : t('syncFailed'));
       if (result.success) {
-        setTimeout(() => window.location.reload(), 500);
+        await Promise.all([
+          fetchProvider(),
+          fetchLicenses(),
+          fetchCategorizedLicenses(),
+          fetchLicenseTypes(),
+          fetchIndividualLicenseTypes(),
+        ]);
       }
     } catch (error) {
       showToast('error', error instanceof Error ? error.message : t('syncFailed'));
     } finally {
       setSyncing(false);
     }
-  }, [provider, isManual, showToast, t]);
+  }, [provider, isManual, showToast, t, fetchProvider, fetchLicenses, fetchCategorizedLicenses, fetchLicenseTypes, fetchIndividualLicenseTypes]);
 
   const handleAddLicense = useCallback(async () => {
     if (!provider) return;
