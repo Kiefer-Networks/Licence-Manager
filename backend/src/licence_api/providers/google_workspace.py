@@ -219,7 +219,10 @@ class GoogleWorkspaceProvider(BaseProvider):
                         timeout=30.0,
                     )
                     if response.status_code == 403:
-                        logger.warning("Licensing API not authorized for product %s, skipping", product_id)
+                        logger.warning(
+                            "Licensing API 403 for product %s: %s",
+                            product_id, response.text,
+                        )
                         break
                     if response.status_code == 404:
                         break
