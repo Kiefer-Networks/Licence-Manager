@@ -377,7 +377,7 @@ function IndividualPricingSection({
   setIndividualPricingEdits: React.Dispatch<React.SetStateAction<Record<string, Omit<PricingEditState, 'next_billing_date'>>>>;
   onSaveIndividualPricing: () => Promise<void>;
   savingIndividualPricing: boolean;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string>) => string;
   tCommon: (key: string) => string;
 }) {
   return (
@@ -408,6 +408,7 @@ function IndividualPricingSection({
             payment_frequency: 'monthly',
             display_name: '',
             notes: '',
+            purchased_quantity: '',
           };
 
           const updateEdit = (updates: Partial<typeof edit>) => {
@@ -430,6 +431,9 @@ function IndividualPricingSection({
             }
           }
 
+          const indPurchasedQty = edit.purchased_quantity ? parseInt(edit.purchased_quantity, 10) : null;
+          const indUtilizationPercent = indPurchasedQty && indPurchasedQty > 0 ? (lt.user_count / indPurchasedQty) * 100 : null;
+
           return (
             <Card key={lt.license_type}>
               <CardContent className="pt-4 pb-4">
@@ -441,14 +445,51 @@ function IndividualPricingSection({
                     </h3>
                     <p className="text-xs text-muted-foreground">{lt.user_count} users</p>
                   </div>
-                  {monthlyEquivalent && (
-                    <Badge variant="secondary" className="text-xs">
-                      {monthlyEquivalent}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {indPurchasedQty != null && indPurchasedQty > 0 ? (
+                      <Badge
+                        variant="outline"
+                        className={
+                          indUtilizationPercent! > 90
+                            ? 'text-red-600 border-red-200 bg-red-50'
+                            : indUtilizationPercent! > 70
+                            ? 'text-amber-600 border-amber-200 bg-amber-50'
+                            : 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                        }
+                      >
+                        {lt.user_count} / {indPurchasedQty}
+                      </Badge>
+                    ) : null}
+                    {monthlyEquivalent && (
+                      <Badge variant="secondary" className="text-xs">
+                        {monthlyEquivalent}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {indUtilizationPercent != null && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>{t('ofPurchased', { count: String(indPurchasedQty) })}</span>
+                      <span>{Math.round(indUtilizationPercent)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          indUtilizationPercent > 90
+                            ? 'bg-red-500'
+                            : indUtilizationPercent > 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(indUtilizationPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <div className="space-y-1.5 md:col-span-2">
                     <Label className="text-xs text-muted-foreground">{t('displayName')}</Label>
                     <Input
@@ -509,6 +550,17 @@ function IndividualPricingSection({
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t('purchasedQuantity')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="—"
+                      value={edit.purchased_quantity}
+                      onChange={(e) => updateEdit({ purchased_quantity: e.target.value })}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -538,7 +590,7 @@ function RegularPricingSection({
   setPricingEdits: React.Dispatch<React.SetStateAction<Record<string, PricingEditState>>>;
   onSavePricing: () => Promise<void>;
   savingPricing: boolean;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string>) => string;
   tCommon: (key: string) => string;
 }) {
   return (
@@ -569,6 +621,7 @@ function RegularPricingSection({
             display_name: existingPricing?.display_name || '',
             next_billing_date: existingPricing?.next_billing_date || '',
             notes: existingPricing?.notes || '',
+            purchased_quantity: existingPricing?.purchased_quantity != null ? String(existingPricing.purchased_quantity) : '',
           };
 
           const updateEdit = (updates: Partial<typeof edit>) => {
@@ -577,6 +630,9 @@ function RegularPricingSection({
               [licType.license_type]: { ...edit, ...updates },
             }));
           };
+
+          const purchasedQty = edit.purchased_quantity ? parseInt(edit.purchased_quantity, 10) : null;
+          const utilizationPercent = purchasedQty && purchasedQty > 0 ? (licType.count / purchasedQty) * 100 : null;
 
           return (
             <Card key={licType.license_type}>
@@ -588,8 +644,46 @@ function RegularPricingSection({
                     </h3>
                     <p className="text-xs text-muted-foreground font-mono">{licType.license_type}</p>
                   </div>
-                  <Badge variant="secondary">{licType.count} {t('licenses')}</Badge>
+                  <div className="flex items-center gap-2">
+                    {purchasedQty != null && purchasedQty > 0 ? (
+                      <Badge
+                        variant="outline"
+                        className={
+                          utilizationPercent! > 90
+                            ? 'text-red-600 border-red-200 bg-red-50'
+                            : utilizationPercent! > 70
+                            ? 'text-amber-600 border-amber-200 bg-amber-50'
+                            : 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                        }
+                      >
+                        {licType.count} / {purchasedQty}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">{licType.count} {t('licenses')}</Badge>
+                    )}
+                  </div>
                 </div>
+
+                {utilizationPercent != null && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>{t('ofPurchased', { count: String(purchasedQty) })}</span>
+                      <span>{Math.round(utilizationPercent)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          utilizationPercent > 90
+                            ? 'bg-red-500'
+                            : utilizationPercent > 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
@@ -639,7 +733,7 @@ function RegularPricingSection({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t('paymentFrequency')}</Label>
                     <Select value={edit.payment_frequency} onValueChange={(v) => updateEdit({ payment_frequency: v })}>
@@ -659,6 +753,16 @@ function RegularPricingSection({
                       type="date"
                       value={edit.next_billing_date}
                       onChange={(e) => updateEdit({ next_billing_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t('purchasedQuantity')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="—"
+                      value={edit.purchased_quantity}
+                      onChange={(e) => updateEdit({ purchased_quantity: e.target.value })}
                     />
                   </div>
                   <div className="space-y-1.5">

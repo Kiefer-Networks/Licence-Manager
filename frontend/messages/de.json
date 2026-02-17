@@ -659,6 +659,8 @@
     "noSeatsAvailable": "Keine Seats verfügbar",
     "setPricesDescription": "Preise für jeden Lizenztyp festlegen. Preise werden auf bestehende und neue Lizenzen angewendet.",
     "individualPricesNote": "Oder individuelle Preise pro Lizenztyp festlegen (überschreibt Paketpreise).",
+    "purchasedQuantity": "Gekauft",
+    "ofPurchased": "von {count} gekauften",
     "import": {
       "title": "Lizenzen importieren",
       "description": "Lizenzen aus einer CSV-Datei importieren",

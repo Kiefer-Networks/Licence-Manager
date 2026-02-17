@@ -86,6 +86,7 @@ export interface PricingEditState {
   display_name: string;
   next_billing_date: string;
   notes: string;
+  purchased_quantity: string;
 }
 
 /**

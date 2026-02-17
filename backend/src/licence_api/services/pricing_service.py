@@ -287,6 +287,7 @@ class PricingService:
                     payment_frequency=price_info.get("payment_frequency", "yearly"),
                     next_billing_date=price_info.get("next_billing_date"),
                     notes=price_info.get("notes"),
+                    purchased_quantity=price_info.get("purchased_quantity"),
                 )
             license_types.append(
                 LicenseTypeInfo(
@@ -334,6 +335,7 @@ class PricingService:
                 payment_frequency=info.get("payment_frequency", "yearly"),
                 next_billing_date=info.get("next_billing_date"),
                 notes=info.get("notes"),
+                purchased_quantity=info.get("purchased_quantity"),
             )
             for lt, info in pricing_config.items()
         ]
@@ -400,6 +402,7 @@ class PricingService:
                     payment_frequency=price_info.get("payment_frequency", "monthly"),
                     next_billing_date=price_info.get("next_billing_date"),
                     notes=price_info.get("notes"),
+                    purchased_quantity=price_info.get("purchased_quantity"),
                 )
             license_types.append(
                 IndividualLicenseTypeInfo(
@@ -476,6 +479,7 @@ class PricingService:
                 "display_name": p.display_name,
                 "next_billing_date": p.next_billing_date,
                 "notes": p.notes,
+                "purchased_quantity": p.purchased_quantity,
             }
         return individual_pricing_config
 
@@ -500,5 +504,6 @@ class PricingService:
                     "display_name": p.display_name,
                     "next_billing_date": p.next_billing_date,
                     "notes": p.notes,
+                    "purchased_quantity": p.purchased_quantity,
                 }
         return pricing_config

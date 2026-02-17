@@ -1085,6 +1085,7 @@ export interface LicenseTypePricing {
   cost: string;
   currency: string;
   billing_cycle: string;  // yearly, quarterly, monthly, perpetual, one_time
+  purchased_quantity?: number | null;
   payment_frequency: string;  // yearly, monthly, one_time
   next_billing_date?: string | null;  // ISO date
   notes?: string | null;

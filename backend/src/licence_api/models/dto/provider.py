@@ -123,6 +123,7 @@ class LicenseTypePricing(BaseModel):
     payment_frequency: str = Field(default="yearly", max_length=20)  # yearly, monthly, one_time
     next_billing_date: str | None = Field(default=None, max_length=10)  # ISO date string
     notes: str | None = Field(default=None, max_length=2000)
+    purchased_quantity: int | None = Field(default=None, ge=0, le=1000000)
 
 
 class PackagePricing(BaseModel):

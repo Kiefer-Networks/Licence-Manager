@@ -521,6 +521,7 @@ export function useProviderDetail(
           display_name: lt.pricing?.display_name || '',
           next_billing_date: lt.pricing?.next_billing_date || '',
           notes: lt.pricing?.notes || '',
+          purchased_quantity: lt.pricing?.purchased_quantity != null ? String(lt.pricing.purchased_quantity) : '',
         };
       }
 
@@ -534,6 +535,7 @@ export function useProviderDetail(
           display_name: '',
           next_billing_date: pkgPricing.next_billing_date || '',
           notes: pkgPricing.notes || '',
+          purchased_quantity: '',
         };
       }
 
@@ -558,6 +560,7 @@ export function useProviderDetail(
           payment_frequency: lt.pricing?.payment_frequency || 'monthly',
           display_name: lt.pricing?.display_name || lt.display_name || '',
           notes: lt.pricing?.notes || '',
+          purchased_quantity: lt.pricing?.purchased_quantity != null ? String(lt.pricing.purchased_quantity) : '',
         };
       }
       setIndividualPricingEdits(edits);
@@ -872,6 +875,7 @@ export function useProviderDetail(
             payment_frequency: edit.payment_frequency,
             next_billing_date: edit.next_billing_date || undefined,
             notes: edit.notes || undefined,
+            purchased_quantity: edit.purchased_quantity ? parseInt(edit.purchased_quantity, 10) : undefined,
           });
         }
       }
@@ -904,6 +908,7 @@ export function useProviderDetail(
           billing_cycle: edit.billing_cycle,
           payment_frequency: edit.payment_frequency,
           notes: edit.notes || undefined,
+          purchased_quantity: edit.purchased_quantity ? parseInt(edit.purchased_quantity, 10) : undefined,
         });
       }
 
